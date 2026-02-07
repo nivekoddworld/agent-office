@@ -53,8 +53,11 @@ export class Workspace {
     // Set first spawned agent as default if none set
     if (!this.defaultAgent) this.defaultAgent = config.name;
 
-    // Forward agent events
+    // Forward agent events to workspace listeners (telegram, etc.)
     handle.onEvent((e) => {
+      if (e.type === "tool_execution_start" || e.type === "message_end" || e.type === "agent_end") {
+        console.log(`[event] ${config.name}: ${e.type}`);
+      }
       for (const fn of this.listeners) fn(config.name, e);
     });
 

@@ -3,47 +3,76 @@ import type { Workspace } from "./workspace.js";
 
 /**
  * Telegram bridge — routes incoming messages to agents via grammY.
- * Subscribes to agent events and replies when the agent finishes.
+ * Streams all agent events (text, tool calls, errors) to the originating chat.
  */
 export function createTelegramBridge(workspace: Workspace, token: string): Bot {
   const bot = new Bot(token);
 
+  // Track which chat triggered work so we know where to send updates
+  let activeChatId: number | null = null;
+
+  // Global listener — every agent event from every agent goes to Telegram
+  workspace.onAgentEvent((agentName, event) => {
+    if (activeChatId === null) return;
+    const chatId = activeChatId;
+
+    const send = async (text: string) => {
+      const chunks = splitMessage(text, 4000);
+      for (const chunk of chunks) {
+        try {
+          await bot.api.sendMessage(chatId, chunk);
+        } catch (err) {
+          console.error("[telegram] sendMessage failed:", err);
+        }
+      }
+    };
+
+    switch (event.type) {
+      case "message_end": {
+        if (event.message.role === "assistant") {
+          const text = event.message.content
+            .filter((c): c is { type: "text"; text: string } => c.type === "text")
+            .map((c) => c.text)
+            .join("");
+          if (text) send(`[${agentName}]\n${text}`);
+        }
+        break;
+      }
+      case "tool_execution_start": {
+        send(`[${agentName}] 🔧 ${event.toolName}`);
+        break;
+      }
+      case "tool_execution_end": {
+        if (event.isError) {
+          send(`[${agentName}] ❌ ${event.toolName} failed`);
+        }
+        break;
+      }
+      case "agent_end": {
+        send(`[${agentName}] ✅ Done`);
+        break;
+      }
+    }
+  });
+
   bot.on("message:text", async (ctx) => {
-    const chatId = String(ctx.chat.id);
-    const agentName = workspace.getRouting(chatId) ?? workspace.defaultAgent;
+    const chatId = ctx.chat.id; // keep as number — grammY expects number
+    const agentName = workspace.getRouting(String(chatId)) ?? workspace.defaultAgent;
 
     if (!agentName) {
       await ctx.reply("No agent configured for this chat.");
       return;
     }
 
-    const handle = workspace.getAgent(agentName);
-    if (!handle) {
+    if (!workspace.getAgent(agentName)) {
       await ctx.reply(`Agent "${agentName}" not found.`);
       return;
     }
 
-    // Queue the message
+    activeChatId = chatId;
     workspace.send(agentName, ctx.message.text);
-
-    // Subscribe to agent response — wait for the final assistant message
-    const unsub = handle.onEvent((event) => {
-      if (event.type === "message_end" && event.message.role === "assistant") {
-        const text = event.message.content
-          .filter((c): c is { type: "text"; text: string } => c.type === "text")
-          .map((c) => c.text)
-          .join("");
-
-        if (text) {
-          // Telegram has a 4096 char limit — split if needed
-          const chunks = splitMessage(text, 4000);
-          for (const chunk of chunks) {
-            ctx.reply(chunk).catch(console.error);
-          }
-        }
-        unsub();
-      }
-    });
+    console.log(`[telegram] Chat ${chatId} → ${agentName}: "${ctx.message.text}"`);
+    await ctx.reply(`Queued for ${agentName}.`);
   });
 
   return bot;
