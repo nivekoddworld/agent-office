@@ -65,6 +65,7 @@ export interface SchedulerState {
 export interface WatchdogConfig {
   checkIntervalMs: number;
   stuckThresholdMs: number;
+  maxRestarts: number;
 }
 
 // --- Workspace ---

@@ -4,12 +4,12 @@ export function routeCommand(workspace: Workspace, chatId: string, agentName: st
   if (!workspace.getAgent(agentName)) {
     console.log(`[route] Warning: agent "${agentName}" not found (will route when spawned)`);
   }
-  workspace.setRoute(chatId, agentName);
+  workspace.router.set(chatId, agentName);
   console.log(`[route] Chat ${chatId} → ${agentName}`);
 }
 
 export function routeListCommand(workspace: Workspace): void {
-  const routes = workspace.getRoutes();
+  const routes = workspace.router.list();
   if (routes.size === 0) {
     console.log("No routes configured.");
     return;

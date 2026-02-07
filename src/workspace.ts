@@ -1,7 +1,7 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { AgentHandle } from "./agent/handle.js";
 import { MessageBus } from "./transport/message-bus.js";
-import { MutexGuard, SemaphoreGuard } from "./scheduler/resource-guard.js";
+import { Router } from "./routing.js";
 import { Scheduler } from "./scheduler/scheduler.js";
 import { Watchdog } from "./scheduler/watchdog.js";
 import type { AgentConfig, AgentInfo, Priority, WorkspaceConfig } from "./types.js";
@@ -12,12 +12,9 @@ import type { AgentConfig, AgentInfo, Priority, WorkspaceConfig } from "./types.
 export class Workspace {
   readonly agents = new Map<string, AgentHandle>();
   readonly bus = new MessageBus();
-  readonly mutex = new MutexGuard();
-  readonly semaphore = new SemaphoreGuard();
   readonly scheduler: Scheduler;
   readonly watchdog: Watchdog;
-
-  private routing = new Map<string, string>(); // chatId → agentName
+  readonly router = new Router();
   defaultAgent: string | undefined;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
 
@@ -40,6 +37,9 @@ export class Workspace {
   }
 
   async spawn(config: AgentConfig): Promise<AgentHandle> {
+    if (!/^[a-zA-Z0-9_-]+$/.test(config.name)) {
+      throw new Error("Agent name must be alphanumeric with hyphens/underscores only");
+    }
     if (this.agents.has(config.name)) {
       throw new Error(`Agent "${config.name}" already exists`);
     }
@@ -91,20 +91,6 @@ export class Workspace {
 
   list(): AgentInfo[] {
     return [...this.agents.values()].map((h) => h.info());
-  }
-
-  // --- Telegram routing ---
-
-  setRoute(chatId: string, agentName: string): void {
-    this.routing.set(chatId, agentName);
-  }
-
-  getRoute(chatId: string): string | undefined {
-    return this.routing.get(chatId);
-  }
-
-  getRoutes(): Map<string, string> {
-    return new Map(this.routing);
   }
 
   // --- Events ---

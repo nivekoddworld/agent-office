@@ -64,6 +64,34 @@ describe("LocalTransport", () => {
     ).toThrow('No mailbox for agent "ghost"');
   });
 
+  it("push() preserves original id and timestamp", () => {
+    const t = new LocalTransport();
+    t.register("a");
+
+    const msg = {
+      id: "original-id",
+      timestamp: 1000,
+      from: "b",
+      to: "a",
+      type: "prompt" as const,
+      payload: "requeued",
+      priority: Priority.NORMAL,
+    };
+
+    t.push("a", msg);
+    const drained = t.drain("a");
+    expect(drained).toHaveLength(1);
+    expect(drained[0]!.id).toBe("original-id");
+    expect(drained[0]!.timestamp).toBe(1000);
+  });
+
+  it("push() throws for unregistered agent", () => {
+    const t = new LocalTransport();
+    expect(() =>
+      t.push("ghost", { id: "x", timestamp: 0, from: "a", to: "ghost", type: "prompt", payload: "hi", priority: Priority.NORMAL }),
+    ).toThrow('No mailbox for agent "ghost"');
+  });
+
   it("returns empty array for unregistered drain", () => {
     const t = new LocalTransport();
     expect(t.drain("ghost")).toEqual([]);

@@ -67,7 +67,7 @@ program
     rl.on("close", () => {
       console.log("\n[shutdown] Stopping...");
       workspace.stop();
-      process.exit(0);
+      setTimeout(() => process.exit(0), 2000);
     });
   });
 
@@ -145,7 +145,7 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
   }
 }
 
-function parseSpawnArgs(parts: string[]): { name: string; model?: string; priority?: string; thinking?: string; cwd?: string; prompt?: string } {
+function parseSpawnArgs(parts: string[]): { name: string; model?: string; priority?: string; thinking?: string; cwd?: string; prompt?: string; desc?: string } {
   const args: Record<string, string> = {};
   let name = "";
 

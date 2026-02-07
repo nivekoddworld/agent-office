@@ -64,6 +64,29 @@ describe("Watchdog", () => {
     expect(wd.getRestartCount("a")).toBe(3);
   });
 
+  it("marks agent dead after exceeding maxRestarts", () => {
+    const agents = new Map<string, any>();
+    const setStatus = vi.fn();
+    agents.set("a", { name: "a", status: "running", lastHeartbeat: Date.now() - 200_000, setStatus });
+
+    const stuck: string[] = [];
+    const wd = new Watchdog(agents, (name) => stuck.push(name), {
+      checkIntervalMs: 100,
+      stuckThresholdMs: 120_000,
+      maxRestarts: 2,
+    });
+
+    wd.start();
+    vi.advanceTimersByTime(100); // check 1 → count=1, onStuck
+    vi.advanceTimersByTime(100); // check 2 → count=2, onStuck
+    vi.advanceTimersByTime(100); // check 3 → count=3 > max(2), setStatus("dead")
+    wd.stop();
+
+    expect(stuck).toEqual(["a", "a"]);
+    expect(setStatus).toHaveBeenCalledWith("dead");
+    expect(wd.getRestartCount("a")).toBe(3);
+  });
+
   it("stuckCount returns current stuck agents", () => {
     const agents = new Map<string, any>();
     agents.set("a", mockAgent("a", "running", Date.now() - 200_000));

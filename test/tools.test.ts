@@ -43,10 +43,10 @@ describe("createListAgentsTool", () => {
 });
 
 describe("createReadAgentFileTool", () => {
-  it("blocks path traversal", async () => {
+  it("rejects invalid agent names", async () => {
     const tool = createReadAgentFileTool();
-    const result = await tool.execute("id-1", { agent: "target", path: "../../etc/passwd" });
-    expect(getText(result)).toContain("path traversal not allowed");
+    const result = await tool.execute("id-1", { agent: "../../etc", path: "passwd" });
+    expect(getText(result)).toContain("invalid agent name");
   });
 
   it("returns error for missing file", async () => {

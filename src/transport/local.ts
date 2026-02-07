@@ -32,6 +32,13 @@ export class LocalTransport {
     queue.push(full);
   }
 
+  /** Push a full message back into the queue (preserves original id/timestamp). */
+  push(name: string, msg: MailboxMessage): void {
+    const queue = this.mailboxes.get(name);
+    if (!queue) throw new Error(`No mailbox for agent "${name}"`);
+    queue.push(msg);
+  }
+
   drain(name: string): MailboxMessage[] {
     const queue = this.mailboxes.get(name);
     if (!queue) return [];

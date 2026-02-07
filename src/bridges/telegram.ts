@@ -15,10 +15,13 @@ export function createTelegramBridge(workspace: Workspace, token: string): Bot {
     const chatId = activeChatId;
 
     const send = (text: string) => {
-      for (const chunk of splitMessage(text, 4000)) {
-        bot.api.sendMessage(chatId, chunk).catch((err) => {
-          console.error("[telegram] sendMessage failed:", err);
-        });
+      const chunks = splitMessage(text, 4000);
+      let chain = Promise.resolve();
+      for (const chunk of chunks) {
+        chain = chain
+          .then(() => bot.api.sendMessage(chatId, chunk))
+          .then(() => {})
+          .catch((err) => console.error("[telegram] sendMessage failed:", err));
       }
     };
 
@@ -77,7 +80,7 @@ export function createTelegramBridge(workspace: Workspace, token: string): Bot {
 
   bot.on("message:text", async (ctx) => {
     const chatId = ctx.chat.id;
-    const name = workspace.getRoute(String(chatId)) ?? workspace.defaultAgent;
+    const name = workspace.router.get(String(chatId)) ?? workspace.defaultAgent;
     if (!name) { await ctx.reply("No agent configured for this chat."); return; }
     if (!workspace.getAgent(name)) { await ctx.reply(`Agent "${name}" not found.`); return; }
     activeChatId = chatId;

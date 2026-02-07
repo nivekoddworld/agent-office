@@ -4,6 +4,7 @@ import type { WatchdogConfig } from "../types.js";
 const DEFAULTS: WatchdogConfig = {
   checkIntervalMs: 10_000,
   stuckThresholdMs: 120_000,
+  maxRestarts: 5,
 };
 
 /**
@@ -47,7 +48,12 @@ export class Watchdog {
       if (elapsed > this.config.stuckThresholdMs) {
         const count = (this.restartCounts.get(name) ?? 0) + 1;
         this.restartCounts.set(name, count);
-        this.onStuck(name);
+        if (count > this.config.maxRestarts) {
+          console.error(`[watchdog] Agent "${name}" exceeded max restarts (${this.config.maxRestarts}) — marking dead`);
+          handle.setStatus("dead");
+        } else {
+          this.onStuck(name);
+        }
       }
     }
   }
