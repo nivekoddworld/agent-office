@@ -1,0 +1,27 @@
+{
+  "name": "pi-tests",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc --noEmit",
+    "check": "eslint src/"
+  },
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "0.52.7",
+    "@mariozechner/pi-coding-agent": "0.52.7",
+    "@mariozechner/pi-ai": "0.52.7",
+    "@sinclair/typebox": "^0.34.0",
+    "async-mutex": "^0.5.0",
+    "commander": "^13.1.0",
+    "grammy": "^1.39.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "eslint": "^9.20.0",
+    "typescript-eslint": "^8.0.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

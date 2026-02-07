@@ -1,0 +1,54 @@
+import { getModel } from "@mariozechner/pi-ai";
+import type { Workspace } from "../workspace.js";
+import { Priority } from "../types.js";
+import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+
+interface SpawnArgs {
+  name: string;
+  model?: string;
+  priority?: string;
+  thinking?: string;
+  cwd?: string;
+  prompt?: string;
+}
+
+export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promise<void> {
+  const [provider, modelId] = parseModel(args.model ?? "anthropic:claude-sonnet-4-20250514");
+  const model = getModel(provider as any, modelId as any);
+  const priority = parsePriority(args.priority ?? "2");
+
+  const handle = await workspace.spawn({
+    name: args.name,
+    model,
+    priority,
+    thinkingLevel: (args.thinking as ThinkingLevel) ?? "low",
+    cwd: args.cwd,
+    systemPrompt: args.prompt,
+  });
+
+  console.log(`[spawn] Agent "${args.name}" created (cwd: ${handle.cwd})`);
+}
+
+function parseModel(spec: string): [string, string] {
+  const parts = spec.split(":");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    throw new Error(`Invalid model spec "${spec}" — expected "provider:model-id"`);
+  }
+  return [parts[0], parts[1]];
+}
+
+function parsePriority(val: string): Priority {
+  const num = parseInt(val, 10);
+  if (num >= 0 && num <= 4) return num as Priority;
+
+  const map: Record<string, Priority> = {
+    idle: Priority.IDLE,
+    low: Priority.LOW,
+    normal: Priority.NORMAL,
+    high: Priority.HIGH,
+    critical: Priority.CRITICAL,
+  };
+  const p = map[val.toLowerCase()];
+  if (p !== undefined) return p;
+  throw new Error(`Invalid priority "${val}" — use 0-4 or idle/low/normal/high/critical`);
+}
