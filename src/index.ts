@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { Workspace } from "./workspace.js";

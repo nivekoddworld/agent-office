@@ -4,22 +4,22 @@ FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com
 
 ## Architecture
 
-```
-                          Telegram (grammY)
-                               |
-                               v
-CLI REPL  ──>  Workspace (facade)
-                   |        |        |
-              Scheduler  MessageBus  Watchdog
-              (tick loop) (mailboxes) (heartbeat)
-                   |        |
-                   v        v
-              ┌─────────┐ ┌─────────┐ ┌─────────┐
-              │ Agent A  │ │ Agent B  │ │ Agent C  │
-              │ (Pi)     │ │ (Pi)     │ │ (Pi)     │
-              │ sandbox/ │ │ sandbox/ │ │ sandbox/ │
-              │ skills/  │ │ skills/  │ │ skills/  │
-              └─────────┘ └─────────┘ └─────────┘
+```mermaid
+graph TD
+    CLI[CLI REPL] --> WS[Workspace]
+    TG[Telegram / grammY] --> WS
+
+    WS --> SCH[Scheduler\ntick loop]
+    WS --> BUS[MessageBus\nmailboxes]
+    WS --> WD[Watchdog\nheartbeat]
+
+    SCH --> A[Agent A\nPi · sandbox · skills]
+    SCH --> B[Agent B\nPi · sandbox · skills]
+    SCH --> C[Agent C\nPi · sandbox · skills]
+
+    BUS --> A
+    BUS --> B
+    BUS --> C
 ```
 
 **Core flow:** CLI/Telegram -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
@@ -31,14 +31,24 @@ Each agent is a full Pi coding agent with its own filesystem sandbox, skills, an
 ```bash
 pnpm install
 
+# Configure .env
+cp .env.example .env   # then fill in your keys
+
 # Start the REPL
-OPENAI_API_KEY=sk-... pnpm dev start
+pnpm dev start
 
 # With Telegram
-TELEGRAM_BOT_TOKEN=xxx OPENAI_API_KEY=sk-... pnpm dev start --telegram
+pnpm dev start --telegram
 ```
 
-Supports multiple providers via environment variables: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.
+Create a `.env` file with your provider keys:
+
+```env
+OPENAI_API_KEY=sk-...
+# ANTHROPIC_API_KEY=sk-...
+# GEMINI_API_KEY=...
+# TELEGRAM_BOT_TOKEN=...
+```
 
 ## REPL Commands
 
@@ -236,8 +246,12 @@ src/
   constants.ts            Shared constants (PI_TESTS_DIR)
   agent/
     handle.ts             Agent lifecycle (init, prompt, steer, abort, destroy)
-    tools.ts              Built-in tools (list_agents, send_mail, read_agent_file)
     prompt.ts             Default system prompt builder
+    tools/
+      index.ts            Barrel re-export for all tools
+      list-agents.ts      list_agents — discover agents in workspace
+      read-agent-file.ts  read_agent_file — cross-agent file access
+      send-mail.ts        send_mail — inter-agent mailbox messaging
   scheduler/
     scheduler.ts          Tick-based priority scheduler
     watchdog.ts           Heartbeat monitor + stuck detection
@@ -275,7 +289,11 @@ src/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint (max 400 lines/file enforced)
+pnpm test             # Run test suite (vitest)
+pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
+
+Tests live in `test/` (one file per module, `<feature>.test.ts` naming).
 
 Requires Node 22+.
