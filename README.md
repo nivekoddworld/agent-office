@@ -281,6 +281,7 @@ src/
 | `@sinclair/typebox` | Tool parameter schemas |
 | `async-mutex` | Mutex and semaphore primitives |
 | `commander` | CLI argument parsing |
+| `dotenv` | Load `.env` into `process.env` |
 | `grammy` | Telegram Bot API |
 
 ## Development
