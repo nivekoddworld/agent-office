@@ -55,6 +55,47 @@ export function createTelegramBridge(workspace: Workspace, token: string): Bot {
     }
   });
 
+  // /help and /start — explain available commands
+  bot.command(["help", "start"], async (ctx) => {
+    await ctx.reply(
+      "pi-tests workspace bot\n\n" +
+      "/agents — list running agents\n" +
+      "@agentname message — send to a specific agent\n" +
+      "Or just type a message to send to the default agent.",
+    );
+  });
+
+  // /agents — list all running agents
+  bot.command("agents", async (ctx) => {
+    const agents = workspace.list();
+    if (agents.length === 0) {
+      await ctx.reply("No agents running.");
+      return;
+    }
+    const lines = agents.map((a) => {
+      const desc = a.description !== "No description" ? ` — ${a.description}` : "";
+      return `${a.name} [${a.status}] pri=${a.priority} q=${a.queueDepth}${desc}`;
+    });
+    await ctx.reply(lines.join("\n"));
+  });
+
+  // @agentname message — send directly to a specific agent
+  bot.hears(/^@(\S+)\s+(.+)$/s, async (ctx) => {
+    const agentName = ctx.match[1]!;
+    const message = ctx.match[2]!;
+
+    if (!workspace.getAgent(agentName)) {
+      await ctx.reply(`Agent "${agentName}" not found. Use /agents to list available agents.`);
+      return;
+    }
+
+    activeChatId = ctx.chat.id;
+    workspace.send(agentName, message);
+    console.log(`[telegram] Chat ${ctx.chat.id} → ${agentName} (direct): "${message}"`);
+    await ctx.reply(`Queued for ${agentName}.`);
+  });
+
+  // Fallback — send to default agent
   bot.on("message:text", async (ctx) => {
     const chatId = ctx.chat.id; // keep as number — grammY expects number
     const agentName = workspace.getRouting(String(chatId)) ?? workspace.defaultAgent;

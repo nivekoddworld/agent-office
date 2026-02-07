@@ -44,7 +44,7 @@ export class Workspace {
       throw new Error(`Agent "${config.name}" already exists`);
     }
 
-    const handle = new AgentHandle(config, this.bus);
+    const handle = new AgentHandle(config, this.bus, () => this.list());
     await handle.init();
 
     this.agents.set(config.name, handle);

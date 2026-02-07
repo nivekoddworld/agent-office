@@ -9,18 +9,17 @@ export function listCommand(workspace: Workspace): void {
   }
 
   const header = "NAME".padEnd(16) + "STATUS".padEnd(10) + "PRIORITY".padEnd(12) +
-    "MODEL".padEnd(28) + "QUEUE".padEnd(7) + "TURNS".padEnd(7) + "HEARTBEAT";
+    "MODEL".padEnd(28) + "QUEUE".padEnd(7) + "TURNS".padEnd(7) + "DESC";
   console.log(header);
 
   for (const a of agents) {
-    const ago = Math.round((Date.now() - a.lastHeartbeat) / 1000);
     const row = a.name.padEnd(16) +
       a.status.padEnd(10) +
       `${PRIORITY_LABELS[a.priority]}(${a.priority})`.padEnd(12) +
       a.model.slice(0, 26).padEnd(28) +
       String(a.queueDepth).padEnd(7) +
       String(a.turns).padEnd(7) +
-      `${ago}s ago`;
+      a.description;
     console.log(row);
   }
 }

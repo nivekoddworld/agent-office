@@ -27,6 +27,7 @@ export interface AgentConfig {
   name: string;
   model: Model<any>;
   priority: Priority;
+  description?: string;
   systemPrompt?: string;
   thinkingLevel?: ThinkingLevel;
   cwd?: string;
@@ -40,6 +41,7 @@ export interface AgentInfo {
   status: AgentStatus;
   priority: Priority;
   model: string;
+  description: string;
   queueDepth: number;
   turns: number;
   lastHeartbeat: number;

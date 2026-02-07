@@ -10,6 +10,7 @@ interface SpawnArgs {
   thinking?: string;
   cwd?: string;
   prompt?: string;
+  desc?: string;
 }
 
 export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promise<void> {
@@ -24,6 +25,7 @@ export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promi
     thinkingLevel: (args.thinking as ThinkingLevel) ?? "low",
     cwd: args.cwd,
     systemPrompt: args.prompt,
+    description: args.desc,
   });
 
   console.log(`[spawn] Agent "${args.name}" created (cwd: ${handle.cwd})`);

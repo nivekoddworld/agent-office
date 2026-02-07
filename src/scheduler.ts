@@ -1,6 +1,6 @@
 import type { AgentHandle } from "./agent-handle.js";
 import type { MessageBus } from "./message-bus.js";
-import type { SchedulerState } from "./types.js";
+import type { MailboxMessage, SchedulerState } from "./types.js";
 
 /**
  * FreeRTOS-inspired tick-based scheduler.
@@ -77,10 +77,11 @@ export class Scheduler {
       const msg = messages[0]!;
       handle.setStatus("running");
 
+      const payload = formatMailPayload(msg);
       const dispatch =
         msg.type === "steer"
-          ? handle.steer(msg.payload)
-          : handle.prompt(msg.payload);
+          ? handle.steer(payload)
+          : handle.prompt(payload);
 
       // Non-blocking — agent runs concurrently
       dispatch
@@ -99,4 +100,10 @@ export class Scheduler {
     const state = this.state();
     for (const fn of this.listeners) fn(state);
   }
+}
+
+/** Prefix inter-agent messages with sender info so the recipient knows who to reply to. */
+function formatMailPayload(msg: MailboxMessage): string {
+  if (msg.from === "__user__") return msg.payload;
+  return `[Mail from ${msg.from}]\n${msg.payload}`;
 }

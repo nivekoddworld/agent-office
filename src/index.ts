@@ -1,5 +1,10 @@
 import { createInterface } from "node:readline";
 import { Command } from "commander";
+
+// Prevent crashes from unhandled promise rejections (e.g. API key errors)
+process.on("unhandledRejection", (err) => {
+  console.error("[error] Unhandled rejection:", err instanceof Error ? err.message : err);
+});
 import { Workspace } from "./workspace.js";
 import { createTelegramBridge } from "./telegram.js";
 import { spawnCommand } from "./commands/spawn.js";
@@ -185,7 +190,7 @@ function parseReplInput(input: string): string[] {
 function printHelp(): void {
   console.log(`
 Commands:
-  spawn <name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path]
+  spawn <name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path] [--desc text]
   list                          List all agents
   send <agent> <message>        Send message to agent
   kill <agent>                  Stop and remove agent
