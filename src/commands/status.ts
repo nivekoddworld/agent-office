@@ -1,5 +1,5 @@
 import type { Workspace } from "../workspace.js";
-import { PRIORITY_LABELS } from "../types.js";
+import { Priority } from "../types.js";
 
 export function statusCommand(workspace: Workspace): void {
   const state = workspace.scheduler.state();
@@ -26,7 +26,7 @@ export function statusCommand(workspace: Workspace): void {
     console.log(header);
     for (const a of state.agents) {
       const row = "  " + a.name.padEnd(16) + a.status.padEnd(10) +
-        `${PRIORITY_LABELS[a.priority]}(${a.priority})`.padEnd(12) +
+        `${Priority[a.priority]}(${a.priority})`.padEnd(12) +
         String(a.queueDepth).padEnd(7) + String(a.turns);
       console.log(row);
     }

@@ -1,9 +1,9 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
-import { AgentHandle } from "./agent-handle.js";
-import { MessageBus } from "./message-bus.js";
-import { MutexGuard, SemaphoreGuard } from "./resource-guard.js";
-import { Scheduler } from "./scheduler.js";
-import { Watchdog } from "./watchdog.js";
+import { AgentHandle } from "./agent/handle.js";
+import { MessageBus } from "./transport/message-bus.js";
+import { MutexGuard, SemaphoreGuard } from "./scheduler/resource-guard.js";
+import { Scheduler } from "./scheduler/scheduler.js";
+import { Watchdog } from "./scheduler/watchdog.js";
 import type { AgentConfig, AgentInfo, Priority, WorkspaceConfig } from "./types.js";
 
 /**
@@ -99,7 +99,7 @@ export class Workspace {
     this.routing.set(chatId, agentName);
   }
 
-  getRouting(chatId: string): string | undefined {
+  getRoute(chatId: string): string | undefined {
     return this.routing.get(chatId);
   }
 

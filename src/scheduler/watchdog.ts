@@ -1,5 +1,5 @@
-import type { AgentHandle } from "./agent-handle.js";
-import type { WatchdogConfig } from "./types.js";
+import type { AgentHandle } from "../agent/handle.js";
+import type { WatchdogConfig } from "../types.js";
 
 const DEFAULTS: WatchdogConfig = {
   checkIntervalMs: 10_000,

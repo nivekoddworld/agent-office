@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { AgentTransport, MailboxMessage, Priority } from "../types.js";
+import type { MailboxMessage, Priority } from "../types.js";
 
 /** In-process mailbox transport — priority-sorted per-agent queues. */
-export class LocalTransport implements AgentTransport {
+export class LocalTransport {
   private mailboxes = new Map<string, MailboxMessage[]>();
 
   register(name: string): void {

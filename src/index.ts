@@ -1,12 +1,7 @@
 import { createInterface } from "node:readline";
 import { Command } from "commander";
-
-// Prevent crashes from unhandled promise rejections (e.g. API key errors)
-process.on("unhandledRejection", (err) => {
-  console.error("[error] Unhandled rejection:", err instanceof Error ? err.message : err);
-});
 import { Workspace } from "./workspace.js";
-import { createTelegramBridge } from "./telegram.js";
+import { createTelegramBridge } from "./bridges/telegram.js";
 import { spawnCommand } from "./commands/spawn.js";
 import { listCommand } from "./commands/list.js";
 import { sendCommand } from "./commands/send.js";
@@ -14,6 +9,10 @@ import { killCommand } from "./commands/kill.js";
 import { statusCommand } from "./commands/status.js";
 import { routeCommand, routeListCommand } from "./commands/route.js";
 import { skillInstallCommand, skillListCommand, skillRemoveCommand } from "./commands/skill.js";
+
+process.on("unhandledRejection", (err) => {
+  console.error("[error]", err instanceof Error ? err.message : err);
+});
 
 const program = new Command();
 
@@ -30,7 +29,6 @@ program
   .action(async (opts: { tickInterval: string; telegram?: boolean }) => {
     const workspace = new Workspace({
       tickIntervalMs: parseInt(opts.tickInterval, 10),
-      telegramToken: opts.telegram ? process.env["TELEGRAM_BOT_TOKEN"] : undefined,
     });
 
     workspace.start();
@@ -59,8 +57,8 @@ program
 
       try {
         await handleRepl(workspace, input);
-      } catch (err: any) {
-        console.error(`Error: ${err.message}`);
+      } catch (err: unknown) {
+        console.error(`Error: ${err instanceof Error ? err.message : err}`);
       }
       rl.prompt();
     });

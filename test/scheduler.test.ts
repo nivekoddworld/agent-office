@@ -1,0 +1,198 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { Scheduler } from "../src/scheduler/scheduler.js";
+import { MessageBus } from "../src/transport/message-bus.js";
+import { Priority } from "../src/types.js";
+
+/** Minimal AgentHandle mock. */
+function mockHandle(name: string, priority: Priority, status: "idle" | "running" = "idle") {
+  return {
+    name,
+    config: { name, priority },
+    status,
+    setStatus: vi.fn(function (this: any, s: string) { this.status = s; }),
+    prompt: vi.fn(async () => {}),
+    steer: vi.fn(async () => {}),
+    info: vi.fn(() => ({
+      name,
+      status,
+      priority,
+      model: "test",
+      description: "",
+      queueDepth: 0,
+      turns: 0,
+      lastHeartbeat: Date.now(),
+    })),
+  } as any;
+}
+
+describe("Scheduler", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("dispatches messages on tick by priority", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const low = mockHandle("low", Priority.LOW);
+    const high = mockHandle("high", Priority.HIGH);
+
+    agents.set("low", low);
+    agents.set("high", high);
+    bus.register("low");
+    bus.register("high");
+
+    bus.send({ from: "__user__", to: "low", type: "prompt", payload: "lo", priority: Priority.LOW });
+    bus.send({ from: "__user__", to: "high", type: "prompt", payload: "hi", priority: Priority.HIGH });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    // Both should be dispatched — high first due to priority sort
+    expect(high.prompt).toHaveBeenCalledWith("hi");
+    expect(low.prompt).toHaveBeenCalledWith("lo");
+    expect(high.setStatus).toHaveBeenCalledWith("running");
+    expect(low.setStatus).toHaveBeenCalledWith("running");
+  });
+
+  it("skips agents that are already running", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const busy = mockHandle("busy", Priority.NORMAL, "running");
+    agents.set("busy", busy);
+    bus.register("busy");
+
+    bus.send({ from: "user", to: "busy", type: "prompt", payload: "work", priority: Priority.NORMAL });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    expect(busy.prompt).not.toHaveBeenCalled();
+    // Message should still be in queue since it wasn't drained
+    expect(bus.peek("busy")).toBe(1);
+  });
+
+  it("formats inter-agent mail with sender prefix", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const target = mockHandle("target", Priority.NORMAL);
+    agents.set("target", target);
+    bus.register("target");
+
+    bus.send({ from: "copywriter", to: "target", type: "prompt", payload: "here's the copy", priority: Priority.NORMAL });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    expect(target.prompt).toHaveBeenCalledWith("[Mail from copywriter]\nhere's the copy");
+  });
+
+  it("passes user messages without prefix", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const target = mockHandle("target", Priority.NORMAL);
+    agents.set("target", target);
+    bus.register("target");
+
+    bus.send({ from: "__user__", to: "target", type: "prompt", payload: "do stuff", priority: Priority.NORMAL });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    expect(target.prompt).toHaveBeenCalledWith("do stuff");
+  });
+
+  it("dispatches steer messages via steer()", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const target = mockHandle("target", Priority.NORMAL);
+    agents.set("target", target);
+    bus.register("target");
+
+    bus.send({ from: "__user__", to: "target", type: "steer", payload: "redirect", priority: Priority.NORMAL });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    expect(target.steer).toHaveBeenCalledWith("redirect");
+    expect(target.prompt).not.toHaveBeenCalled();
+  });
+
+  it("requeues extra messages for next tick", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const target = mockHandle("target", Priority.NORMAL);
+    agents.set("target", target);
+    bus.register("target");
+
+    bus.send({ from: "a", to: "target", type: "prompt", payload: "first", priority: Priority.HIGH });
+    bus.send({ from: "b", to: "target", type: "prompt", payload: "second", priority: Priority.LOW });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+
+    // First message dispatched, second requeued
+    expect(target.prompt).toHaveBeenCalledTimes(1);
+    expect(bus.peek("target")).toBe(1);
+
+    sched.stop();
+  });
+
+  it("increments tick count", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const sched = new Scheduler(agents, bus, 100);
+    expect(sched.tickCount).toBe(0);
+
+    sched.start();
+    vi.advanceTimersByTime(350);
+    sched.stop();
+
+    expect(sched.tickCount).toBe(3);
+  });
+
+  it("fires tick listeners", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+    const states: any[] = [];
+
+    const sched = new Scheduler(agents, bus, 100);
+    const unsub = sched.onTick((s) => states.push(s));
+
+    sched.start();
+    vi.advanceTimersByTime(200);
+    sched.stop();
+
+    expect(states).toHaveLength(2);
+    unsub();
+  });
+
+  it("state() returns current scheduler info", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const sched = new Scheduler(agents, bus, 500);
+    const state = sched.state();
+
+    expect(state.running).toBe(false);
+    expect(state.tickCount).toBe(0);
+    expect(state.intervalMs).toBe(500);
+    expect(state.agents).toEqual([]);
+  });
+});

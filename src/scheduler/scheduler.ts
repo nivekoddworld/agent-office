@@ -1,6 +1,6 @@
-import type { AgentHandle } from "./agent-handle.js";
-import type { MessageBus } from "./message-bus.js";
-import type { MailboxMessage, SchedulerState } from "./types.js";
+import type { AgentHandle } from "../agent/handle.js";
+import type { MessageBus } from "../transport/message-bus.js";
+import type { MailboxMessage, SchedulerState } from "../types.js";
 
 /**
  * FreeRTOS-inspired tick-based scheduler.

@@ -1,5 +1,5 @@
-import { LocalTransport } from "./transport/local.js";
-import type { MailboxMessage, Priority } from "./types.js";
+import { LocalTransport } from "./local.js";
+import type { MailboxMessage, Priority } from "../types.js";
 
 /**
  * Message bus — thin wrapper over transport with convenience helpers.

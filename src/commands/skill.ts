@@ -1,7 +1,7 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { readdirSync, existsSync } from "node:fs";
-import { PI_TESTS_DIR } from "../agent-handle.js";
+import { PI_TESTS_DIR } from "../constants.js";
 
 export function skillInstallCommand(agentName: string, source: string): void {
   const agentDir = join(PI_TESTS_DIR, "agents", agentName);
@@ -9,7 +9,7 @@ export function skillInstallCommand(agentName: string, source: string): void {
     throw new Error(`Agent directory not found: ${agentDir}. Spawn the agent first.`);
   }
   console.log(`[skill] Installing "${source}" for agent "${agentName}"...`);
-  execSync(`npx pi install ${source}`, { cwd: agentDir, stdio: "inherit" });
+  execFileSync("npx", ["pi", "install", source], { cwd: agentDir, stdio: "inherit" });
   console.log(`[skill] Installed.`);
 }
 
@@ -39,6 +39,6 @@ export function skillRemoveCommand(agentName: string, source: string): void {
     throw new Error(`Agent directory not found: ${agentDir}`);
   }
   console.log(`[skill] Removing "${source}" from agent "${agentName}"...`);
-  execSync(`npx pi uninstall ${source}`, { cwd: agentDir, stdio: "inherit" });
+  execFileSync("npx", ["pi", "uninstall", source], { cwd: agentDir, stdio: "inherit" });
   console.log(`[skill] Removed.`);
 }
