@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createListAgentsTool, createReadAgentFileTool, createMailboxTool } from "../src/agent/tools.js";
+import { createListAgentsTool, createReadAgentFileTool, createMailboxTool } from "../src/agent/tools/index.js";
 import { Priority, type AgentInfo } from "../src/types.js";
 
 /** Extract text from tool result content[0]. */

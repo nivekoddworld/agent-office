@@ -7,7 +7,7 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentConfig, AgentInfo, AgentStatus } from "../types.js";
 import { PI_TESTS_DIR } from "../constants.js";
 import { buildDefaultPrompt } from "./prompt.js";
-import { createListAgentsTool, createReadAgentFileTool, createMailboxTool } from "./tools.js";
+import { createListAgentsTool, createReadAgentFileTool, createMailboxTool } from "./tools/index.js";
 
 export class AgentHandle {
   readonly config: AgentConfig;
