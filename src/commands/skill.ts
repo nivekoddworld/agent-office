@@ -6,6 +6,7 @@ function skillsDir(agentName: string): string {
   return join(PI_TESTS_DIR, "agents", agentName, "skills");
 }
 
+const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const SOURCE_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
 
 /** Fetch SKILL.md files from a GitHub repo (owner/repo format). */
@@ -42,7 +43,12 @@ async function fetchSkills(source: string): Promise<Array<{ name: string; conten
   return skills;
 }
 
+function validateAgentName(name: string): void {
+  if (!AGENT_NAME_RE.test(name)) throw new Error(`Invalid agent name: "${name}"`);
+}
+
 export async function skillAddCommand(agentName: string, source: string): Promise<void> {
+  validateAgentName(agentName);
   console.log(`[skill] Fetching from "${source}"...`);
   const skills = await fetchSkills(source);
 
@@ -62,6 +68,7 @@ export async function skillAddCommand(agentName: string, source: string): Promis
 }
 
 export function skillListCommand(agentName: string): void {
+  validateAgentName(agentName);
   const dir = skillsDir(agentName);
   if (!existsSync(dir)) { console.log(`No skills for "${agentName}".`); return; }
 
@@ -74,6 +81,8 @@ export function skillListCommand(agentName: string): void {
 }
 
 export function skillRemoveCommand(agentName: string, skillName: string): void {
+  validateAgentName(agentName);
+  if (!AGENT_NAME_RE.test(skillName)) throw new Error(`Invalid skill name: "${skillName}"`);
   const path = join(skillsDir(agentName), skillName);
   if (!existsSync(path)) throw new Error(`Skill "${skillName}" not found for "${agentName}"`);
   rmSync(path, { recursive: true });

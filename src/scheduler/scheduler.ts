@@ -90,10 +90,10 @@ export class Scheduler {
 
       // Non-blocking — agent runs concurrently
       dispatch
-        .then(() => handle.setStatus("idle"))
+        .then(() => { if (handle.status !== "dead") handle.setStatus("idle"); })
         .catch((err) => {
           console.error(`[scheduler] Agent "${handle.name}" error:`, err);
-          handle.setStatus("idle");
+          if (handle.status !== "dead") handle.setStatus("idle");
         });
     }
 
