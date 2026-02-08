@@ -54,8 +54,8 @@ export class AgentHandle {
       cwd: this.cwd,
       agentDir: this.agentDir,
       skillPaths: this.config.skillDirs,
-      includeDefaults: false,
     });
+    if (skills.length > 0) console.log(`[agent:${this.name}] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`);
     const skillsPrompt = skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
     const defaultPrompt = buildDefaultPrompt(this.name, this.cwd, this.config.description);
     const systemPrompt = (this.config.systemPrompt ?? defaultPrompt) + skillsPrompt;

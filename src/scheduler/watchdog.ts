@@ -5,6 +5,7 @@ const DEFAULTS: WatchdogConfig = {
   checkIntervalMs: 10_000,
   stuckThresholdMs: 120_000,
   maxRestarts: 5,
+  healthyResetMs: 600_000,
 };
 
 /**
@@ -16,6 +17,7 @@ export class Watchdog {
   private timer: ReturnType<typeof setInterval> | null = null;
   private agents: Map<string, AgentHandle>;
   private restartCounts = new Map<string, number>();
+  private lastStuck = new Map<string, number>();
   private onStuck: (name: string) => void;
 
   constructor(
@@ -46,8 +48,14 @@ export class Watchdog {
       if (handle.status !== "running") continue;
       const elapsed = now - handle.lastHeartbeat;
       if (elapsed > this.config.stuckThresholdMs) {
+        // Reset count if agent was healthy long enough since last stuck event
+        const lastStuckAt = this.lastStuck.get(name) ?? 0;
+        if (lastStuckAt && now - lastStuckAt > this.config.healthyResetMs) {
+          this.restartCounts.set(name, 0);
+        }
         const count = (this.restartCounts.get(name) ?? 0) + 1;
         this.restartCounts.set(name, count);
+        this.lastStuck.set(name, now);
         if (count > this.config.maxRestarts) {
           console.error(`[watchdog] Agent "${name}" exceeded max restarts (${this.config.maxRestarts}) — marking dead`);
           handle.setStatus("dead");

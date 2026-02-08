@@ -5,10 +5,13 @@ import type { Workspace } from "../workspace.js";
  * Telegram bridge — routes incoming messages to agents via grammY.
  * Streams agent events back to the originating chat.
  */
-export function createTelegramBridge(workspace: Workspace, token: string): Bot {
+export function createTelegramBridge(workspace: Workspace, token: string, allowedUsers?: string[]): Bot {
   const bot = new Bot(token);
   // Chat ID for the active Telegram session (all agent events route here)
   let activeChatId: number | null = null;
+
+  const isAllowed = (username?: string): boolean =>
+    !allowedUsers || allowedUsers.length === 0 || (!!username && allowedUsers.includes(username));
 
   workspace.onAgentEvent((agentName, event) => {
     if (!activeChatId) return;
@@ -67,6 +70,7 @@ export function createTelegramBridge(workspace: Workspace, token: string): Bot {
   });
 
   bot.hears(/^@(\S+)\s+(.+)$/s, async (ctx) => {
+    if (!isAllowed(ctx.from?.username)) return;
     const name = ctx.match[1]!;
     const message = ctx.match[2]!;
     if (!workspace.getAgent(name)) {
@@ -79,6 +83,7 @@ export function createTelegramBridge(workspace: Workspace, token: string): Bot {
   });
 
   bot.on("message:text", async (ctx) => {
+    if (!isAllowed(ctx.from?.username)) return;
     const chatId = ctx.chat.id;
     const name = workspace.router.get(String(chatId)) ?? workspace.defaultAgent;
     if (!name) { await ctx.reply("No agent configured for this chat."); return; }
