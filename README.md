@@ -544,12 +544,3 @@ pnpm dev start        # Run in dev mode (tsx)
 Tests live in `test/` (one file per module, `<feature>.test.ts` naming).
 
 Requires Node 22+ and Docker (for sandbox mode).
-
-## Roadmap
-
-Phase 1 (current): Docker sandbox isolation with in-process and container execution modes.
-
-Phase 2 (planned):
-- Deno sandbox provider (lightweight alternative to Docker)
-- LLM proxy endpoint (API keys never enter sandbox)
-- 30-minute sandbox lifetime with state rehydration
