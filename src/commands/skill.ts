@@ -1,48 +1,19 @@
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, readdirSync, rmSync, existsSync } from "node:fs";
-import { PI_TESTS_DIR } from "../constants.js";
+import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import type { Workspace } from "../workspace.js";
-
-function skillsDir(agentName: string): string {
-  return join(PI_TESTS_DIR, "agents", agentName, "skills");
-}
+import {
+  fetchSkills,
+  isSkillInstalled,
+  skillsDir,
+  readSourceMap,
+  writeSourceMap,
+  reverseSourceLookup,
+} from "../skills/fetch.js";
+import { addSkillToYamlSync, removeSkillFromYamlSync, loadAgentsYaml } from "../config/agents-yaml.js";
+import { withConfigLock } from "../config/lock.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
-const SOURCE_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
-
-/** Fetch SKILL.md files from a GitHub repo (owner/repo format). */
-async function fetchSkills(source: string): Promise<Array<{ name: string; content: string }>> {
-  if (!SOURCE_RE.test(source)) throw new Error(`Invalid source "${source}" — expected "owner/repo"`);
-
-  const skills: Array<{ name: string; content: string }> = [];
-
-  // Try skills/ subdirectory first (multi-skill repo)
-  const apiUrl = `https://api.github.com/repos/${source}/contents/skills`;
-  const res = await fetch(apiUrl, { headers: { "User-Agent": "pi-tests" } });
-
-  if (res.ok) {
-    const entries = (await res.json()) as Array<{ name: string; type: string; path: string }>;
-    const dirs = entries.filter((e) => e.type === "dir");
-
-    for (const dir of dirs) {
-      const raw = `https://raw.githubusercontent.com/${source}/main/${dir.path}/SKILL.md`;
-      const md = await fetch(raw);
-      if (md.ok) skills.push({ name: dir.name, content: await md.text() });
-    }
-  }
-
-  // Fallback: single SKILL.md at repo root
-  if (skills.length === 0) {
-    const raw = `https://raw.githubusercontent.com/${source}/main/SKILL.md`;
-    const md = await fetch(raw);
-    if (md.ok) {
-      const name = source.split("/").pop() ?? "skill";
-      skills.push({ name, content: await md.text() });
-    }
-  }
-
-  return skills;
-}
 
 function validateAgentName(name: string): void {
   if (!AGENT_NAME_RE.test(name)) throw new Error(`Invalid agent name: "${name}"`);
@@ -58,12 +29,23 @@ export async function skillAddCommand(agentName: string, source: string, workspa
     return;
   }
 
+  // Atomic: disk writes + source map + YAML in one lock scope
   const dir = skillsDir(agentName);
-  for (const skill of skills) {
-    const dest = join(dir, skill.name);
-    mkdirSync(dest, { recursive: true });
-    writeFileSync(join(dest, "SKILL.md"), skill.content);
-    console.log(`  ✓ ${skill.name}`);
+  try {
+    await withConfigLock(async () => {
+      for (const skill of skills) {
+        const dest = join(dir, skill.name);
+        mkdirSync(dest, { recursive: true });
+        writeFileSync(join(dest, "SKILL.md"), skill.content);
+        console.log(`  ✓ ${skill.name}`);
+      }
+      const map = readSourceMap(agentName);
+      for (const skill of skills) map[skill.name] = source;
+      writeSourceMap(agentName, map);
+      addSkillToYamlSync(agentName, source);
+    });
+  } catch (err) {
+    console.warn(`[skill] Could not install/sync:`, err instanceof Error ? err.message : err);
   }
   console.log(`[skill] ${skills.length} skill(s) installed for "${agentName}".`);
 
@@ -98,8 +80,57 @@ export async function skillRemoveCommand(agentName: string, skillName: string, w
   if (!AGENT_NAME_RE.test(skillName)) throw new Error(`Invalid skill name: "${skillName}"`);
   const path = join(skillsDir(agentName), skillName);
   if (!existsSync(path)) throw new Error(`Skill "${skillName}" not found for "${agentName}"`);
-  rmSync(path, { recursive: true });
+
+  // Look up source BEFORE deleting anything (needs the map intact)
+  let source: string | undefined;
+  let fromRecovery = false;
+  const map = readSourceMap(agentName);
+  source = map[skillName];
+
+  // Recovery: if no source map entry, try reverse lookup
+  if (!source) {
+    const yaml = loadAgentsYaml();
+    const yamlSources = yaml?.agents[agentName]?.skills ?? [];
+    if (yamlSources.length > 0) {
+      source = await reverseSourceLookup(skillName, yamlSources);
+      if (source) {
+        fromRecovery = true;
+        console.log(`[skill] Recovered source mapping: "${skillName}" → "${source}"`);
+      }
+    }
+  }
+
+  // Atomic: disk delete + mapping removal + conditional YAML update in one lock scope
+  try {
+    await withConfigLock(async () => {
+      rmSync(path, { recursive: true });
+
+      if (!source) return;
+
+      const currentMap = readSourceMap(agentName);
+      delete currentMap[skillName];
+      writeSourceMap(agentName, currentMap);
+
+      if (fromRecovery) {
+        const dir = skillsDir(agentName);
+        const remaining = existsSync(dir)
+          ? readdirSync(dir, { withFileTypes: true })
+              .filter((d) => d.isDirectory() && d.name !== ".sources.json" && isSkillInstalled(agentName, d.name))
+          : [];
+        if (remaining.length === 0) removeSkillFromYamlSync(agentName, source);
+      } else {
+        const remainingFromSource = Object.values(currentMap).filter((s) => s === source);
+        if (remainingFromSource.length === 0) removeSkillFromYamlSync(agentName, source);
+      }
+    });
+  } catch (err) {
+    console.warn(`[skill] Could not sync metadata:`, err instanceof Error ? err.message : err);
+  }
   console.log(`[skill] Removed "${skillName}" from "${agentName}".`);
+
+  if (!source) {
+    console.warn(`[skill] Cannot determine source for "${skillName}" — update agents.yaml manually`);
+  }
 
   const handle = workspace?.getAgent(agentName);
   if (handle) {

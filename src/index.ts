@@ -10,6 +10,8 @@ import { killCommand } from "./commands/kill.js";
 import { statusCommand } from "./commands/status.js";
 import { routeCommand, routeListCommand } from "./commands/route.js";
 import { skillAddCommand, skillListCommand, skillRemoveCommand } from "./commands/skill.js";
+import { applyAgentsYaml, agentsReloadCommand, agentsValidateCommand, agentsPathCommand } from "./commands/agents-yaml.js";
+import { ensureAgentsYamlExists } from "./config/agents-yaml.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[error]", err instanceof Error ? err.message : err);
@@ -54,6 +56,10 @@ program
       bot.start();
       console.log(`[telegram] Connected${allowedUsers.length ? ` (allowed: ${allowedUsers.join(", ")})` : " (open access)"}`);
     }
+
+    // Bootstrap agents.yaml if missing, then auto-spawn
+    ensureAgentsYamlExists();
+    await applyAgentsYaml(workspace);
 
     // REPL
     const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "\npi> " });
@@ -128,6 +134,20 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
       console.log("Usage: skill add <agent> <owner/repo> | skill list <agent> | skill remove <agent> <name>");
       break;
     }
+    case "agents": {
+      const sub = parts[1];
+      if (sub === "reload") {
+        const force = parts.includes("--force");
+        await agentsReloadCommand(workspace, force);
+      } else if (sub === "validate") {
+        agentsValidateCommand();
+      } else if (sub === "path") {
+        agentsPathCommand();
+      } else {
+        console.log("Usage: agents reload [--force] | agents validate | agents path");
+      }
+      break;
+    }
     case "help":
       printHelp();
       break;
@@ -142,13 +162,16 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
   }
 }
 
-function parseSpawnArgs(parts: string[]): { name: string; model?: string; priority?: string; thinking?: string; cwd?: string; prompt?: string; desc?: string } {
+function parseSpawnArgs(parts: string[]): { name: string; model?: string; priority?: string; thinking?: string; cwd?: string; prompt?: string; desc?: string; ephemeral?: boolean } {
   const args: Record<string, string> = {};
   let name = "";
+  let ephemeral = false;
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
-    if (part.startsWith("--")) {
+    if (part === "--ephemeral") {
+      ephemeral = true;
+    } else if (part.startsWith("--")) {
       const key = part.slice(2);
       args[key] = parts[++i] ?? "";
     } else if (!name) {
@@ -156,8 +179,8 @@ function parseSpawnArgs(parts: string[]): { name: string; model?: string; priori
     }
   }
 
-  if (!name) throw new Error("Usage: spawn <name> [--model provider:id] [--priority 0-4] [--thinking level] [--cwd path]");
-  return { name, ...args };
+  if (!name) throw new Error("Usage: spawn <name> [--model provider:id] [--priority 0-4] [--thinking level] [--cwd path] [--ephemeral]");
+  return { name, ...args, ...(ephemeral ? { ephemeral: true } : {}) };
 }
 
 function parseReplInput(input: string): string[] {
@@ -186,7 +209,7 @@ function parseReplInput(input: string): string[] {
 function printHelp(): void {
   console.log(`
 Commands:
-  spawn <name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path] [--desc text]
+  spawn <name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path] [--desc text] [--ephemeral]
   list                          List all agents
   send <agent> <message>        Send message to agent
   kill <agent>                  Stop and remove agent
@@ -194,6 +217,9 @@ Commands:
   skill add <agent> <owner/repo> Install skills from GitHub
   skill list <agent>            List agent skills
   skill remove <agent> <name>   Remove a skill
+  agents reload [--force]       Re-read agents.yaml and spawn/update agents
+  agents validate               Validate agents.yaml without spawning
+  agents path                   Print path to agents.yaml
   route <chatId> <agent>        Route Telegram chat to agent
   route list                    List all routes
   help                          Show this help

@@ -2,6 +2,7 @@ import { getModel } from "@mariozechner/pi-ai";
 import type { Workspace } from "../workspace.js";
 import { Priority } from "../types.js";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import { upsertAgentToYaml } from "../config/agents-yaml.js";
 
 interface SpawnArgs {
   name: string;
@@ -11,10 +12,12 @@ interface SpawnArgs {
   cwd?: string;
   prompt?: string;
   desc?: string;
+  ephemeral?: boolean;
 }
 
 export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promise<void> {
-  const [provider, modelId] = parseModel(args.model ?? "anthropic:claude-sonnet-4-20250514");
+  const modelSpec = args.model ?? "anthropic:claude-sonnet-4-20250514";
+  const [provider, modelId] = parseModel(modelSpec);
   const model = getModel(provider as any, modelId as any);
   const priority = parsePriority(args.priority ?? "2");
 
@@ -29,6 +32,21 @@ export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promi
   });
 
   console.log(`[spawn] Agent "${args.name}" created (cwd: ${handle.cwd})`);
+
+  if (!args.ephemeral) {
+    try {
+      await upsertAgentToYaml(args.name, {
+        model: modelSpec,
+        priority: args.priority,
+        thinking: args.thinking,
+        description: args.desc,
+        prompt: args.prompt,
+        cwd: args.cwd,
+      });
+    } catch (err) {
+      console.warn(`[spawn] Could not sync agents.yaml:`, err instanceof Error ? err.message : err);
+    }
+  }
 }
 
 function parseModel(spec: string): [string, string] {
@@ -40,8 +58,7 @@ function parseModel(spec: string): [string, string] {
 }
 
 function parsePriority(val: string): Priority {
-  const num = parseInt(val, 10);
-  if (num >= 0 && num <= 4) return num as Priority;
+  if (/^[0-4]$/.test(val)) return Number(val) as Priority;
 
   const map: Record<string, Priority> = {
     idle: Priority.IDLE,
