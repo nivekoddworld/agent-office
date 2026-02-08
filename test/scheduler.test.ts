@@ -153,6 +153,51 @@ describe("Scheduler", () => {
     sched.stop();
   });
 
+  it("does not overwrite dead status when in-flight dispatch resolves", async () => {
+    let resolvePrompt: (() => void) | undefined;
+    const promptPromise = new Promise<void>((resolve) => {
+      resolvePrompt = resolve;
+    });
+
+    const target = {
+      name: "target",
+      config: { name: "target", priority: Priority.NORMAL },
+      status: "idle" as "idle" | "running" | "dead",
+      setStatus: vi.fn(function (this: any, s: "idle" | "running" | "dead") { this.status = s; }),
+      prompt: vi.fn(async () => promptPromise),
+      steer: vi.fn(async () => {}),
+      info: vi.fn(() => ({
+        name: "target",
+        status: "idle",
+        priority: Priority.NORMAL,
+        model: "test",
+        description: "",
+        queueDepth: 0,
+        turns: 0,
+        lastHeartbeat: Date.now(),
+      })),
+    } as any;
+
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+    agents.set("target", target);
+    bus.register("target");
+    bus.send({ from: "__user__", to: "target", type: "prompt", payload: "work", priority: Priority.NORMAL });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+
+    // Simulate watchdog marking the agent dead while prompt is still in-flight.
+    target.setStatus("dead");
+    resolvePrompt?.();
+    await Promise.resolve();
+
+    expect(target.status).toBe("dead");
+    expect(target.setStatus).not.toHaveBeenCalledWith("idle");
+    sched.stop();
+  });
+
   it("increments tick count", () => {
     const agents = new Map<string, any>();
     const bus = new MessageBus();

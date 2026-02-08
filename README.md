@@ -52,17 +52,17 @@ OPENAI_API_KEY=sk-...
 
 ## REPL Commands
 
-| Command | Description |
-|---|---|
-| `spawn <name> [options]` | Create a new agent |
-| `list` | Show all agents with status table |
-| `send <agent> <message>` | Queue a message for an agent |
-| `kill <agent>` | Stop and remove an agent |
-| `status` | Show scheduler, watchdog, and resource state |
-| `route <chatId> <agent>` | Route a Telegram chat to an agent |
-| `route list` | List all Telegram chat routes |
-| `help` | Show available commands |
-| `exit` | Shutdown |
+| Command                  | Description                                  |
+| ------------------------ | -------------------------------------------- |
+| `spawn <name> [options]` | Create a new agent                           |
+| `list`                   | Show all agents with status table            |
+| `send <agent> <message>` | Queue a message for an agent                 |
+| `kill <agent>`           | Stop and remove an agent                     |
+| `status`                 | Show scheduler, watchdog, and resource state |
+| `route <chatId> <agent>` | Route a Telegram chat to an agent            |
+| `route list`             | List all Telegram chat routes                |
+| `help`                   | Show available commands                      |
+| `exit`                   | Shutdown                                     |
 
 ### Spawn Options
 
@@ -113,6 +113,7 @@ reviewer calls read_agent_file:
 ### Collaboration Prompt
 
 Agents are prompted to:
+
 - Always use `list_agents` first to discover collaborators
 - Use `send_mail` for delegation and `read_agent_file` for code review
 - Never ask the user for information another agent can provide
@@ -129,12 +130,12 @@ TELEGRAM_BOT_TOKEN=xxx pnpm dev start --telegram
 
 ### Telegram Commands
 
-| Command | Description |
-|---|---|
-| `/agents` | List all running agents |
-| `/help` | Show available commands |
-| `@agentname message` | Send directly to a specific agent |
-| *(plain text)* | Send to the default agent or routed agent |
+| Command              | Description                               |
+| -------------------- | ----------------------------------------- |
+| `/agents`            | List all running agents                   |
+| `/help`              | Show available commands                   |
+| `@agentname message` | Send directly to a specific agent         |
+| _(plain text)_       | Send to the default agent or routed agent |
 
 Each agent's events route to the chat that triggered it, so multiple chats can interact with different agents concurrently.
 
@@ -156,13 +157,13 @@ The scheduler runs a `setInterval` tick loop (default 2s). Each tick:
 
 ### Priority Levels
 
-| Level | Value | Use case |
-|---|---|---|
-| `IDLE` | 0 | Background tasks, monitoring |
-| `LOW` | 1 | Review, optimization |
-| `NORMAL` | 2 | Standard work (default) |
-| `HIGH` | 3 | Primary agents, user-facing |
-| `CRITICAL` | 4 | Urgent, time-sensitive |
+| Level      | Value | Use case                     |
+| ---------- | ----- | ---------------------------- |
+| `IDLE`     | 0     | Background tasks, monitoring |
+| `LOW`      | 1     | Review, optimization         |
+| `NORMAL`   | 2     | Standard work (default)      |
+| `HIGH`     | 3     | Primary agents, user-facing  |
+| `CRITICAL` | 4     | Urgent, time-sensitive       |
 
 Higher-priority agents are always served first. One message per tick per agent prevents starvation.
 
@@ -222,12 +223,14 @@ pi> spawn reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — review
 ```
 
 Via Telegram:
+
 ```
 @copywriter Write landing page copy for FlowPilot, an AI task manager.
 Include hero, 3 features, CTA. Send to designer when done.
 ```
 
 What happens:
+
 1. **copywriter** writes copy, uses `list_agents` to discover designer, sends via `send_mail`
 2. **designer** receives mail, builds `index.html` with the copy
 3. You send: `@reviewer Review designer's work and send feedback`
@@ -273,16 +276,16 @@ src/
 
 ## Dependencies
 
-| Package | Purpose |
-|---|---|
-| `@mariozechner/pi-agent-core` | Pi agent runtime |
+| Package                         | Purpose                         |
+| ------------------------------- | ------------------------------- |
+| `@mariozechner/pi-agent-core`   | Pi agent runtime                |
 | `@mariozechner/pi-coding-agent` | Sandboxed coding tools + skills |
-| `@mariozechner/pi-ai` | Model registry + streaming |
-| `@sinclair/typebox` | Tool parameter schemas |
-| `async-mutex` | Mutex and semaphore primitives |
-| `commander` | CLI argument parsing |
-| `dotenv` | Load `.env` into `process.env` |
-| `grammy` | Telegram Bot API |
+| `@mariozechner/pi-ai`           | Model registry + streaming      |
+| `@sinclair/typebox`             | Tool parameter schemas          |
+| `async-mutex`                   | Mutex and semaphore primitives  |
+| `commander`                     | CLI argument parsing            |
+| `dotenv`                        | Load `.env` into `process.env`  |
+| `grammy`                        | Telegram Bot API                |
 
 ## Development
 
