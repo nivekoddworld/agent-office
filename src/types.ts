@@ -1,5 +1,6 @@
 import type { AgentTool, ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Model } from "@mariozechner/pi-ai";
+import type { SandboxMode } from "./sandbox/types.js";
 
 // --- Priority ---
 
@@ -26,6 +27,7 @@ export interface AgentConfig {
   skillDirs?: string[];
   tools?: AgentTool<any>[];
   apiKey?: string;
+  sandbox?: SandboxMode;
 }
 
 export interface AgentInfo {
@@ -75,4 +77,5 @@ export interface WorkspaceConfig {
   tickIntervalMs?: number;
   watchdog?: Partial<WatchdogConfig>;
   defaultAgent?: string;
+  sandbox?: { mode: SandboxMode; hostPort?: number };
 }

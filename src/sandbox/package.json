@@ -1,0 +1,13 @@
+{
+  "name": "pi-sandbox",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@mariozechner/pi-agent-core": "0.52.7",
+    "@mariozechner/pi-ai": "0.52.7",
+    "@mariozechner/pi-coding-agent": "0.52.7",
+    "@sinclair/typebox": "^0.34.0",
+    "tsx": "^4.19.3"
+  }
+}

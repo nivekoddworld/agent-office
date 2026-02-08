@@ -1,10 +1,16 @@
+import { randomUUID } from "node:crypto";
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { AgentHandle } from "./agent/handle.js";
 import { MessageBus } from "./transport/message-bus.js";
 import { Router } from "./routing.js";
 import { Scheduler } from "./scheduler/scheduler.js";
 import { Watchdog } from "./scheduler/watchdog.js";
+import { HostApi } from "./sandbox/host-api.js";
+import { DockerProvider } from "./sandbox/docker-provider.js";
+import type { SandboxProvider } from "./sandbox/types.js";
 import type { AgentConfig, AgentInfo, Priority, WorkspaceConfig } from "./types.js";
+
+const DEFAULT_HOST_PORT = 13000;
 
 /**
  * Workspace — the central facade that wires scheduler, bus, watchdog, and agents.
@@ -17,23 +23,38 @@ export class Workspace {
   readonly router = new Router();
   defaultAgent: string | undefined;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
+  private hostApi: HostApi | null = null;
+  private sandboxProvider: SandboxProvider | null = null;
+  private sandboxMode: string;
+  private hostApiPort: number;
 
   constructor(config: WorkspaceConfig = {}) {
     this.defaultAgent = config.defaultAgent;
+    this.sandboxMode = config.sandbox?.mode ?? "none";
+    this.hostApiPort = config.sandbox?.hostPort ?? DEFAULT_HOST_PORT;
     this.scheduler = new Scheduler(this.agents, this.bus, config.tickIntervalMs ?? 2000);
     this.watchdog = new Watchdog(this.agents, (name) => this.handleStuck(name), config.watchdog);
+
+    if (this.sandboxMode === "docker") {
+      this.hostApi = new HostApi(this.bus, () => this.list());
+      this.sandboxProvider = new DockerProvider(this.hostApi, this.hostApiPort);
+    }
   }
 
-  start(): void {
+  async start(): Promise<void> {
+    if (this.hostApi && this.sandboxMode === "docker") {
+      await this.hostApi.start(this.hostApiPort);
+    }
     this.scheduler.start();
     this.watchdog.start();
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     this.scheduler.stop();
     this.watchdog.stop();
-    for (const handle of this.agents.values()) handle.destroy();
+    for (const handle of this.agents.values()) await handle.destroy();
     this.agents.clear();
+    if (this.hostApi) await this.hostApi.stop();
   }
 
   async spawn(config: AgentConfig): Promise<AgentHandle> {
@@ -44,8 +65,35 @@ export class Workspace {
       throw new Error(`Agent "${config.name}" already exists`);
     }
 
-    const handle = new AgentHandle(config, this.bus, () => this.list());
-    await handle.init();
+    const useSandbox = config.sandbox === "docker" || (config.sandbox !== "none" && this.sandboxMode === "docker");
+
+    // Register token with host API for sandboxed agents
+    let provider: SandboxProvider | undefined;
+    let hostApi: HostApi | undefined;
+    let sandboxToken: string | undefined;
+    if (useSandbox && this.sandboxProvider && this.hostApi) {
+      sandboxToken = randomUUID();
+      this.hostApi.registerAgent(config.name, sandboxToken);
+      provider = this.sandboxProvider;
+      hostApi = this.hostApi;
+    }
+
+    const handle = new AgentHandle(config, {
+      bus: this.bus,
+      listAgentsFn: () => this.list(),
+      provider,
+      hostApi,
+      sandboxToken,
+    });
+    try {
+      await handle.init();
+    } catch (err) {
+      if (sandboxToken && this.hostApi) {
+        this.hostApi.unregisterAgent(sandboxToken);
+        this.hostApi.clearPendingPrompts(config.name);
+      }
+      throw err;
+    }
 
     this.agents.set(config.name, handle);
     this.bus.register(config.name);
@@ -64,10 +112,10 @@ export class Workspace {
     return handle;
   }
 
-  kill(name: string): void {
+  async kill(name: string): Promise<void> {
     const handle = this.agents.get(name);
     if (!handle) throw new Error(`Agent "${name}" not found`);
-    handle.destroy();
+    await handle.destroy();
     this.bus.unregister(name);
     this.agents.delete(name);
     if (this.defaultAgent === name) this.defaultAgent = undefined;

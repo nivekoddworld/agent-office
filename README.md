@@ -1,6 +1,6 @@
 # pi-tests
 
-FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates sandboxed AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, and Telegram as a messaging frontend.
+FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, optional Docker sandbox isolation, and Telegram as a messaging frontend.
 
 ## Architecture
 
@@ -13,18 +13,23 @@ graph TD
     WS --> BUS[MessageBus\nmailboxes]
     WS --> WD[Watchdog\nheartbeat]
 
-    SCH --> A[Agent A\nPi · sandbox · skills]
-    SCH --> B[Agent B\nPi · sandbox · skills]
-    SCH --> C[Agent C\nPi · sandbox · skills]
+    WS -->|in-process| A[Agent A\nPi · tools · skills]
+    WS -->|in-process| B[Agent B\nPi · tools · skills]
+
+    WS -->|Docker sandbox| HA[Host API\nHTTP :13000]
+    HA <-->|HTTP| SA[Sandbox A\nDocker · Pi · proxy tools]
+    HA <-->|HTTP| SB[Sandbox B\nDocker · Pi · proxy tools]
 
     BUS --> A
     BUS --> B
-    BUS --> C
+    BUS --> HA
 ```
 
 **Core flow:** CLI/Telegram -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem sandbox, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`). The scheduler runs a FreeRTOS-style tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`). The scheduler runs a FreeRTOS-style tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+
+Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
 ## Quick Start
 
@@ -34,11 +39,11 @@ pnpm install
 # Configure .env
 cp .env.example .env   # then fill in your keys
 
-# Start the REPL
+# Start the REPL (in-process agents, Telegram auto-connects if token set)
 pnpm dev start
 
-# With Telegram
-pnpm dev start --telegram
+# Start with Docker sandbox isolation
+pnpm dev start --sandbox docker
 ```
 
 Create a `.env` file with your provider keys:
@@ -47,22 +52,134 @@ Create a `.env` file with your provider keys:
 OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=sk-...
 # GEMINI_API_KEY=...
-# TELEGRAM_BOT_TOKEN=...
+TELEGRAM_BOT_TOKEN=...          # Telegram bridge auto-enables when set
+# TELEGRAM_ENABLED=false        # Set to disable Telegram
+# ALLOWED_USERS=alice,bob       # Comma-separated allowlist (empty = open access)
 ```
+
+## Sandbox Modes
+
+pi-tests supports two execution modes for agents:
+
+### In-Process Mode (default)
+
+```bash
+pnpm dev start                  # or explicitly:
+pnpm dev start --sandbox none
+```
+
+Agents run in the same Node.js process as the scheduler. Simple, fast, zero setup. Tools call directly into the message bus and filesystem.
+
+**Best for:** development, single-user setups, trusted agent code.
+
+### Docker Sandbox Mode
+
+```bash
+pnpm dev start --sandbox docker
+```
+
+Each agent runs inside an isolated Docker container with hardened security. Agents communicate with the host via HTTP through the Host API.
+
+**Best for:** untrusted agent code, multi-tenant environments, production deployments.
+
+**Requirements:** Docker must be installed and running.
+
+#### How Docker Sandbox Works
+
+```
+Host Process                        Docker Container (per agent)
++---------------------------+       +-----------------------------+
+| Workspace                 |       | sandbox-entry.ts            |
+| Scheduler + MessageBus    |       | Pi Agent + coding tools     |
+| Host API server (:13000)  |<-HTTP>| Proxy tools (HTTP->Host)    |
+| DockerProvider            |       | HTTP server (:3100)         |
+| Watchdog                  |       | Heartbeat loop (5s)         |
++---------------------------+       +-----------------------------+
+```
+
+1. **Workspace** generates a unique auth token per agent and registers it with the Host API.
+2. **DockerProvider** builds the `pi-sandbox` Docker image (once), then runs a container per agent with:
+   - `--cap-drop=ALL` — no Linux capabilities
+   - `--security-opt no-new-privileges` — no privilege escalation
+   - `--user 1000:1000` — non-root user
+   - Volume mount: host workspace directory -> `/workspace` in container
+3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
+   - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
+   - Proxy tools that forward `send_mail`, `list_agents`, `read_agent_file` to the Host API over HTTP
+4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
+5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
+6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
+
+#### Docker Sandbox Security Model
+
+| Protection | Mechanism |
+|---|---|
+| Process isolation | Separate Docker container per agent |
+| No root access | `--user 1000:1000`, `--cap-drop=ALL`, `no-new-privileges` |
+| Filesystem isolation | Only the agent's own workspace is mounted |
+| Cross-agent file access | Proxied through Host API with path traversal guards |
+| Authentication | Unique per-agent Bearer token, server-side validation |
+| Message integrity | Server derives sender identity from token, never trusts body |
+| Idempotency | `messageId`-based deduplication with 5-minute TTL |
+| Request limits | 64 KB send-mail body, 1 MB general body, 1 MB file response |
+| Prompt timeout | 5-minute timeout on prompt completion |
+
+#### Docker Sandbox Example
+
+```bash
+# Terminal 1: Start with Docker sandbox
+pnpm dev start --sandbox docker
+
+# In the REPL:
+pi> spawn designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
+# → [agent:designer] Started in sandbox (http://localhost:13100)
+
+pi> spawn reviewer --model openai:gpt-4.1 --desc "Code reviewer"
+# → [agent:reviewer] Started in sandbox (http://localhost:13101)
+
+pi> send designer "Create a responsive landing page with hero section"
+# → designer works inside its Docker container, edits files in /workspace
+# → Files persist at ~/.pi-tests/agents/designer/workspace/ on the host
+
+pi> send reviewer "Review designer's index.html and send feedback"
+# → reviewer uses read_agent_file (proxied via Host API) to read designer's files
+# → reviewer uses send_mail (proxied via Host API) to send feedback to designer
+```
+
+Verify files created by sandboxed agents persist on the host:
+
+```bash
+ls ~/.pi-tests/agents/designer/workspace/
+# index.html  styles.css  ...
+```
+
+#### Host API Endpoints
+
+The Host API runs on port 13000 (configurable) and provides the bridge between sandboxed agents and the host system.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/send-mail` | Forward message to another agent's mailbox |
+| `GET` | `/api/agents` | List all agents (name, status, description) |
+| `GET` | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace |
+| `POST` | `/api/prompt-done` | Notify host that a prompt completed |
+| `POST` | `/api/heartbeat` | Update agent heartbeat timestamp |
+
+All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable.
 
 ## REPL Commands
 
-| Command                  | Description                                  |
-| ------------------------ | -------------------------------------------- |
-| `spawn <name> [options]` | Create a new agent                           |
-| `list`                   | Show all agents with status table            |
-| `send <agent> <message>` | Queue a message for an agent                 |
-| `kill <agent>`           | Stop and remove an agent                     |
-| `status`                 | Show scheduler, watchdog, and resource state |
-| `route <chatId> <agent>` | Route a Telegram chat to an agent            |
-| `route list`             | List all Telegram chat routes                |
-| `help`                   | Show available commands                      |
-| `exit`                   | Shutdown                                     |
+| Command | Description |
+|---|---|
+| `spawn <name> [options]` | Create a new agent |
+| `list` | Show all agents with status table |
+| `send <agent> <message>` | Queue a message for an agent |
+| `kill <agent>` | Stop and remove an agent |
+| `status` | Show scheduler, watchdog, and resource state |
+| `route <chatId> <agent>` | Route a Telegram chat to an agent |
+| `route list` | List all Telegram chat routes |
+| `help` | Show available commands |
+| `exit` | Shutdown |
 
 ### Spawn Options
 
@@ -76,13 +193,23 @@ spawn <name>
   --prompt <text>           Custom system prompt
 ```
 
+### CLI Flags
+
+```
+pnpm dev start
+  --tick-interval <ms>      Scheduler tick interval (default: 2000)
+  --sandbox <mode>          Sandbox mode: none | docker (default: none)
+```
+
+Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via `TELEGRAM_ENABLED=false` in `.env`.
+
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through three built-in tools:
+Agents discover and communicate with each other autonomously through three built-in tools. Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
 
 ### `list_agents`
 
-Discover all agents in the workspace with their name, status, workspace path, and description. Agents are instructed to call this first when given a task to find collaborators.
+Discover all agents in the workspace with their name, status, and description. Agents are instructed to call this first when given a task to find collaborators.
 
 ### `send_mail`
 
@@ -93,9 +220,9 @@ copywriter calls send_mail:
   to: "designer"
   message: "Here's the landing page copy: ..."
 
-→ Message lands in designer's mailbox
-→ Next tick delivers it as: [Mail from copywriter]\nHere's the landing page copy: ...
-→ Designer starts working
+-> Message lands in designer's mailbox
+-> Next tick delivers it as: [Mail from copywriter]\nHere's the landing page copy: ...
+-> Designer starts working
 ```
 
 ### `read_agent_file`
@@ -107,8 +234,27 @@ reviewer calls read_agent_file:
   agent: "designer"
   path: "index.html"
 
-→ Returns contents of ~/.pi-tests/agents/designer/workspace/index.html
+-> Returns contents of ~/.pi-tests/agents/designer/workspace/index.html
 ```
+
+In Docker sandbox mode, this tool is proxied through the Host API. The agent sends an HTTP request to the host, which reads the file on disk and returns the content. The sandboxed agent never has direct filesystem access to other agents' workspaces.
+
+### Tool Architecture
+
+```
+src/agent/tools/
+  contracts.ts              Single source of truth (name, label, description, parameters)
+  send-mail.ts              Host implementation (direct bus.send)
+  list-agents.ts            Host implementation (direct listFn call)
+  read-agent-file.ts        Host implementation (direct fs access)
+  proxy/
+    send-mail.ts            Sandbox implementation (HTTP POST /api/send-mail)
+    list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
+    read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
+    index.ts                Barrel export + HostFetch type
+```
+
+In-process agents use the host implementations directly. Sandboxed agents use the proxy implementations, which forward requests to the Host API over HTTP. Both share the same tool contracts to prevent schema drift.
 
 ### Collaboration Prompt
 
@@ -122,20 +268,27 @@ Agents are prompted to:
 
 ## Telegram Integration
 
-Connect a Telegram bot as a messaging frontend. All agent events (tool calls, text responses, completion) stream to the originating chat.
+Telegram bridge auto-enables when `TELEGRAM_BOT_TOKEN` is set in `.env` or the environment. All agent events (tool calls, text responses, completion) stream to the originating chat.
+
+```env
+# .env
+TELEGRAM_BOT_TOKEN=xxx
+# TELEGRAM_ENABLED=false   # uncomment to disable
+# ALLOWED_USERS=alice,bob  # optional allowlist
+```
 
 ```bash
-TELEGRAM_BOT_TOKEN=xxx pnpm dev start --telegram
+pnpm dev start   # Telegram connects automatically
 ```
 
 ### Telegram Commands
 
-| Command              | Description                               |
-| -------------------- | ----------------------------------------- |
-| `/agents`            | List all running agents                   |
-| `/help`              | Show available commands                   |
-| `@agentname message` | Send directly to a specific agent         |
-| _(plain text)_       | Send to the default agent or routed agent |
+| Command | Description |
+|---|---|
+| `/agents` | List all running agents |
+| `/help` | Show available commands |
+| `@agentname message` | Send directly to a specific agent |
+| _(plain text)_ | Send to the default agent or routed agent |
 
 Each agent's events route to the chat that triggered it, so multiple chats can interact with different agents concurrently.
 
@@ -157,19 +310,19 @@ The scheduler runs a `setInterval` tick loop (default 2s). Each tick:
 
 ### Priority Levels
 
-| Level      | Value | Use case                     |
-| ---------- | ----- | ---------------------------- |
-| `IDLE`     | 0     | Background tasks, monitoring |
-| `LOW`      | 1     | Review, optimization         |
-| `NORMAL`   | 2     | Standard work (default)      |
-| `HIGH`     | 3     | Primary agents, user-facing  |
-| `CRITICAL` | 4     | Urgent, time-sensitive       |
+| Level | Value | Use case |
+|---|---|---|
+| `IDLE` | 0 | Background tasks, monitoring |
+| `LOW` | 1 | Review, optimization |
+| `NORMAL` | 2 | Standard work (default) |
+| `HIGH` | 3 | Primary agents, user-facing |
+| `CRITICAL` | 4 | Urgent, time-sensitive |
 
 Higher-priority agents are always served first. One message per tick per agent prevents starvation.
 
-### Sandboxing
+### Workspace Sandboxing
 
-Each agent gets an isolated workspace:
+Each agent gets an isolated workspace on the host filesystem:
 
 ```
 ~/.pi-tests/agents/
@@ -183,9 +336,11 @@ Each agent gets an isolated workspace:
 
 All file tools (read, write, edit, bash) are scoped to the agent's workspace directory. Agents can read each other's files via `read_agent_file` but cannot write to them.
 
+In Docker sandbox mode, the workspace directory is volume-mounted into the container at `/workspace`. File changes made inside the container persist on the host.
+
 ### Skills
 
-Markdown files with YAML frontmatter loaded from each agent's `skills/` directory and injected into the system prompt.
+Markdown files with YAML frontmatter loaded from each agent's `skills/` directory and injected into the system prompt. Skills work in both in-process and Docker sandbox modes — in sandbox mode, skill directories are mounted read-only into the container and loaded at startup.
 
 ```bash
 pnpm dev skill install designer npm:@anthropic/web-skills
@@ -196,6 +351,8 @@ pnpm dev skill remove designer npm:@anthropic/web-skills
 ### Watchdog
 
 Periodic heartbeat checks (default: every 10s). If an agent's last heartbeat exceeds the stuck threshold (default: 120s), it aborts and re-initializes with a fresh Pi instance. Every agent event resets the heartbeat timer.
+
+For Docker-sandboxed agents, heartbeats are received via `POST /api/heartbeat` from the container (every 5s) and fed into the watchdog through the same monitoring path.
 
 ### Resource Guards
 
@@ -212,9 +369,11 @@ const release = await workspace.semaphore.acquire("api-rate-limit");
 release();
 ```
 
-## End-to-End Example
+## End-to-End Examples
 
-Three agents collaborate on a landing page:
+### Example 1: In-Process Multi-Agent Collaboration
+
+Three agents collaborate on a landing page, all running in-process:
 
 ```
 pi> spawn designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
@@ -239,65 +398,158 @@ What happens:
 
 All coordination is autonomous after the initial prompt.
 
+### Example 2: Docker-Sandboxed Agent Workflow
+
+Isolated agents working on a Node.js API project:
+
+```bash
+# Start with Docker isolation
+pnpm dev start --sandbox docker
+```
+
+```
+pi> spawn backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
+# → Container started with --cap-drop=ALL, --user 1000:1000
+
+pi> spawn tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
+
+pi> send backend "Build a REST API for a todo app with CRUD endpoints using Express"
+```
+
+What happens behind the scenes:
+
+1. **DockerProvider** builds the `pi-sandbox` image (once, cached)
+2. Two containers start on ports 13100 and 13101
+3. **backend** agent runs inside its container:
+   - Uses `bash`, `write_file`, `edit_file` tools locally in `/workspace`
+   - Creates `server.js`, `package.json`, route files
+   - Files appear at `~/.pi-tests/agents/backend/workspace/` on host
+4. You send: `@tester Review backend's code and write tests`
+5. **tester** calls `list_agents` (proxy -> Host API -> returns agent list)
+6. **tester** calls `read_agent_file` (proxy -> Host API -> reads backend's files from host disk)
+7. **tester** writes test files in its own `/workspace`
+8. **tester** sends feedback to **backend** via `send_mail` (proxy -> Host API -> message bus)
+
+Each agent is fully isolated — a misbehaving agent cannot crash the host, read secrets, or access another agent's filesystem directly.
+
+### Example 3: Mixed Mode with Telegram
+
+```bash
+TELEGRAM_BOT_TOKEN=xxx pnpm dev start --sandbox docker
+```
+
+```
+# In Telegram:
+@backend Set up a PostgreSQL schema for users and posts
+@frontend Build a React dashboard that displays user stats
+
+# Both agents work in isolated containers
+# Files persist on host for inspection
+# Status visible via /agents command in Telegram
+```
+
 ## Project Structure
 
 ```
 src/
-  index.ts                CLI entry + REPL
-  workspace.ts            Central facade
-  types.ts                Shared types (Priority, AgentConfig, MailboxMessage, etc.)
-  constants.ts            Shared constants (PI_TESTS_DIR)
+  index.ts                    CLI entry + REPL
+  workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox)
+  types.ts                    Shared types (Priority, AgentConfig, SandboxMode, etc.)
+  constants.ts                Shared constants (PI_TESTS_DIR)
+  routing.ts                  Telegram chat -> agent routing
+
   agent/
-    handle.ts             Agent lifecycle (init, prompt, steer, abort, destroy)
-    prompt.ts             Default system prompt builder
+    handle.ts                 Agent lifecycle (init, prompt, steer, abort, destroy)
+    prompt.ts                 Default system prompt builder
+    entrypoints/
+      sandbox-entry.ts        Standalone process for Docker containers
     tools/
-      index.ts            Barrel re-export for all tools
-      list-agents.ts      list_agents — discover agents in workspace
-      read-agent-file.ts  read_agent_file — cross-agent file access
-      send-mail.ts        send_mail — inter-agent mailbox messaging
+      contracts.ts            Shared tool metadata (name, label, description, parameters)
+      index.ts                Barrel re-export for host-side tools
+      send-mail.ts            send_mail — host implementation (bus.send)
+      list-agents.ts          list_agents — host implementation (direct call)
+      read-agent-file.ts      read_agent_file — host implementation (local fs)
+      proxy/
+        index.ts              Barrel + HostFetch type
+        send-mail.ts          send_mail — proxy implementation (HTTP)
+        list-agents.ts        list_agents — proxy implementation (HTTP)
+        read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
+
+  sandbox/
+    types.ts                  SandboxProvider interface, SandboxMode, SandboxStartOpts
+    host-api.ts               HTTP server for sandbox-to-host communication
+    docker-provider.ts        Docker container lifecycle (build, run, stop, health)
+    Dockerfile                Container image definition (node:22-slim, non-root)
+    package.json              Sandbox-specific npm dependencies
+    index.ts                  Barrel export
+
   scheduler/
-    scheduler.ts          Tick-based priority scheduler
-    watchdog.ts           Heartbeat monitor + stuck detection
-    resource-guard.ts     Mutex + Semaphore via async-mutex
+    scheduler.ts              Tick-based priority scheduler
+    watchdog.ts               Heartbeat monitor + stuck detection
+
   transport/
-    local.ts              In-process priority mailbox queues
-    message-bus.ts        Bus wrapper over transport
+    local.ts                  In-process priority mailbox queues
+    message-bus.ts            Bus wrapper over transport
+
   bridges/
-    telegram.ts           grammY Telegram bridge
+    telegram.ts               grammY Telegram bridge
+
   commands/
-    spawn.ts              Agent creation with model/priority parsing
-    list.ts               Agent status table
-    send.ts               Message queueing
-    kill.ts               Agent teardown
-    status.ts             Scheduler/watchdog overview
-    route.ts              Telegram chat routing
-    skill.ts              Per-agent skill management
+    spawn.ts                  Agent creation with model/priority parsing
+    list.ts                   Agent status table
+    send.ts                   Message queueing
+    kill.ts                   Agent teardown
+    status.ts                 Scheduler/watchdog overview
+    route.ts                  Telegram chat routing
+    skill.ts                  Per-agent skill management
+
+test/
+  docker-provider.test.ts     Docker provider (mocked execFile + fetch)
+  host-api.test.ts            Host API endpoints, auth, prompt correlation
+  tool-contracts.test.ts      Verifies host + proxy tools share contracts
+  sandbox-validation.test.ts  CLI --sandbox option validation
+  tools.test.ts               Host-side tool behavior
+  scheduler.test.ts           Tick loop, priority ordering
+  watchdog.test.ts            Heartbeat, stuck detection, restart
+  message-bus.test.ts         Mailbox routing, rate limiting
+  local-transport.test.ts     Priority queue ordering
+  handle-skills.test.ts       Skill paths for in-process + sandbox agents
+  prompt.test.ts              System prompt generation
 ```
 
 ## Dependencies
 
-| Package                         | Purpose                         |
-| ------------------------------- | ------------------------------- |
-| `@mariozechner/pi-agent-core`   | Pi agent runtime                |
-| `@mariozechner/pi-coding-agent` | Sandboxed coding tools + skills |
-| `@mariozechner/pi-ai`           | Model registry + streaming      |
-| `@sinclair/typebox`             | Tool parameter schemas          |
-| `async-mutex`                   | Mutex and semaphore primitives  |
-| `commander`                     | CLI argument parsing            |
-| `dotenv`                        | Load `.env` into `process.env`  |
-| `grammy`                        | Telegram Bot API                |
+| Package | Purpose |
+|---|---|
+| `@mariozechner/pi-agent-core` | Pi agent runtime |
+| `@mariozechner/pi-coding-agent` | Coding tools (read, write, edit, bash, grep, find, ls) + skills |
+| `@mariozechner/pi-ai` | Model registry + streaming |
+| `@sinclair/typebox` | Tool parameter schemas |
+| `async-mutex` | Mutex and semaphore primitives |
+| `commander` | CLI argument parsing |
+| `dotenv` | Load `.env` into `process.env` |
+| `grammy` | Telegram Bot API |
 
 ## Development
 
 ```bash
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
-pnpm check            # ESLint (max 400 lines/file enforced)
-pnpm test             # Run test suite (vitest)
+pnpm check            # ESLint
+pnpm test             # Run test suite (vitest) — 84 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
 
 Tests live in `test/` (one file per module, `<feature>.test.ts` naming).
 
-Requires Node 22+.
+Requires Node 22+ and Docker (for sandbox mode).
+
+## Roadmap
+
+Phase 1 (current): Docker sandbox isolation with in-process and container execution modes.
+
+Phase 2 (planned):
+- Deno sandbox provider (lightweight alternative to Docker)
+- LLM proxy endpoint (API keys never enter sandbox)
+- 30-minute sandbox lifetime with state rehydration

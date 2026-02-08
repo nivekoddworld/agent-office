@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createInterface } from "node:readline";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { Workspace } from "./workspace.js";
 import { createTelegramBridge } from "./bridges/telegram.js";
 import { spawnCommand } from "./commands/spawn.js";
@@ -26,29 +26,31 @@ program
   .command("start")
   .description("Start the scheduler and enter REPL mode")
   .option("--tick-interval <ms>", "Scheduler tick interval in ms", "2000")
-  .option("--telegram", "Enable Telegram bridge")
-  .action(async (opts: { tickInterval: string; telegram?: boolean }) => {
+  .addOption(new Option("--sandbox <mode>", "Sandbox mode").choices(["none", "docker"]).default("none"))
+  .action(async (opts: { tickInterval: string; sandbox: string }) => {
     const tickIntervalMs = parseInt(opts.tickInterval, 10);
     if (!Number.isFinite(tickIntervalMs) || tickIntervalMs <= 0) {
       console.error("Error: --tick-interval must be a positive number");
       process.exit(1);
     }
-    const workspace = new Workspace({ tickIntervalMs });
+    const sandboxMode = opts.sandbox as "none" | "docker";
+    const workspace = new Workspace({
+      tickIntervalMs,
+      sandbox: sandboxMode !== "none" ? { mode: sandboxMode } : undefined,
+    });
 
-    workspace.start();
+    await workspace.start();
     console.log(`[scheduler] Started (tick=${workspace.scheduler.intervalMs}ms)`);
     console.log(`[watchdog] Started (check=10s, threshold=120s)`);
+    if (sandboxMode !== "none") console.log(`[sandbox] Mode: ${sandboxMode}`);
 
-    // Telegram bridge
-    if (opts.telegram) {
-      const token = process.env["TELEGRAM_BOT_TOKEN"];
-      if (!token) {
-        console.error("Error: TELEGRAM_BOT_TOKEN not set");
-        process.exit(1);
-      }
+    // Telegram bridge (enabled by default; disable with TELEGRAM_ENABLED=false)
+    const telegramToken = process.env["TELEGRAM_BOT_TOKEN"];
+    const telegramEnabled = process.env["TELEGRAM_ENABLED"] !== "false";
+    if (telegramEnabled && telegramToken) {
       const allowedUsers = (process.env["ALLOWED_USERS"] ?? "")
         .split(",").map((s) => s.trim()).filter(Boolean);
-      const bot = createTelegramBridge(workspace, token, allowedUsers);
+      const bot = createTelegramBridge(workspace, telegramToken, allowedUsers);
       bot.start();
       console.log(`[telegram] Connected${allowedUsers.length ? ` (allowed: ${allowedUsers.join(", ")})` : " (open access)"}`);
     }
@@ -71,8 +73,7 @@ program
 
     rl.on("close", () => {
       console.log("\n[shutdown] Stopping...");
-      workspace.stop();
-      setTimeout(() => process.exit(0), 2000);
+      workspace.stop().then(() => process.exit(0)).catch(() => process.exit(1));
     });
   });
 
@@ -104,7 +105,7 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
     case "kill": {
       const name = parts[1];
       if (!name) { console.log("Usage: kill <agent>"); break; }
-      killCommand(workspace, name);
+      await killCommand(workspace, name);
       break;
     }
     case "status":
@@ -133,7 +134,7 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
     case "exit":
     case "quit":
       console.log("[shutdown] Stopping...");
-      workspace.stop();
+      await workspace.stop();
       process.exit(0);
       break;
     default:
