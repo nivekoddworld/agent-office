@@ -15,7 +15,11 @@ export function createMailboxTool(agentName: string, bus: MessageBus): AgentTool
       message: Type.String({ description: "Message content" }),
     }),
     execute: async (_id, params: { to: string; message: string }) => {
-      bus.send({ from: agentName, to: params.to, type: "prompt", payload: params.message, priority: Priority.NORMAL });
+      try {
+        bus.send({ from: agentName, to: params.to, type: "prompt", payload: params.message, priority: Priority.NORMAL });
+      } catch {
+        return textResult(`Error: agent "${params.to}" not found.`);
+      }
       return textResult(`Message sent to ${params.to}`);
     },
   };

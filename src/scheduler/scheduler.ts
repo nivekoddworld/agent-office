@@ -77,6 +77,11 @@ export class Scheduler {
       const msg = messages[0]!;
       handle.setStatus("running");
 
+      // Re-queue remaining messages before dispatch (prevents loss on throw)
+      for (let i = 1; i < messages.length; i++) {
+        this.bus.requeue(handle.name, messages[i]!);
+      }
+
       const payload = formatMailPayload(msg);
       const dispatch =
         msg.type === "steer"
@@ -90,11 +95,6 @@ export class Scheduler {
           console.error(`[scheduler] Agent "${handle.name}" error:`, err);
           handle.setStatus("idle");
         });
-
-      // Re-queue remaining messages for next tick
-      for (let i = 1; i < messages.length; i++) {
-        this.bus.requeue(handle.name, messages[i]!);
-      }
     }
 
     const state = this.state();

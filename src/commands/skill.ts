@@ -6,8 +6,12 @@ function skillsDir(agentName: string): string {
   return join(PI_TESTS_DIR, "agents", agentName, "skills");
 }
 
+const SOURCE_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+
 /** Fetch SKILL.md files from a GitHub repo (owner/repo format). */
 async function fetchSkills(source: string): Promise<Array<{ name: string; content: string }>> {
+  if (!SOURCE_RE.test(source)) throw new Error(`Invalid source "${source}" — expected "owner/repo"`);
+
   const skills: Array<{ name: string; content: string }> = [];
 
   // Try skills/ subdirectory first (multi-skill repo)

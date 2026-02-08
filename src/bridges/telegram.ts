@@ -51,6 +51,7 @@ export function createTelegramBridge(workspace: Workspace, token: string, allowe
   });
 
   bot.command(["help", "start"], async (ctx) => {
+    if (!isAllowed(ctx.from?.username)) return;
     await ctx.reply(
       "pi-tests workspace bot\n\n" +
       "/agents — list running agents\n" +
@@ -60,6 +61,7 @@ export function createTelegramBridge(workspace: Workspace, token: string, allowe
   });
 
   bot.command("agents", async (ctx) => {
+    if (!isAllowed(ctx.from?.username)) return;
     const agents = workspace.list();
     if (agents.length === 0) { await ctx.reply("No agents running."); return; }
     const lines = agents.map((a) => {
