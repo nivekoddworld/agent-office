@@ -1,11 +1,12 @@
 # pi-tests
 
-FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, optional Docker sandbox isolation, and Telegram as a messaging frontend.
+FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
 
 ## Architecture
 
 ```mermaid
 graph TD
+    YAML[agents.yaml] --> WS
     CLI[CLI REPL] --> WS[Workspace]
     TG[Telegram / grammY] --> WS
 
@@ -25,7 +26,7 @@ graph TD
     BUS --> HA
 ```
 
-**Core flow:** CLI/Telegram -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
+**Core flow:** `agents.yaml` (auto-spawn) / CLI / Telegram -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
 Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`). The scheduler runs a FreeRTOS-style tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
@@ -56,6 +57,65 @@ TELEGRAM_BOT_TOKEN=...          # Telegram bridge auto-enables when set
 # TELEGRAM_ENABLED=false        # Set to disable Telegram
 # ALLOWED_USERS=alice,bob       # Comma-separated allowlist (empty = open access)
 ```
+
+## Declarative Configuration (`agents.yaml`)
+
+Define your workspace once in `~/.pi-tests/agents.yaml` and agents auto-spawn on startup. No more manual REPL commands on every restart.
+
+```yaml
+# ~/.pi-tests/agents.yaml
+agents:
+  designer:
+    model: anthropic:claude-sonnet-4-20250514
+    priority: normal        # idle | low | normal | high | critical (or 0-4)
+    thinking: low           # off | minimal | low | medium | high | xhigh
+    description: "Frontend designer — builds HTML/CSS"
+    prompt: |
+      You are a frontend designer specializing in responsive layouts.
+      Focus on clean, semantic HTML and modern CSS.
+    skills:
+      - nichochar/web-skills
+
+  reviewer:
+    model: openai:gpt-4.1
+    priority: high
+    thinking: medium
+    description: "Code reviewer"
+```
+
+All fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model` | string | `anthropic:claude-sonnet-4-20250514` | `provider:model-id` |
+| `priority` | string \| number | `normal` | Priority name or 0-4 |
+| `thinking` | string | `low` | `off` / `minimal` / `low` / `medium` / `high` / `xhigh` |
+| `description` | string | `""` | Visible to other agents |
+| `prompt` | string | _(built-in default)_ | Custom system prompt |
+| `cwd` | string | `~/.pi-tests/agents/<name>/workspace` | Working directory |
+| `skills` | string[] | `[]` | GitHub sources to auto-install (`owner/repo`) |
+
+### Auto-Sync
+
+REPL commands automatically keep `agents.yaml` in sync:
+
+- **`spawn`** persists the agent to YAML (use `--ephemeral` to skip)
+- **`kill`** removes the agent from YAML
+- **`skill add/remove`** updates the agent's `skills` array in YAML
+
+All writes are atomic (temp file + rename) and serialized through an in-process config lock to prevent concurrent corruption.
+
+### Reload
+
+```bash
+# In the REPL:
+pi> agents reload              # Spawn new agents from YAML, skip already-running
+pi> agents reload --force      # Kill and re-spawn agents with changed config
+pi> agents validate            # Dry-run: parse + validate without spawning
+pi> agents path                # Print path to agents.yaml
+```
+
+Change detection uses normalized config comparison (resolved model, numeric priority, sorted skills, trimmed prompt) so cosmetic YAML differences like `normal` vs `2` or reordered skills don't trigger false warnings.
 
 ## Sandbox Modes
 
@@ -171,11 +231,17 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 
 | Command | Description |
 |---|---|
-| `spawn <name> [options]` | Create a new agent |
+| `spawn <name> [options]` | Create a new agent (persists to YAML unless `--ephemeral`) |
 | `list` | Show all agents with status table |
 | `send <agent> <message>` | Queue a message for an agent |
-| `kill <agent>` | Stop and remove an agent |
+| `kill <agent>` | Stop and remove an agent (removes from YAML) |
 | `status` | Show scheduler, watchdog, and resource state |
+| `skill add <agent> <source>` | Install skills from GitHub (`owner/repo`) |
+| `skill list <agent>` | List installed skills |
+| `skill remove <agent> <name>` | Remove an installed skill |
+| `agents reload [--force]` | Re-apply `agents.yaml` (force kills changed agents) |
+| `agents validate` | Dry-run: parse + validate YAML without spawning |
+| `agents path` | Print path to `agents.yaml` |
 | `route <chatId> <agent>` | Route a Telegram chat to an agent |
 | `route list` | List all Telegram chat routes |
 | `help` | Show available commands |
@@ -191,6 +257,7 @@ spawn <name>
   --cwd <path>              Custom workspace dir (default: ~/.pi-tests/agents/<name>/workspace)
   --desc <text>             Agent description (visible to other agents)
   --prompt <text>           Custom system prompt
+  --ephemeral               Don't persist to agents.yaml
 ```
 
 ### CLI Flags
@@ -325,13 +392,16 @@ Higher-priority agents are always served first. One message per tick per agent p
 Each agent gets an isolated workspace on the host filesystem:
 
 ```
-~/.pi-tests/agents/
-  designer/
-    workspace/          # agent's cwd — all file tools scoped here
-    skills/             # agent-specific skills
-  reviewer/
-    workspace/
-    skills/
+~/.pi-tests/
+  agents.yaml               # declarative agent definitions
+  agents/
+    designer/
+      workspace/            # agent's cwd — all file tools scoped here
+      skills/               # installed skill directories
+        .sources.json       # skill folder → GitHub source mapping
+    reviewer/
+      workspace/
+      skills/
 ```
 
 All file tools (read, write, edit, bash) are scoped to the agent's workspace directory. Agents can read each other's files via `read_agent_file` but cannot write to them.
@@ -340,13 +410,26 @@ In Docker sandbox mode, the workspace directory is volume-mounted into the conta
 
 ### Skills
 
-Markdown files with YAML frontmatter loaded from each agent's `skills/` directory and injected into the system prompt. Skills work in both in-process and Docker sandbox modes — in sandbox mode, skill directories are mounted read-only into the container and loaded at startup.
+Markdown files loaded from each agent's `skills/` directory and injected into the system prompt. Skills work in both in-process and Docker sandbox modes.
+
+Skills can be installed via REPL or declared in `agents.yaml`:
+
+```yaml
+# agents.yaml — skills auto-install on startup
+agents:
+  designer:
+    skills:
+      - nichochar/web-skills
+```
 
 ```bash
-pnpm dev skill install designer npm:@anthropic/web-skills
-pnpm dev skill list designer
-pnpm dev skill remove designer npm:@anthropic/web-skills
+# REPL — installs to disk + updates agents.yaml
+pi> skill add designer nichochar/web-skills
+pi> skill list designer
+pi> skill remove designer web-tools
 ```
+
+A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `agents.yaml` entries when the last skill from a source is removed.
 
 ### Watchdog
 
@@ -458,6 +541,13 @@ src/
   constants.ts                Shared constants (PI_TESTS_DIR)
   routing.ts                  Telegram chat -> agent routing
 
+  config/
+    agents-yaml.ts            YAML loader, validator, write-back helpers
+    lock.ts                   In-process mutex for config read-modify-write
+
+  skills/
+    fetch.ts                  Skill fetching, source map, reverse lookup
+
   agent/
     handle.ts                 Agent lifecycle (init, prompt, steer, abort, destroy)
     prompt.ts                 Default system prompt builder
@@ -495,15 +585,17 @@ src/
     telegram.ts               grammY Telegram bridge
 
   commands/
-    spawn.ts                  Agent creation with model/priority parsing
+    agents-yaml.ts            Apply logic + agents reload/validate/path commands
+    spawn.ts                  Agent creation with YAML auto-sync
     list.ts                   Agent status table
     send.ts                   Message queueing
-    kill.ts                   Agent teardown
+    kill.ts                   Agent teardown with YAML auto-sync
     status.ts                 Scheduler/watchdog overview
     route.ts                  Telegram chat routing
-    skill.ts                  Per-agent skill management
+    skill.ts                  Skill install/remove with YAML + source map sync
 
 test/
+  agents-yaml.test.ts        YAML config: parsing, validation, apply, write-back, locking
   docker-provider.test.ts     Docker provider (mocked execFile + fetch)
   host-api.test.ts            Host API endpoints, auth, prompt correlation
   tool-contracts.test.ts      Verifies host + proxy tools share contracts
@@ -525,10 +617,10 @@ test/
 | `@mariozechner/pi-coding-agent` | Coding tools (read, write, edit, bash, grep, find, ls) + skills |
 | `@mariozechner/pi-ai` | Model registry + streaming |
 | `@sinclair/typebox` | Tool parameter schemas |
-| `async-mutex` | Mutex and semaphore primitives |
 | `commander` | CLI argument parsing |
 | `dotenv` | Load `.env` into `process.env` |
 | `grammy` | Telegram Bot API |
+| `yaml` | YAML parsing with comment-preserving Document API |
 
 ## Development
 
@@ -536,7 +628,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 84 tests
+pnpm test             # Run test suite (vitest) — 162 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
