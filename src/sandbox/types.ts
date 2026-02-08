@@ -16,7 +16,7 @@ export interface SandboxStartOpts {
   modelName: string;
   apiKey: string;
   workspacePath: string;
-  /** Host paths to skill directories (each mounted read-only at /workspace/.skills-{i}). */
+  /** Host paths to skill directories (each mounted read-only at /skills, /skills-1, etc.). */
   skillsPaths: string[];
 }
 

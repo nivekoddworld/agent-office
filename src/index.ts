@@ -122,9 +122,9 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
     case "skill": {
       const sub = parts[1];
       const agent = parts[2];
-      if (sub === "add" && agent && parts[3]) { await skillAddCommand(agent, parts[3]); break; }
+      if (sub === "add" && agent && parts[3]) { await skillAddCommand(agent, parts[3], workspace); break; }
       if (sub === "list" && agent) { skillListCommand(agent); break; }
-      if (sub === "remove" && agent && parts[3]) { skillRemoveCommand(agent, parts[3]); break; }
+      if (sub === "remove" && agent && parts[3]) { await skillRemoveCommand(agent, parts[3], workspace); break; }
       console.log("Usage: skill add <agent> <owner/repo> | skill list <agent> | skill remove <agent> <name>");
       break;
     }

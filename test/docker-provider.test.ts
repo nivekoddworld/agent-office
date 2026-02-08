@@ -101,8 +101,8 @@ describe("DockerProvider", () => {
 
     const runCall = (execFile as any).mock.calls.find((c: any[]) => c[1][0] === "run");
     const args: string[] = runCall[1];
-    expect(args.some((a: string) => a === "/tmp/default-skills:/workspace/.skills-0:ro")).toBe(true);
-    expect(args.some((a: string) => a === "/tmp/custom-skills:/workspace/.skills-1:ro")).toBe(true);
+    expect(args.some((a: string) => a === "/tmp/default-skills:/skills:ro")).toBe(true);
+    expect(args.some((a: string) => a === "/tmp/custom-skills:/skills-1:ro")).toBe(true);
   });
 
   it("cleans up stale containers before starting", async () => {
@@ -281,12 +281,12 @@ describe("DockerProvider", () => {
 
     // Alice's container only mounts alice's paths
     expect(aliceArgs.some((a: string) => a.includes("/tmp/alice/workspace:/workspace"))).toBe(true);
-    expect(aliceArgs.some((a: string) => a.includes("/tmp/alice/skills:/workspace/.skills-0:ro"))).toBe(true);
+    expect(aliceArgs.some((a: string) => a.includes("/tmp/alice/skills:/skills:ro"))).toBe(true);
     expect(aliceArgs.some((a: string) => a.includes("/tmp/bob/"))).toBe(false);
 
     // Bob's container only mounts bob's paths
     expect(bobArgs.some((a: string) => a.includes("/tmp/bob/workspace:/workspace"))).toBe(true);
-    expect(bobArgs.some((a: string) => a.includes("/tmp/bob/skills:/workspace/.skills-0:ro"))).toBe(true);
+    expect(bobArgs.some((a: string) => a.includes("/tmp/bob/skills:/skills:ro"))).toBe(true);
     expect(bobArgs.some((a: string) => a.includes("/tmp/alice/"))).toBe(false);
   });
 

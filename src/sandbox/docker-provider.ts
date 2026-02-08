@@ -54,9 +54,9 @@ export class DockerProvider implements SandboxProvider {
       "--cap-drop=ALL",
       "--security-opt", "no-new-privileges",
       "-v", `${opts.workspacePath}:/workspace`,
-      ...opts.skillsPaths.flatMap((p, i) => ["-v", `${p}:/workspace/.skills-${i}:ro`]),
+      ...opts.skillsPaths.flatMap((p, i) => ["-v", `${p}:${containerSkillPath(i)}:ro`]),
       "-e", `AGENT_NAME=${agentName}`,
-      "-e", `SKILL_PATHS=${JSON.stringify(opts.skillsPaths.map((_, i) => `/workspace/.skills-${i}`))}`,
+      "-e", `SKILL_PATHS=${JSON.stringify(opts.skillsPaths.map((_, i) => containerSkillPath(i)))}`,
       "-e", `AUTH_TOKEN=${opts.token}`,
       "-e", `HOST_URL=${hostUrl}`,
       "-e", `API_KEY=${opts.apiKey}`,
@@ -178,6 +178,11 @@ export class DockerProvider implements SandboxProvider {
     }
     return false;
   }
+}
+
+/** Maps skill path index to container mount path: /skills (default), /skills-1, /skills-2, etc. */
+function containerSkillPath(index: number): string {
+  return index === 0 ? "/skills" : `/skills-${index}`;
 }
 
 function exec(cmd: string, args: string[], timeoutMs = 30_000): Promise<string> {
