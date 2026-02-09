@@ -56,6 +56,7 @@ OPENAI_API_KEY=sk-...
 TELEGRAM_BOT_TOKEN=...          # Telegram bridge auto-enables when set
 # TELEGRAM_ENABLED=false        # Set to disable Telegram
 # ALLOWED_USERS=alice,bob       # Comma-separated allowlist (empty = open access)
+# MY_GH_TOKEN=ghp_...           # Host env vars for secret refs (agents.yaml secrets)
 ```
 
 ## Declarative Configuration (`agents.yaml`)
@@ -75,6 +76,13 @@ agents:
       Focus on clean, semantic HTML and modern CSS.
     skills:
       - nichochar/web-skills
+    api_key_ref: MY_CUSTOM_KEY     # optional — host env var name for model key override
+    env:                           # non-sensitive, passed as Docker --env
+      LOG_LEVEL: debug
+      WORKSPACE_NAME: designer
+    secrets:                       # sensitive, ${VAR} refs only (tool delivery deferred)
+      GITHUB_TOKEN: ${MY_GH_TOKEN}
+    disclose_secrets: true         # show secret names in system prompt (default: false)
 
   reviewer:
     model: openai:gpt-4.1
@@ -94,6 +102,10 @@ All fields are optional. Agents are spawned sequentially in declaration order; i
 | `prompt` | string | _(built-in default)_ | Custom system prompt |
 | `cwd` | string | `~/.pi-tests/agents/<name>/workspace` | Working directory |
 | `skills` | string[] | `[]` | GitHub sources to auto-install (`owner/repo`) |
+| `api_key_ref` | string | _(auto from provider)_ | Host env var name for model API key |
+| `env` | map | `{}` | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs) |
+| `secrets` | map | `{}` | Secret refs in `${VAR}` format (tool delivery deferred) |
+| `disclose_secrets` | boolean | `false` | Show secret names in system prompt |
 
 ### Auto-Sync
 
@@ -177,8 +189,10 @@ Host Process                        Docker Container (per agent)
 | Process isolation | Separate Docker container per agent |
 | No root access | `--user 1000:1000`, `--cap-drop=ALL`, `no-new-privileges` |
 | Filesystem isolation | Only the agent's own workspace is mounted |
+| Secret isolation | Model API key via `GET /api/secrets` (memory-only, never in Docker env) |
+| Output redaction | Two-layer: sandbox-side + host-side redaction of secrets in events |
 | Cross-agent file access | Proxied through Host API with path traversal guards |
-| Authentication | Unique per-agent Bearer token, server-side validation |
+| Authentication | Unique per-agent Bearer token on all endpoints (except `/health`) |
 | Message integrity | Server derives sender identity from token, never trusts body |
 | Idempotency | `messageId`-based deduplication with 5-minute TTL |
 | Request limits | 64 KB send-mail body, 1 MB general body, 1 MB file response |
@@ -219,13 +233,15 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 
 | Method | Path | Purpose |
 |---|---|---|
+| `GET` | `/api/secrets` | Fetch secrets (model API key) at container boot |
 | `POST` | `/api/send-mail` | Forward message to another agent's mailbox |
 | `GET` | `/api/agents` | List all agents (name, status, description) |
 | `GET` | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace |
 | `POST` | `/api/prompt-done` | Notify host that a prompt completed |
+| `POST` | `/api/agent-event` | Forward agent events to host (redacted) |
 | `POST` | `/api/heartbeat` | Update agent heartbeat timestamp |
 
-All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable.
+All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable. Model API keys are never passed as Docker env vars — they are fetched via `GET /api/secrets` at boot and stored in memory only.
 
 ## REPL Commands
 
@@ -239,6 +255,11 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `skill add <agent> <source>` | Install skills from GitHub (`owner/repo`) |
 | `skill list <agent>` | List installed skills |
 | `skill remove <agent> <name>` | Remove an installed skill |
+| `agent env set <agent> <KEY> <VALUE>` | Set env var in `agents.yaml` |
+| `agent env unset <agent> <KEY>` | Remove env var from `agents.yaml` |
+| `agent secret-ref set <agent> <KEY> <ENV>` | Set secret ref in `agents.yaml` |
+| `agent secret-ref unset <agent> <KEY>` | Remove secret ref from `agents.yaml` |
+| `agent config show <agent>` | Show agent config (secrets redacted) |
 | `agents reload [--force]` | Re-apply `agents.yaml` (force kills changed agents) |
 | `agents validate` | Dry-run: parse + validate YAML without spawning |
 | `agents path` | Print path to `agents.yaml` |
@@ -257,6 +278,9 @@ spawn <name>
   --cwd <path>              Custom workspace dir (default: ~/.pi-tests/agents/<name>/workspace)
   --desc <text>             Agent description (visible to other agents)
   --prompt <text>           Custom system prompt
+  --api-key-ref <ENV_NAME>  Host env var for model API key override
+  --env <KEY=VALUE>         Non-sensitive env var (repeatable)
+  --secret-ref <KEY=ENV>    Secret ref mapping (repeatable)
   --ephemeral               Don't persist to agents.yaml
 ```
 
@@ -542,8 +566,12 @@ src/
   routing.ts                  Telegram chat -> agent routing
 
   config/
-    agents-yaml.ts            YAML loader, validator, write-back helpers
+    agents-yaml.ts            YAML loader, validator, write-back, env/secret mutation
+    env-substitution.ts       ${VAR} env ref resolution with validation
     lock.ts                   In-process mutex for config read-modify-write
+
+  security/
+    redact.ts                 Secret redaction (text + deep object walker)
 
   skills/
     fetch.ts                  Skill fetching, source map, reverse lookup
@@ -593,11 +621,15 @@ src/
     status.ts                 Scheduler/watchdog overview
     route.ts                  Telegram chat routing
     skill.ts                  Skill install/remove with YAML + source map sync
+    agent-config.ts           Per-agent env/secret-ref set/unset + config show
 
 test/
   agents-yaml.test.ts        YAML config: parsing, validation, apply, write-back, locking
+  agent-config.test.ts        Per-agent env/secret-ref CLI commands + config show
+  env-substitution.test.ts    ${VAR} resolution, missing vars, reserved keys
+  redact.test.ts              Secret redaction (text, deep objects, edge cases)
   docker-provider.test.ts     Docker provider (mocked execFile + fetch)
-  host-api.test.ts            Host API endpoints, auth, prompt correlation
+  host-api.test.ts            Host API endpoints, auth, secrets, prompt correlation
   tool-contracts.test.ts      Verifies host + proxy tools share contracts
   sandbox-validation.test.ts  CLI --sandbox option validation
   tools.test.ts               Host-side tool behavior
@@ -628,7 +660,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 162 tests
+pnpm test             # Run test suite (vitest) — 258 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
