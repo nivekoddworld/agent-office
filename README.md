@@ -123,10 +123,10 @@ All writes are atomic (temp file + rename) and serialized through an in-process 
 
 ```bash
 # In the REPL:
-pi> agents reload              # Spawn new agents from YAML, skip already-running
-pi> agents reload --force      # Kill and re-spawn agents with changed config
-pi> agents validate            # Dry-run: parse + validate without spawning
-pi> agents path                # Print path to agents.yaml
+ao> agents reload              # Spawn new agents from YAML, skip already-running
+ao> agents reload --force      # Kill and re-spawn agents with changed config
+ao> agents validate            # Dry-run: parse + validate without spawning
+ao> agents path                # Print path to agents.yaml
 ```
 
 ### Cron Jobs
@@ -165,13 +165,13 @@ Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 
 ```bash
 # In the REPL:
-pi> cron list                                          # List all cron jobs
-pi> cron status [agent]                                # Detailed job status
-pi> cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
-pi> cron remove <agent> <job> [--apply]                # Remove a job
-pi> cron trigger <agent> <job>                         # Fire immediately
-pi> cron enable <agent> <job> [--apply]                # Re-enable a paused job
-pi> cron disable <agent> <job> [--apply]               # Pause a job
+ao> cron list                                          # List all cron jobs
+ao> cron status [agent]                                # Detailed job status
+ao> cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
+ao> cron remove <agent> <job> [--apply]                # Remove a job
+ao> cron trigger <agent> <job>                         # Fire immediately
+ao> cron enable <agent> <job> [--apply]                # Re-enable a paused job
+ao> cron disable <agent> <job> [--apply]               # Pause a job
 ```
 
 Without `--apply`, commands write to `agents.yaml` only — run `agents reload` to activate. With `--apply`, changes take effect immediately if the agent is running.
@@ -258,17 +258,17 @@ Host Process                        Docker Container (per agent)
 pnpm dev start --sandbox docker
 
 # In the REPL:
-pi> spawn designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
+ao> spawn designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
 # → [agent:designer] Started in sandbox (http://localhost:13100)
 
-pi> spawn reviewer --model openai:gpt-4.1 --desc "Code reviewer"
+ao> spawn reviewer --model openai:gpt-4.1 --desc "Code reviewer"
 # → [agent:reviewer] Started in sandbox (http://localhost:13101)
 
-pi> send designer "Create a responsive landing page with hero section"
+ao> send designer "Create a responsive landing page with hero section"
 # → designer works inside its Docker container, edits files in /workspace
 # → Files persist at ~/.agent-office/agents/designer/workspace/ on the host
 
-pi> send reviewer "Review designer's index.html and send feedback"
+ao> send reviewer "Review designer's index.html and send feedback"
 # → reviewer uses read_agent_file (proxied via Host API) to read designer's files
 # → reviewer uses send_mail (proxied via Host API) to send feedback to designer
 ```
@@ -620,9 +620,9 @@ agents:
 
 ```bash
 # REPL — installs to disk + updates agents.yaml
-pi> skill add designer nichochar/web-skills
-pi> skill list designer
-pi> skill remove designer web-tools
+ao> skill add designer nichochar/web-skills
+ao> skill list designer
+ao> skill remove designer web-tools
 ```
 
 A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `agents.yaml` entries when the last skill from a source is removed.
@@ -655,9 +655,9 @@ release();
 Three agents collaborate on a landing page, all running in-process:
 
 ```
-pi> spawn designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
-pi> spawn copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marketing copy"
-pi> spawn reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
+ao> spawn designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
+ao> spawn copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marketing copy"
+ao> spawn reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
 ```
 
 Via Telegram:
@@ -687,12 +687,12 @@ pnpm dev start --sandbox docker
 ```
 
 ```
-pi> spawn backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
+ao> spawn backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
 # → Container started with --cap-drop=ALL, --user 1000:1000
 
-pi> spawn tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
+ao> spawn tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
 
-pi> send backend "Build a REST API for a todo app with CRUD endpoints using Express"
+ao> send backend "Build a REST API for a todo app with CRUD endpoints using Express"
 ```
 
 What happens behind the scenes:
@@ -723,11 +723,11 @@ export MY_GH_TOKEN="ghp_..."
 **Option A: Via REPL**
 
 ```
-pi> spawn github-bot --model anthropic:claude-sonnet-4-20250514 \
+ao> spawn github-bot --model anthropic:claude-sonnet-4-20250514 \
     --desc "GitHub integration bot" \
     --secret-ref GITHUB_TOKEN=MY_GH_TOKEN
 
-pi> send github-bot "List my GitHub repos using authenticated_fetch with secretName GITHUB_TOKEN"
+ao> send github-bot "List my GitHub repos using authenticated_fetch with secretName GITHUB_TOKEN"
 ```
 
 **Option B: Via agents.yaml**
@@ -744,8 +744,8 @@ agents:
 ```
 
 ```
-pi> agents reload
-pi> send github-bot "List my GitHub repos"
+ao> agents reload
+ao> send github-bot "List my GitHub repos"
 ```
 
 What happens:
@@ -904,7 +904,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 415+ tests
+pnpm test             # Run test suite (vitest) — 422+ tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
