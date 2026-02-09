@@ -205,6 +205,8 @@ Each agent runs inside an isolated Docker container with hardened security. Agen
 
 **Requirements:** Docker must be installed and running.
 
+**Build tooling:** The sandbox image includes `python3`, `make`, and `g++` so agents can `npm install` packages with native addons (node-gyp).
+
 #### How Docker Sandbox Works
 
 ```
