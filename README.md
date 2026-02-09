@@ -1,6 +1,52 @@
 # agent-office
 
-FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
+Multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
+
+## Get Started
+
+```bash
+pnpm install
+cp .env.example .env
+mkdir -p ~/.agent-office
+cp examples/agents.yaml ~/.agent-office/agents.yaml
+pnpm dev start
+```
+
+See [`examples/`](examples/) for ready-to-use configurations — each has a README describing the setup.
+
+## Table of Contents
+
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Declarative Configuration](#declarative-configuration-agentsyaml)
+  - [Auto-Sync](#auto-sync)
+  - [Reload](#reload)
+  - [Cron Jobs](#cron-jobs)
+- [Sandbox Modes](#sandbox-modes)
+  - [In-Process Mode](#in-process-mode-default)
+  - [Docker Sandbox Mode](#docker-sandbox-mode)
+- [REPL Commands](#repl-commands)
+  - [Spawn Options](#spawn-options)
+  - [CLI Flags](#cli-flags)
+- [Agent Collaboration](#agent-collaboration)
+  - [list_agents](#list_agents)
+  - [send_mail](#send_mail)
+  - [read_agent_file](#read_agent_file)
+  - [authenticated_fetch](#authenticated_fetch)
+  - [Tool Architecture](#tool-architecture)
+  - [Prompt System](#prompt-system)
+- [Telegram Integration](#telegram-integration)
+- [Concepts](#concepts)
+  - [Tick-Based Scheduler](#tick-based-scheduler)
+  - [Priority Levels](#priority-levels)
+  - [Workspace Sandboxing](#workspace-sandboxing)
+  - [Skills](#skills)
+  - [Watchdog](#watchdog)
+  - [Resource Guards](#resource-guards)
+- [End-to-End Examples](#end-to-end-examples)
+- [Project Structure](#project-structure)
+- [Dependencies](#dependencies)
+- [Development](#development)
 
 ## Architecture
 
@@ -29,7 +75,7 @@ graph TD
 
 **Core flow:** `agents.yaml` (auto-spawn) / CLI / Telegram / Cron -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`). The scheduler runs a FreeRTOS-style tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -69,21 +115,21 @@ Define your workspace once in `~/.agent-office/agents.yaml` and agents auto-spaw
 agents:
   designer:
     model: anthropic:claude-sonnet-4-20250514
-    priority: normal        # idle | low | normal | high | critical (or 0-4)
-    thinking: low           # off | minimal | low | medium | high | xhigh
+    priority: normal # idle | low | normal | high | critical (or 0-4)
+    thinking: low # off | minimal | low | medium | high | xhigh
     description: "Frontend designer — builds HTML/CSS"
     prompt: |
       You are a frontend designer specializing in responsive layouts.
       Focus on clean, semantic HTML and modern CSS.
     skills:
       - nichochar/web-skills
-    api_key_ref: MY_CUSTOM_KEY     # optional — host env var name for model key override
-    env:                           # non-sensitive, passed as Docker --env
+    api_key_ref: MY_CUSTOM_KEY # optional — host env var name for model key override
+    env: # non-sensitive, passed as Docker --env
       LOG_LEVEL: debug
       WORKSPACE_NAME: designer
-    secrets:                       # sensitive, ${VAR} refs only — delivered via authenticated_fetch
+    secrets: # sensitive, ${VAR} refs only — delivered via authenticated_fetch
       GITHUB_TOKEN: ${MY_GH_TOKEN}
-    disclose_secrets: true         # show secret names in system prompt (default: false)
+    disclose_secrets: true # show secret names in system prompt (default: false)
 
   reviewer:
     model: openai:gpt-4.1
@@ -94,20 +140,20 @@ agents:
 
 All fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start.
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `model` | string | `anthropic:claude-sonnet-4-20250514` | `provider:model-id` |
-| `priority` | string \| number | `normal` | Priority name or 0-4 |
-| `thinking` | string | `low` | `off` / `minimal` / `low` / `medium` / `high` / `xhigh` |
-| `description` | string | `""` | Visible to other agents |
-| `prompt` | string | _(none)_ | Custom instructions (appended to base prompt) |
-| `cwd` | string | `~/.agent-office/agents/<name>/workspace` | Working directory |
-| `skills` | string[] | `[]` | GitHub sources to auto-install (`owner/repo`) |
-| `api_key_ref` | string | _(auto from provider)_ | Host env var name for model API key |
-| `env` | map | `{}` | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs) |
-| `secrets` | map | `{}` | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
-| `disclose_secrets` | boolean | `false` | Show secret names in system prompt |
-| `cron` | map | `{}` | Named cron jobs (see [Cron Jobs](#cron-jobs)) |
+| Field              | Type             | Default                                   | Description                                                          |
+| ------------------ | ---------------- | ----------------------------------------- | -------------------------------------------------------------------- |
+| `model`            | string           | `anthropic:claude-sonnet-4-20250514`      | `provider:model-id`                                                  |
+| `priority`         | string \| number | `normal`                                  | Priority name or 0-4                                                 |
+| `thinking`         | string           | `low`                                     | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`              |
+| `description`      | string           | `""`                                      | Visible to other agents                                              |
+| `prompt`           | string           | _(none)_                                  | Custom instructions (appended to base prompt)                        |
+| `cwd`              | string           | `~/.agent-office/agents/<name>/workspace` | Working directory                                                    |
+| `skills`           | string[]         | `[]`                                      | GitHub sources to auto-install (`owner/repo`)                        |
+| `api_key_ref`      | string           | _(auto from provider)_                    | Host env var name for model API key                                  |
+| `env`              | map              | `{}`                                      | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)      |
+| `secrets`          | map              | `{}`                                      | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
+| `disclose_secrets` | boolean          | `false`                                   | Show secret names in system prompt                                   |
+| `cron`             | map              | `{}`                                      | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
 
 ### Auto-Sync
 
@@ -140,20 +186,20 @@ agents:
     model: anthropic:claude-sonnet-4-20250514
     cron:
       daily-standup:
-        schedule: "0 9 * * 1-5"        # 5-field only (min hour dom month dow)
+        schedule: "0 9 * * 1-5" # 5-field only (min hour dom month dow)
         message: "Run the daily standup"
-        timezone: "America/New_York"    # optional, default UTC
-        catch_up: once                  # optional: "skip" (default) | "once"
-        enabled: true                   # optional, default true
+        timezone: "America/New_York" # optional, default UTC
+        catch_up: once # optional: "skip" (default) | "once"
+        enabled: true # optional, default true
 ```
 
-| Field | Required | Default | Description |
-|---|---|---|---|
-| `schedule` | yes | — | 5-field cron expression (`@daily`/`@hourly` rejected) |
-| `message` | yes | — | Prompt text sent to the agent |
-| `timezone` | no | `UTC` | IANA timezone for schedule evaluation |
-| `catch_up` | no | `skip` | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
-| `enabled` | no | `true` | Set `false` to pause without removing |
+| Field      | Required | Default | Description                                                                 |
+| ---------- | -------- | ------- | --------------------------------------------------------------------------- |
+| `schedule` | yes      | —       | 5-field cron expression (`@daily`/`@hourly` rejected)                       |
+| `message`  | yes      | —       | Prompt text sent to the agent                                               |
+| `timezone` | no       | `UTC`   | IANA timezone for schedule evaluation                                       |
+| `catch_up` | no       | `skip`  | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `enabled`  | no       | `true`  | Set `false` to pause without removing                                       |
 
 Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 
@@ -235,21 +281,21 @@ Host Process                        Docker Container (per agent)
 
 #### Docker Sandbox Security Model
 
-| Protection | Mechanism |
-|---|---|
-| Process isolation | Separate Docker container per agent |
-| No root access | `--user 1000:1000`, `--cap-drop=ALL`, `no-new-privileges` |
-| Filesystem isolation | Only the agent's own workspace is mounted |
-| Secret isolation | Model API key via `GET /api/secrets` (memory-only, never in Docker env) |
-| Tool secret isolation | Per-agent secrets resolved host-side via `authenticated_fetch` — never enter container |
-| Output redaction | Two-layer: sandbox-side + host-side redaction of secrets in events and fetch responses |
-| SSRF protection | Two-layer: literal IP check + DNS resolution (blocks private, loopback, link-local, IPv4-mapped IPv6) |
-| Cross-agent file access | Proxied through Host API with path traversal guards |
-| Authentication | Unique per-agent Bearer token on all endpoints (except `/health`) |
-| Message integrity | Server derives sender identity from token, never trusts body |
-| Idempotency | `messageId`-based deduplication with 5-minute TTL |
-| Request limits | 64 KB send-mail body, 1 MB general body, 1 MB file response |
-| Prompt timeout | 5-minute timeout on prompt completion |
+| Protection              | Mechanism                                                                                             |
+| ----------------------- | ----------------------------------------------------------------------------------------------------- |
+| Process isolation       | Separate Docker container per agent                                                                   |
+| No root access          | `--user 1000:1000`, `--cap-drop=ALL`, `no-new-privileges`                                             |
+| Filesystem isolation    | Only the agent's own workspace is mounted                                                             |
+| Secret isolation        | Model API key via `GET /api/secrets` (memory-only, never in Docker env)                               |
+| Tool secret isolation   | Per-agent secrets resolved host-side via `authenticated_fetch` — never enter container                |
+| Output redaction        | Two-layer: sandbox-side + host-side redaction of secrets in events and fetch responses                |
+| SSRF protection         | Two-layer: literal IP check + DNS resolution (blocks private, loopback, link-local, IPv4-mapped IPv6) |
+| Cross-agent file access | Proxied through Host API with path traversal guards                                                   |
+| Authentication          | Unique per-agent Bearer token on all endpoints (except `/health`)                                     |
+| Message integrity       | Server derives sender identity from token, never trusts body                                          |
+| Idempotency             | `messageId`-based deduplication with 5-minute TTL                                                     |
+| Request limits          | 64 KB send-mail body, 1 MB general body, 1 MB file response                                           |
+| Prompt timeout          | 5-minute timeout on prompt completion                                                                 |
 
 #### Docker Sandbox Example
 
@@ -284,54 +330,54 @@ ls ~/.agent-office/agents/designer/workspace/
 
 The Host API runs on port 13000 (configurable) and provides the bridge between sandboxed agents and the host system.
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/secrets` | Fetch secrets (model API key + tool secrets) at container boot |
-| `POST` | `/api/send-mail` | Forward message to another agent's mailbox |
-| `GET` | `/api/agents` | List all agents (name, status, description) |
-| `GET` | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace |
-| `POST` | `/api/authenticated-fetch` | Host-proxied HTTP request with secret injection |
-| `POST` | `/api/prompt-done` | Notify host that a prompt completed |
-| `POST` | `/api/agent-event` | Forward agent events to host (redacted) |
-| `POST` | `/api/heartbeat` | Update agent heartbeat timestamp |
+| Method | Path                             | Purpose                                                        |
+| ------ | -------------------------------- | -------------------------------------------------------------- |
+| `GET`  | `/api/secrets`                   | Fetch secrets (model API key + tool secrets) at container boot |
+| `POST` | `/api/send-mail`                 | Forward message to another agent's mailbox                     |
+| `GET`  | `/api/agents`                    | List all agents (name, status, description)                    |
+| `GET`  | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace                       |
+| `POST` | `/api/authenticated-fetch`       | Host-proxied HTTP request with secret injection                |
+| `POST` | `/api/prompt-done`               | Notify host that a prompt completed                            |
+| `POST` | `/api/agent-event`               | Forward agent events to host (redacted)                        |
+| `POST` | `/api/heartbeat`                 | Update agent heartbeat timestamp                               |
 
 All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable. Model API keys are never passed as Docker env vars — they are fetched via `GET /api/secrets` at boot and stored in memory only.
 
 ## REPL Commands
 
-| Command | Description |
-|---|---|
-| `spawn <name> [options]` | Create a new agent (persists to YAML unless `--ephemeral`) |
-| `list` | Show all agents with status table |
-| `send <agent> <message>` | Queue a message for an agent |
-| `kill <agent>` | Stop and remove an agent (removes from YAML) |
-| `status` | Show scheduler, watchdog, and resource state |
-| `skill add <agent> <source>` | Install skills from GitHub (`owner/repo`) |
-| `skill list <agent>` | List installed skills |
-| `skill remove <agent> <name>` | Remove an installed skill |
-| `agent env set <agent> <KEY> <VALUE>` | Set env var in `agents.yaml` |
-| `agent env unset <agent> <KEY>` | Remove env var from `agents.yaml` |
-| `agent secret-ref set <agent> <KEY> <ENV>` | Set secret ref in `agents.yaml` |
-| `agent secret-ref unset <agent> <KEY>` | Remove secret ref from `agents.yaml` |
-| `agent config show <agent>` | Show agent config (secrets redacted) |
-| `agent prompt show <agent>` | Show effective prompt (version/hash) |
-| `agent prompt set <agent> <text>` | Set custom prompt |
-| `agent prompt append <agent> <text>` | Append to custom prompt |
-| `agent prompt clear <agent>` | Remove custom prompt |
-| `agents reload [--force]` | Re-apply `agents.yaml` (force kills changed agents) |
-| `agents validate` | Dry-run: parse + validate YAML without spawning |
-| `agents path` | Print path to `agents.yaml` |
-| `cron list` | List all cron jobs |
-| `cron status [agent]` | Detailed cron job status |
-| `cron add <agent> <job> "<sched>" <msg> [--apply]` | Add a cron job |
-| `cron remove <agent> <job> [--apply]` | Remove a cron job |
-| `cron trigger <agent> <job>` | Fire a cron job immediately |
-| `cron enable <agent> <job> [--apply]` | Re-enable a paused job |
-| `cron disable <agent> <job> [--apply]` | Pause a cron job |
-| `route <chatId> <agent>` | Route a Telegram chat to an agent |
-| `route list` | List all Telegram chat routes |
-| `help` | Show available commands |
-| `exit` | Shutdown |
+| Command                                            | Description                                                |
+| -------------------------------------------------- | ---------------------------------------------------------- |
+| `spawn <name> [options]`                           | Create a new agent (persists to YAML unless `--ephemeral`) |
+| `list`                                             | Show all agents with status table                          |
+| `send <agent> <message>`                           | Queue a message for an agent                               |
+| `kill <agent>`                                     | Stop and remove an agent (removes from YAML)               |
+| `status`                                           | Show scheduler, watchdog, and resource state               |
+| `skill add <agent> <source>`                       | Install skills from GitHub (`owner/repo`)                  |
+| `skill list <agent>`                               | List installed skills                                      |
+| `skill remove <agent> <name>`                      | Remove an installed skill                                  |
+| `agent env set <agent> <KEY> <VALUE>`              | Set env var in `agents.yaml`                               |
+| `agent env unset <agent> <KEY>`                    | Remove env var from `agents.yaml`                          |
+| `agent secret-ref set <agent> <KEY> <ENV>`         | Set secret ref in `agents.yaml`                            |
+| `agent secret-ref unset <agent> <KEY>`             | Remove secret ref from `agents.yaml`                       |
+| `agent config show <agent>`                        | Show agent config (secrets redacted)                       |
+| `agent prompt show <agent>`                        | Show effective prompt (version/hash)                       |
+| `agent prompt set <agent> <text>`                  | Set custom prompt                                          |
+| `agent prompt append <agent> <text>`               | Append to custom prompt                                    |
+| `agent prompt clear <agent>`                       | Remove custom prompt                                       |
+| `agents reload [--force]`                          | Re-apply `agents.yaml` (force kills changed agents)        |
+| `agents validate`                                  | Dry-run: parse + validate YAML without spawning            |
+| `agents path`                                      | Print path to `agents.yaml`                                |
+| `cron list`                                        | List all cron jobs                                         |
+| `cron status [agent]`                              | Detailed cron job status                                   |
+| `cron add <agent> <job> "<sched>" <msg> [--apply]` | Add a cron job                                             |
+| `cron remove <agent> <job> [--apply]`              | Remove a cron job                                          |
+| `cron trigger <agent> <job>`                       | Fire a cron job immediately                                |
+| `cron enable <agent> <job> [--apply]`              | Re-enable a paused job                                     |
+| `cron disable <agent> <job> [--apply]`             | Pause a cron job                                           |
+| `route <chatId> <agent>`                           | Route a Telegram chat to an agent                          |
+| `route list`                                       | List all Telegram chat routes                              |
+| `help`                                             | Show available commands                                    |
+| `exit`                                             | Shutdown                                                   |
 
 ### Spawn Options
 
@@ -423,7 +469,7 @@ agent calls authenticated_fetch:
        secrets:
          GITHUB_TOKEN: ${MY_GH_TOKEN}
          SLACK_TOKEN: ${MY_SLACK_TOKEN}
-       disclose_secrets: true    # agent sees names, never values
+       disclose_secrets: true # agent sees names, never values
    ```
 
 2. **Resolution** — at spawn time, `${MY_GH_TOKEN}` is resolved from `process.env`. Missing refs fail fast with a clear error. The resolved values are stored in memory on the host, never written to disk or Docker env vars.
@@ -438,20 +484,20 @@ agent calls authenticated_fetch:
 
 #### Security Guardrails
 
-| Protection | Detail |
-|---|---|
-| HTTPS required | Only `https://` URLs allowed (localhost exempt in dev) |
-| SSRF (literal) | Blocks private IPs: `10.x`, `172.16-31.x`, `192.168.x`, `127.x`, `169.254.x`, `0.0.0.0` |
-| SSRF (DNS) | Resolves hostnames via `dns.resolve4`/`resolve6`, checks all IPs — catches `evil.com → 127.0.0.1` |
-| SSRF (IPv6) | Blocks `::1`, `fc00::/7`, `fe80::/10`, IPv4-mapped forms (`::ffff:7f00:1`, `::ffff:127.0.0.1`) |
-| Auth header injection | Auth header set _after_ user headers — cannot be overridden by the agent |
-| Blocked headers | `Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Cookie` are silently stripped |
-| Header name allowlist | Only `Authorization`, `X-API-Key`, `Api-Key` allowed as auth header names |
-| Reserved secrets | `MODEL_API_KEY` cannot be used with `authenticated_fetch` (prevents exfiltration) |
-| Size limits | Request body: 1 MB, Response body: 5 MB |
-| Timeout | 30-second timeout on outbound requests |
-| Response redaction | Secret value scrubbed from response body and headers before agent sees it |
-| Agent isolation | Each agent can only access its own secrets — agent A cannot use agent B's tokens |
+| Protection            | Detail                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| HTTPS required        | Only `https://` URLs allowed (localhost exempt in dev)                                            |
+| SSRF (literal)        | Blocks private IPs: `10.x`, `172.16-31.x`, `192.168.x`, `127.x`, `169.254.x`, `0.0.0.0`           |
+| SSRF (DNS)            | Resolves hostnames via `dns.resolve4`/`resolve6`, checks all IPs — catches `evil.com → 127.0.0.1` |
+| SSRF (IPv6)           | Blocks `::1`, `fc00::/7`, `fe80::/10`, IPv4-mapped forms (`::ffff:7f00:1`, `::ffff:127.0.0.1`)    |
+| Auth header injection | Auth header set _after_ user headers — cannot be overridden by the agent                          |
+| Blocked headers       | `Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Cookie` are silently stripped       |
+| Header name allowlist | Only `Authorization`, `X-API-Key`, `Api-Key` allowed as auth header names                         |
+| Reserved secrets      | `MODEL_API_KEY` cannot be used with `authenticated_fetch` (prevents exfiltration)                 |
+| Size limits           | Request body: 1 MB, Response body: 5 MB                                                           |
+| Timeout               | 30-second timeout on outbound requests                                                            |
+| Response redaction    | Secret value scrubbed from response body and headers before agent sees it                         |
+| Agent isolation       | Each agent can only access its own secrets — agent A cannot use agent B's tokens                  |
 
 #### `secrets` vs `env` — When to Use Which
 
@@ -464,13 +510,13 @@ In both cases, the raw secret value is **never exposed** to agent code — it's 
 
 This means if a project inside the agent workspace needs a raw key (e.g. an SDK that reads `process.env.X_API_KEY`), secrets won't work for that. Use `env` instead:
 
-| | `secrets` | `env` |
-|---|---|---|
-| Agent can read value | No | Yes (visible in `process.env` / bash) |
-| Usable by SDKs/CLIs | No — only via `authenticated_fetch` | Yes — available as env var |
-| Appears in Docker env | No | Yes (`--env`) |
-| Redacted from logs | Yes (response + event redaction) | No |
-| Requires `${VAR}` format | Yes | Yes (supports `${VAR}` and literals) |
+|                          | `secrets`                           | `env`                                 |
+| ------------------------ | ----------------------------------- | ------------------------------------- |
+| Agent can read value     | No                                  | Yes (visible in `process.env` / bash) |
+| Usable by SDKs/CLIs      | No — only via `authenticated_fetch` | Yes — available as env var            |
+| Appears in Docker env    | No                                  | Yes (`--env`)                         |
+| Redacted from logs       | Yes (response + event redaction)    | No                                    |
+| Requires `${VAR}` format | Yes                                 | Yes (supports `${VAR}` and literals)  |
 
 **Rule of thumb:** use `secrets` when the agent only needs to make authenticated HTTP calls (API tokens, webhooks). Use `env` when workspace code needs the raw value (SDK clients, CLI tools, build scripts) — but accept that the agent can read it.
 
@@ -478,11 +524,11 @@ This means if a project inside the agent workspace needs a raw key (e.g. an SDK 
 
 The `auth` parameter controls how the secret is injected into the request:
 
-| Mode | Header value | Example |
-|---|---|---|
+| Mode               | Header value      | Example                            |
+| ------------------ | ----------------- | ---------------------------------- |
 | `bearer` (default) | `Bearer <secret>` | `Authorization: Bearer ghp_abc123` |
-| `token` | `token <secret>` | `Authorization: token ghp_abc123` |
-| `raw` | `<secret>` | `X-API-Key: ghp_abc123` |
+| `token`            | `token <secret>`  | `Authorization: token ghp_abc123`  |
+| `raw`              | `<secret>`        | `X-API-Key: ghp_abc123`            |
 
 ```
 # Custom auth mode example:
@@ -544,12 +590,12 @@ pnpm dev start   # Telegram connects automatically
 
 ### Telegram Commands
 
-| Command | Description |
-|---|---|
-| `/agents` | List all running agents |
-| `/help` | Show available commands |
-| `@agentname message` | Send directly to a specific agent |
-| _(plain text)_ | Send to the default agent or routed agent |
+| Command              | Description                               |
+| -------------------- | ----------------------------------------- |
+| `/agents`            | List all running agents                   |
+| `/help`              | Show available commands                   |
+| `@agentname message` | Send directly to a specific agent         |
+| _(plain text)_       | Send to the default agent or routed agent |
 
 Each agent's events route to the chat that triggered it, so multiple chats can interact with different agents concurrently.
 
@@ -571,13 +617,13 @@ The scheduler runs a `setInterval` tick loop (default 2s). Each tick:
 
 ### Priority Levels
 
-| Level | Value | Use case |
-|---|---|---|
-| `IDLE` | 0 | Background tasks, monitoring |
-| `LOW` | 1 | Review, optimization |
-| `NORMAL` | 2 | Standard work (default) |
-| `HIGH` | 3 | Primary agents, user-facing |
-| `CRITICAL` | 4 | Urgent, time-sensitive |
+| Level      | Value | Use case                     |
+| ---------- | ----- | ---------------------------- |
+| `IDLE`     | 0     | Background tasks, monitoring |
+| `LOW`      | 1     | Review, optimization         |
+| `NORMAL`   | 2     | Standard work (default)      |
+| `HIGH`     | 3     | Primary agents, user-facing  |
+| `CRITICAL` | 4     | Urgent, time-sensitive       |
 
 Higher-priority agents are always served first. One message per tick per agent prevents starvation.
 
@@ -886,17 +932,17 @@ test/
 
 ## Dependencies
 
-| Package | Purpose |
-|---|---|
-| `@mariozechner/pi-agent-core` | Pi agent runtime |
+| Package                         | Purpose                                                         |
+| ------------------------------- | --------------------------------------------------------------- |
+| `@mariozechner/pi-agent-core`   | Pi agent runtime                                                |
 | `@mariozechner/pi-coding-agent` | Coding tools (read, write, edit, bash, grep, find, ls) + skills |
-| `@mariozechner/pi-ai` | Model registry + streaming |
-| `@sinclair/typebox` | Tool parameter schemas |
-| `commander` | CLI argument parsing |
-| `dotenv` | Load `.env` into `process.env` |
-| `grammy` | Telegram Bot API |
-| `cron-parser` | Cron expression parsing (next/prev fire times) |
-| `yaml` | YAML parsing with comment-preserving Document API |
+| `@mariozechner/pi-ai`           | Model registry + streaming                                      |
+| `@sinclair/typebox`             | Tool parameter schemas                                          |
+| `commander`                     | CLI argument parsing                                            |
+| `dotenv`                        | Load `.env` into `process.env`                                  |
+| `grammy`                        | Telegram Bot API                                                |
+| `cron-parser`                   | Cron expression parsing (next/prev fire times)                  |
+| `yaml`                          | YAML parsing with comment-preserving Document API               |
 
 ## Development
 

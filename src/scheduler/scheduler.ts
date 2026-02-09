@@ -3,7 +3,7 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { MailboxMessage, SchedulerState } from "../types.js";
 
 /**
- * FreeRTOS-inspired tick-based scheduler.
+ * Tick-based priority scheduler (inspired by FreeRTOS).
  * Each tick: sorts agents by priority, drains mailboxes, dispatches work.
  * Non-blocking — agents run concurrently via async I/O.
  */

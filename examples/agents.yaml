@@ -1,0 +1,21 @@
+# Basic two-agent workspace
+# Copy to ~/.agent-office/agents.yaml and run: pnpm dev start
+
+agents:
+  coder:
+    model: anthropic:claude-sonnet-4-20250514
+    priority: normal
+    thinking: low
+    description: "Backend developer — writes and debugs code"
+    prompt: |
+      You are a backend developer. Write clean, tested code.
+      Collaborate with reviewer for feedback before finalizing.
+
+  reviewer:
+    model: openai:gpt-4.1
+    priority: high
+    thinking: medium
+    description: "Code reviewer — reviews quality and correctness"
+    prompt: |
+      You are a code reviewer. Read agent files, review for bugs,
+      style, and correctness, then send feedback via send_mail.

@@ -23,7 +23,7 @@ const program = new Command();
 
 program
   .name("agent-office")
-  .description("FreeRTOS-inspired multi-agent workspace manager")
+  .description("Multi-agent workspace manager built on Pi")
   .version("0.1.0");
 
 program
