@@ -15,9 +15,9 @@ describe("buildDefaultPrompt", () => {
 
   it("omits description when not provided", () => {
     const prompt = buildDefaultPrompt("designer", "/tmp/ws");
-    // First line should NOT have a description suffix
-    const firstLine = prompt.split("\n")[0]!;
-    expect(firstLine).toBe('You are agent "designer".');
+    // Identity line should NOT have a description suffix
+    expect(prompt).toContain('You are agent "designer".');
+    expect(prompt).not.toMatch(/You are agent "designer" —/);
   });
 
   it("includes collaboration rules", () => {

@@ -16,8 +16,13 @@ import {
   unsetAgentEnv,
   setAgentSecretRef,
   unsetAgentSecretRef,
+  setAgentPrompt,
+  appendAgentPrompt,
+  clearAgentPrompt,
+  loadAgentsYaml,
+  getCronSummaries,
 } from "../src/config/agents-yaml.js";
-import { agentConfigShowCommand } from "../src/commands/agent-config.js";
+import { agentConfigShowCommand, agentPromptShowCommand } from "../src/commands/agent-config.js";
 
 function writeYaml(content: string): void {
   mkdirSync(TEST_DIR, { recursive: true });
@@ -246,6 +251,161 @@ describe("agentConfigShowCommand", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     agentConfigShowCommand("bot");
     expect(spy).toHaveBeenCalledWith(expect.stringContaining('not found'));
+    spy.mockRestore();
+  });
+});
+
+// --- setAgentPrompt ---
+
+describe("setAgentPrompt", () => {
+  it("sets prompt field", async () => {
+    writeYaml("agents:\n  bot: {}\n");
+    await setAgentPrompt("bot", "You are a copywriter.");
+    expect(readYaml()).toContain("You are a copywriter.");
+  });
+
+  it("overwrites existing prompt", async () => {
+    writeYaml("agents:\n  bot:\n    prompt: Old prompt\n");
+    await setAgentPrompt("bot", "New prompt");
+    const raw = readYaml();
+    expect(raw).toContain("New prompt");
+    expect(raw).not.toContain("Old prompt");
+  });
+
+  it("throws on missing agent", async () => {
+    writeYaml("agents:\n  other: {}\n");
+    await expect(setAgentPrompt("bot", "text")).rejects.toThrow("not found");
+  });
+});
+
+// --- appendAgentPrompt ---
+
+describe("appendAgentPrompt", () => {
+  it("appends with double newline separator", async () => {
+    writeYaml("agents:\n  bot:\n    prompt: First line\n");
+    await appendAgentPrompt("bot", "Second line");
+    const yaml = loadAgentsYaml()!;
+    expect(yaml.agents["bot"]!.prompt).toBe("First line\n\nSecond line");
+  });
+
+  it("sets prompt when none exists", async () => {
+    writeYaml("agents:\n  bot: {}\n");
+    await appendAgentPrompt("bot", "First line");
+    const yaml = loadAgentsYaml()!;
+    expect(yaml.agents["bot"]!.prompt).toBe("First line");
+  });
+
+  it("repeated appends stay readable", async () => {
+    writeYaml("agents:\n  bot: {}\n");
+    await appendAgentPrompt("bot", "Line 1");
+    await appendAgentPrompt("bot", "Line 2");
+    await appendAgentPrompt("bot", "Line 3");
+    const yaml = loadAgentsYaml()!;
+    expect(yaml.agents["bot"]!.prompt).toBe("Line 1\n\nLine 2\n\nLine 3");
+  });
+
+  it("throws on missing agent", async () => {
+    writeYaml("agents:\n  other: {}\n");
+    await expect(appendAgentPrompt("bot", "text")).rejects.toThrow("not found");
+  });
+});
+
+// --- clearAgentPrompt ---
+
+describe("clearAgentPrompt", () => {
+  it("removes prompt field", async () => {
+    writeYaml("agents:\n  bot:\n    prompt: Some prompt\n    model: openai:gpt-4\n");
+    await clearAgentPrompt("bot");
+    const raw = readYaml();
+    expect(raw).not.toContain("prompt:");
+    expect(raw).toContain("model:");
+  });
+
+  it("is idempotent when no prompt exists", async () => {
+    writeYaml("agents:\n  bot: {}\n");
+    await clearAgentPrompt("bot"); // no throw
+  });
+
+  it("throws on missing agent", async () => {
+    writeYaml("agents:\n  other: {}\n");
+    await expect(clearAgentPrompt("bot")).rejects.toThrow("not found");
+  });
+});
+
+// --- agentPromptShowCommand ---
+
+describe("agentPromptShowCommand", () => {
+  it("shows effective prompt with version and hash", () => {
+    writeYaml("agents:\n  bot:\n    description: A helper bot\n");
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentPromptShowCommand("bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("v1");
+    expect(output).toContain("hash");
+    expect(output).toContain("excludes skills");
+    expect(output).toContain("Agent-to-Agent Collaboration");
+    expect(output).toContain("A helper bot");
+    spy.mockRestore();
+  });
+
+  it("includes custom prompt in effective output", () => {
+    writeYaml("agents:\n  bot:\n    prompt: Custom rules here\n");
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentPromptShowCommand("bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("Custom Instructions");
+    expect(output).toContain("Custom rules here");
+    spy.mockRestore();
+  });
+});
+
+// --- getCronSummaries ---
+
+describe("getCronSummaries", () => {
+  it("returns summaries for enabled cron jobs", () => {
+    writeYaml("agents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n");
+    const summaries = getCronSummaries("bot");
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toContain("daily");
+    expect(summaries[0]).toContain("Run report");
+  });
+
+  it("skips disabled cron jobs", () => {
+    writeYaml("agents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n        enabled: false\n");
+    expect(getCronSummaries("bot")).toHaveLength(0);
+  });
+
+  it("returns empty for agent without cron", () => {
+    writeYaml("agents:\n  bot: {}\n");
+    expect(getCronSummaries("bot")).toHaveLength(0);
+  });
+
+  it("returns empty for unknown agent", () => {
+    writeYaml("agents:\n  other: {}\n");
+    expect(getCronSummaries("bot")).toHaveLength(0);
+  });
+});
+
+// --- agentPromptShowCommand + cron integration ---
+
+describe("agentPromptShowCommand cron integration", () => {
+  it("includes cron summaries in effective prompt", () => {
+    writeYaml("agents:\n  bot:\n    cron:\n      standup:\n        schedule: '0 9 * * 1-5'\n        message: Run standup\n");
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentPromptShowCommand("bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("Active cron jobs");
+    expect(output).toContain("standup");
+    expect(output).toContain("Run standup");
+    spy.mockRestore();
+  });
+
+  it("omits cron section when no cron jobs", () => {
+    writeYaml("agents:\n  bot: {}\n");
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentPromptShowCommand("bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).not.toContain("Active cron jobs");
     spy.mockRestore();
   });
 });

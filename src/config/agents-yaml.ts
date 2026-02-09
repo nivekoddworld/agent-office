@@ -8,7 +8,7 @@ import { PI_TESTS_DIR } from "../constants.js";
 import { Priority } from "../types.js";
 import { withConfigLock } from "./lock.js";
 import { resolveEnvRefs } from "./env-substitution.js";
-import { isValidCron } from "../cron/cron-parser.js";
+import { isValidCron, describeCron } from "../cron/cron-parser.js";
 import type { CronJobConfig } from "../cron/types.js";
 
 // --- Types ---
@@ -273,7 +273,7 @@ export function addSkillToYamlSync(agentName: string, source: string): void {
     skillsNode.add(source);
   }
 
-  atomicWriteYaml(path, doc.toString());
+  atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
 }
 
 /** Remove source from agent's skills array in YAML. No lock — caller must hold configLock. */
@@ -292,7 +292,7 @@ export function removeSkillFromYamlSync(agentName: string, source: string): void
   if (idx === -1) return;
 
   skillsNode.items.splice(idx, 1);
-  atomicWriteYaml(path, doc.toString());
+  atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
 }
 
 export async function addSkillToYaml(agentName: string, source: string): Promise<void> {
@@ -383,7 +383,7 @@ export async function upsertAgentToYaml(name: string, entry: AgentYamlEntry, opt
       doc.setIn(["agents", name], clean);
     }
 
-    atomicWriteYaml(path, doc.toString());
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
 
@@ -397,7 +397,7 @@ export async function removeAgentFromYaml(name: string): Promise<void> {
 
     if (!doc.getIn(["agents", name])) return;
     doc.deleteIn(["agents", name]);
-    atomicWriteYaml(path, doc.toString());
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
 
@@ -441,7 +441,7 @@ export async function setAgentEnv(agentName: string, key: string, value: string)
     }
 
     doc.setIn(["agents", agentName, "env", key], value);
-    atomicWriteYaml(path, doc.toString());
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
 
@@ -457,7 +457,7 @@ export async function unsetAgentEnv(agentName: string, key: string): Promise<voi
 
     doc.deleteIn(["agents", agentName, "env", key]);
     cleanupEmptyMap(doc, ["agents", agentName, "env"]);
-    atomicWriteYaml(path, doc.toString());
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
 
@@ -476,7 +476,7 @@ export async function setAgentSecretRef(agentName: string, key: string, hostEnvN
     }
 
     doc.setIn(["agents", agentName, "secrets", key], `\${${hostEnvName}}`);
-    atomicWriteYaml(path, doc.toString());
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
 
@@ -492,6 +492,55 @@ export async function unsetAgentSecretRef(agentName: string, key: string): Promi
 
     doc.deleteIn(["agents", agentName, "secrets", key]);
     cleanupEmptyMap(doc, ["agents", agentName, "secrets"]);
-    atomicWriteYaml(path, doc.toString());
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
+}
+
+// --- Per-agent prompt mutations ---
+
+export async function setAgentPrompt(agentName: string, text: string): Promise<void> {
+  return withConfigLock(async () => {
+    const path = getAgentsYamlPath();
+    const doc = requireYamlDoc(path);
+    if (!doc.getIn(["agents", agentName])) throw new Error(`Agent "${agentName}" not found in agents.yaml`);
+    doc.setIn(["agents", agentName, "prompt"], text);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function appendAgentPrompt(agentName: string, text: string): Promise<void> {
+  return withConfigLock(async () => {
+    const path = getAgentsYamlPath();
+    const doc = requireYamlDoc(path);
+    if (!doc.getIn(["agents", agentName])) throw new Error(`Agent "${agentName}" not found in agents.yaml`);
+    const existing = doc.getIn(["agents", agentName, "prompt"]) as string | undefined;
+    const merged = existing ? `${existing}\n\n${text}` : text;
+    doc.setIn(["agents", agentName, "prompt"], merged);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function clearAgentPrompt(agentName: string): Promise<void> {
+  return withConfigLock(async () => {
+    const path = getAgentsYamlPath();
+    const doc = requireYamlDoc(path);
+    if (!doc.getIn(["agents", agentName])) throw new Error(`Agent "${agentName}" not found in agents.yaml`);
+    doc.deleteIn(["agents", agentName, "prompt"]);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Cron summaries for prompt composition ---
+
+export function getCronSummaries(agentName: string): string[] {
+  const yaml = loadAgentsYaml();
+  if (!yaml) return [];
+  const entry = yaml.agents[agentName];
+  if (!entry?.cron) return [];
+  const summaries: string[] = [];
+  for (const [name, raw] of Object.entries(entry.cron)) {
+    if (!raw || raw.enabled === false) continue;
+    summaries.push(`${name}: ${describeCron(raw.schedule)} — ${raw.message}`);
+  }
+  return summaries;
 }

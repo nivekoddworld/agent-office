@@ -1,12 +1,18 @@
 import {
   loadAgentsYaml,
+  resolveCwd,
   setAgentEnv,
   unsetAgentEnv,
   setAgentSecretRef,
   unsetAgentSecretRef,
+  setAgentPrompt,
+  appendAgentPrompt,
+  clearAgentPrompt,
+  getCronSummaries,
 } from "../config/agents-yaml.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
+import { composeSystemPrompt } from "../agent/prompts/prompt-manager.js";
 
 export async function agentEnvSetCommand(agentName: string, key: string, value: string): Promise<void> {
   await setAgentEnv(agentName, key, value);
@@ -70,4 +76,44 @@ export function agentConfigShowCommand(agentName: string): void {
 
   console.log(`\nAgent "${agentName}" config:`);
   console.log(JSON.stringify(display, null, 2));
+}
+
+// --- Prompt commands ---
+
+export function agentPromptShowCommand(agentName: string): void {
+  const yaml = loadAgentsYaml();
+  if (!yaml) { console.error("[agent] Could not load agents.yaml"); return; }
+
+  const entry = yaml.agents[agentName];
+  if (!entry) { console.error(`[agent] Agent "${agentName}" not found in agents.yaml`); return; }
+
+  const composed = composeSystemPrompt({
+    name: agentName,
+    cwd: resolveCwd(agentName, entry.cwd),
+    description: entry.description,
+    customPrompt: entry.prompt,
+    envNames: entry.env ? Object.keys(entry.env) : undefined,
+    secretNames: entry.disclose_secrets && entry.secrets ? Object.keys(entry.secrets) : undefined,
+    cronJobs: getCronSummaries(agentName),
+  });
+
+  console.log(`\nAgent "${agentName}" effective prompt (${composed.version}, hash ${composed.hash} — excludes skills; sandbox agents use cwd /workspace at runtime):`);
+  console.log("---");
+  console.log(composed.text);
+  console.log("---");
+}
+
+export async function agentPromptSetCommand(agentName: string, text: string): Promise<void> {
+  await setAgentPrompt(agentName, text);
+  console.log(`[agent] Set prompt for "${agentName}"`);
+}
+
+export async function agentPromptAppendCommand(agentName: string, text: string): Promise<void> {
+  await appendAgentPrompt(agentName, text);
+  console.log(`[agent] Appended to prompt for "${agentName}"`);
+}
+
+export async function agentPromptClearCommand(agentName: string): Promise<void> {
+  await clearAgentPrompt(agentName);
+  console.log(`[agent] Cleared prompt for "${agentName}"`);
 }

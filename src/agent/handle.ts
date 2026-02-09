@@ -10,10 +10,11 @@ import type { AgentConfig, AgentInfo, AgentStatus } from "../types.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { PI_TESTS_DIR } from "../constants.js";
-import { buildDefaultPrompt } from "./prompt.js";
+import { composeSystemPrompt, hashPrompt } from "./prompts/prompt-manager.js";
 import { createListAgentsTool, createReadAgentFileTool, createMailboxTool, createAuthenticatedFetchTool } from "./tools/index.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
+import { getCronSummaries } from "../config/agents-yaml.js";
 
 export interface AgentHandleDeps {
   bus: MessageBus;
@@ -74,15 +75,17 @@ export class AgentHandle {
       // Sandboxed: start container, agent runs inside it
       const model = this.config.model;
 
-      // Build system prompt with env/secret name disclosure
-      const defaultPrompt = buildDefaultPrompt(this.name, "/workspace", this.config.description);
-      let systemPrompt = this.config.systemPrompt ?? defaultPrompt;
-      const envNames = Object.keys(this.config.env ?? {});
-      if (envNames.length > 0) systemPrompt += `\n\nEnvironment variables: ${envNames.join(", ")}`;
-      const secretNames = Object.keys(this.config.secrets ?? {});
-      if (this.config.discloseSecrets && secretNames.length > 0) {
-        systemPrompt += `\nPre-configured services: ${secretNames.join(", ")}`;
-      }
+      // Build system prompt via prompt manager (sandbox path — skills appended in sandbox-entry)
+      const composed = composeSystemPrompt({
+        name: this.name,
+        cwd: "/workspace",
+        description: this.config.description,
+        customPrompt: this.config.systemPrompt,
+        envNames: Object.keys(this.config.env ?? {}),
+        secretNames: this.config.discloseSecrets ? Object.keys(this.config.secrets ?? {}) : undefined,
+        cronJobs: getCronSummaries(this.name),
+      });
+      const systemPrompt = composed.text;
 
       this.sandboxInfo = await this.provider.start(this.name, {
         token: this.sandboxToken,
@@ -142,8 +145,18 @@ export class AgentHandle {
     });
     if (skills.length > 0) console.log(`[agent:${this.name}] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`);
     const skillsPrompt = skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
-    const defaultPrompt = buildDefaultPrompt(this.name, this.cwd, this.config.description);
-    const systemPrompt = (this.config.systemPrompt ?? defaultPrompt) + skillsPrompt;
+    const composed = composeSystemPrompt({
+      name: this.name,
+      cwd: this.cwd,
+      description: this.config.description,
+      customPrompt: this.config.systemPrompt,
+      envNames: Object.keys(this.config.env ?? {}),
+      secretNames: this.config.discloseSecrets ? Object.keys(this.config.secrets ?? {}) : undefined,
+      cronJobs: getCronSummaries(this.name),
+    });
+    const systemPrompt = composed.text + skillsPrompt;
+    const finalHash = hashPrompt(systemPrompt);
+    console.log(`[agent:${this.name}] Prompt ${composed.version} (${finalHash})`);
 
     this.agent = new Agent({
       initialState: {

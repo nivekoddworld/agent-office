@@ -8,6 +8,8 @@ import { createCodingTools, createGrepTool, createFindTool, createLsTool, loadSk
 import { getModel, streamSimple } from "@mariozechner/pi-ai";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { createSendMailProxy, createListAgentsProxy, createReadAgentFileProxy, createAuthenticatedFetchProxy } from "../tools/proxy/index.js";
+import { hashPrompt } from "../prompts/prompt-manager.js";
+import { PROMPT_VERSION } from "../prompts/base-v1.js";
 
 import { createRedactor } from "../../security/redact.js";
 
@@ -97,9 +99,12 @@ const { skills } = loadSkills({ cwd: WORKSPACE, skillPaths: SKILL_PATHS, include
 const skillsPrompt = skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
 if (skills.length > 0) console.log(`[agent-entry] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`);
 
+const finalPrompt = SYSTEM_PROMPT + skillsPrompt;
+console.log(`[agent-entry] Prompt ${PROMPT_VERSION} (${hashPrompt(finalPrompt)})`);
+
 const agent = new Agent({
   initialState: {
-    systemPrompt: SYSTEM_PROMPT + skillsPrompt,
+    systemPrompt: finalPrompt,
     model,
     thinkingLevel: "low",
     tools,

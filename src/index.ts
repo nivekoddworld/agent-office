@@ -11,7 +11,7 @@ import { statusCommand } from "./commands/status.js";
 import { routeCommand, routeListCommand } from "./commands/route.js";
 import { skillAddCommand, skillListCommand, skillRemoveCommand } from "./commands/skill.js";
 import { applyAgentsYaml, agentsReloadCommand, agentsValidateCommand, agentsPathCommand } from "./commands/agents-yaml.js";
-import { agentEnvSetCommand, agentEnvUnsetCommand, agentSecretRefSetCommand, agentSecretRefUnsetCommand, agentConfigShowCommand } from "./commands/agent-config.js";
+import { agentEnvSetCommand, agentEnvUnsetCommand, agentSecretRefSetCommand, agentSecretRefUnsetCommand, agentConfigShowCommand, agentPromptShowCommand, agentPromptSetCommand, agentPromptAppendCommand, agentPromptClearCommand } from "./commands/agent-config.js";
 import { cronListCommand, cronStatusCommand, cronTriggerCommand, cronAddCommand, cronRemoveCommand, cronEnableCommand, cronDisableCommand } from "./commands/cron.js";
 import { ensureAgentsYamlExists } from "./config/agents-yaml.js";
 
@@ -152,12 +152,24 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
         await agentSecretRefUnsetCommand(agent, parts[4]);
       } else if (sub === "config" && action === "show" && agent) {
         agentConfigShowCommand(agent);
+      } else if (sub === "prompt" && action === "show" && agent) {
+        agentPromptShowCommand(agent);
+      } else if (sub === "prompt" && action === "set" && agent && parts[4]) {
+        await agentPromptSetCommand(agent, parts.slice(4).join(" "));
+      } else if (sub === "prompt" && action === "append" && agent && parts[4]) {
+        await agentPromptAppendCommand(agent, parts.slice(4).join(" "));
+      } else if (sub === "prompt" && action === "clear" && agent) {
+        await agentPromptClearCommand(agent);
       } else {
         console.log("Usage: agent env set <agent> <KEY> <VALUE>");
         console.log("       agent env unset <agent> <KEY>");
         console.log("       agent secret-ref set <agent> <KEY> <HOST_ENV_NAME>");
         console.log("       agent secret-ref unset <agent> <KEY>");
         console.log("       agent config show <agent>");
+        console.log("       agent prompt show <agent>");
+        console.log("       agent prompt set <agent> <text>");
+        console.log("       agent prompt append <agent> <text>");
+        console.log("       agent prompt clear <agent>");
       }
       break;
     }
@@ -324,6 +336,10 @@ Commands:
   agent secret-ref set <agent> <KEY> <ENV>    Set secret ref in agents.yaml
   agent secret-ref unset <agent> <KEY>        Remove secret ref from agents.yaml
   agent config show <agent>                   Show agent config (secrets redacted)
+  agent prompt show <agent>                  Show effective prompt (version/hash)
+  agent prompt set <agent> <text>            Set custom prompt
+  agent prompt append <agent> <text>         Append to custom prompt
+  agent prompt clear <agent>                 Remove custom prompt
   skill add <agent> <owner/repo> Install skills from GitHub
   skill list <agent>            List agent skills
   skill remove <agent> <name>   Remove a skill

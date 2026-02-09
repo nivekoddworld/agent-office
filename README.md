@@ -100,7 +100,7 @@ All fields are optional. Agents are spawned sequentially in declaration order; i
 | `priority` | string \| number | `normal` | Priority name or 0-4 |
 | `thinking` | string | `low` | `off` / `minimal` / `low` / `medium` / `high` / `xhigh` |
 | `description` | string | `""` | Visible to other agents |
-| `prompt` | string | _(built-in default)_ | Custom system prompt |
+| `prompt` | string | _(none)_ | Custom instructions (appended to base prompt) |
 | `cwd` | string | `~/.pi-tests/agents/<name>/workspace` | Working directory |
 | `skills` | string[] | `[]` | GitHub sources to auto-install (`owner/repo`) |
 | `api_key_ref` | string | _(auto from provider)_ | Host env var name for model API key |
@@ -314,6 +314,10 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `agent secret-ref set <agent> <KEY> <ENV>` | Set secret ref in `agents.yaml` |
 | `agent secret-ref unset <agent> <KEY>` | Remove secret ref from `agents.yaml` |
 | `agent config show <agent>` | Show agent config (secrets redacted) |
+| `agent prompt show <agent>` | Show effective prompt (version/hash) |
+| `agent prompt set <agent> <text>` | Set custom prompt |
+| `agent prompt append <agent> <text>` | Append to custom prompt |
+| `agent prompt clear <agent>` | Remove custom prompt |
 | `agents reload [--force]` | Re-apply `agents.yaml` (force kills changed agents) |
 | `agents validate` | Dry-run: parse + validate YAML without spawning |
 | `agents path` | Print path to `agents.yaml` |
@@ -510,15 +514,35 @@ src/agent/tools/
 
 In-process agents use the host implementations directly. Sandboxed agents use the proxy implementations, which forward requests to the Host API over HTTP. Both share the same tool contracts and validation helpers to prevent drift.
 
-### Collaboration Prompt
+### Prompt System
 
-Agents are prompted to:
+Every agent receives a **layered system prompt** composed from four ordered layers:
 
-- Always use `list_agents` first to discover collaborators
-- Use `send_mail` for delegation, `read_agent_file` for code review, and `authenticated_fetch` for external APIs
-- Never ask the user for information another agent can provide
-- Avoid reply loops — only send actionable messages, not pleasantries
-- Report completion back to the user when all delegated work is done
+1. **Base prompt** (`src/agent/prompts/base-v1.md`) — collaboration rules, tool guidance, anti-loop rules, workflow, reporting, safety. Always included, never overridden.
+2. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
+3. **Identity** — agent name, description, workspace path.
+4. **Custom instructions** — the `prompt` field from `agents.yaml`, appended under a `## Custom Instructions` header.
+
+Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn.
+
+#### Breaking Change: `prompt` is now append-only
+
+Previously, setting `prompt:` in `agents.yaml` **replaced** the entire system prompt:
+
+```yaml
+# OLD behavior — base prompt was discarded
+prompt: "You are a copywriter. Write marketing copy."
+```
+
+Now, `prompt:` **appends** to the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions:
+
+```yaml
+# NEW behavior — base prompt + your text
+prompt: "You are a copywriter. Write marketing copy."
+# Agent receives: [base rules] + [identity] + [your text]
+```
+
+No action needed if your custom prompt was additive. If it contained its own collaboration/tool rules, those are now provided by the base prompt and can be removed from your `prompt:` field.
 
 ## Telegram Integration
 
@@ -794,7 +818,11 @@ src/
 
   agent/
     handle.ts                 Agent lifecycle (init, prompt, steer, abort, destroy)
-    prompt.ts                 Default system prompt builder
+    prompt.ts                 Backwards-compat wrapper over prompt-manager
+    prompts/
+      base-v1.md              Versioned base prompt (collaboration, tools, safety)
+      base-v1.ts              TS companion (reads .md, exports PROMPT_VERSION)
+      prompt-manager.ts       Layered composition + deterministic hashing
     entrypoints/
       sandbox-entry.ts        Standalone process for Docker containers
     tools/
@@ -846,12 +874,12 @@ src/
     status.ts                 Scheduler/watchdog overview
     route.ts                  Telegram chat routing
     skill.ts                  Skill install/remove with YAML + source map sync
-    agent-config.ts           Per-agent env/secret-ref set/unset + config show
+    agent-config.ts           Per-agent env/secret-ref/prompt commands + config show
     cron.ts                   Cron CLI handlers (add/remove/enable/disable/list/status/trigger)
 
 test/
   agents-yaml.test.ts        YAML config: parsing, validation, apply, write-back, locking
-  agent-config.test.ts        Per-agent env/secret-ref CLI commands + config show
+  agent-config.test.ts        Per-agent env/secret-ref/prompt CLI commands + config show
   env-substitution.test.ts    ${VAR} resolution, missing vars, reserved keys
   redact.test.ts              Secret redaction (text, deep objects, edge cases)
   docker-provider.test.ts     Docker provider (mocked execFile + fetch)
@@ -869,7 +897,8 @@ test/
   cron-store.test.ts          State persistence round-trip, atomic writes
   cron-service.test.ts        Timer lifecycle, catch-up, dispatch cap, busy skip
   cron-commands.test.ts       Cron CLI add/remove/enable/disable + validation
-  prompt.test.ts              System prompt generation
+  prompt.test.ts              System prompt backwards compat
+  prompt-manager.test.ts      Prompt composition, layering, hashing, determinism
 ```
 
 ## Dependencies
@@ -892,7 +921,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 375+ tests
+pnpm test             # Run test suite (vitest) — 415+ tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
