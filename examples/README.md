@@ -1,12 +1,15 @@
 # Examples
 
-## agents.yaml
+Each folder contains an `agents.yaml` and a README describing the setup.
 
-Basic two-agent workspace with a coder and a reviewer. The coder writes code, the reviewer reads agent files and sends feedback via `send_mail`. Drop-in ready — copy to `~/.agent-office/agents.yaml` and start.
+## [basic-team](basic-team/)
+
+Three-agent team: product manager, coder, and reviewer. The PM breaks down tasks, the coder builds, and the reviewer provides feedback — all coordinated via `send_mail`.
 
 ```bash
-cp examples/agents.yaml ~/.agent-office/agents.yaml
-pnpm dev start
+mkdir -p ~/.agent-office
+cp examples/basic-team/agents.yaml ~/.agent-office/agents.yaml
+pnpm dev start --sandbox docker
 ```
 
-Requires `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` in `.env` (or swap models to a single provider).
+Requires `OPENAI_API_KEY` in `.env` (or swap models to your preferred provider).

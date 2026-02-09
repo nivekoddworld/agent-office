@@ -8,8 +8,8 @@ Multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono
 pnpm install
 cp .env.example .env
 mkdir -p ~/.agent-office
-cp examples/agents.yaml ~/.agent-office/agents.yaml
-pnpm dev start
+cp examples/basic-team/agents.yaml ~/.agent-office/agents.yaml
+pnpm dev start --sandbox docker
 ```
 
 See [`examples/`](examples/) for ready-to-use configurations — each has a README describing the setup.

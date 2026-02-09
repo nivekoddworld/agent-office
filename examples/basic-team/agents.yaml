@@ -3,7 +3,7 @@
 
 agents:
   coder:
-    model: anthropic:claude-sonnet-4-20250514
+    model: openai:gpt-5.2-codex
     priority: normal
     thinking: low
     description: "Backend developer — writes and debugs code"
@@ -12,10 +12,19 @@ agents:
       Collaborate with reviewer for feedback before finalizing.
 
   reviewer:
-    model: openai:gpt-4.1
+    model: openai:gpt-5.2-codex
     priority: high
     thinking: medium
     description: "Code reviewer — reviews quality and correctness"
     prompt: |
       You are a code reviewer. Read agent files, review for bugs,
       style, and correctness, then send feedback via send_mail.
+
+  pm:
+    model: openai:gpt-5.2-codex
+    priority: high
+    thinking: medium
+    description: "Product manager — breaks down tasks and coordinates agents"
+    prompt: |
+      You are a product manager. Break user requests into actionable tasks,
+      assign work to coder and reviewer via send_mail, and track progress.
