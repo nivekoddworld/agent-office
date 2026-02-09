@@ -1,6 +1,6 @@
 # pi-tests
 
-FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
+FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
 
 ## Architecture
 
@@ -13,6 +13,7 @@ graph TD
     WS --> SCH[Scheduler\ntick loop]
     WS --> BUS[MessageBus\nmailboxes]
     WS --> WD[Watchdog\nheartbeat]
+    WS --> CRON[CronService\nscheduled jobs]
 
     WS -->|in-process| A[Agent A\nPi · tools · skills]
     WS -->|in-process| B[Agent B\nPi · tools · skills]
@@ -26,7 +27,7 @@ graph TD
     BUS --> HA
 ```
 
-**Core flow:** `agents.yaml` (auto-spawn) / CLI / Telegram -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
+**Core flow:** `agents.yaml` (auto-spawn) / CLI / Telegram / Cron -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
 Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`). The scheduler runs a FreeRTOS-style tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
@@ -106,6 +107,7 @@ All fields are optional. Agents are spawned sequentially in declaration order; i
 | `env` | map | `{}` | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs) |
 | `secrets` | map | `{}` | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
 | `disclose_secrets` | boolean | `false` | Show secret names in system prompt |
+| `cron` | map | `{}` | Named cron jobs (see [Cron Jobs](#cron-jobs)) |
 
 ### Auto-Sync
 
@@ -126,6 +128,53 @@ pi> agents reload --force      # Kill and re-spawn agents with changed config
 pi> agents validate            # Dry-run: parse + validate without spawning
 pi> agents path                # Print path to agents.yaml
 ```
+
+### Cron Jobs
+
+Agents can run proactively on schedules via per-agent cron jobs. The host-side `CronService` manages timers and injects messages into the bus with `from: "__cron__"` — agents never see cron internals.
+
+```yaml
+# ~/.pi-tests/agents.yaml
+agents:
+  standup-bot:
+    model: anthropic:claude-sonnet-4-20250514
+    cron:
+      daily-standup:
+        schedule: "0 9 * * 1-5"        # 5-field only (min hour dom month dow)
+        message: "Run the daily standup"
+        timezone: "America/New_York"    # optional, default UTC
+        catch_up: once                  # optional: "skip" (default) | "once"
+        enabled: true                   # optional, default true
+```
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `schedule` | yes | — | 5-field cron expression (`@daily`/`@hourly` rejected) |
+| `message` | yes | — | Prompt text sent to the agent |
+| `timezone` | no | `UTC` | IANA timezone for schedule evaluation |
+| `catch_up` | no | `skip` | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `enabled` | no | `true` | Set `false` to pause without removing |
+
+Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
+
+**Catch-up behavior:** On restart, if `catch_up: once` and a fire was missed since the last run, one immediate message is sent. First-ever run (no prior state) never catches up. State persists to `~/.pi-tests/cron/state.json`.
+
+**Safety guards:** Busy agents (status `running`) are skipped. A global dispatch cap of 60 cron messages per minute prevents misconfigured schedules from flooding the bus.
+
+#### Cron CLI Commands
+
+```bash
+# In the REPL:
+pi> cron list                                          # List all cron jobs
+pi> cron status [agent]                                # Detailed job status
+pi> cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
+pi> cron remove <agent> <job> [--apply]                # Remove a job
+pi> cron trigger <agent> <job>                         # Fire immediately
+pi> cron enable <agent> <job> [--apply]                # Re-enable a paused job
+pi> cron disable <agent> <job> [--apply]               # Pause a job
+```
+
+Without `--apply`, commands write to `agents.yaml` only — run `agents reload` to activate. With `--apply`, changes take effect immediately if the agent is running.
 
 Change detection uses normalized config comparison (resolved model, numeric priority, sorted skills, trimmed prompt) so cosmetic YAML differences like `normal` vs `2` or reordered skills don't trigger false warnings.
 
@@ -266,6 +315,13 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `agents reload [--force]` | Re-apply `agents.yaml` (force kills changed agents) |
 | `agents validate` | Dry-run: parse + validate YAML without spawning |
 | `agents path` | Print path to `agents.yaml` |
+| `cron list` | List all cron jobs |
+| `cron status [agent]` | Detailed cron job status |
+| `cron add <agent> <job> "<sched>" <msg> [--apply]` | Add a cron job |
+| `cron remove <agent> <job> [--apply]` | Remove a cron job |
+| `cron trigger <agent> <job>` | Fire a cron job immediately |
+| `cron enable <agent> <job> [--apply]` | Re-enable a paused job |
+| `cron disable <agent> <job> [--apply]` | Pause a cron job |
 | `route <chatId> <agent>` | Route a Telegram chat to an agent |
 | `route list` | List all Telegram chat routes |
 | `help` | Show available commands |
@@ -523,6 +579,8 @@ Each agent gets an isolated workspace on the host filesystem:
 ```
 ~/.pi-tests/
   agents.yaml               # declarative agent definitions
+  cron/
+    state.json              # cron job state (last run times, run counts)
   agents/
     designer/
       workspace/            # agent's cwd — all file tools scoped here
@@ -760,6 +818,12 @@ src/
     package.json              Sandbox-specific npm dependencies
     index.ts                  Barrel export
 
+  cron/
+    types.ts                  CronJobConfig, CronJobState, CronJobEntry
+    cron-parser.ts            Thin wrapper over cron-parser (5-field only)
+    cron-store.ts             State persistence (~/.pi-tests/cron/state.json)
+    cron-service.ts           Timer orchestrator (setTimeout per job, catch-up, dispatch cap)
+
   scheduler/
     scheduler.ts              Tick-based priority scheduler
     watchdog.ts               Heartbeat monitor + stuck detection
@@ -781,6 +845,7 @@ src/
     route.ts                  Telegram chat routing
     skill.ts                  Skill install/remove with YAML + source map sync
     agent-config.ts           Per-agent env/secret-ref set/unset + config show
+    cron.ts                   Cron CLI handlers (add/remove/enable/disable/list/status/trigger)
 
 test/
   agents-yaml.test.ts        YAML config: parsing, validation, apply, write-back, locking
@@ -798,6 +863,10 @@ test/
   message-bus.test.ts         Mailbox routing, rate limiting
   local-transport.test.ts     Priority queue ordering
   handle-skills.test.ts       Skill paths for in-process + sandbox agents
+  cron-parser.test.ts         Cron expression parsing, timezone, describeCron
+  cron-store.test.ts          State persistence round-trip, atomic writes
+  cron-service.test.ts        Timer lifecycle, catch-up, dispatch cap, busy skip
+  cron-commands.test.ts       Cron CLI add/remove/enable/disable + validation
   prompt.test.ts              System prompt generation
 ```
 
@@ -812,6 +881,7 @@ test/
 | `commander` | CLI argument parsing |
 | `dotenv` | Load `.env` into `process.env` |
 | `grammy` | Telegram Bot API |
+| `cron-parser` | Cron expression parsing (next/prev fire times) |
 | `yaml` | YAML parsing with comment-preserving Document API |
 
 ## Development
@@ -820,7 +890,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 304 tests
+pnpm test             # Run test suite (vitest) — 375+ tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
