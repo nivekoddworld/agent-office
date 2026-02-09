@@ -53,7 +53,7 @@ export function createTelegramBridge(workspace: Workspace, token: string, allowe
   bot.command(["help", "start"], async (ctx) => {
     if (!isAllowed(ctx.from?.username)) return;
     await ctx.reply(
-      "pi-tests workspace bot\n\n" +
+      "agent-office workspace bot\n\n" +
       "/agents — list running agents\n" +
       "@agentname message — send to a specific agent\n" +
       "Or just type a message to send to the default agent.",

@@ -1,4 +1,4 @@
-# pi-tests
+# agent-office
 
 FreeRTOS-inspired multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Spawns and orchestrates AI agent instances with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
 
@@ -62,10 +62,10 @@ TELEGRAM_BOT_TOKEN=...          # Telegram bridge auto-enables when set
 
 ## Declarative Configuration (`agents.yaml`)
 
-Define your workspace once in `~/.pi-tests/agents.yaml` and agents auto-spawn on startup. No more manual REPL commands on every restart.
+Define your workspace once in `~/.agent-office/agents.yaml` and agents auto-spawn on startup. No more manual REPL commands on every restart.
 
 ```yaml
-# ~/.pi-tests/agents.yaml
+# ~/.agent-office/agents.yaml
 agents:
   designer:
     model: anthropic:claude-sonnet-4-20250514
@@ -101,7 +101,7 @@ All fields are optional. Agents are spawned sequentially in declaration order; i
 | `thinking` | string | `low` | `off` / `minimal` / `low` / `medium` / `high` / `xhigh` |
 | `description` | string | `""` | Visible to other agents |
 | `prompt` | string | _(none)_ | Custom instructions (appended to base prompt) |
-| `cwd` | string | `~/.pi-tests/agents/<name>/workspace` | Working directory |
+| `cwd` | string | `~/.agent-office/agents/<name>/workspace` | Working directory |
 | `skills` | string[] | `[]` | GitHub sources to auto-install (`owner/repo`) |
 | `api_key_ref` | string | _(auto from provider)_ | Host env var name for model API key |
 | `env` | map | `{}` | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs) |
@@ -134,7 +134,7 @@ pi> agents path                # Print path to agents.yaml
 Agents can run proactively on schedules via per-agent cron jobs. The host-side `CronService` manages timers and injects messages into the bus with `from: "__cron__"` — agents never see cron internals.
 
 ```yaml
-# ~/.pi-tests/agents.yaml
+# ~/.agent-office/agents.yaml
 agents:
   standup-bot:
     model: anthropic:claude-sonnet-4-20250514
@@ -157,7 +157,7 @@ agents:
 
 Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 
-**Catch-up behavior:** On restart, if `catch_up: once` and a fire was missed since the last run, one immediate message is sent. First-ever run (no prior state) never catches up. State persists to `~/.pi-tests/cron/state.json`.
+**Catch-up behavior:** On restart, if `catch_up: once` and a fire was missed since the last run, one immediate message is sent. First-ever run (no prior state) never catches up. State persists to `~/.agent-office/cron/state.json`.
 
 **Safety guards:** Busy agents (status `running`) are skipped. A global dispatch cap of 60 cron messages per minute prevents misconfigured schedules from flooding the bus.
 
@@ -180,7 +180,7 @@ Change detection uses normalized config comparison (resolved model, numeric prio
 
 ## Sandbox Modes
 
-pi-tests supports two execution modes for agents:
+agent-office supports two execution modes for agents:
 
 ### In-Process Mode (default)
 
@@ -266,7 +266,7 @@ pi> spawn reviewer --model openai:gpt-4.1 --desc "Code reviewer"
 
 pi> send designer "Create a responsive landing page with hero section"
 # → designer works inside its Docker container, edits files in /workspace
-# → Files persist at ~/.pi-tests/agents/designer/workspace/ on the host
+# → Files persist at ~/.agent-office/agents/designer/workspace/ on the host
 
 pi> send reviewer "Review designer's index.html and send feedback"
 # → reviewer uses read_agent_file (proxied via Host API) to read designer's files
@@ -276,7 +276,7 @@ pi> send reviewer "Review designer's index.html and send feedback"
 Verify files created by sandboxed agents persist on the host:
 
 ```bash
-ls ~/.pi-tests/agents/designer/workspace/
+ls ~/.agent-office/agents/designer/workspace/
 # index.html  styles.css  ...
 ```
 
@@ -340,7 +340,7 @@ spawn <name>
   --model <provider:id>     Model (default: anthropic:claude-sonnet-4-20250514)
   --priority <0-4>          0=IDLE, 1=LOW, 2=NORMAL, 3=HIGH, 4=CRITICAL
   --thinking <level>        off, minimal, low, medium, high, xhigh
-  --cwd <path>              Custom workspace dir (default: ~/.pi-tests/agents/<name>/workspace)
+  --cwd <path>              Custom workspace dir (default: ~/.agent-office/agents/<name>/workspace)
   --desc <text>             Agent description (visible to other agents)
   --prompt <text>           Custom system prompt
   --api-key-ref <ENV_NAME>  Host env var for model API key override
@@ -390,7 +390,7 @@ reviewer calls read_agent_file:
   agent: "designer"
   path: "index.html"
 
--> Returns contents of ~/.pi-tests/agents/designer/workspace/index.html
+-> Returns contents of ~/.agent-office/agents/designer/workspace/index.html
 ```
 
 In Docker sandbox mode, this tool is proxied through the Host API. The agent sends an HTTP request to the host, which reads the file on disk and returns the content. The sandboxed agent never has direct filesystem access to other agents' workspaces.
@@ -586,7 +586,7 @@ Higher-priority agents are always served first. One message per tick per agent p
 Each agent gets an isolated workspace on the host filesystem:
 
 ```
-~/.pi-tests/
+~/.agent-office/
   agents.yaml               # declarative agent definitions
   cron/
     state.json              # cron job state (last run times, run counts)
@@ -702,7 +702,7 @@ What happens behind the scenes:
 3. **backend** agent runs inside its container:
    - Uses `bash`, `write_file`, `edit_file` tools locally in `/workspace`
    - Creates `server.js`, `package.json`, route files
-   - Files appear at `~/.pi-tests/agents/backend/workspace/` on host
+   - Files appear at `~/.agent-office/agents/backend/workspace/` on host
 4. You send: `@tester Review backend's code and write tests`
 5. **tester** calls `list_agents` (proxy -> Host API -> returns agent list)
 6. **tester** calls `read_agent_file` (proxy -> Host API -> reads backend's files from host disk)
@@ -733,7 +733,7 @@ pi> send github-bot "List my GitHub repos using authenticated_fetch with secretN
 **Option B: Via agents.yaml**
 
 ```yaml
-# ~/.pi-tests/agents.yaml
+# ~/.agent-office/agents.yaml
 agents:
   github-bot:
     model: anthropic:claude-sonnet-4-20250514
@@ -785,7 +785,7 @@ src/
   index.ts                    CLI entry + REPL
   workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox)
   types.ts                    Shared types (Priority, AgentConfig, SandboxMode, etc.)
-  constants.ts                Shared constants (PI_TESTS_DIR)
+  constants.ts                Shared constants (AGENT_OFFICE_DIR)
   routing.ts                  Telegram chat -> agent routing
 
   config/
@@ -834,7 +834,7 @@ src/
   cron/
     types.ts                  CronJobConfig, CronJobState, CronJobEntry
     cron-parser.ts            Thin wrapper over cron-parser (5-field only)
-    cron-store.ts             State persistence (~/.pi-tests/cron/state.json)
+    cron-store.ts             State persistence (~/.agent-office/cron/state.json)
     cron-service.ts           Timer orchestrator (setTimeout per job, catch-up, dispatch cap)
 
   scheduler/

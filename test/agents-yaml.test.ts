@@ -4,12 +4,12 @@ import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node
 import { tmpdir } from "node:os";
 
 // vi.mock is hoisted — cannot reference runtime variables. Use a fixed temp path.
-const TEST_DIR = join(tmpdir(), "pi-tests-yaml-test");
+const TEST_DIR = join(tmpdir(), "ao-yaml-test");
 
 vi.mock("../src/constants.js", async () => {
   const os = await import("node:os");
   const path = await import("node:path");
-  return { PI_TESTS_DIR: path.join(os.tmpdir(), "pi-tests-yaml-test") };
+  return { AGENT_OFFICE_DIR: path.join(os.tmpdir(), "ao-yaml-test") };
 });
 
 vi.mock("@mariozechner/pi-ai", () => ({
@@ -460,7 +460,7 @@ agents:
 });
 
 describe("resolveCwd", () => {
-  it("defaults to PI_TESTS_DIR/agents/<name>/workspace", () => {
+  it("defaults to AGENT_OFFICE_DIR/agents/<name>/workspace", () => {
     expect(resolveCwd("agent1")).toBe(join(TEST_DIR, "agents", "agent1", "workspace"));
   });
 
@@ -474,7 +474,7 @@ describe("resolveCwd", () => {
     expect(resolveCwd("agent1", "/absolute/path")).toBe("/absolute/path");
   });
 
-  it("resolves relative paths relative to PI_TESTS_DIR", () => {
+  it("resolves relative paths relative to AGENT_OFFICE_DIR", () => {
     const result = resolveCwd("agent1", "relative/path");
     expect(result).toBe(join(TEST_DIR, "relative", "path"));
   });
@@ -998,7 +998,7 @@ describe("withConfigLock", () => {
 // --- getAgentsYamlPath ---
 
 describe("getAgentsYamlPath", () => {
-  it("returns path under PI_TESTS_DIR", () => {
+  it("returns path under AGENT_OFFICE_DIR", () => {
     expect(getAgentsYamlPath()).toBe(join(TEST_DIR, "agents.yaml"));
   });
 });

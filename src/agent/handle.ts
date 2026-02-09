@@ -9,7 +9,7 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentConfig, AgentInfo, AgentStatus } from "../types.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
-import { PI_TESTS_DIR } from "../constants.js";
+import { AGENT_OFFICE_DIR } from "../constants.js";
 import { composeSystemPrompt, hashPrompt } from "./prompts/prompt-manager.js";
 import { createListAgentsTool, createReadAgentFileTool, createMailboxTool, createAuthenticatedFetchTool } from "./tools/index.js";
 import { createRedactor } from "../security/redact.js";
@@ -60,11 +60,11 @@ export class AgentHandle {
   get sandboxed(): boolean { return !!this.provider; }
 
   get cwd(): string {
-    return this.config.cwd ?? join(PI_TESTS_DIR, "agents", this.config.name, "workspace");
+    return this.config.cwd ?? join(AGENT_OFFICE_DIR, "agents", this.config.name, "workspace");
   }
 
   private get agentDir(): string {
-    return join(PI_TESTS_DIR, "agents", this.config.name);
+    return join(AGENT_OFFICE_DIR, "agents", this.config.name);
   }
 
   async init(): Promise<void> {

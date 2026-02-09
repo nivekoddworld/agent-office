@@ -6,7 +6,7 @@ import type { AgentConfig } from "../src/types.js";
 import { Priority } from "../src/types.js";
 import type { SandboxProvider, SandboxInfo, SandboxStartOpts } from "../src/sandbox/types.js";
 import type { MessageBus } from "../src/transport/message-bus.js";
-import { PI_TESTS_DIR } from "../src/constants.js";
+import { AGENT_OFFICE_DIR } from "../src/constants.js";
 
 // Mock fs to avoid real disk access
 vi.mock("node:fs/promises", () => ({
@@ -89,7 +89,7 @@ describe("AgentHandle sandbox skills", () => {
 
     expect(provider.start).toHaveBeenCalledOnce();
     const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
-    expect(opts.skillsPaths).toEqual([join(PI_TESTS_DIR, "agents", "test-agent", "skills")]);
+    expect(opts.skillsPaths).toEqual([join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills")]);
   });
 
   it("includes custom skillDirs in sandbox skillsPaths", async () => {
@@ -105,10 +105,10 @@ describe("AgentHandle sandbox skills", () => {
     const handle = new AgentHandle(config, deps);
     await handle.init();
 
-    const cwd = join(PI_TESTS_DIR, "agents", "test-agent", "workspace");
+    const cwd = join(AGENT_OFFICE_DIR, "agents", "test-agent", "workspace");
     const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
     expect(opts.skillsPaths).toEqual([
-      join(PI_TESTS_DIR, "agents", "test-agent", "skills"),
+      join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills"),
       "/extra/skills-a",                   // absolute stays absolute
       resolve(cwd, "./relative-skills"),   // relative resolved against cwd
       join(homedir(), "my-skills"),        // tilde expanded

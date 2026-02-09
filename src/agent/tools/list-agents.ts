@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { PI_TESTS_DIR } from "../../constants.js";
+import { AGENT_OFFICE_DIR } from "../../constants.js";
 import type { AgentInfo } from "../../types.js";
 import { LIST_AGENTS } from "./contracts.js";
 
@@ -13,7 +13,7 @@ export function createListAgentsTool(selfName: string, listFn: () => AgentInfo[]
       const agents = listFn();
       const lines = agents.map((a) => {
         const self = a.name === selfName ? " (you)" : "";
-        const ws = join(PI_TESTS_DIR, "agents", a.name, "workspace");
+        const ws = join(AGENT_OFFICE_DIR, "agents", a.name, "workspace");
         return `- ${a.name}${self}: ${a.status}, workspace=${ws}, desc="${a.description}"`;
       });
       return textResult(lines.join("\n") || "No agents running.");

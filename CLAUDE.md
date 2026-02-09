@@ -2,7 +2,7 @@
 
 ## What is this?
 
-FreeRTOS-inspired multi-agent workspace manager built on Pi. Spawns sandboxed AI agents with tick-based scheduling, priority queues, mailbox IPC, and Telegram as a frontend.
+Agent Office — FreeRTOS-inspired multi-agent workspace manager built on Pi. Spawns sandboxed AI agents with tick-based scheduling, priority queues, mailbox IPC, and Telegram as a frontend.
 
 ## Commands
 
@@ -22,7 +22,7 @@ src/
   index.ts                CLI entry + REPL
   workspace.ts            Central facade
   types.ts                Shared types
-  constants.ts            Shared constants (PI_TESTS_DIR)
+  constants.ts            Shared constants (AGENT_OFFICE_DIR)
   agent/
     handle.ts             Agent lifecycle
     prompt.ts             System prompt builder

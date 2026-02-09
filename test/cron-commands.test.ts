@@ -8,7 +8,7 @@ const TEST_DIR = join(tmpdir(), "cron-cmd-test");
 vi.mock("../src/constants.js", async () => {
   const os = await import("node:os");
   const path = await import("node:path");
-  return { PI_TESTS_DIR: path.join(os.tmpdir(), "cron-cmd-test") };
+  return { AGENT_OFFICE_DIR: path.join(os.tmpdir(), "cron-cmd-test") };
 });
 
 vi.mock("@mariozechner/pi-ai", () => ({

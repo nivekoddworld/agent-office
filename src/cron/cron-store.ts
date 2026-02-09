@@ -1,10 +1,10 @@
 import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync, unlinkSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { PI_TESTS_DIR } from "../constants.js";
+import { AGENT_OFFICE_DIR } from "../constants.js";
 import type { CronJobState } from "./types.js";
 
-const DEFAULT_DIR = join(PI_TESTS_DIR, "cron");
+const DEFAULT_DIR = join(AGENT_OFFICE_DIR, "cron");
 const STATE_FILE = "state.json";
 
 export class CronStore {

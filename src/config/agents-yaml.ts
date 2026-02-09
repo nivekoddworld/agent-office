@@ -4,7 +4,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "
 import { randomUUID } from "node:crypto";
 import { parseDocument, isSeq } from "yaml";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { PI_TESTS_DIR } from "../constants.js";
+import { AGENT_OFFICE_DIR } from "../constants.js";
 import { Priority } from "../types.js";
 import { withConfigLock } from "./lock.js";
 import { resolveEnvRefs } from "./env-substitution.js";
@@ -62,14 +62,14 @@ const RESERVED_KEYS = new Set([
 // --- Path helpers ---
 
 export function getAgentsYamlPath(): string {
-  return join(PI_TESTS_DIR, "agents.yaml");
+  return join(AGENT_OFFICE_DIR, "agents.yaml");
 }
 
 export function resolveCwd(name: string, cwd?: string): string {
-  if (!cwd) return join(PI_TESTS_DIR, "agents", name, "workspace");
+  if (!cwd) return join(AGENT_OFFICE_DIR, "agents", name, "workspace");
   if (cwd.startsWith("~/")) return join(homedir(), cwd.slice(2));
   if (cwd.startsWith("/")) return cwd;
-  return resolve(PI_TESTS_DIR, cwd);
+  return resolve(AGENT_OFFICE_DIR, cwd);
 }
 
 // --- Bootstrap ---

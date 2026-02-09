@@ -3,12 +3,12 @@ import { join } from "node:path";
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 
-const TEST_DIR = join(tmpdir(), "pi-tests-agent-config-test");
+const TEST_DIR = join(tmpdir(), "ao-agent-config-test");
 
 vi.mock("../src/constants.js", async () => {
   const os = await import("node:os");
   const path = await import("node:path");
-  return { PI_TESTS_DIR: path.join(os.tmpdir(), "pi-tests-agent-config-test") };
+  return { AGENT_OFFICE_DIR: path.join(os.tmpdir(), "ao-agent-config-test") };
 });
 
 import {

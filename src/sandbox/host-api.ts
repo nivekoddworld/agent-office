@@ -4,7 +4,7 @@ import { join, sep } from "node:path";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentInfo } from "../types.js";
 import { Priority } from "../types.js";
-import { PI_TESTS_DIR } from "../constants.js";
+import { AGENT_OFFICE_DIR } from "../constants.js";
 import { createRedactor, redactText } from "../security/redact.js";
 import { validateFetchParams, FETCH_TIMEOUT_MS, MAX_RESPONSE_BODY, RESERVED_SECRET_NAMES, type FetchParams } from "../agent/tools/fetch-helpers.js";
 
@@ -243,7 +243,7 @@ export class HostApi {
       return;
     }
 
-    const agentWs = join(PI_TESTS_DIR, "agents", agent, "workspace");
+    const agentWs = join(AGENT_OFFICE_DIR, "agents", agent, "workspace");
     try {
       const resolvedWs = await realpath(agentWs);
       const resolved = await realpath(join(agentWs, filePath));

@@ -1,13 +1,13 @@
 import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { PI_TESTS_DIR } from "../constants.js";
+import { AGENT_OFFICE_DIR } from "../constants.js";
 import { withConfigLock } from "../config/lock.js";
 
 const SOURCE_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
 
 export function skillsDir(agentName: string): string {
-  return join(PI_TESTS_DIR, "agents", agentName, "skills");
+  return join(AGENT_OFFICE_DIR, "agents", agentName, "skills");
 }
 
 /** Fetch SKILL.md files from a GitHub repo (owner/repo format). */
@@ -17,7 +17,7 @@ export async function fetchSkills(
 ): Promise<Array<{ name: string; content: string }>> {
   if (!SOURCE_RE.test(source)) throw new Error(`Invalid source "${source}" — expected "owner/repo"`);
 
-  const headers = { "User-Agent": "pi-tests" };
+  const headers = { "User-Agent": "agent-office" };
   const skills: Array<{ name: string; content: string }> = [];
 
   // Try skills/ subdirectory first (multi-skill repo)

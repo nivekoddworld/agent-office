@@ -22,7 +22,7 @@ process.on("unhandledRejection", (err) => {
 const program = new Command();
 
 program
-  .name("pi-tests")
+  .name("agent-office")
   .description("FreeRTOS-inspired multi-agent workspace manager")
   .version("0.1.0");
 
@@ -64,7 +64,7 @@ program
     await applyAgentsYaml(workspace);
 
     // REPL
-    const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "\npi> " });
+    const rl = createInterface({ input: process.stdin, output: process.stdout, prompt: "\nao> " });
     rl.prompt();
 
     rl.on("line", async (line) => {

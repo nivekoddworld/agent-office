@@ -1,7 +1,7 @@
 import { readFile, realpath } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { PI_TESTS_DIR } from "../../constants.js";
+import { AGENT_OFFICE_DIR } from "../../constants.js";
 import { READ_AGENT_FILE } from "./contracts.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
@@ -15,7 +15,7 @@ export function createReadAgentFileTool(): AgentTool<any> {
     ...READ_AGENT_FILE,
     execute: async (_id, params: { agent: string; path: string }) => {
       if (!AGENT_NAME_RE.test(params.agent)) return textResult("Error: invalid agent name.");
-      const agentWs = join(PI_TESTS_DIR, "agents", params.agent, "workspace");
+      const agentWs = join(AGENT_OFFICE_DIR, "agents", params.agent, "workspace");
       try {
         const resolvedWs = await realpath(agentWs);
         const resolved = await realpath(join(agentWs, params.path));
