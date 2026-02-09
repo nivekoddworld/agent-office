@@ -10,6 +10,8 @@ import { DockerProvider } from "./sandbox/docker-provider.js";
 import type { SandboxProvider } from "./sandbox/types.js";
 import type { AgentConfig, AgentInfo, Priority, WorkspaceConfig } from "./types.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
+import { CronService } from "./cron/cron-service.js";
+import { CronStore } from "./cron/cron-store.js";
 
 const DEFAULT_HOST_PORT = 13000;
 
@@ -21,6 +23,7 @@ export class Workspace {
   readonly bus = new MessageBus();
   readonly scheduler: Scheduler;
   readonly watchdog: Watchdog;
+  readonly cron: CronService;
   readonly router = new Router();
   defaultAgent: string | undefined;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
@@ -35,6 +38,7 @@ export class Workspace {
     this.hostApiPort = config.sandbox?.hostPort ?? DEFAULT_HOST_PORT;
     this.scheduler = new Scheduler(this.agents, this.bus, config.tickIntervalMs ?? 2000);
     this.watchdog = new Watchdog(this.agents, (name) => this.handleStuck(name), config.watchdog);
+    this.cron = new CronService(this.bus, this.agents, new CronStore());
 
     if (this.sandboxMode === "docker") {
       this.hostApi = new HostApi(this.bus, () => this.list());
@@ -48,9 +52,11 @@ export class Workspace {
     }
     this.scheduler.start();
     this.watchdog.start();
+    this.cron.start();
   }
 
   async stop(): Promise<void> {
+    this.cron.stop();
     this.scheduler.stop();
     this.watchdog.stop();
     for (const handle of this.agents.values()) await handle.destroy();
@@ -123,6 +129,7 @@ export class Workspace {
   async kill(name: string): Promise<void> {
     const handle = this.agents.get(name);
     if (!handle) throw new Error(`Agent "${name}" not found`);
+    this.cron.removeJobs(name);
     await handle.destroy();
     this.bus.unregister(name);
     this.agents.delete(name);

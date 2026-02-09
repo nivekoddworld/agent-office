@@ -27,6 +27,7 @@ import {
   ensureAgentsYamlExists,
   upsertAgentToYaml,
   removeAgentFromYaml,
+  extractCronJobs,
 } from "../src/config/agents-yaml.js";
 import { withConfigLock } from "../src/config/lock.js";
 import {
@@ -75,6 +76,11 @@ function makeWorkspace(agents: Record<string, any> = {}): any {
     kill: vi.fn(async (name: string) => { agentMap.delete(name); }),
     send: vi.fn(),
     list: vi.fn(() => []),
+    cron: {
+      setJobs: vi.fn(),
+      removeJobs: vi.fn(),
+      activeAgents: vi.fn(() => new Set()),
+    },
   };
 }
 
@@ -297,6 +303,159 @@ describe("validateAgentEntry", () => {
     });
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]).toContain("both env and secrets");
+  });
+});
+
+// --- Cron Validation ---
+
+describe("validateAgentEntry — cron", () => {
+  it("accepts valid cron entry", () => {
+    expect(validateAgentEntry("bot", {
+      cron: {
+        "daily-standup": {
+          schedule: "0 9 * * 1-5",
+          message: "Run standup",
+          timezone: "America/New_York",
+          catch_up: "once",
+          enabled: true,
+        },
+      },
+    })).toEqual([]);
+  });
+
+  it("rejects invalid schedule", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { job: { schedule: "bad", message: "hi" } },
+    });
+    expect(errors.some((e) => e.includes("invalid schedule"))).toBe(true);
+  });
+
+  it("rejects @daily shorthand", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { job: { schedule: "@daily", message: "hi" } },
+    });
+    expect(errors.some((e) => e.includes("invalid schedule"))).toBe(true);
+  });
+
+  it("rejects missing message", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { job: { schedule: "0 9 * * *", message: "" } },
+    });
+    expect(errors.some((e) => e.includes("message is required"))).toBe(true);
+  });
+
+  it("rejects invalid timezone", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { job: { schedule: "0 9 * * *", message: "hi", timezone: "Mars/Olympus" } },
+    });
+    expect(errors.some((e) => e.includes("invalid timezone"))).toBe(true);
+  });
+
+  it("accepts UTC timezone", () => {
+    expect(validateAgentEntry("bot", {
+      cron: { job: { schedule: "0 9 * * *", message: "hi", timezone: "UTC" } },
+    })).toEqual([]);
+  });
+
+  it("rejects invalid catch_up value", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { job: { schedule: "0 9 * * *", message: "hi", catch_up: "all" } },
+    });
+    expect(errors.some((e) => e.includes("catch_up"))).toBe(true);
+  });
+
+  it("rejects invalid job name", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { "bad name!": { schedule: "0 9 * * *", message: "hi" } },
+    });
+    expect(errors.some((e) => e.includes("Invalid cron job name"))).toBe(true);
+  });
+
+  it("rejects non-boolean enabled", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { job: { schedule: "0 9 * * *", message: "hi", enabled: "yes" as any } },
+    });
+    expect(errors.some((e) => e.includes("enabled must be a boolean"))).toBe(true);
+  });
+
+  it("handles null/non-object cron job gracefully", () => {
+    const errors = validateAgentEntry("bot", {
+      cron: { job: null as any },
+    });
+    expect(errors.some((e) => e.includes("must be an object"))).toBe(true);
+  });
+});
+
+describe("extractCronJobs", () => {
+  it("returns correct map from YAML", () => {
+    const yaml = {
+      agents: {
+        bot: {
+          cron: {
+            daily: { schedule: "0 9 * * *", message: "hello" },
+            hourly: { schedule: "0 * * * *", message: "ping", timezone: "UTC" },
+          },
+        },
+        other: {},
+      },
+    };
+    const result = extractCronJobs(yaml);
+    expect(result.size).toBe(1);
+    expect(result.has("bot")).toBe(true);
+    const jobs = result.get("bot")!;
+    expect(Object.keys(jobs)).toEqual(["daily", "hourly"]);
+    expect(jobs.daily!.schedule).toBe("0 9 * * *");
+    expect(jobs.daily!.catchUp).toBe("skip"); // default
+    expect(jobs.hourly!.timezone).toBe("UTC");
+  });
+
+  it("skips null/non-object cron entries without throwing", () => {
+    const yaml = {
+      agents: {
+        bot: {
+          cron: {
+            good: { schedule: "0 9 * * *", message: "hi" },
+            bad: null as any,
+            alsobad: "string" as any,
+          },
+        },
+      },
+    };
+    const result = extractCronJobs(yaml);
+    const jobs = result.get("bot")!;
+    expect(Object.keys(jobs)).toEqual(["good"]);
+  });
+
+  it("skips disabled jobs", () => {
+    const yaml = {
+      agents: {
+        bot: {
+          cron: {
+            active: { schedule: "0 9 * * *", message: "hi", enabled: true },
+            disabled: { schedule: "0 9 * * *", message: "bye", enabled: false },
+          },
+        },
+      },
+    };
+    const result = extractCronJobs(yaml);
+    const jobs = result.get("bot")!;
+    expect(Object.keys(jobs)).toEqual(["active"]);
+  });
+
+  it("cron preserved through upsert round-trip", async () => {
+    writeYaml(`
+agents:
+  bot:
+    model: anthropic:test-model
+    cron:
+      daily:
+        schedule: "0 9 * * *"
+        message: Run standup
+`);
+    await upsertAgentToYaml("bot", { model: "openai:gpt-4" });
+    const result = loadAgentsYaml();
+    expect(result!.agents["bot"]!.cron).toBeDefined();
+    expect(result!.agents["bot"]!.cron!["daily"]!.schedule).toBe("0 9 * * *");
   });
 });
 

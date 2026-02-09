@@ -12,6 +12,7 @@ import { routeCommand, routeListCommand } from "./commands/route.js";
 import { skillAddCommand, skillListCommand, skillRemoveCommand } from "./commands/skill.js";
 import { applyAgentsYaml, agentsReloadCommand, agentsValidateCommand, agentsPathCommand } from "./commands/agents-yaml.js";
 import { agentEnvSetCommand, agentEnvUnsetCommand, agentSecretRefSetCommand, agentSecretRefUnsetCommand, agentConfigShowCommand } from "./commands/agent-config.js";
+import { cronListCommand, cronStatusCommand, cronTriggerCommand, cronAddCommand, cronRemoveCommand, cronEnableCommand, cronDisableCommand } from "./commands/cron.js";
 import { ensureAgentsYamlExists } from "./config/agents-yaml.js";
 
 process.on("unhandledRejection", (err) => {
@@ -174,6 +175,52 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
       }
       break;
     }
+    case "cron": {
+      const sub = parts[1];
+      if (sub === "list") { cronListCommand(workspace); break; }
+      if (sub === "status") { cronStatusCommand(workspace, parts[2]); break; }
+      if (sub === "trigger" && parts[2] && parts[3]) { cronTriggerCommand(workspace, parts[2], parts[3]); break; }
+      if (sub === "add" && parts[2] && parts[3] && parts[4] && parts[5]) {
+        const schedule = parts[4];
+        const fieldCount = schedule.split(/\s+/).length;
+        if (fieldCount !== 5) {
+          console.log(`Error: schedule must be a quoted 5-field cron expression (got ${fieldCount} field${fieldCount !== 1 ? "s" : ""}). Example: cron add mybot daily "0 9 * * 1-5" Run standup`);
+          break;
+        }
+        const apply = parts.includes("--apply");
+        const optStart = parts.findIndex((p, i) => i >= 5 && p.startsWith("--"));
+        const msgEnd = optStart === -1 ? parts.length : optStart;
+        const message = parts.slice(5, msgEnd).join(" ");
+        if (!message) { console.log("Error: message is required"); break; }
+        const opts = parseCronAddOpts(parts.slice(msgEnd));
+        await cronAddCommand(parts[2], parts[3], schedule, message, opts, apply ? workspace : undefined);
+        break;
+      }
+      if (sub === "remove" && parts[2] && parts[3]) {
+        const apply = parts.includes("--apply");
+        await cronRemoveCommand(parts[2], parts[3], apply ? workspace : undefined);
+        break;
+      }
+      if (sub === "enable" && parts[2] && parts[3]) {
+        const apply = parts.includes("--apply");
+        await cronEnableCommand(parts[2], parts[3], apply ? workspace : undefined);
+        break;
+      }
+      if (sub === "disable" && parts[2] && parts[3]) {
+        const apply = parts.includes("--apply");
+        await cronDisableCommand(parts[2], parts[3], apply ? workspace : undefined);
+        break;
+      }
+      console.log(`Usage:
+  cron list                                          List all cron jobs
+  cron status [agent]                                Show detailed job status
+  cron add <agent> <job> "<sched>" <msg> [--apply]   Add job
+  cron remove <agent> <job> [--apply]                Remove job
+  cron trigger <agent> <job>                         Fire a job immediately
+  cron enable <agent> <job> [--apply]                Enable a disabled job
+  cron disable <agent> <job> [--apply]               Disable a job`);
+      break;
+    }
     case "help":
       printHelp();
       break;
@@ -231,6 +278,15 @@ function parseSpawnArgs(parts: string[]): SpawnArgs {
   };
 }
 
+function parseCronAddOpts(flags: string[]): { timezone?: string; catchUp?: string } {
+  const opts: { timezone?: string; catchUp?: string } = {};
+  for (let i = 0; i < flags.length; i++) {
+    if (flags[i] === "--timezone" && flags[i + 1]) opts.timezone = flags[++i];
+    else if (flags[i] === "--catch-up" && flags[i + 1]) opts.catchUp = flags[++i];
+  }
+  return opts;
+}
+
 function parseReplInput(input: string): string[] {
   const parts: string[] = [];
   let current = "";
@@ -274,6 +330,13 @@ Commands:
   agents reload [--force]       Re-read agents.yaml and spawn/update agents
   agents validate               Validate agents.yaml without spawning
   agents path                   Print path to agents.yaml
+  cron list                     List all cron jobs
+  cron status [agent]           Show detailed job status
+  cron add <agent> <job> "<sched>" <msg> [--apply]   Add cron job
+  cron remove <agent> <job> [--apply]                Remove cron job
+  cron trigger <agent> <job>    Fire a job immediately
+  cron enable <agent> <job> [--apply]   Enable a disabled job
+  cron disable <agent> <job> [--apply]  Disable a job
   route <chatId> <agent>        Route Telegram chat to agent
   route list                    List all routes
   help                          Show this help

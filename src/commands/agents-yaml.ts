@@ -7,6 +7,7 @@ import {
   resolveCwd,
   resolvePriority,
   getAgentsYamlPath,
+  extractCronJobs,
   type AgentYamlEntry,
 } from "../config/agents-yaml.js";
 import { withConfigLock } from "../config/lock.js";
@@ -168,6 +169,22 @@ export async function applyAgentsYaml(workspace: Workspace, opts?: { force?: boo
   if (skipped > 0) parts.push(`${skipped} skipped`);
   if (failures.length > 0) parts.push(`${failures.length} failed (${failures.join(", ")})`);
   console.log(`[agents.yaml] ${parts.join(", ")}`);
+
+  // Reconcile cron jobs — full sync (add/update/remove)
+  // Wrapped per-agent so invalid cron in one agent doesn't crash the whole reload.
+  const yamlCronJobs = extractCronJobs(yaml);
+  const yamlAgentNames = new Set(yamlCronJobs.keys());
+  for (const [name, jobs] of yamlCronJobs) {
+    if (!workspace.agents.has(name)) continue;
+    try {
+      workspace.cron.setJobs(name, jobs);
+    } catch (err) {
+      console.warn(`[agents.yaml] Cron setup failed for "${name}": ${err instanceof Error ? err.message : err}`);
+    }
+  }
+  for (const activeAgent of workspace.cron.activeAgents()) {
+    if (!yamlAgentNames.has(activeAgent)) workspace.cron.removeJobs(activeAgent);
+  }
 }
 
 async function installMissingSkills(agentName: string, sources: string[]): Promise<void> {

@@ -29,7 +29,7 @@ export class MessageBus {
     priority: Priority;
   }): void {
     // Rate-limit inter-agent mail (skip user messages)
-    if (opts.from !== "__user__") {
+    if (opts.from !== "__user__" && opts.from !== "__cron__") {
       const now = Date.now();
       let entry = this.sendCounts.get(opts.from);
       if (!entry || now - entry.windowStart > RATE_WINDOW_MS) {

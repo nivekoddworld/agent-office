@@ -54,6 +54,17 @@ describe("MessageBus", () => {
     expect(bus.peek("target")).toBe(15);
   });
 
+  it("does not rate-limit __cron__ sends", () => {
+    const bus = new MessageBus();
+    bus.register("target");
+
+    for (let i = 0; i < 15; i++) {
+      bus.send({ from: "__cron__", to: "target", type: "prompt", payload: `cron-${i}`, priority: Priority.NORMAL });
+    }
+
+    expect(bus.peek("target")).toBe(15);
+  });
+
   it("unregisters agents", () => {
     const bus = new MessageBus();
     bus.register("agent-a");

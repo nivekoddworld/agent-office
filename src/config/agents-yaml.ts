@@ -8,6 +8,8 @@ import { PI_TESTS_DIR } from "../constants.js";
 import { Priority } from "../types.js";
 import { withConfigLock } from "./lock.js";
 import { resolveEnvRefs } from "./env-substitution.js";
+import { isValidCron } from "../cron/cron-parser.js";
+import type { CronJobConfig } from "../cron/types.js";
 
 // --- Types ---
 
@@ -23,6 +25,13 @@ export interface AgentYamlEntry {
   env?: Record<string, string>;
   secrets?: Record<string, string>;
   disclose_secrets?: boolean;
+  cron?: Record<string, {
+    schedule: string;
+    message: string;
+    timezone?: string;
+    catch_up?: string;
+    enabled?: boolean;
+  }>;
 }
 
 export interface AgentsYaml {
@@ -41,6 +50,8 @@ const PRIORITY_NAME_TO_NUM: Record<string, number> = {
   critical: Priority.CRITICAL,
 };
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const CRON_JOB_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const VALID_CATCH_UP = ["skip", "once"];
 const ENV_KEY_RE = /^[A-Z_][A-Z0-9_]*$/;
 const ENV_REF_RE = /^\$\{[A-Z_][A-Z0-9_]*\}$/;
 const RESERVED_KEYS = new Set([
@@ -186,7 +197,46 @@ export function validateAgentEntry(name: string, entry: AgentYamlEntry): string[
     for (const k of overlap) errors.push(`Key "${k}" appears in both env and secrets`);
   }
 
+  // Validate cron jobs
+  if (entry.cron) {
+    for (const [jobName, job] of Object.entries(entry.cron)) {
+      const p = `cron.${jobName}`;
+      if (!job || typeof job !== "object") { errors.push(`${p}: must be an object`); continue; }
+      if (!CRON_JOB_NAME_RE.test(jobName)) errors.push(`Invalid cron job name "${jobName}" — must match [a-zA-Z0-9_-]+`);
+      if (!job.schedule || !isValidCron(job.schedule)) errors.push(`${p}: invalid schedule "${job.schedule ?? ""}" — must be a valid 5-field cron expression`);
+      if (!job.message || typeof job.message !== "string" || !job.message.trim()) errors.push(`${p}: message is required`);
+      if (job.timezone !== undefined && !isValidTimezone(job.timezone)) errors.push(`${p}: invalid timezone "${job.timezone}"`);
+      if (job.catch_up !== undefined && !VALID_CATCH_UP.includes(job.catch_up)) errors.push(`${p}: catch_up must be "skip" or "once"`);
+      if (job.enabled !== undefined && typeof job.enabled !== "boolean") errors.push(`${p}: enabled must be a boolean`);
+    }
+  }
+
   return errors;
+}
+
+export function isValidTimezone(tz: string): boolean {
+  // Check supportedValuesOf first (fast path), but always fall through to DateTimeFormat
+  // because Node 22's supportedValuesOf("timeZone") excludes "UTC" despite it being valid.
+  try {
+    if (typeof Intl.supportedValuesOf === "function" && (Intl.supportedValuesOf("timeZone") as string[]).includes(tz)) return true;
+  } catch { /* continue */ }
+  try { Intl.DateTimeFormat("en", { timeZone: tz }); return true; } catch { return false; }
+}
+
+/** Extract enabled cron jobs from parsed YAML into a map of agent → jobs. */
+export function extractCronJobs(yaml: AgentsYaml): Map<string, Record<string, CronJobConfig>> {
+  const result = new Map<string, Record<string, CronJobConfig>>();
+  for (const [agent, entry] of Object.entries(yaml.agents)) {
+    if (!entry.cron) continue;
+    const jobs: Record<string, CronJobConfig> = {};
+    for (const [name, raw] of Object.entries(entry.cron)) {
+      if (!raw || typeof raw !== "object") continue;
+      if (raw.enabled === false) continue;
+      jobs[name] = { schedule: raw.schedule, message: raw.message, timezone: raw.timezone, catchUp: (raw.catch_up as "skip" | "once") ?? "skip", enabled: raw.enabled ?? true };
+    }
+    if (Object.keys(jobs).length > 0) result.set(agent, jobs);
+  }
+  return result;
 }
 
 export function resolvePriority(p?: string | number): Priority {
@@ -292,6 +342,7 @@ function buildYamlEntry(entry: AgentYamlEntry, rawSecrets?: Record<string, strin
   if (entry.env && Object.keys(entry.env).length > 0) out.env = entry.env;
   if (rawSecrets && Object.keys(rawSecrets).length > 0) out.secrets = rawSecrets;
   if (entry.disclose_secrets) out.disclose_secrets = entry.disclose_secrets;
+  if (entry.cron && Object.keys(entry.cron).length > 0) out.cron = entry.cron;
   return out;
 }
 
