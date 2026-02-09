@@ -391,6 +391,27 @@ agent calls authenticated_fetch:
 | Response redaction | Secret value scrubbed from response body and headers before agent sees it |
 | Agent isolation | Each agent can only access its own secrets — agent A cannot use agent B's tokens |
 
+#### `secrets` vs `env` — When to Use Which
+
+Secrets are only usable through two host-side paths:
+
+- **Model auth** — `MODEL_API_KEY` is consumed by the agent runtime's `getApiKey()` callback to authenticate with model providers (Anthropic, OpenAI, etc.)
+- **HTTP calls** — tool secrets (`GITHUB_TOKEN`, etc.) are consumed via `authenticated_fetch`, where the host injects the secret into outbound requests
+
+In both cases, the raw secret value is **never exposed** to agent code — it's not in `process.env`, not on disk, and not in Docker env vars. The agent only knows the secret _name_.
+
+This means if a project inside the agent workspace needs a raw key (e.g. an SDK that reads `process.env.X_API_KEY`), secrets won't work for that. Use `env` instead:
+
+| | `secrets` | `env` |
+|---|---|---|
+| Agent can read value | No | Yes (visible in `process.env` / bash) |
+| Usable by SDKs/CLIs | No — only via `authenticated_fetch` | Yes — available as env var |
+| Appears in Docker env | No | Yes (`--env`) |
+| Redacted from logs | Yes (response + event redaction) | No |
+| Requires `${VAR}` format | Yes | Yes (supports `${VAR}` and literals) |
+
+**Rule of thumb:** use `secrets` when the agent only needs to make authenticated HTTP calls (API tokens, webhooks). Use `env` when workspace code needs the raw value (SDK clients, CLI tools, build scripts) — but accept that the agent can read it.
+
 #### Auth Modes
 
 The `auth` parameter controls how the secret is injected into the request:
