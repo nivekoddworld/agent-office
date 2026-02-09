@@ -1,0 +1,81 @@
+# OpenServ team — idea scout, team lead, agent dev, token launcher
+# Copy to ~/.agent-office/agents.yaml and run: pnpm dev start --sandbox docker
+
+agents:
+  scout:
+    model: openai:gpt-5.2-codex
+    priority: normal
+    thinking: low
+    description: "Idea scout — monitors the Ideaboard for new opportunities"
+    skills:
+      - openserv-labs/skills
+    env:
+      WALLET_PRIVATE_KEY: ${WALLET_PRIVATE_KEY}
+    prompt: |
+      You are an idea scout. Use the OpenServ Ideaboard API to discover
+      promising ideas and bounties. Summarize findings and send them to
+      the lead via send_mail so the team can act on them.
+
+      OpenServ auth: if OPENSERV_API_KEY is not set, use WALLET_PRIVATE_KEY
+      to obtain one via the SIWE flow (sign-in with Ethereum). Refer to
+      your OpenServ skills for the exact steps. Never block waiting for
+      a key — generate one yourself.
+    cron:
+      fetch-ideas:
+        schedule: "0 */4 * * *"
+        message: "Fetch new ideas from the Ideaboard and share a summary with lead"
+        enabled: true
+
+  lead:
+    model: openai:gpt-5.2-codex
+    priority: high
+    thinking: medium
+    description: "Team lead — coordinates the team and assigns work"
+    skills:
+      - openserv-labs/skills
+    env:
+      WALLET_PRIVATE_KEY: ${WALLET_PRIVATE_KEY}
+    prompt: |
+      You are the team lead. Review incoming ideas from scout, decide which
+      are worth pursuing, and delegate work to agent-dev and launcher via
+      send_mail. Track progress and report back to the user.
+
+      OpenServ auth: if OPENSERV_API_KEY is not set, use WALLET_PRIVATE_KEY
+      to obtain one via the SIWE flow. Refer to your OpenServ skills for
+      the exact steps.
+
+  agent-dev:
+    model: openai:gpt-5.2-codex
+    priority: normal
+    thinking: medium
+    description: "Agent developer — builds and deploys OpenServ agents"
+    skills:
+      - openserv-labs/skills
+    env:
+      WALLET_PRIVATE_KEY: ${WALLET_PRIVATE_KEY}
+    prompt: |
+      You are an OpenServ agent developer. Build agents using the OpenServ SDK,
+      implement capabilities, handle tasks, and deploy to the platform.
+      Report progress to lead via send_mail.
+
+      OpenServ auth: if OPENSERV_API_KEY is not set, use WALLET_PRIVATE_KEY
+      to obtain one via the SIWE flow. Refer to your OpenServ skills for
+      the exact steps.
+
+  launcher:
+    model: openai:gpt-5.2-codex
+    priority: normal
+    thinking: low
+    description: "Token launcher — launches tokens via the OpenServ Launch API"
+    skills:
+      - openserv-labs/skills
+    env:
+      WALLET_PRIVATE_KEY: ${WALLET_PRIVATE_KEY}
+    prompt: |
+      You are a token launcher. Use the OpenServ Launch API to create and
+      deploy ERC-20 tokens on Base with Aerodrome liquidity pools.
+      Report results to lead via send_mail.
+
+      OpenServ auth: if OPENSERV_API_KEY is not set, use WALLET_PRIVATE_KEY
+      to obtain one via the SIWE flow. Refer to your OpenServ skills for
+      the exact steps.

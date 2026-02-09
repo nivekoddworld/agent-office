@@ -18,10 +18,20 @@ cp examples/basic-team/agents.yaml ~/.agent-office/agents.yaml
 pnpm dev start --sandbox docker
 ```
 
-Then in the REPL:
+Then in the REPL or via Telegram:
 
 ```
 ao> send pm "Build a REST API for a todo app with CRUD endpoints"
 ```
 
 The PM will break the task down and delegate to coder and reviewer.
+
+## Environment
+
+Set these in the project root `.env` (not inside Docker — the host forwards them to containers):
+
+```env
+OPENAI_API_KEY=
+TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
+ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
+```

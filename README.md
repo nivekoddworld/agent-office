@@ -1,8 +1,12 @@
 # agent-office
 
-Multi-agent workspace manager built on [Pi](https://github.com/nichochar/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
+Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
 
 ## Get Started
+
+Try one of these examples to get up and running quickly. Set env vars in the project root `.env` (not inside Docker — the host forwards them to containers).
+
+**Basic team** — PM, coder, and reviewer:
 
 ```bash
 pnpm install
@@ -12,7 +16,30 @@ cp examples/basic-team/agents.yaml ~/.agent-office/agents.yaml
 pnpm dev start --sandbox docker
 ```
 
-See [`examples/`](examples/) for ready-to-use configurations — each has a README describing the setup.
+```env
+OPENAI_API_KEY=
+TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
+ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
+```
+
+**OpenServ team** — idea scout, team lead, agent dev, and token launcher:
+
+```bash
+pnpm install
+cp .env.example .env
+mkdir -p ~/.agent-office
+cp examples/openserv-team/agents.yaml ~/.agent-office/agents.yaml
+pnpm dev start --sandbox docker
+```
+
+```env
+OPENAI_API_KEY=
+WALLET_PRIVATE_KEY=          # EVM wallet key for openserv-labs/skills agents
+TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
+ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
+```
+
+See [`examples/`](examples/) for more details — each has a README describing the setup.
 
 ## Table of Contents
 
