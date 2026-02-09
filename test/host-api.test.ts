@@ -102,6 +102,48 @@ describe("HostApi", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects reserved recipients (__cron__) with 400", async () => {
+    const res = await postJson(port, "/api/send-mail", { to: "__cron__", payload: "hi", messageId: "r1" }, token);
+    expect(res.status).toBe(400);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("system address");
+    expect(data.error).toContain("__cron__");
+  });
+
+  it("rejects reserved recipients (__user__) with 400", async () => {
+    const res = await postJson(port, "/api/send-mail", { to: "__user__", payload: "hi", messageId: "r2" }, token);
+    expect(res.status).toBe(400);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("system address");
+  });
+
+  it("allows __broadcast__ as a valid send target", async () => {
+    const res = await postJson(port, "/api/send-mail", { to: "__broadcast__", payload: "hi", messageId: "r3" }, token);
+    expect(res.status).toBe(200);
+    expect(bus.send).toHaveBeenCalledWith(expect.objectContaining({ to: "__broadcast__" }));
+  });
+
+  it("returns 404 with clear error for unknown mailbox", async () => {
+    bus.send.mockImplementation(() => { throw new Error('No mailbox for agent "ghost"'); });
+    const res = await postJson(port, "/api/send-mail", { to: "ghost", payload: "hi", messageId: "u1" }, token);
+    expect(res.status).toBe(404);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("No mailbox");
+  });
+
+  it("rolls back dedup key on send failure so retry succeeds", async () => {
+    bus.send.mockImplementationOnce(() => { throw new Error("No mailbox"); });
+    const msg = { to: "ghost", payload: "hi", messageId: "retry-1" };
+    const r1 = await postJson(port, "/api/send-mail", msg, token);
+    expect(r1.status).toBe(404);
+    // Fix the mailbox and retry with same messageId — should not be deduplicated
+    bus.send.mockImplementation(() => {});
+    const r2 = await postJson(port, "/api/send-mail", msg, token);
+    expect(r2.status).toBe(200);
+    const data = await r2.json() as { deduplicated?: boolean };
+    expect(data.deduplicated).toBeUndefined();
+  });
+
   // --- /api/agent-file ---
 
   it("rejects invalid agent names", async () => {

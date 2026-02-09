@@ -105,5 +105,6 @@ export class Scheduler {
 /** Prefix inter-agent messages with sender info so the recipient knows who to reply to. */
 function formatMailPayload(msg: MailboxMessage): string {
   if (msg.from === "__user__") return msg.payload;
+  if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
   return `[Mail from ${msg.from}]\n${msg.payload}`;
 }

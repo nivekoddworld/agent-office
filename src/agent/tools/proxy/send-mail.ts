@@ -14,7 +14,11 @@ export function createSendMailProxy(hostFetch: HostFetch): AgentTool<any> {
         payload: params.message,
         messageId: randomUUID(),
       });
-      if (!res.ok) return textResult(`Error sending mail: ${res.statusText}`);
+      if (!res.ok) {
+        let msg = res.statusText;
+        try { const body = await res.json() as { error?: string }; if (body.error) msg = body.error; } catch { /* use statusText */ }
+        return textResult(`Error sending mail: ${msg}`);
+      }
       return textResult(`Message sent to ${params.to}`);
     },
   };

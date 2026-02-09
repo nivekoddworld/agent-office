@@ -188,6 +188,13 @@ export class HostApi {
       return;
     }
 
+    // Reject system senders that are trigger sources, not mailbox recipients
+    if (to === "__cron__" || to === "__user__") {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `"${to}" is a system address and cannot receive mail` }));
+      return;
+    }
+
     // Idempotency check
     if (this.seenMessages.has(messageId)) {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -196,13 +203,21 @@ export class HostApi {
     }
     this.seenMessages.set(messageId, Date.now());
 
-    this.bus.send({
-      from: agentName,
-      to,
-      type: "prompt",
-      payload,
-      priority: priority ?? Priority.NORMAL,
-    });
+    try {
+      this.bus.send({
+        from: agentName,
+        to,
+        type: "prompt",
+        payload,
+        priority: priority ?? Priority.NORMAL,
+      });
+    } catch (err) {
+      this.seenMessages.delete(messageId);
+      const msg = err instanceof Error ? err.message : String(err);
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: msg }));
+      return;
+    }
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));

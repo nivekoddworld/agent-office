@@ -112,6 +112,24 @@ describe("Scheduler", () => {
     expect(target.prompt).toHaveBeenCalledWith("do stuff");
   });
 
+  it("formats cron messages as [Scheduled trigger]", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const target = mockHandle("target", Priority.NORMAL);
+    agents.set("target", target);
+    bus.register("target");
+
+    bus.send({ from: "__cron__", to: "target", type: "prompt", payload: "Run standup", priority: Priority.NORMAL });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    expect(target.prompt).toHaveBeenCalledWith("[Scheduled trigger]\nRun standup");
+  });
+
   it("dispatches steer messages via steer()", () => {
     const agents = new Map<string, any>();
     const bus = new MessageBus();
