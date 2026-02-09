@@ -11,6 +11,7 @@ import { statusCommand } from "./commands/status.js";
 import { routeCommand, routeListCommand } from "./commands/route.js";
 import { skillAddCommand, skillListCommand, skillRemoveCommand } from "./commands/skill.js";
 import { applyAgentsYaml, agentsReloadCommand, agentsValidateCommand, agentsPathCommand } from "./commands/agents-yaml.js";
+import { agentEnvSetCommand, agentEnvUnsetCommand, agentSecretRefSetCommand, agentSecretRefUnsetCommand, agentConfigShowCommand } from "./commands/agent-config.js";
 import { ensureAgentsYamlExists } from "./config/agents-yaml.js";
 
 process.on("unhandledRejection", (err) => {
@@ -134,6 +135,31 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
       console.log("Usage: skill add <agent> <owner/repo> | skill list <agent> | skill remove <agent> <name>");
       break;
     }
+    case "agent": {
+      const sub = parts[1];
+      const action = parts[2];
+      const agent = parts[3];
+      if (sub === "env" && action === "set" && agent && parts[4] && parts[5] !== undefined) {
+        // Support multi-word values: join parts[5..] with space
+        const value = parts.slice(5).join(" ");
+        await agentEnvSetCommand(agent, parts[4], value);
+      } else if (sub === "env" && action === "unset" && agent && parts[4]) {
+        await agentEnvUnsetCommand(agent, parts[4]);
+      } else if (sub === "secret-ref" && action === "set" && agent && parts[4] && parts[5]) {
+        await agentSecretRefSetCommand(agent, parts[4], parts[5]);
+      } else if (sub === "secret-ref" && action === "unset" && agent && parts[4]) {
+        await agentSecretRefUnsetCommand(agent, parts[4]);
+      } else if (sub === "config" && action === "show" && agent) {
+        agentConfigShowCommand(agent);
+      } else {
+        console.log("Usage: agent env set <agent> <KEY> <VALUE>");
+        console.log("       agent env unset <agent> <KEY>");
+        console.log("       agent secret-ref set <agent> <KEY> <HOST_ENV_NAME>");
+        console.log("       agent secret-ref unset <agent> <KEY>");
+        console.log("       agent config show <agent>");
+      }
+      break;
+    }
     case "agents": {
       const sub = parts[1];
       if (sub === "reload") {
@@ -237,6 +263,11 @@ Commands:
   send <agent> <message>        Send message to agent
   kill <agent>                  Stop and remove agent
   status                        Show scheduler/watchdog/resource status
+  agent env set <agent> <KEY> <VALUE>         Set env var in agents.yaml
+  agent env unset <agent> <KEY>               Remove env var from agents.yaml
+  agent secret-ref set <agent> <KEY> <ENV>    Set secret ref in agents.yaml
+  agent secret-ref unset <agent> <KEY>        Remove secret ref from agents.yaml
+  agent config show <agent>                   Show agent config (secrets redacted)
   skill add <agent> <owner/repo> Install skills from GitHub
   skill list <agent>            List agent skills
   skill remove <agent> <name>   Remove a skill

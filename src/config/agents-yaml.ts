@@ -349,3 +349,98 @@ export async function removeAgentFromYaml(name: string): Promise<void> {
     atomicWriteYaml(path, doc.toString());
   });
 }
+
+// --- Per-agent env/secret-ref mutations ---
+
+function requireYamlDoc(path: string): ReturnType<typeof parseDocument> {
+  if (!existsSync(path)) {
+    throw new Error(`agents.yaml not found — run "start" or create it at ${path}`);
+  }
+  return parseDocument(readFileSync(path, "utf-8"));
+}
+
+function validateEnvKey(key: string, section: string): void {
+  if (!ENV_KEY_RE.test(key)) throw new Error(`Invalid ${section} key "${key}" — must match [A-Z_][A-Z0-9_]*`);
+  if (RESERVED_KEYS.has(key)) throw new Error(`Reserved key "${key}" — used internally`);
+}
+
+function getMapKeys(doc: ReturnType<typeof parseDocument>, path: string[]): Set<string> {
+  const node = doc.getIn(path);
+  if (!node || typeof node !== "object") return new Set();
+  const js = (node as any).toJSON?.() ?? node;
+  return new Set(Object.keys(js));
+}
+
+function cleanupEmptyMap(doc: ReturnType<typeof parseDocument>, path: string[]): void {
+  const node = doc.getIn(path);
+  if (!node || typeof node !== "object") return;
+  const js = (node as any).toJSON?.() ?? node;
+  if (Object.keys(js).length === 0) doc.deleteIn(path);
+}
+
+export async function setAgentEnv(agentName: string, key: string, value: string): Promise<void> {
+  return withConfigLock(async () => {
+    const path = getAgentsYamlPath();
+    const doc = requireYamlDoc(path);
+
+    if (!doc.getIn(["agents", agentName])) throw new Error(`Agent "${agentName}" not found in agents.yaml`);
+    validateEnvKey(key, "env");
+    if (getMapKeys(doc, ["agents", agentName, "secrets"]).has(key)) {
+      throw new Error(`Key "${key}" already exists in secrets — unset it first`);
+    }
+
+    doc.setIn(["agents", agentName, "env", key], value);
+    atomicWriteYaml(path, doc.toString());
+  });
+}
+
+export async function unsetAgentEnv(agentName: string, key: string): Promise<void> {
+  return withConfigLock(async () => {
+    const path = getAgentsYamlPath();
+    const doc = requireYamlDoc(path);
+
+    if (!doc.getIn(["agents", agentName])) throw new Error(`Agent "${agentName}" not found in agents.yaml`);
+    if (!doc.getIn(["agents", agentName, "env", key])) {
+      throw new Error(`Env key "${key}" not found for agent "${agentName}"`);
+    }
+
+    doc.deleteIn(["agents", agentName, "env", key]);
+    cleanupEmptyMap(doc, ["agents", agentName, "env"]);
+    atomicWriteYaml(path, doc.toString());
+  });
+}
+
+export async function setAgentSecretRef(agentName: string, key: string, hostEnvName: string): Promise<void> {
+  return withConfigLock(async () => {
+    const path = getAgentsYamlPath();
+    const doc = requireYamlDoc(path);
+
+    if (!doc.getIn(["agents", agentName])) throw new Error(`Agent "${agentName}" not found in agents.yaml`);
+    validateEnvKey(key, "secrets");
+    if (!ENV_KEY_RE.test(hostEnvName)) {
+      throw new Error(`Invalid host env name "${hostEnvName}" — must match [A-Z_][A-Z0-9_]*`);
+    }
+    if (getMapKeys(doc, ["agents", agentName, "env"]).has(key)) {
+      throw new Error(`Key "${key}" already exists in env — unset it first`);
+    }
+
+    doc.setIn(["agents", agentName, "secrets", key], `\${${hostEnvName}}`);
+    atomicWriteYaml(path, doc.toString());
+  });
+}
+
+export async function unsetAgentSecretRef(agentName: string, key: string): Promise<void> {
+  return withConfigLock(async () => {
+    const path = getAgentsYamlPath();
+    const doc = requireYamlDoc(path);
+
+    if (!doc.getIn(["agents", agentName])) throw new Error(`Agent "${agentName}" not found in agents.yaml`);
+    if (!doc.getIn(["agents", agentName, "secrets", key])) {
+      throw new Error(`Secret key "${key}" not found for agent "${agentName}"`);
+    }
+
+    doc.deleteIn(["agents", agentName, "secrets", key]);
+    cleanupEmptyMap(doc, ["agents", agentName, "secrets"]);
+    atomicWriteYaml(path, doc.toString());
+  });
+}
