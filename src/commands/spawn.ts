@@ -4,7 +4,7 @@ import { Priority } from "../types.js";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { upsertAgentToYaml } from "../config/agents-yaml.js";
 
-interface SpawnArgs {
+export interface SpawnArgs {
   name: string;
   model?: string;
   priority?: string;
@@ -13,6 +13,9 @@ interface SpawnArgs {
   prompt?: string;
   desc?: string;
   ephemeral?: boolean;
+  "api-key-ref"?: string;
+  env?: Record<string, string>;
+  "secret-ref"?: Record<string, string>;
 }
 
 export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promise<void> {
@@ -20,6 +23,14 @@ export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promi
   const [provider, modelId] = parseModel(modelSpec);
   const model = getModel(provider as any, modelId as any);
   const priority = parsePriority(args.priority ?? "2");
+
+  // Build secrets in ${VAR} format (matches YAML storage format for change detection)
+  const secrets: Record<string, string> = {};
+  if (args["secret-ref"]) {
+    for (const [key, hostEnvName] of Object.entries(args["secret-ref"])) {
+      secrets[key] = `\${${hostEnvName}}`;
+    }
+  }
 
   const handle = await workspace.spawn({
     name: args.name,
@@ -29,11 +40,15 @@ export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promi
     cwd: args.cwd,
     systemPrompt: args.prompt,
     description: args.desc,
+    apiKeyRef: args["api-key-ref"],
+    env: args.env,
+    secrets: Object.keys(secrets).length > 0 ? secrets : undefined,
   });
 
   console.log(`[spawn] Agent "${args.name}" created (cwd: ${handle.cwd})`);
 
   if (!args.ephemeral) {
+
     try {
       await upsertAgentToYaml(args.name, {
         model: modelSpec,
@@ -42,7 +57,9 @@ export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promi
         description: args.desc,
         prompt: args.prompt,
         cwd: args.cwd,
-      });
+        api_key_ref: args["api-key-ref"],
+        env: args.env,
+      }, { rawSecrets: Object.keys(secrets).length > 0 ? secrets : undefined });
     } catch (err) {
       console.warn(`[spawn] Could not sync agents.yaml:`, err instanceof Error ? err.message : err);
     }

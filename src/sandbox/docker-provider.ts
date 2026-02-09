@@ -59,9 +59,9 @@ export class DockerProvider implements SandboxProvider {
       "-e", `SKILL_PATHS=${JSON.stringify(opts.skillsPaths.map((_, i) => containerSkillPath(i)))}`,
       "-e", `AUTH_TOKEN=${opts.token}`,
       "-e", `HOST_URL=${hostUrl}`,
-      "-e", `API_KEY=${opts.apiKey}`,
       "-e", `SYSTEM_PROMPT=${opts.systemPrompt}`,
       "-e", `MODEL_NAME=${opts.modelName}`,
+      ...Object.entries(opts.env ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
       "-p", `${port}:3100`,
       IMAGE_NAME,
     ]);
@@ -139,7 +139,10 @@ export class DockerProvider implements SandboxProvider {
       try {
         const res = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${entry.token}`,
+          },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });

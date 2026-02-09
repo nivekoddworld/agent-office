@@ -73,7 +73,10 @@ export class Workspace {
     let sandboxToken: string | undefined;
     if (useSandbox && this.sandboxProvider && this.hostApi) {
       sandboxToken = randomUUID();
-      this.hostApi.registerAgent(config.name, sandboxToken);
+      // Resolve model key and build secrets map
+      const modelKey = resolveModelKey(config);
+      const secrets: Record<string, string> = { MODEL_API_KEY: modelKey };
+      this.hostApi.registerAgent(config.name, sandboxToken, secrets);
       provider = this.sandboxProvider;
       hostApi = this.hostApi;
     }
@@ -169,4 +172,27 @@ export class Workspace {
       handle.setStatus("dead");
     }
   }
+}
+
+const PROVIDER_ENV_KEYS: Record<string, string> = {
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  google: "GEMINI_API_KEY",
+  xai: "XAI_API_KEY",
+};
+
+function resolveModelKey(config: AgentConfig): string {
+  // Custom ref takes precedence
+  if (config.apiKeyRef) {
+    const key = process.env[config.apiKeyRef];
+    if (key) return key;
+    throw new Error(`Agent "${config.name}": model key not found. env var "${config.apiKeyRef}" is not set (from api_key_ref).`);
+  }
+  // Explicit apiKey (legacy in-process path)
+  if (config.apiKey) return config.apiKey;
+  // Auto-resolve from model provider
+  const envVar = PROVIDER_ENV_KEYS[config.model.provider];
+  const key = envVar ? process.env[envVar] : undefined;
+  if (key) return key;
+  throw new Error(`Agent "${config.name}": model key not found. Set ${envVar ?? "provider API key"} in host env or use api_key_ref.`);
 }

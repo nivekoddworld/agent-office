@@ -7,6 +7,7 @@ import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { PI_TESTS_DIR } from "../constants.js";
 import { Priority } from "../types.js";
 import { withConfigLock } from "./lock.js";
+import { resolveEnvRefs } from "./env-substitution.js";
 
 // --- Types ---
 
@@ -18,6 +19,10 @@ export interface AgentYamlEntry {
   prompt?: string;
   cwd?: string;
   skills?: string[];
+  api_key_ref?: string;
+  env?: Record<string, string>;
+  secrets?: Record<string, string>;
+  disclose_secrets?: boolean;
 }
 
 export interface AgentsYaml {
@@ -36,6 +41,12 @@ const PRIORITY_NAME_TO_NUM: Record<string, number> = {
   critical: Priority.CRITICAL,
 };
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const ENV_KEY_RE = /^[A-Z_][A-Z0-9_]*$/;
+const ENV_REF_RE = /^\$\{[A-Z_][A-Z0-9_]*\}$/;
+const RESERVED_KEYS = new Set([
+  "MODEL_API_KEY", "AGENT_NAME", "AUTH_TOKEN", "HOST_URL",
+  "MODEL_NAME", "SYSTEM_PROMPT", "SKILL_PATHS",
+]);
 
 // --- Path helpers ---
 
@@ -106,7 +117,16 @@ export function loadAgentsYaml(): AgentsYaml | null {
     return null;
   }
 
-  return { agents: agents as Record<string, AgentYamlEntry> };
+  const result: Record<string, AgentYamlEntry> = {};
+  for (const [agentName, entry] of Object.entries(agents as Record<string, AgentYamlEntry>)) {
+    const resolved = { ...entry };
+    // Resolve ${VAR} refs in env only; secrets are format-validated, not resolved
+    if (resolved.env && Object.keys(resolved.env).length > 0) {
+      resolved.env = resolveEnvRefs(resolved.env, process.env, `agents.${agentName}.env`);
+    }
+    result[agentName] = resolved;
+  }
+  return { agents: result };
 }
 
 // --- Validation ---
@@ -141,6 +161,29 @@ export function validateAgentEntry(name: string, entry: AgentYamlEntry): string[
     if (parts.length !== 2 || !parts[0] || !parts[1]) {
       errors.push(`Invalid model "${entry.model}" — must be "provider:model-id"`);
     }
+  }
+
+  // Validate env keys
+  if (entry.env) {
+    for (const key of Object.keys(entry.env)) {
+      if (!ENV_KEY_RE.test(key)) errors.push(`Invalid env key "${key}" — must match [A-Z_][A-Z0-9_]*`);
+      if (RESERVED_KEYS.has(key)) errors.push(`Reserved env key "${key}" — used internally`);
+    }
+  }
+
+  // Validate secrets keys (format-only, refs not resolved)
+  if (entry.secrets) {
+    for (const [key, value] of Object.entries(entry.secrets)) {
+      if (!ENV_KEY_RE.test(key)) errors.push(`Invalid secrets key "${key}" — must match [A-Z_][A-Z0-9_]*`);
+      if (RESERVED_KEYS.has(key)) errors.push(`Reserved secrets key "${key}" — used internally`);
+      if (!ENV_REF_RE.test(value)) errors.push(`Secret "${key}" must use \${VAR} ref syntax`);
+    }
+  }
+
+  // Check key collisions between env and secrets
+  if (entry.env && entry.secrets) {
+    const overlap = Object.keys(entry.env).filter((k) => k in entry.secrets!);
+    for (const k of overlap) errors.push(`Key "${k}" appears in both env and secrets`);
   }
 
   return errors;
@@ -233,7 +276,7 @@ function canonicalizePriority(p: string | number): string {
 }
 
 /** Build a clean YAML entry from spawn args, omitting defaults. */
-function buildYamlEntry(entry: AgentYamlEntry): Record<string, unknown> {
+function buildYamlEntry(entry: AgentYamlEntry, rawSecrets?: Record<string, string>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (entry.model && entry.model !== "anthropic:claude-sonnet-4-20250514") out.model = entry.model;
   if (entry.priority !== undefined) {
@@ -245,10 +288,27 @@ function buildYamlEntry(entry: AgentYamlEntry): Record<string, unknown> {
   if (entry.prompt) out.prompt = entry.prompt;
   if (entry.cwd) out.cwd = entry.cwd;
   if (entry.skills && entry.skills.length > 0) out.skills = entry.skills;
+  if (entry.api_key_ref) out.api_key_ref = entry.api_key_ref;
+  if (entry.env && Object.keys(entry.env).length > 0) out.env = entry.env;
+  if (rawSecrets && Object.keys(rawSecrets).length > 0) out.secrets = rawSecrets;
+  if (entry.disclose_secrets) out.disclose_secrets = entry.disclose_secrets;
   return out;
 }
 
-export async function upsertAgentToYaml(name: string, entry: AgentYamlEntry): Promise<void> {
+export interface UpsertOpts {
+  rawSecrets?: Record<string, string>;
+}
+
+export async function upsertAgentToYaml(name: string, entry: AgentYamlEntry, opts?: UpsertOpts): Promise<void> {
+  // Persistence guardrail: rawSecrets must contain only ${VAR} refs
+  if (opts?.rawSecrets) {
+    for (const [key, value] of Object.entries(opts.rawSecrets)) {
+      if (!ENV_REF_RE.test(value)) {
+        throw new Error(`Resolved secret value passed to YAML writer for key "${key}"`);
+      }
+    }
+  }
+
   return withConfigLock(async () => {
     const path = getAgentsYamlPath();
     if (!existsSync(path)) return;
@@ -257,17 +317,17 @@ export async function upsertAgentToYaml(name: string, entry: AgentYamlEntry): Pr
     const doc = parseDocument(raw);
 
     const existing = doc.getIn(["agents", name]);
-    const clean = buildYamlEntry(entry);
+    const clean = buildYamlEntry(entry, opts?.rawSecrets);
 
     if (existing && typeof existing === "object") {
-      // Merge: update only the fields spawn provides, preserve the rest (e.g. skills)
       for (const [key, value] of Object.entries(clean)) {
         doc.setIn(["agents", name, key], value);
       }
       // Remove keys that buildYamlEntry omitted (reverted to default)
-      for (const key of ["model", "priority", "thinking", "description", "prompt", "cwd"]) {
+      for (const key of ["model", "priority", "thinking", "description", "prompt", "cwd", "api_key_ref"]) {
         if (!(key in clean)) doc.deleteIn(["agents", name, key]);
       }
+      // Preserve env/secrets/disclose_secrets if not in clean (don't wipe existing)
     } else {
       doc.setIn(["agents", name], clean);
     }

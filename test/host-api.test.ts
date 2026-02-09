@@ -41,7 +41,7 @@ describe("HostApi", () => {
     port = nextPort();
     bus = makeBus();
     api = new HostApi(bus, makeListFn());
-    api.registerAgent(agentName, token);
+    api.registerAgent(agentName, token, { MODEL_API_KEY: "sk-test-key" });
     await api.start(port);
   });
 
@@ -185,6 +185,34 @@ describe("HostApi", () => {
   it("unregisterAgent is idempotent", () => {
     api.unregisterAgent(token);
     api.unregisterAgent(token); // no throw
+  });
+
+  // --- /api/secrets ---
+
+  it("GET /api/secrets returns registered secrets", async () => {
+    const res = await getJson(port, "/api/secrets", token);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data).toEqual({ MODEL_API_KEY: "sk-test-key" });
+  });
+
+  it("GET /api/secrets returns 401 without auth", async () => {
+    const res = await fetch(`http://localhost:${port}/api/secrets`);
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /api/secrets is idempotent", async () => {
+    const res1 = await getJson(port, "/api/secrets", token);
+    const res2 = await getJson(port, "/api/secrets", token);
+    expect(await res1.json()).toEqual(await res2.json());
+  });
+
+  it("secrets cleared on unregister", async () => {
+    api.unregisterAgent(token);
+    // Re-register without secrets to verify old secrets are gone
+    api.registerAgent(agentName, token);
+    const res = await getJson(port, "/api/secrets", token);
+    expect(await res.json()).toEqual({});
   });
 
   // --- kill agent while prompt pending ---

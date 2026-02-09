@@ -31,6 +31,10 @@ interface NormalizedConfig {
   prompt: string;
   cwd: string;
   skills: string[];
+  env: string;
+  secrets: string;
+  apiKeyRef: string;
+  discloseSecrets: boolean;
 }
 
 function normalizeEntry(name: string, entry: AgentYamlEntry): NormalizedConfig {
@@ -42,6 +46,10 @@ function normalizeEntry(name: string, entry: AgentYamlEntry): NormalizedConfig {
     prompt: (entry.prompt ?? "").trimEnd(),
     cwd: resolveCwd(name, entry.cwd),
     skills: [...(entry.skills ?? [])].sort(),
+    env: JSON.stringify(entry.env ?? {}),
+    secrets: JSON.stringify(entry.secrets ?? {}),
+    apiKeyRef: entry.api_key_ref ?? "",
+    discloseSecrets: entry.disclose_secrets ?? false,
   };
 }
 
@@ -57,6 +65,10 @@ function normalizeRunning(name: string, ws: Workspace): NormalizedConfig | null 
     prompt: (cfg.systemPrompt ?? "").trimEnd(),
     cwd: handle.cwd,
     skills: installedSourcesForAgent(name),
+    env: JSON.stringify(cfg.env ?? {}),
+    secrets: JSON.stringify(cfg.secrets ?? {}),
+    apiKeyRef: cfg.apiKeyRef ?? "",
+    discloseSecrets: cfg.discloseSecrets ?? false,
   };
 }
 
@@ -68,7 +80,11 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.description === b.description &&
     a.prompt === b.prompt &&
     a.cwd === b.cwd &&
-    JSON.stringify(a.skills) === JSON.stringify(b.skills)
+    JSON.stringify(a.skills) === JSON.stringify(b.skills) &&
+    a.env === b.env &&
+    a.secrets === b.secrets &&
+    a.apiKeyRef === b.apiKeyRef &&
+    a.discloseSecrets === b.discloseSecrets
   );
 }
 
@@ -134,6 +150,10 @@ export async function applyAgentsYaml(workspace: Workspace, opts?: { force?: boo
         cwd: resolveCwd(name, entry.cwd),
         systemPrompt: entry.prompt,
         description: entry.description,
+        apiKeyRef: entry.api_key_ref,
+        env: entry.env,
+        secrets: entry.secrets,
+        discloseSecrets: entry.disclose_secrets,
       });
 
       spawned++;

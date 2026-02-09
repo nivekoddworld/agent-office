@@ -5,6 +5,7 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentInfo } from "../types.js";
 import { Priority } from "../types.js";
 import { PI_TESTS_DIR } from "../constants.js";
+import { createRedactor } from "../security/redact.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const MAX_BODY = 1_048_576; // 1 MB
@@ -18,6 +19,8 @@ const DEDUP_SWEEP_MS = 60_000;
 export class HostApi {
   private server: Server | null = null;
   private tokens = new Map<string, string>(); // token -> agentName
+  private agentSecrets = new Map<string, Record<string, string>>(); // token -> secrets
+  private redactors = new Map<string, { deep: (obj: unknown) => unknown }>(); // token -> redactor
   private pendingPrompts = new Map<string, { resolve: () => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private seenMessages = new Map<string, number>(); // messageId -> timestamp
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -31,12 +34,16 @@ export class HostApi {
     this.listFn = listFn;
   }
 
-  registerAgent(name: string, token: string): void {
+  registerAgent(name: string, token: string, secrets: Record<string, string> = {}): void {
     this.tokens.set(token, name);
+    this.agentSecrets.set(token, secrets);
+    this.redactors.set(token, createRedactor(secrets));
   }
 
   unregisterAgent(token: string): void {
     this.tokens.delete(token);
+    this.agentSecrets.delete(token);
+    this.redactors.delete(token);
   }
 
   getHeartbeat(name: string): number | undefined {
@@ -132,7 +139,9 @@ export class HostApi {
     }
 
     try {
-      if (req.method === "POST" && path === "/api/send-mail") {
+      if (req.method === "GET" && path === "/api/secrets") {
+        this.handleSecrets(req, res);
+      } else if (req.method === "POST" && path === "/api/send-mail") {
         await this.handleSendMail(req, res, agentName);
       } else if (req.method === "GET" && path === "/api/agents") {
         this.handleAgents(res);
@@ -155,6 +164,14 @@ export class HostApi {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Internal server error" }));
     }
+  }
+
+  private handleSecrets(req: IncomingMessage, res: ServerResponse): void {
+    const auth = req.headers.authorization;
+    const token = auth?.startsWith("Bearer ") ? auth.slice(7) : "";
+    const secrets = this.agentSecrets.get(token) ?? {};
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(secrets));
   }
 
   private async handleSendMail(req: IncomingMessage, res: ServerResponse, agentName: string): Promise<void> {
@@ -271,7 +288,12 @@ export class HostApi {
 
     const { event } = JSON.parse(body);
     const fn = this.eventListeners.get(agentName);
-    if (fn) fn(event);
+    if (fn) {
+      // Host-side redaction (defense in depth — sandbox already redacts)
+      const token = req.headers.authorization?.slice(7) ?? "";
+      const redactor = this.redactors.get(token);
+      fn(redactor ? redactor.deep(event) : event);
+    }
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));

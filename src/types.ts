@@ -27,6 +27,10 @@ export interface AgentConfig {
   skillDirs?: string[];
   tools?: AgentTool<any>[];
   apiKey?: string;
+  apiKeyRef?: string;
+  env?: Record<string, string>;
+  secrets?: Record<string, string>;
+  discloseSecrets?: boolean;
   sandbox?: SandboxMode;
 }
 

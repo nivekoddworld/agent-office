@@ -10,6 +10,7 @@ RUN npm install
 COPY agent/entrypoints/sandbox-entry.ts ./agent/entrypoints/
 COPY agent/tools/contracts.ts ./agent/tools/
 COPY agent/tools/proxy/ ./agent/tools/proxy/
+COPY security/ ./security/
 
 RUN chown -R node:node /app
 

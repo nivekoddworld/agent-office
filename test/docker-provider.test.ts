@@ -48,7 +48,6 @@ describe("DockerProvider", () => {
       hostUrl: "http://host.docker.internal:13000",
       systemPrompt: "You are test",
       modelName: "anthropic:test",
-      apiKey: "sk-test",
       workspacePath: "/tmp/test-workspace",
       skillsPaths: ["/tmp/test-skills"],
     });
@@ -76,7 +75,6 @@ describe("DockerProvider", () => {
       hostUrl: "",
       systemPrompt: "test",
       modelName: "test",
-      apiKey: "key",
       workspacePath: ws,
       skillsPaths: ["/tmp/skills"],
     });
@@ -94,7 +92,6 @@ describe("DockerProvider", () => {
       hostUrl: "",
       systemPrompt: "test",
       modelName: "test",
-      apiKey: "key",
       workspacePath: "/tmp/ws",
       skillsPaths: ["/tmp/default-skills", "/tmp/custom-skills"],
     });
@@ -112,7 +109,6 @@ describe("DockerProvider", () => {
       hostUrl: "",
       systemPrompt: "test",
       modelName: "test",
-      apiKey: "key",
       workspacePath: "/tmp/ws",
       skillsPaths: ["/tmp/skills"],
     });
@@ -144,7 +140,6 @@ describe("DockerProvider", () => {
       hostUrl: "",
       systemPrompt: "test",
       modelName: "test",
-      apiKey: "key",
       workspacePath: "/tmp/ws",
       skillsPaths: ["/tmp/skills"],
     })).rejects.toThrow("failed health check");
@@ -162,7 +157,6 @@ describe("DockerProvider", () => {
       hostUrl: "",
       systemPrompt: "test",
       modelName: "test",
-      apiKey: "key",
       workspacePath: "/tmp/ws",
       skillsPaths: ["/tmp/skills"],
     });
@@ -177,7 +171,6 @@ describe("DockerProvider", () => {
       hostUrl: "",
       systemPrompt: "test",
       modelName: "test",
-      apiKey: "key",
       workspacePath: "/tmp/ws",
       skillsPaths: ["/tmp/skills"],
     });
@@ -197,7 +190,6 @@ describe("DockerProvider", () => {
       hostUrl: "",
       systemPrompt: "test",
       modelName: "test",
-      apiKey: "key",
       workspacePath: "/tmp/ws",
       skillsPaths: ["/tmp/skills"],
     });
@@ -219,8 +211,8 @@ describe("DockerProvider", () => {
 
     // Start two agents concurrently
     await Promise.all([
-      provider.start("a1", { token: "t1", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k", workspacePath: "/tmp/a1", skillsPaths: ["/tmp/s1"] }),
-      provider.start("a2", { token: "t2", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k", workspacePath: "/tmp/a2", skillsPaths: ["/tmp/s2"] }),
+      provider.start("a1", { token: "t1", hostUrl: "", systemPrompt: "t", modelName: "t", workspacePath: "/tmp/a1", skillsPaths: ["/tmp/s1"] }),
+      provider.start("a2", { token: "t2", hostUrl: "", systemPrompt: "t", modelName: "t", workspacePath: "/tmp/a2", skillsPaths: ["/tmp/s2"] }),
     ]);
 
     const buildCalls = (execFile as any).mock.calls.filter((c: any[]) => c[1][0] === "build");
@@ -251,12 +243,12 @@ describe("DockerProvider", () => {
 
     // First start fails due to build
     await expect(provider.start("retry-a", {
-      token: "t1", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k", workspacePath: "/tmp/ra", skillsPaths: ["/tmp/sa"],
+      token: "t1", hostUrl: "", systemPrompt: "t", modelName: "t", workspacePath: "/tmp/ra", skillsPaths: ["/tmp/sa"],
     })).rejects.toThrow("build failed");
 
     // Second start retries build and succeeds
     const info = await provider.start("retry-b", {
-      token: "t2", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k", workspacePath: "/tmp/rb", skillsPaths: ["/tmp/sb"],
+      token: "t2", hostUrl: "", systemPrompt: "t", modelName: "t", workspacePath: "/tmp/rb", skillsPaths: ["/tmp/sb"],
     });
     expect(info.agentName).toBe("retry-b");
     expect(buildCount).toBe(2);
@@ -266,12 +258,10 @@ describe("DockerProvider", () => {
     const { execFile } = await import("node:child_process");
 
     await provider.start("alice", {
-      token: "t-a", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k",
-      workspacePath: "/tmp/alice/workspace", skillsPaths: ["/tmp/alice/skills"],
+      token: "t-a", hostUrl: "", systemPrompt: "t", modelName: "t",      workspacePath: "/tmp/alice/workspace", skillsPaths: ["/tmp/alice/skills"],
     });
     await provider.start("bob", {
-      token: "t-b", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k",
-      workspacePath: "/tmp/bob/workspace", skillsPaths: ["/tmp/bob/skills"],
+      token: "t-b", hostUrl: "", systemPrompt: "t", modelName: "t",      workspacePath: "/tmp/bob/workspace", skillsPaths: ["/tmp/bob/skills"],
     });
 
     const runCalls = (execFile as any).mock.calls.filter((c: any[]) => c[1][0] === "run");
@@ -290,9 +280,55 @@ describe("DockerProvider", () => {
     expect(bobArgs.some((a: string) => a.includes("/tmp/alice/"))).toBe(false);
   });
 
+  it("passes user env vars as --env flags", async () => {
+    const { execFile } = await import("node:child_process");
+    await provider.start("env-agent", {
+      token: "tok-env",
+      hostUrl: "",
+      systemPrompt: "test",
+      modelName: "test",
+      workspacePath: "/tmp/ws",
+      skillsPaths: ["/tmp/skills"],
+      env: { LOG_LEVEL: "debug", WORKSPACE_NAME: "env-agent" },
+    });
+
+    const runCall = (execFile as any).mock.calls.find((c: any[]) => c[1][0] === "run");
+    const args: string[] = runCall[1];
+    // Check user env vars are present
+    const envFlags = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-e" && args[i + 1]) acc.push(args[i + 1]!);
+      return acc;
+    }, []);
+    expect(envFlags).toContain("LOG_LEVEL=debug");
+    expect(envFlags).toContain("WORKSPACE_NAME=env-agent");
+  });
+
+  it("does not pass API_KEY or MODEL_API_KEY in Docker env", async () => {
+    const { execFile } = await import("node:child_process");
+    await provider.start("no-key-agent", {
+      token: "tok-nokey",
+      hostUrl: "",
+      systemPrompt: "test",
+      modelName: "test",
+      workspacePath: "/tmp/ws",
+      skillsPaths: ["/tmp/skills"],
+    });
+
+    const runCall = (execFile as any).mock.calls.find((c: any[]) =>
+      c[1][0] === "run" && c[1].includes("pi-agent-no-key-agent"),
+    );
+    const args: string[] = runCall[1];
+    const envFlags = args.reduce<string[]>((acc, a, i) => {
+      if (a === "-e" && args[i + 1]) acc.push(args[i + 1]!);
+      return acc;
+    }, []);
+    expect(envFlags.some((f: string) => f.startsWith("API_KEY="))).toBe(false);
+    expect(envFlags.some((f: string) => f.startsWith("MODEL_API_KEY="))).toBe(false);
+  });
+
   it("allocates unique ports per agent", async () => {
-    const info1 = await provider.start("port-a", { token: "t1", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k", workspacePath: "/tmp/a", skillsPaths: ["/tmp/sa"] });
-    const info2 = await provider.start("port-b", { token: "t2", hostUrl: "", systemPrompt: "t", modelName: "t", apiKey: "k", workspacePath: "/tmp/b", skillsPaths: ["/tmp/sb"] });
+    const info1 = await provider.start("port-a", { token: "t1", hostUrl: "", systemPrompt: "t", modelName: "t", workspacePath: "/tmp/a", skillsPaths: ["/tmp/sa"] });
+    const info2 = await provider.start("port-b", { token: "t2", hostUrl: "", systemPrompt: "t", modelName: "t", workspacePath: "/tmp/b", skillsPaths: ["/tmp/sb"] });
 
     expect(info1.url).not.toBe(info2.url);
   });

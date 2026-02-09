@@ -3,7 +3,7 @@ import { createInterface } from "node:readline";
 import { Command, Option } from "commander";
 import { Workspace } from "./workspace.js";
 import { createTelegramBridge } from "./bridges/telegram.js";
-import { spawnCommand } from "./commands/spawn.js";
+import { spawnCommand, type SpawnArgs } from "./commands/spawn.js";
 import { listCommand } from "./commands/list.js";
 import { sendCommand } from "./commands/send.js";
 import { killCommand } from "./commands/kill.js";
@@ -162,15 +162,25 @@ async function handleRepl(workspace: Workspace, input: string): Promise<void> {
   }
 }
 
-function parseSpawnArgs(parts: string[]): { name: string; model?: string; priority?: string; thinking?: string; cwd?: string; prompt?: string; desc?: string; ephemeral?: boolean } {
+function parseSpawnArgs(parts: string[]): SpawnArgs {
   const args: Record<string, string> = {};
   let name = "";
   let ephemeral = false;
+  const env: Record<string, string> = {};
+  const secretRef: Record<string, string> = {};
 
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i]!;
     if (part === "--ephemeral") {
       ephemeral = true;
+    } else if (part === "--env") {
+      const val = parts[++i] ?? "";
+      const eq = val.indexOf("=");
+      if (eq > 0) env[val.slice(0, eq)] = val.slice(eq + 1);
+    } else if (part === "--secret-ref") {
+      const val = parts[++i] ?? "";
+      const eq = val.indexOf("=");
+      if (eq > 0) secretRef[val.slice(0, eq)] = val.slice(eq + 1);
     } else if (part.startsWith("--")) {
       const key = part.slice(2);
       args[key] = parts[++i] ?? "";
@@ -179,8 +189,20 @@ function parseSpawnArgs(parts: string[]): { name: string; model?: string; priori
     }
   }
 
-  if (!name) throw new Error("Usage: spawn <name> [--model provider:id] [--priority 0-4] [--thinking level] [--cwd path] [--ephemeral]");
-  return { name, ...args, ...(ephemeral ? { ephemeral: true } : {}) };
+  if (!name) throw new Error("Usage: spawn <name> [--model provider:id] [--priority 0-4] [--thinking level] [--cwd path] [--api-key-ref ENV_NAME] [--env KEY=VALUE] [--secret-ref KEY=ENV_NAME] [--ephemeral]");
+  return {
+    name,
+    model: args["model"],
+    priority: args["priority"],
+    thinking: args["thinking"],
+    cwd: args["cwd"],
+    prompt: args["prompt"],
+    desc: args["desc"],
+    "api-key-ref": args["api-key-ref"],
+    ...(Object.keys(env).length > 0 ? { env } : {}),
+    ...(Object.keys(secretRef).length > 0 ? { "secret-ref": secretRef } : {}),
+    ...(ephemeral ? { ephemeral: true } : {}),
+  };
 }
 
 function parseReplInput(input: string): string[] {
@@ -209,7 +231,8 @@ function parseReplInput(input: string): string[] {
 function printHelp(): void {
   console.log(`
 Commands:
-  spawn <name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path] [--desc text] [--ephemeral]
+  spawn <name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path] [--desc text]
+                              [--api-key-ref ENV_NAME] [--env KEY=VALUE] [--secret-ref KEY=ENV_NAME] [--ephemeral]
   list                          List all agents
   send <agent> <message>        Send message to agent
   kill <agent>                  Stop and remove agent

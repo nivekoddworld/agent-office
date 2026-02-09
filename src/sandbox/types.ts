@@ -14,10 +14,11 @@ export interface SandboxStartOpts {
   hostUrl: string;
   systemPrompt: string;
   modelName: string;
-  apiKey: string;
   workspacePath: string;
   /** Host paths to skill directories (each mounted read-only at /skills, /skills-1, etc.). */
   skillsPaths: string[];
+  /** Non-sensitive env vars passed as Docker --env flags. */
+  env?: Record<string, string>;
 }
 
 export interface SandboxProvider {

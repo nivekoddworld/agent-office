@@ -12,6 +12,7 @@ import type { HostApi } from "../sandbox/host-api.js";
 import { PI_TESTS_DIR } from "../constants.js";
 import { buildDefaultPrompt } from "./prompt.js";
 import { createListAgentsTool, createReadAgentFileTool, createMailboxTool } from "./tools/index.js";
+import { createRedactor } from "../security/redact.js";
 
 export interface AgentHandleDeps {
   bus: MessageBus;
@@ -70,19 +71,26 @@ export class AgentHandle {
 
     if (this.provider && this.sandboxToken) {
       // Sandboxed: start container, agent runs inside it
-      const defaultPrompt = buildDefaultPrompt(this.name, "/workspace", this.config.description);
-      const systemPrompt = this.config.systemPrompt ?? defaultPrompt;
       const model = this.config.model;
-      const apiKey = this.config.apiKey ?? resolveProviderKey(model.provider);
+
+      // Build system prompt with env/secret name disclosure
+      const defaultPrompt = buildDefaultPrompt(this.name, "/workspace", this.config.description);
+      let systemPrompt = this.config.systemPrompt ?? defaultPrompt;
+      const envNames = Object.keys(this.config.env ?? {});
+      if (envNames.length > 0) systemPrompt += `\n\nEnvironment variables: ${envNames.join(", ")}`;
+      const secretNames = Object.keys(this.config.secrets ?? {});
+      if (this.config.discloseSecrets && secretNames.length > 0) {
+        systemPrompt += `\nPre-configured services: ${secretNames.join(", ")}`;
+      }
 
       this.sandboxInfo = await this.provider.start(this.name, {
         token: this.sandboxToken,
-        hostUrl: "", // Overridden by provider with host.docker.internal URL
+        hostUrl: "",
         systemPrompt,
         modelName: `${model.provider}:${model.id}`,
-        apiKey,
         workspacePath: this.cwd,
         skillsPaths: [join(this.agentDir, "skills"), ...(this.config.skillDirs ?? []).map((d) => resolve(this.cwd, d.startsWith("~/") ? join(homedir(), d.slice(2)) : d))],
+        env: this.config.env,
       });
       // Register event listener so sandbox events flow to workspace/Telegram
       if (this.hostApi) {
@@ -116,6 +124,17 @@ export class AgentHandle {
     const defaultPrompt = buildDefaultPrompt(this.name, this.cwd, this.config.description);
     const systemPrompt = (this.config.systemPrompt ?? defaultPrompt) + skillsPrompt;
 
+    // Resolve model API key: apiKeyRef > apiKey > auto (undefined lets Pi resolve)
+    let resolvedApiKey: string | undefined;
+    if (this.config.apiKeyRef) {
+      resolvedApiKey = process.env[this.config.apiKeyRef];
+      if (!resolvedApiKey) {
+        throw new Error(`Agent "${this.name}": model key not found. env var "${this.config.apiKeyRef}" is not set (from api_key_ref).`);
+      }
+    } else if (this.config.apiKey) {
+      resolvedApiKey = this.config.apiKey;
+    }
+
     this.agent = new Agent({
       initialState: {
         systemPrompt,
@@ -124,13 +143,19 @@ export class AgentHandle {
         tools,
       },
       streamFn: streamSimple,
-      getApiKey: this.config.apiKey ? () => this.config.apiKey : undefined,
+      getApiKey: resolvedApiKey ? () => resolvedApiKey : undefined,
     });
+
+    // Build redactor for in-process event forwarding (defense in depth)
+    const secretValues: Record<string, string> = {};
+    if (resolvedApiKey) secretValues.MODEL_API_KEY = resolvedApiKey;
+    const redact = createRedactor(secretValues);
 
     this.agent.subscribe((e) => {
       this._lastHeartbeat = Date.now();
       if (e.type === "turn_end") this._turns++;
-      for (const fn of this.listeners) fn(e);
+      const safe = redact.deep(e) as AgentEvent;
+      for (const fn of this.listeners) fn(safe);
     });
   }
 
@@ -208,16 +233,4 @@ export class AgentHandle {
     }
     this.listeners = [];
   }
-}
-
-const PROVIDER_ENV_KEYS: Record<string, string> = {
-  openai: "OPENAI_API_KEY",
-  anthropic: "ANTHROPIC_API_KEY",
-  google: "GEMINI_API_KEY",
-  xai: "XAI_API_KEY",
-};
-
-function resolveProviderKey(provider: string): string {
-  const envVar = PROVIDER_ENV_KEYS[provider];
-  return (envVar && process.env[envVar]) ?? "";
 }

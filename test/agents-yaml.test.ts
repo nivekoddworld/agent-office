@@ -114,6 +114,45 @@ agents:
     expect(d.skills).toEqual(["nichochar/web-skills"]);
   });
 
+  it("parses env, secrets, api_key_ref, disclose_secrets fields", () => {
+    writeYaml(`
+agents:
+  designer:
+    model: anthropic:claude-sonnet-4-20250514
+    api_key_ref: MY_CUSTOM_KEY
+    env:
+      LOG_LEVEL: debug
+    secrets:
+      GITHUB_TOKEN: \${MY_GH_TOKEN}
+    disclose_secrets: true
+`);
+    const result = loadAgentsYaml();
+    expect(result).not.toBeNull();
+    const d = result!.agents["designer"]!;
+    expect(d.api_key_ref).toBe("MY_CUSTOM_KEY");
+    expect(d.env).toEqual({ LOG_LEVEL: "debug" });
+    expect(d.secrets).toEqual({ GITHUB_TOKEN: "${MY_GH_TOKEN}" });
+    expect(d.disclose_secrets).toBe(true);
+  });
+
+  it("resolves ${VAR} refs in env at load time", () => {
+    const origVal = process.env["TEST_PI_LOAD_VAR"];
+    process.env["TEST_PI_LOAD_VAR"] = "resolved_value";
+    try {
+      writeYaml(`
+agents:
+  bot:
+    env:
+      MY_SETTING: \${TEST_PI_LOAD_VAR}
+`);
+      const result = loadAgentsYaml();
+      expect(result!.agents["bot"]!.env!["MY_SETTING"]).toBe("resolved_value");
+    } finally {
+      if (origVal === undefined) delete process.env["TEST_PI_LOAD_VAR"];
+      else process.env["TEST_PI_LOAD_VAR"] = origVal;
+    }
+  });
+
   it("parses minimal YAML (agent with no optional fields)", () => {
     writeYaml(`
 agents:
@@ -196,6 +235,68 @@ describe("validateAgentEntry", () => {
     const errors = validateAgentEntry("ok", { model: "bad-model" });
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]).toContain("provider:model-id");
+  });
+
+  // --- env/secrets validation ---
+
+  it("accepts valid env keys", () => {
+    expect(validateAgentEntry("ok", { env: { LOG_LEVEL: "debug", MY_VAR_2: "val" } })).toEqual([]);
+  });
+
+  it("rejects invalid env key format", () => {
+    const errors = validateAgentEntry("ok", { env: { "invalid-key": "val" } });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("Invalid env key");
+  });
+
+  it("rejects reserved env keys", () => {
+    const errors = validateAgentEntry("ok", { env: { MODEL_API_KEY: "val" } });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("Reserved");
+  });
+
+  it("rejects reserved keys: AGENT_NAME, AUTH_TOKEN, HOST_URL", () => {
+    for (const key of ["AGENT_NAME", "AUTH_TOKEN", "HOST_URL", "MODEL_NAME", "SYSTEM_PROMPT", "SKILL_PATHS"]) {
+      const errors = validateAgentEntry("ok", { env: { [key]: "val" } });
+      expect(errors.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("validates secrets key format", () => {
+    const errors = validateAgentEntry("ok", { secrets: { "bad-key": "${VAR}" } });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("Invalid secrets key");
+  });
+
+  it("rejects secrets without ${VAR} ref syntax", () => {
+    const errors = validateAgentEntry("ok", { secrets: { MY_SECRET: "plain-value" } });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("ref syntax");
+  });
+
+  it("rejects secrets with prefix/suffix around ${VAR}", () => {
+    const errors = validateAgentEntry("ok", { secrets: { MY_SECRET: "prefix${VAR}suffix" } });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("ref syntax");
+  });
+
+  it("accepts valid secrets with ${VAR} ref", () => {
+    expect(validateAgentEntry("ok", { secrets: { GITHUB_TOKEN: "${MY_GH_TOKEN}" } })).toEqual([]);
+  });
+
+  it("rejects reserved secrets keys", () => {
+    const errors = validateAgentEntry("ok", { secrets: { MODEL_API_KEY: "${VAR}" } });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("Reserved");
+  });
+
+  it("rejects key collisions between env and secrets", () => {
+    const errors = validateAgentEntry("ok", {
+      env: { MY_KEY: "val" },
+      secrets: { MY_KEY: "${VAR}" },
+    });
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0]).toContain("both env and secrets");
   });
 });
 
@@ -285,6 +386,35 @@ agents:
     await applyAgentsYaml(ws);
     expect(ws.spawn).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("passes env/secrets/apiKeyRef/discloseSecrets to spawn", async () => {
+    const origVal = process.env["TEST_PI_ENV_VAR"];
+    process.env["TEST_PI_ENV_VAR"] = "resolved";
+    try {
+      writeYaml(`
+agents:
+  envbot:
+    model: anthropic:test-model
+    api_key_ref: MY_KEY
+    env:
+      LOG_LEVEL: \${TEST_PI_ENV_VAR}
+    secrets:
+      GITHUB_TOKEN: \${MY_GH_TOKEN}
+    disclose_secrets: true
+`);
+      const ws = makeWorkspace();
+      await applyAgentsYaml(ws);
+      expect(ws.spawn).toHaveBeenCalledTimes(1);
+      const config = ws.spawn.mock.calls[0][0];
+      expect(config.apiKeyRef).toBe("MY_KEY");
+      expect(config.env).toEqual({ LOG_LEVEL: "resolved" });
+      expect(config.secrets).toEqual({ GITHUB_TOKEN: "${MY_GH_TOKEN}" });
+      expect(config.discloseSecrets).toBe(true);
+    } finally {
+      if (origVal === undefined) delete process.env["TEST_PI_ENV_VAR"];
+      else process.env["TEST_PI_ENV_VAR"] = origVal;
+    }
   });
 
   it("one bad agent doesn't block others", async () => {
@@ -410,6 +540,65 @@ agents:
     await applyAgentsYaml(ws);
     expect(ws.spawn).not.toHaveBeenCalled();
     expect(spy).not.toHaveBeenCalledWith(expect.stringContaining("already running"));
+    spy.mockRestore();
+  });
+
+  it("detects env changes", async () => {
+    writeYaml(`
+agents:
+  agent1:
+    model: anthropic:test-model
+    env:
+      LOG_LEVEL: debug
+`);
+    const ws = makeWorkspace({
+      agent1: {
+        config: {
+          name: "agent1",
+          model: { provider: "anthropic", id: "test-model", name: "test-model" },
+          priority: Priority.NORMAL,
+          thinkingLevel: "low",
+          description: undefined,
+          systemPrompt: undefined,
+          env: { LOG_LEVEL: "info" }, // different
+        },
+        cwd: join(TEST_DIR, "agents", "agent1", "workspace"),
+        name: "agent1",
+      },
+    });
+
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await applyAgentsYaml(ws);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("already running"));
+    spy.mockRestore();
+  });
+
+  it("detects apiKeyRef changes", async () => {
+    writeYaml(`
+agents:
+  agent1:
+    model: anthropic:test-model
+    api_key_ref: NEW_KEY_REF
+`);
+    const ws = makeWorkspace({
+      agent1: {
+        config: {
+          name: "agent1",
+          model: { provider: "anthropic", id: "test-model", name: "test-model" },
+          priority: Priority.NORMAL,
+          thinkingLevel: "low",
+          description: undefined,
+          systemPrompt: undefined,
+          apiKeyRef: "OLD_KEY_REF",
+        },
+        cwd: join(TEST_DIR, "agents", "agent1", "workspace"),
+        name: "agent1",
+      },
+    });
+
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await applyAgentsYaml(ws);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("already running"));
     spy.mockRestore();
   });
 
@@ -835,6 +1024,60 @@ agents:
     const result = loadAgentsYaml();
     expect(result!.agents["keeper"]!.model).toBe("anthropic:keep-me");
     expect(result!.agents["newone"]).toBeDefined();
+  });
+
+  it("persists api_key_ref to YAML", async () => {
+    writeYaml("agents: {}\n");
+    await upsertAgentToYaml("bot", { api_key_ref: "MY_CUSTOM_KEY" });
+    const result = loadAgentsYaml();
+    expect(result!.agents["bot"]!.api_key_ref).toBe("MY_CUSTOM_KEY");
+  });
+
+  it("persists env to YAML", async () => {
+    writeYaml("agents: {}\n");
+    await upsertAgentToYaml("bot", { env: { LOG_LEVEL: "debug" } });
+    const result = loadAgentsYaml();
+    expect(result!.agents["bot"]!.env).toEqual({ LOG_LEVEL: "debug" });
+  });
+
+  it("persists secrets via rawSecrets to YAML", async () => {
+    writeYaml("agents: {}\n");
+    await upsertAgentToYaml("bot", {}, { rawSecrets: { GITHUB_TOKEN: "${MY_GH_TOKEN}" } });
+    const yaml = readYaml();
+    expect(yaml).toContain("GITHUB_TOKEN");
+    expect(yaml).toContain("${MY_GH_TOKEN}");
+  });
+
+  it("persistence guardrail: throws if rawSecrets contains non-ref values", async () => {
+    writeYaml("agents: {}\n");
+    await expect(
+      upsertAgentToYaml("bot", {}, { rawSecrets: { KEY: "plain-value" } }),
+    ).rejects.toThrow("Resolved secret value passed to YAML writer");
+  });
+
+  it("persistence guardrail: throws if rawSecrets has prefix around ref", async () => {
+    writeYaml("agents: {}\n");
+    await expect(
+      upsertAgentToYaml("bot", {}, { rawSecrets: { KEY: "prefix${VAR}" } }),
+    ).rejects.toThrow("Resolved secret value passed to YAML writer");
+  });
+
+  it("preserves env/secrets on update merge", async () => {
+    writeYaml(`
+agents:
+  bot:
+    model: anthropic:test-model
+    env:
+      LOG_LEVEL: debug
+    secrets:
+      GITHUB_TOKEN: \${MY_GH_TOKEN}
+`);
+    await upsertAgentToYaml("bot", { model: "openai:gpt-4" });
+    const result = loadAgentsYaml();
+    expect(result!.agents["bot"]!.model).toBe("openai:gpt-4");
+    // env and secrets preserved
+    expect(result!.agents["bot"]!.env).toEqual({ LOG_LEVEL: "debug" });
+    expect(result!.agents["bot"]!.secrets).toEqual({ GITHUB_TOKEN: "${MY_GH_TOKEN}" });
   });
 
   it("no-op when YAML file missing", async () => {

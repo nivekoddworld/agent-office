@@ -9,23 +9,39 @@ import { getModel, streamSimple } from "@mariozechner/pi-ai";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { createSendMailProxy, createListAgentsProxy, createReadAgentFileProxy } from "../tools/proxy/index.js";
 
+import { createRedactor } from "../../security/redact.js";
+
 const AGENT_NAME = process.env["AGENT_NAME"]!;
 const AUTH_TOKEN = process.env["AUTH_TOKEN"]!;
 const HOST_URL = process.env["HOST_URL"]!;
 const SYSTEM_PROMPT = process.env["SYSTEM_PROMPT"]!;
 const MODEL_NAME = process.env["MODEL_NAME"]!;
-const API_KEY = process.env["API_KEY"]!;
 
-// Expose the API key under the provider-specific env var that pi-ai expects
-const PROVIDER_ENV_KEYS: Record<string, string> = {
-  openai: "OPENAI_API_KEY",
-  anthropic: "ANTHROPIC_API_KEY",
-  google: "GEMINI_API_KEY",
-  xai: "XAI_API_KEY",
-};
-const providerName = MODEL_NAME.split(":")[0] ?? "";
-const providerEnvKey = PROVIDER_ENV_KEYS[providerName];
-if (providerEnvKey && API_KEY) process.env[providerEnvKey] = API_KEY;
+// Fetch secrets from host API with retry
+async function fetchSecrets(): Promise<Record<string, string>> {
+  const delays = [1000, 2000, 4000];
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      const res = await fetch(`${HOST_URL}/api/secrets`, {
+        headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+      });
+      if (!res.ok) throw new Error(`GET /api/secrets returned ${res.status}`);
+      return await res.json() as Record<string, string>;
+    } catch (err) {
+      if (attempt < delays.length) {
+        console.warn(`[agent-entry] Secrets fetch attempt ${attempt + 1} failed, retrying...`);
+        await new Promise((r) => setTimeout(r, delays[attempt]));
+      } else {
+        throw new Error(`Failed to fetch secrets after ${delays.length + 1} attempts: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+  }
+  throw new Error("Unreachable");
+}
+
+const secrets = await fetchSecrets();
+const MODEL_API_KEY = secrets["MODEL_API_KEY"] ?? "";
+const redact = createRedactor(secrets);
 
 const WORKSPACE = "/workspace";
 const PORT = 3100;
@@ -83,14 +99,15 @@ const agent = new Agent({
     tools,
   },
   streamFn: streamSimple,
-  getApiKey: () => API_KEY,
+  getApiKey: () => MODEL_API_KEY,
 });
 
 let turns = 0;
 agent.subscribe((e) => {
   if (e.type === "turn_end") turns++;
-  // Forward events to host so Telegram bridge and workspace listeners receive them
-  hostFetch("/api/agent-event", { event: e }).catch(() => {});
+  // Redact secrets from event data before forwarding to host
+  const safeEvent = redact.deep(e);
+  hostFetch("/api/agent-event", { event: safeEvent }).catch(() => {});
 });
 
 // --- Prompt deduplication ---
@@ -111,12 +128,25 @@ const server = createServer((req, res) => handleRequest(req, res).catch((err) =>
   res.writeHead(500); res.end();
 }));
 
+function authenticateRequest(req: IncomingMessage): boolean {
+  const auth = req.headers.authorization;
+  return auth === `Bearer ${AUTH_TOKEN}`;
+}
+
 async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
 
+  // Health is unauthenticated (used by Docker provider for polling)
   if (req.method === "GET" && url.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, agent: AGENT_NAME, turns }));
+    return;
+  }
+
+  // All other endpoints require auth
+  if (!authenticateRequest(req)) {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Unauthorized" }));
     return;
   }
 
