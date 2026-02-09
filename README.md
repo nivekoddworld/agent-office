@@ -525,24 +525,7 @@ Every agent receives a **layered system prompt** composed from four ordered laye
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn.
 
-#### Breaking Change: `prompt` is now append-only
-
-Previously, setting `prompt:` in `agents.yaml` **replaced** the entire system prompt:
-
-```yaml
-# OLD behavior — base prompt was discarded
-prompt: "You are a copywriter. Write marketing copy."
-```
-
-Now, `prompt:` **appends** to the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions:
-
-```yaml
-# NEW behavior — base prompt + your text
-prompt: "You are a copywriter. Write marketing copy."
-# Agent receives: [base rules] + [identity] + [your text]
-```
-
-No action needed if your custom prompt was additive. If it contained its own collaboration/tool rules, those are now provided by the base prompt and can be removed from your `prompt:` field.
+The `prompt` field in `agents.yaml` is **append-only** — it adds your custom instructions after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
 
 ## Telegram Integration
 
@@ -818,7 +801,7 @@ src/
 
   agent/
     handle.ts                 Agent lifecycle (init, prompt, steer, abort, destroy)
-    prompt.ts                 Backwards-compat wrapper over prompt-manager
+    prompt.ts                 Convenience wrapper over prompt-manager
     prompts/
       base-v1.md              Versioned base prompt (collaboration, tools, safety)
       base-v1.ts              TS companion (reads .md, exports PROMPT_VERSION)
@@ -897,7 +880,7 @@ test/
   cron-store.test.ts          State persistence round-trip, atomic writes
   cron-service.test.ts        Timer lifecycle, catch-up, dispatch cap, busy skip
   cron-commands.test.ts       Cron CLI add/remove/enable/disable + validation
-  prompt.test.ts              System prompt backwards compat
+  prompt.test.ts              System prompt composition
   prompt-manager.test.ts      Prompt composition, layering, hashing, determinism
 ```
 
