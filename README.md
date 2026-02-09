@@ -28,7 +28,7 @@ graph TD
 
 **Core flow:** `agents.yaml` (auto-spawn) / CLI / Telegram -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`). The scheduler runs a FreeRTOS-style tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`). The scheduler runs a FreeRTOS-style tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -80,7 +80,7 @@ agents:
     env:                           # non-sensitive, passed as Docker --env
       LOG_LEVEL: debug
       WORKSPACE_NAME: designer
-    secrets:                       # sensitive, ${VAR} refs only (tool delivery deferred)
+    secrets:                       # sensitive, ${VAR} refs only — delivered via authenticated_fetch
       GITHUB_TOKEN: ${MY_GH_TOKEN}
     disclose_secrets: true         # show secret names in system prompt (default: false)
 
@@ -104,7 +104,7 @@ All fields are optional. Agents are spawned sequentially in declaration order; i
 | `skills` | string[] | `[]` | GitHub sources to auto-install (`owner/repo`) |
 | `api_key_ref` | string | _(auto from provider)_ | Host env var name for model API key |
 | `env` | map | `{}` | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs) |
-| `secrets` | map | `{}` | Secret refs in `${VAR}` format (tool delivery deferred) |
+| `secrets` | map | `{}` | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
 | `disclose_secrets` | boolean | `false` | Show secret names in system prompt |
 
 ### Auto-Sync
@@ -190,7 +190,9 @@ Host Process                        Docker Container (per agent)
 | No root access | `--user 1000:1000`, `--cap-drop=ALL`, `no-new-privileges` |
 | Filesystem isolation | Only the agent's own workspace is mounted |
 | Secret isolation | Model API key via `GET /api/secrets` (memory-only, never in Docker env) |
-| Output redaction | Two-layer: sandbox-side + host-side redaction of secrets in events |
+| Tool secret isolation | Per-agent secrets resolved host-side via `authenticated_fetch` — never enter container |
+| Output redaction | Two-layer: sandbox-side + host-side redaction of secrets in events and fetch responses |
+| SSRF protection | Two-layer: literal IP check + DNS resolution (blocks private, loopback, link-local, IPv4-mapped IPv6) |
 | Cross-agent file access | Proxied through Host API with path traversal guards |
 | Authentication | Unique per-agent Bearer token on all endpoints (except `/health`) |
 | Message integrity | Server derives sender identity from token, never trusts body |
@@ -233,10 +235,11 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/secrets` | Fetch secrets (model API key) at container boot |
+| `GET` | `/api/secrets` | Fetch secrets (model API key + tool secrets) at container boot |
 | `POST` | `/api/send-mail` | Forward message to another agent's mailbox |
 | `GET` | `/api/agents` | List all agents (name, status, description) |
 | `GET` | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace |
+| `POST` | `/api/authenticated-fetch` | Host-proxied HTTP request with secret injection |
 | `POST` | `/api/prompt-done` | Notify host that a prompt completed |
 | `POST` | `/api/agent-event` | Forward agent events to host (redacted) |
 | `POST` | `/api/heartbeat` | Update agent heartbeat timestamp |
@@ -330,29 +333,110 @@ reviewer calls read_agent_file:
 
 In Docker sandbox mode, this tool is proxied through the Host API. The agent sends an HTTP request to the host, which reads the file on disk and returns the content. The sandboxed agent never has direct filesystem access to other agents' workspaces.
 
+### `authenticated_fetch`
+
+Make HTTP requests to external APIs using pre-configured secrets. The secret is injected server-side and never exposed to the agent process — the agent only knows the secret _name_, not its value.
+
+```
+agent calls authenticated_fetch:
+  url: "https://api.github.com/user/repos"
+  secretName: "GITHUB_TOKEN"
+  method: "GET"
+
+-> Host resolves GITHUB_TOKEN to the actual value from process.env
+-> Host injects Authorization: Bearer ghp_... header
+-> Host makes the outbound HTTPS request
+-> Host redacts secret value from response body
+-> Agent receives: HTTP 200 OK\n\n[{"id":1,"name":"my-repo",...}]
+```
+
+#### How It Works
+
+1. **Configuration** — secrets are declared in `agents.yaml` using `${VAR}` refs:
+
+   ```yaml
+   agents:
+     my-agent:
+       model: anthropic:claude-sonnet-4-20250514
+       secrets:
+         GITHUB_TOKEN: ${MY_GH_TOKEN}
+         SLACK_TOKEN: ${MY_SLACK_TOKEN}
+       disclose_secrets: true    # agent sees names, never values
+   ```
+
+2. **Resolution** — at spawn time, `${MY_GH_TOKEN}` is resolved from `process.env`. Missing refs fail fast with a clear error. The resolved values are stored in memory on the host, never written to disk or Docker env vars.
+
+3. **Tool injection** — the `authenticated_fetch` tool is automatically added to agents that have at least one secret configured. No secrets = no tool.
+
+4. **Execution** — when the agent calls the tool:
+   - **In-process:** the host tool resolves the secret, validates the request (SSRF, HTTPS, headers), makes the fetch, and redacts the secret from the response.
+   - **Docker sandbox:** the proxy tool forwards the request to `POST /api/authenticated-fetch` on the Host API. The host resolves the secret, makes the outbound request, redacts the response, and returns it. The secret never enters the container.
+
+5. **Response redaction** — before the response reaches the agent, the secret value is scrubbed from both the response body and headers. This prevents reflection attacks where an upstream endpoint echoes back the `Authorization` header.
+
+#### Security Guardrails
+
+| Protection | Detail |
+|---|---|
+| HTTPS required | Only `https://` URLs allowed (localhost exempt in dev) |
+| SSRF (literal) | Blocks private IPs: `10.x`, `172.16-31.x`, `192.168.x`, `127.x`, `169.254.x`, `0.0.0.0` |
+| SSRF (DNS) | Resolves hostnames via `dns.resolve4`/`resolve6`, checks all IPs — catches `evil.com → 127.0.0.1` |
+| SSRF (IPv6) | Blocks `::1`, `fc00::/7`, `fe80::/10`, IPv4-mapped forms (`::ffff:7f00:1`, `::ffff:127.0.0.1`) |
+| Auth header injection | Auth header set _after_ user headers — cannot be overridden by the agent |
+| Blocked headers | `Host`, `Content-Length`, `Transfer-Encoding`, `Connection`, `Cookie` are silently stripped |
+| Header name allowlist | Only `Authorization`, `X-API-Key`, `Api-Key` allowed as auth header names |
+| Reserved secrets | `MODEL_API_KEY` cannot be used with `authenticated_fetch` (prevents exfiltration) |
+| Size limits | Request body: 1 MB, Response body: 5 MB |
+| Timeout | 30-second timeout on outbound requests |
+| Response redaction | Secret value scrubbed from response body and headers before agent sees it |
+| Agent isolation | Each agent can only access its own secrets — agent A cannot use agent B's tokens |
+
+#### Auth Modes
+
+The `auth` parameter controls how the secret is injected into the request:
+
+| Mode | Header value | Example |
+|---|---|---|
+| `bearer` (default) | `Bearer <secret>` | `Authorization: Bearer ghp_abc123` |
+| `token` | `token <secret>` | `Authorization: token ghp_abc123` |
+| `raw` | `<secret>` | `X-API-Key: ghp_abc123` |
+
+```
+# Custom auth mode example:
+agent calls authenticated_fetch:
+  url: "https://api.service.com/data"
+  secretName: "SERVICE_KEY"
+  auth: { mode: "raw", headerName: "X-API-Key" }
+
+-> Header injected: X-API-Key: <resolved secret value>
+```
+
 ### Tool Architecture
 
 ```
 src/agent/tools/
   contracts.ts              Single source of truth (name, label, description, parameters)
+  fetch-helpers.ts          Shared SSRF protection, URL validation, auth header builder
   send-mail.ts              Host implementation (direct bus.send)
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
+  authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
   proxy/
     send-mail.ts            Sandbox implementation (HTTP POST /api/send-mail)
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
     read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
+    authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
     index.ts                Barrel export + HostFetch type
 ```
 
-In-process agents use the host implementations directly. Sandboxed agents use the proxy implementations, which forward requests to the Host API over HTTP. Both share the same tool contracts to prevent schema drift.
+In-process agents use the host implementations directly. Sandboxed agents use the proxy implementations, which forward requests to the Host API over HTTP. Both share the same tool contracts and validation helpers to prevent drift.
 
 ### Collaboration Prompt
 
 Agents are prompted to:
 
 - Always use `list_agents` first to discover collaborators
-- Use `send_mail` for delegation and `read_agent_file` for code review
+- Use `send_mail` for delegation, `read_agent_file` for code review, and `authenticated_fetch` for external APIs
 - Never ask the user for information another agent can provide
 - Avoid reply loops — only send actionable messages, not pleasantries
 - Report completion back to the user when all delegated work is done
@@ -539,7 +623,58 @@ What happens behind the scenes:
 
 Each agent is fully isolated — a misbehaving agent cannot crash the host, read secrets, or access another agent's filesystem directly.
 
-### Example 3: Mixed Mode with Telegram
+### Example 3: Authenticated Fetch with External APIs
+
+An agent uses pre-configured secrets to interact with the GitHub API — the secret never touches the agent process:
+
+```bash
+# Set the host env var with your GitHub PAT
+export MY_GH_TOKEN="ghp_..."
+```
+
+**Option A: Via REPL**
+
+```
+pi> spawn github-bot --model anthropic:claude-sonnet-4-20250514 \
+    --desc "GitHub integration bot" \
+    --secret-ref GITHUB_TOKEN=MY_GH_TOKEN
+
+pi> send github-bot "List my GitHub repos using authenticated_fetch with secretName GITHUB_TOKEN"
+```
+
+**Option B: Via agents.yaml**
+
+```yaml
+# ~/.pi-tests/agents.yaml
+agents:
+  github-bot:
+    model: anthropic:claude-sonnet-4-20250514
+    description: "GitHub integration bot"
+    secrets:
+      GITHUB_TOKEN: ${MY_GH_TOKEN}
+    disclose_secrets: true
+```
+
+```
+pi> agents reload
+pi> send github-bot "List my GitHub repos"
+```
+
+What happens:
+
+1. **Spawn:** `${MY_GH_TOKEN}` is resolved from `process.env` (fails fast if not set)
+2. **Tool injection:** `authenticated_fetch` is automatically added because the agent has secrets
+3. **Agent calls tool:**
+   ```
+   authenticated_fetch(url: "https://api.github.com/user/repos", secretName: "GITHUB_TOKEN")
+   ```
+4. **Host resolves secret**, injects `Authorization: Bearer ghp_...`, makes the HTTPS request
+5. **Response redacted** — `ghp_...` value is scrubbed from the response body before the agent sees it
+6. **Agent processes** the clean JSON response and reports results to the user
+
+The agent never sees `ghp_...` — only the name `GITHUB_TOKEN`. In Docker sandbox mode, the secret never enters the container at all.
+
+### Example 4: Mixed Mode with Telegram
 
 ```bash
 TELEGRAM_BOT_TOKEN=xxx pnpm dev start --sandbox docker
@@ -583,15 +718,18 @@ src/
       sandbox-entry.ts        Standalone process for Docker containers
     tools/
       contracts.ts            Shared tool metadata (name, label, description, parameters)
+      fetch-helpers.ts        Shared SSRF, URL validation, auth header builder
       index.ts                Barrel re-export for host-side tools
       send-mail.ts            send_mail — host implementation (bus.send)
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
+      authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
       proxy/
         index.ts              Barrel + HostFetch type
         send-mail.ts          send_mail — proxy implementation (HTTP)
         list-agents.ts        list_agents — proxy implementation (HTTP)
         read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
+        authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
 
   sandbox/
     types.ts                  SandboxProvider interface, SandboxMode, SandboxStartOpts
@@ -629,6 +767,7 @@ test/
   env-substitution.test.ts    ${VAR} resolution, missing vars, reserved keys
   redact.test.ts              Secret redaction (text, deep objects, edge cases)
   docker-provider.test.ts     Docker provider (mocked execFile + fetch)
+  authenticated-fetch.test.ts  authenticated_fetch tool + SSRF + auth modes + redaction
   host-api.test.ts            Host API endpoints, auth, secrets, prompt correlation
   tool-contracts.test.ts      Verifies host + proxy tools share contracts
   sandbox-validation.test.ts  CLI --sandbox option validation
@@ -660,7 +799,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 258 tests
+pnpm test             # Run test suite (vitest) — 304 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
