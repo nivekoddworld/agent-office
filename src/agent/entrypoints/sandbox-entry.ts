@@ -7,7 +7,7 @@ import { Agent } from "@mariozechner/pi-agent-core";
 import { createCodingTools, createGrepTool, createFindTool, createLsTool, loadSkills, formatSkillsForPrompt } from "@mariozechner/pi-coding-agent";
 import { getModel, streamSimple } from "@mariozechner/pi-ai";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { createSendMailProxy, createListAgentsProxy, createReadAgentFileProxy } from "../tools/proxy/index.js";
+import { createSendMailProxy, createListAgentsProxy, createReadAgentFileProxy, createAuthenticatedFetchProxy } from "../tools/proxy/index.js";
 
 import { createRedactor } from "../../security/redact.js";
 
@@ -40,7 +40,10 @@ async function fetchSecrets(): Promise<Record<string, string>> {
 }
 
 const secrets = await fetchSecrets();
-const MODEL_API_KEY = secrets["MODEL_API_KEY"] ?? "";
+const MODEL_API_KEY = secrets["MODEL_API_KEY"];
+if (!MODEL_API_KEY) {
+  throw new Error("[agent-entry] MODEL_API_KEY not found in secrets — agent cannot start without a model key");
+}
 const redact = createRedactor(secrets);
 
 const WORKSPACE = "/workspace";
@@ -75,6 +78,8 @@ const model = parseModelSpec(MODEL_NAME);
 
 // --- Agent setup ---
 
+const hasToolSecrets = Object.keys(secrets).some((k) => k !== "MODEL_API_KEY");
+
 const tools: AgentTool<any>[] = [
   ...createCodingTools(WORKSPACE),
   createGrepTool(WORKSPACE),
@@ -83,6 +88,7 @@ const tools: AgentTool<any>[] = [
   createSendMailProxy(hostFetch),
   createListAgentsProxy(AGENT_NAME, hostFetch),
   createReadAgentFileProxy(hostFetch),
+  ...(hasToolSecrets ? [createAuthenticatedFetchProxy(hostFetch)] : []),
 ];
 
 // Load skills from read-only mounts

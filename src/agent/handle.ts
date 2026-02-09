@@ -11,8 +11,9 @@ import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { PI_TESTS_DIR } from "../constants.js";
 import { buildDefaultPrompt } from "./prompt.js";
-import { createListAgentsTool, createReadAgentFileTool, createMailboxTool } from "./tools/index.js";
+import { createListAgentsTool, createReadAgentFileTool, createMailboxTool, createAuthenticatedFetchTool } from "./tools/index.js";
 import { createRedactor } from "../security/redact.js";
+import { resolveEnvRefs } from "../config/env-substitution.js";
 
 export interface AgentHandleDeps {
   bus: MessageBus;
@@ -106,11 +107,31 @@ export class AgentHandle {
     }
 
     // In-process: create agent directly
+
+    // Resolve model API key: apiKeyRef > apiKey > auto (undefined lets Pi resolve)
+    let resolvedApiKey: string | undefined;
+    if (this.config.apiKeyRef) {
+      resolvedApiKey = process.env[this.config.apiKeyRef];
+      if (!resolvedApiKey) {
+        throw new Error(`Agent "${this.name}": model key not found. env var "${this.config.apiKeyRef}" is not set (from api_key_ref).`);
+      }
+    } else if (this.config.apiKey) {
+      resolvedApiKey = this.config.apiKey;
+    }
+
+    // Resolve user-defined secrets (fail fast on missing refs)
+    const resolvedSecrets: Record<string, string> = {};
+    if (this.config.secrets) {
+      const resolved = resolveEnvRefs(this.config.secrets, process.env, `agents.${this.name}.secrets`);
+      Object.assign(resolvedSecrets, resolved);
+    }
+
     const tools: AgentTool<any>[] = [
       ...createCodingTools(this.cwd),
       createMailboxTool(this.name, this.bus),
       createListAgentsTool(this.name, this.listAgentsFn),
       createReadAgentFileTool(),
+      ...(Object.keys(resolvedSecrets).length > 0 ? [createAuthenticatedFetchTool(resolvedSecrets)] : []),
       ...(this.config.tools ?? []),
     ];
 
@@ -123,17 +144,6 @@ export class AgentHandle {
     const skillsPrompt = skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
     const defaultPrompt = buildDefaultPrompt(this.name, this.cwd, this.config.description);
     const systemPrompt = (this.config.systemPrompt ?? defaultPrompt) + skillsPrompt;
-
-    // Resolve model API key: apiKeyRef > apiKey > auto (undefined lets Pi resolve)
-    let resolvedApiKey: string | undefined;
-    if (this.config.apiKeyRef) {
-      resolvedApiKey = process.env[this.config.apiKeyRef];
-      if (!resolvedApiKey) {
-        throw new Error(`Agent "${this.name}": model key not found. env var "${this.config.apiKeyRef}" is not set (from api_key_ref).`);
-      }
-    } else if (this.config.apiKey) {
-      resolvedApiKey = this.config.apiKey;
-    }
 
     this.agent = new Agent({
       initialState: {
@@ -149,6 +159,7 @@ export class AgentHandle {
     // Build redactor for in-process event forwarding (defense in depth)
     const secretValues: Record<string, string> = {};
     if (resolvedApiKey) secretValues.MODEL_API_KEY = resolvedApiKey;
+    Object.assign(secretValues, resolvedSecrets);
     const redact = createRedactor(secretValues);
 
     this.agent.subscribe((e) => {

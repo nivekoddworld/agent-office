@@ -5,7 +5,8 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentInfo } from "../types.js";
 import { Priority } from "../types.js";
 import { PI_TESTS_DIR } from "../constants.js";
-import { createRedactor } from "../security/redact.js";
+import { createRedactor, redactText } from "../security/redact.js";
+import { validateFetchParams, FETCH_TIMEOUT_MS, MAX_RESPONSE_BODY, RESERVED_SECRET_NAMES, type FetchParams } from "../agent/tools/fetch-helpers.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const MAX_BODY = 1_048_576; // 1 MB
@@ -151,6 +152,8 @@ export class HostApi {
         await this.handlePromptDone(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/agent-event") {
         await this.handleAgentEvent(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/authenticated-fetch") {
+        await this.handleAuthenticatedFetch(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
         this.heartbeats.set(agentName, Date.now());
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -297,6 +300,75 @@ export class HostApi {
 
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
+  }
+
+  private async handleAuthenticatedFetch(req: IncomingMessage, res: ServerResponse, agentName: string): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) { res.writeHead(413); res.end(); return; }
+
+    const params = JSON.parse(body) as FetchParams;
+    if (!params.url || !params.secretName) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing required fields: url, secretName" }));
+      return;
+    }
+    if (RESERVED_SECRET_NAMES.has(params.secretName)) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `Secret "${params.secretName}" cannot be used with authenticated_fetch` }));
+      return;
+    }
+
+    // Look up secret for this agent
+    const token = req.headers.authorization?.slice(7) ?? "";
+    const secrets = this.agentSecrets.get(token);
+    if (!secrets || !(params.secretName in secrets)) {
+      res.writeHead(404, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `Secret "${params.secretName}" not found for agent "${agentName}"` }));
+      return;
+    }
+
+    const validation = await validateFetchParams(params, secrets[params.secretName]!);
+    if (!validation.ok) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: validation.error }));
+      return;
+    }
+
+    const { url, method, headers, body: reqBody } = validation.result;
+    try {
+      const fetchRes = await fetch(url, {
+        method,
+        headers,
+        body: reqBody,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+
+      const responseBody = await fetchRes.text();
+      if (Buffer.byteLength(responseBody, "utf-8") > MAX_RESPONSE_BODY) {
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Response too large" }));
+        return;
+      }
+
+      const secretValue = secrets[params.secretName]!;
+      const safeBody = redactText(responseBody, [secretValue]);
+      const safeHeaders: Record<string, string> = {};
+      for (const [k, v] of fetchRes.headers.entries()) {
+        safeHeaders[k] = redactText(v, [secretValue]);
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        status: fetchRes.status,
+        statusText: fetchRes.statusText,
+        headers: safeHeaders,
+        body: safeBody,
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: `Fetch failed: ${message}` }));
+    }
   }
 
   private sweepDedup(): void {

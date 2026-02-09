@@ -9,6 +9,7 @@ import { HostApi } from "./sandbox/host-api.js";
 import { DockerProvider } from "./sandbox/docker-provider.js";
 import type { SandboxProvider } from "./sandbox/types.js";
 import type { AgentConfig, AgentInfo, Priority, WorkspaceConfig } from "./types.js";
+import { resolveEnvRefs } from "./config/env-substitution.js";
 
 const DEFAULT_HOST_PORT = 13000;
 
@@ -73,9 +74,13 @@ export class Workspace {
     let sandboxToken: string | undefined;
     if (useSandbox && this.sandboxProvider && this.hostApi) {
       sandboxToken = randomUUID();
-      // Resolve model key and build secrets map
+      // Resolve model key and all user-defined secrets
       const modelKey = resolveModelKey(config);
       const secrets: Record<string, string> = { MODEL_API_KEY: modelKey };
+      if (config.secrets) {
+        const resolved = resolveEnvRefs(config.secrets, process.env, `agents.${config.name}.secrets`);
+        Object.assign(secrets, resolved);
+      }
       this.hostApi.registerAgent(config.name, sandboxToken, secrets);
       provider = this.sandboxProvider;
       hostApi = this.hostApi;

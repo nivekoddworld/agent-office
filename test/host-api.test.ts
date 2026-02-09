@@ -215,6 +215,70 @@ describe("HostApi", () => {
     expect(await res.json()).toEqual({});
   });
 
+  // --- /api/authenticated-fetch ---
+
+  it("POST /api/authenticated-fetch returns 400 for missing fields", async () => {
+    const res = await postJson(port, "/api/authenticated-fetch", { url: "https://api.example.com" }, token);
+    expect(res.status).toBe(400);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("secretName");
+  });
+
+  it("POST /api/authenticated-fetch returns 404 for unknown secret", async () => {
+    const res = await postJson(port, "/api/authenticated-fetch", {
+      url: "https://api.example.com",
+      secretName: "NONEXISTENT",
+    }, token);
+    expect(res.status).toBe(404);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("NONEXISTENT");
+    expect(data.error).toContain(agentName);
+  });
+
+  it("POST /api/authenticated-fetch returns 400 for non-HTTPS", async () => {
+    api.unregisterAgent(token);
+    api.registerAgent(agentName, token, { MODEL_API_KEY: "sk-test", MY_SECRET: "val" });
+    const res = await postJson(port, "/api/authenticated-fetch", {
+      url: "http://example.com",
+      secretName: "MY_SECRET",
+    }, token);
+    expect(res.status).toBe(400);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("HTTPS");
+  });
+
+  it("POST /api/authenticated-fetch returns 401 without auth", async () => {
+    const res = await fetch(`http://localhost:${port}/api/authenticated-fetch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "https://api.example.com", secretName: "MODEL_API_KEY" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/authenticated-fetch returns 403 for MODEL_API_KEY", async () => {
+    const res = await postJson(port, "/api/authenticated-fetch", {
+      url: "https://api.example.com",
+      secretName: "MODEL_API_KEY",
+    }, token);
+    expect(res.status).toBe(403);
+    const data = await res.json() as { error: string };
+    expect(data.error).toContain("MODEL_API_KEY");
+    expect(data.error).toContain("cannot be used");
+  });
+
+  it("POST /api/authenticated-fetch agent isolation — agent B cannot access agent A secrets", async () => {
+    const tokenB = "token-agent-b";
+    api.registerAgent("agent-b", tokenB, { MODEL_API_KEY: "sk-b" });
+    // Agent B tries to access MODEL_API_KEY which it has, but not MY_SECRET
+    const res = await postJson(port, "/api/authenticated-fetch", {
+      url: "https://api.example.com",
+      secretName: "MY_SECRET",
+    }, tokenB);
+    expect(res.status).toBe(404);
+    api.unregisterAgent(tokenB);
+  });
+
   // --- kill agent while prompt pending ---
 
   it("kill clears pending prompts + unregisters token", async () => {

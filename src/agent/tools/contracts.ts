@@ -28,3 +28,20 @@ export const READ_AGENT_FILE = {
     path: Type.String({ description: "Relative file path within the agent's workspace" }),
   }),
 };
+
+export const AUTHENTICATED_FETCH = {
+  name: "authenticated_fetch" as const,
+  label: "Authenticated Fetch",
+  description: "Make an HTTP request with a pre-configured secret injected as the auth header. The secret is resolved server-side and never exposed to the agent process.",
+  parameters: Type.Object({
+    url: Type.String({ description: "The URL to fetch (HTTPS required, except localhost)" }),
+    secretName: Type.String({ description: "Name of the pre-configured secret (e.g. GITHUB_TOKEN)" }),
+    method: Type.Optional(Type.String({ description: "HTTP method: GET, POST, PUT, DELETE, PATCH (default: GET)" })),
+    headers: Type.Optional(Type.Record(Type.String(), Type.String(), { description: "Additional headers" })),
+    body: Type.Optional(Type.String({ description: "Request body (for POST/PUT/PATCH)" })),
+    auth: Type.Optional(Type.Object({
+      mode: Type.Optional(Type.String({ description: "Auth mode: bearer (default), token, raw" })),
+      headerName: Type.Optional(Type.String({ description: "Header name (default: Authorization). Allowed: Authorization, X-API-Key, Api-Key" })),
+    })),
+  }),
+};
