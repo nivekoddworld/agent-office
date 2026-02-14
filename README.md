@@ -51,6 +51,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Auto-Sync](#auto-sync)
   - [Reload](#reload)
   - [Cron Jobs](#cron-jobs)
+  - [Office-Level Cron](#office-level-cron)
   - [Migration from agents.yaml](#migration-from-agentsyaml)
 - [Sandbox Modes](#sandbox-modes)
   - [In-Process Mode](#in-process-mode-default)
@@ -65,6 +66,10 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [authenticated_fetch](#authenticated_fetch)
   - [Tool Architecture](#tool-architecture)
   - [Prompt System](#prompt-system)
+- [Memory System](#memory-system)
+  - [memory_search](#memory_search)
+  - [memory_get](#memory_get)
+  - [Citation Mode](#citation-mode)
 - [Telegram Integration](#telegram-integration)
 - [Concepts](#concepts)
   - [Tick-Based Scheduler](#tick-based-scheduler)
@@ -105,7 +110,7 @@ graph TD
 
 **Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -168,6 +173,13 @@ office:
     SHARED_API_URL: https://api.acme.com
   secrets:
     SHARED_TOKEN: ${ACME_TOKEN}
+  memory:
+    citations: auto # on | off | auto (default: auto)
+  cron:
+    standup:
+      schedule: "0 9 * * 1-5"
+      message: "Run standup"
+      targets: [pm, coder]
 
 agents:
   designer:
@@ -283,6 +295,52 @@ Without `--apply`, commands write to `office.yaml` only — run `office reload` 
 
 Change detection uses normalized config comparison (resolved model, numeric priority, sorted skills, trimmed prompt) so cosmetic YAML differences like `normal` vs `2` or reordered skills don't trigger false warnings.
 
+#### Office-Level Cron
+
+In addition to per-agent cron, you can define office-level cron jobs that dispatch messages to one or more target agents:
+
+```yaml
+# In office.yaml under the office section:
+office:
+  cron:
+    standup:
+      schedule: "0 9 * * 1-5"
+      message: "Report your status for today's standup"
+      targets: [pm, coder, reviewer]
+      timezone: "America/New_York"
+    weekly-review:
+      schedule: "0 17 * * 5"
+      message: "Summarize this week's progress"
+      targets: [__broadcast__] # sends to all agents
+```
+
+| Field      | Required | Default | Description                                                                 |
+| ---------- | -------- | ------- | --------------------------------------------------------------------------- |
+| `schedule` | yes      | —       | 5-field cron expression                                                     |
+| `message`  | yes      | —       | Prompt text sent to each target agent                                       |
+| `targets`  | yes      | —       | Agent names or `__broadcast__` (all agents)                                 |
+| `timezone` | no       | `UTC`   | IANA timezone for schedule evaluation                                       |
+| `catch_up` | no       | `skip`  | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `enabled`  | no       | `true`  | Set `false` to pause without removing                                       |
+
+Target agent names are validated at parse time. Typos fail fast:
+
+```
+[office] office.cron.standup: unknown target agent "codre"
+```
+
+**Activation:** YAML edits require `office reload` to take effect. CLI commands always apply immediately.
+
+Office cron CLI commands:
+
+```bash
+ao> cron add office <job> "<schedule>" <message> --targets pm,coder
+ao> cron remove office <job>
+ao> cron trigger office <job>                    # fire immediately
+```
+
+Office jobs appear in `cron list` with an `[office]` scope tag. The same safety guards apply: busy agents are skipped, and the global 60/minute dispatch cap counts each target dispatch.
+
 ### Migration from `agents.yaml`
 
 If you have a legacy `~/.agent-office/agents.yaml`, migrate to the multi-office format:
@@ -353,7 +411,7 @@ Host Process                        Docker Container (per agent)
    - Volume mount: host workspace directory -> `/workspace` in container
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
-   - Proxy tools that forward `send_mail`, `list_agents`, `read_agent_file` to the Host API over HTTP
+   - Proxy tools that forward `send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get` to the Host API over HTTP
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
 6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
@@ -416,6 +474,8 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | `GET`  | `/api/agents`                    | List all agents (name, status, description)                    |
 | `GET`  | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace                       |
 | `POST` | `/api/authenticated-fetch`       | Host-proxied HTTP request with secret injection                |
+| `POST` | `/api/memory-search`             | Search memory files across scopes (auth required)              |
+| `POST` | `/api/memory-get`                | Read a specific memory file (auth required)                    |
 | `POST` | `/api/prompt-done`               | Notify host that a prompt completed                            |
 | `POST` | `/api/agent-event`               | Forward agent events to host (redacted)                        |
 | `POST` | `/api/heartbeat`                 | Update agent heartbeat timestamp                               |
@@ -453,6 +513,9 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `cron trigger <agent> <job>`                       | Fire a cron job immediately                                |
 | `cron enable <agent> <job> [--apply]`              | Re-enable a paused job                                     |
 | `cron disable <agent> <job> [--apply]`             | Pause a cron job                                           |
+| `cron add office <job> "<sched>" <msg> --targets a,b` | Add an office-level cron job (applies immediately)      |
+| `cron remove office <job>`                         | Remove an office-level cron job (applies immediately)      |
+| `cron trigger office <job>`                        | Fire an office cron job immediately                        |
 | `route <chatId> <agent>`                           | Route a Telegram chat to an agent                          |
 | `route list`                                       | List all Telegram chat routes                              |
 | `help`                                             | Show available commands                                    |
@@ -487,7 +550,7 @@ Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via 
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through three built-in tools. Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`) and memory tools (`memory_search`, `memory_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
 
 ### `list_agents`
 
@@ -630,11 +693,15 @@ src/agent/tools/
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
+  memory-search.ts          memory_search — host implementation
+  memory-get.ts             memory_get — host implementation
   proxy/
     send-mail.ts            Sandbox implementation (HTTP POST /api/send-mail)
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
     read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
     authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
+    memory-search.ts        memory_search — proxy implementation (HTTP)
+    memory-get.ts           memory_get — proxy implementation (HTTP)
     index.ts                Barrel export + HostFetch type
 ```
 
@@ -642,17 +709,76 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 
 ### Prompt System
 
-Every agent receives a **layered system prompt** composed from five ordered layers:
+Every agent receives a **layered system prompt** composed from six ordered layers:
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — collaboration rules, tool guidance, anti-loop rules, workflow, reporting, safety. Always included, never overridden.
 2. **Office context** — office name and description (e.g. "You work at Acme Corp. We build AI-powered widgets"). Only present when an office has a display name.
-3. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
-4. **Identity** — agent name, description, workspace path.
-5. **Custom instructions** — the `prompt` field from `office.yaml`, appended under a `## Custom Instructions` header.
+3. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
+4. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
+5. **Identity** — agent name, description, workspace path.
+6. **Custom instructions** — the `prompt` field from `office.yaml`, appended under a `## Custom Instructions` header.
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn.
 
 The `prompt` field in `office.yaml` is **append-only** — it adds your custom instructions after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
+
+## Memory System
+
+Agents have access to a two-scope memory system for persisting knowledge across sessions.
+
+**Scopes:**
+
+- **Office memory** — shared across all agents. Files live at `~/.agent-office/offices/<id>/MEMORY.md` and `~/.agent-office/offices/<id>/memory/*.md`. Searchable by all agents but not writable by them (managed by the office operator).
+- **Agent memory** — private to each agent's workspace. Files live at `~/.agent-office/offices/<id>/agents/<name>/workspace/MEMORY.md` and `workspace/memory/*.md`. Agents can read and write these using their standard file tools (write/edit).
+
+Memory is automatically enabled when `MEMORY.md` or `memory/*.md` files exist in either scope. The system prompt then includes reading, writing, and logging guidance.
+
+### `memory_search`
+
+Search memory files by keyword across scopes. Returns matching lines with file path and line number.
+
+```
+agent calls memory_search:
+  query: "database schema"
+  scope: "all"          # "agent" | "office" | "all" (default: "all")
+
+-> Returns matching lines from both office and agent memory files
+-> Agent-scope results ranked first
+```
+
+### `memory_get`
+
+Read a specific memory file by path.
+
+```
+agent calls memory_get:
+  path: "memory/debugging.md"
+  scope: "agent"        # "agent" | "office" (default: "agent")
+
+-> Returns contents of the file
+```
+
+Both tools are **read-only** — they search and retrieve memory files but cannot modify them. Agents write to their own memory files using their standard file tools (write/edit), which are scoped to the agent's workspace.
+
+**Prompt-driven writing and logging:** The system prompt instructs agents to update `MEMORY.md` and `memory/<topic>.md` after completing tasks, and to append daily summaries to `logs/YYYY-MM-DD.md`. This is prompt-level guidance — agents follow it as part of their instructed behavior, not via tool enforcement.
+
+**Security guards:** Path traversal is blocked (both `..` components and symlink escape via `realpathSync`). Files larger than 256 KB are rejected. Binary files (null bytes detected) return an error. Only `MEMORY.md` and `memory/*.md` paths are allowed.
+
+### Citation Mode
+
+Configure how memory search/get results are annotated with their source scope:
+
+```yaml
+office:
+  memory:
+    citations: auto # on | off | auto (default: auto)
+```
+
+| Mode   | Behavior                                               |
+| ------ | ------------------------------------------------------ |
+| `on`   | Always prefix results with `[agent]` or `[office]` tag |
+| `off`  | Never add scope tags                                   |
+| `auto` | Add scope tags for office results only (default)       |
 
 ## Telegram Integration
 
@@ -718,11 +844,16 @@ Each office gets an isolated directory, and each agent within it gets its own wo
     acme/
       office.yaml           # office + agent definitions
       .lock                 # per-office config lock
+      MEMORY.md             # office memory (shared, read-only to agents)
+      memory/               # office-level topic files
       cron/
         state.json          # cron job state
       agents/
         designer/
           workspace/        # agent's cwd — all file tools scoped here
+            MEMORY.md       # agent memory (private, writable)
+            memory/         # detailed topic files
+            logs/           # daily activity logs (YYYY-MM-DD.md)
           skills/           # installed skill directories
             .sources.json   # skill folder → GitHub source mapping
         reviewer/
@@ -941,6 +1072,8 @@ src/
   agent/
     handle.ts                 Agent lifecycle (init, prompt, steer, abort, destroy)
     prompt.ts                 Convenience wrapper over prompt-manager
+    memory/
+      search.ts              Memory search/get utility (path guards, size limits)
     prompts/
       base-v1.md              Versioned base prompt (collaboration, tools, safety)
       base-v1.ts              TS companion (reads .md, exports PROMPT_VERSION)
@@ -955,12 +1088,16 @@ src/
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
+      memory-search.ts        memory_search — host implementation
+      memory-get.ts           memory_get — host implementation
       proxy/
         index.ts              Barrel + HostFetch type
         send-mail.ts          send_mail — proxy implementation (HTTP)
         list-agents.ts        list_agents — proxy implementation (HTTP)
         read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
+        memory-search.ts      memory_search — proxy implementation (HTTP)
+        memory-get.ts         memory_get — proxy implementation (HTTP)
 
   sandbox/
     types.ts                  SandboxProvider interface, SandboxMode, SandboxStartOpts
@@ -1023,6 +1160,10 @@ test/
   cron-commands.test.ts       Cron CLI add/remove/enable/disable + validation
   prompt.test.ts              System prompt composition
   prompt-manager.test.ts      Prompt composition, layering, hashing, office block, determinism
+  memory-search.test.ts       Memory search/get utility, path traversal, size guards
+  memory-tools.test.ts        Memory tool execution, citation modes
+  office-cron.test.ts         Office-level cron lifecycle, targets, broadcast, state keys
+  cli-behavior.test.ts        CLI flag/option validation
 ```
 
 ## Dependencies
@@ -1046,7 +1187,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 468+ tests
+pnpm test             # Run test suite (vitest) — 438 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
