@@ -2,10 +2,23 @@ import { resolve4, resolve6 } from "node:dns/promises";
 
 // --- Constants ---
 
-export const ALLOWED_METHODS = new Set(["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"]);
+export const ALLOWED_METHODS = new Set([
+  "GET",
+  "POST",
+  "PUT",
+  "DELETE",
+  "PATCH",
+  "HEAD",
+]);
 export const RESERVED_SECRET_NAMES = new Set(["MODEL_API_KEY"]);
 const ALLOWED_AUTH_HEADERS = new Set(["authorization", "x-api-key", "api-key"]);
-const BLOCKED_HEADERS = new Set(["host", "content-length", "transfer-encoding", "connection", "cookie"]);
+const BLOCKED_HEADERS = new Set([
+  "host",
+  "content-length",
+  "transfer-encoding",
+  "connection",
+  "cookie",
+]);
 export const FETCH_TIMEOUT_MS = 30_000;
 export const MAX_REQUEST_BODY = 1_048_576; // 1 MB
 export const MAX_RESPONSE_BODY = 5_242_880; // 5 MB
@@ -13,7 +26,7 @@ export const MAX_RESPONSE_BODY = 5_242_880; // 5 MB
 // --- Types ---
 
 export interface AuthConfig {
-  mode?: string;   // "bearer" | "token" | "raw"
+  mode?: string; // "bearer" | "token" | "raw"
   headerName?: string; // default "Authorization"
 }
 
@@ -40,12 +53,12 @@ type ValidationResult =
 // --- SSRF protection ---
 
 function isPrivateV4(a: number, b: number): boolean {
-  if (a === 127) return true;                         // 127.0.0.0/8
-  if (a === 10) return true;                          // 10.0.0.0/8
-  if (a === 172 && b >= 16 && b <= 31) return true;   // 172.16.0.0/12
-  if (a === 192 && b === 168) return true;            // 192.168.0.0/16
-  if (a === 169 && b === 254) return true;            // 169.254.0.0/16 (link-local + metadata)
-  if (a === 0 && b === 0) return true;                // 0.0.0.0
+  if (a === 127) return true; // 127.0.0.0/8
+  if (a === 10) return true; // 10.0.0.0/8
+  if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+  if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  if (a === 169 && b === 254) return true; // 169.254.0.0/16 (link-local + metadata)
+  if (a === 0 && b === 0) return true; // 0.0.0.0
   return false;
 }
 
@@ -58,7 +71,13 @@ function isPrivateOrLoopback(ip: string): boolean {
   const norm = ip.replace(/^\[|]$/g, "").toLowerCase();
   if (norm === "::1") return true;
   if (norm.startsWith("fc") || norm.startsWith("fd")) return true; // fc00::/7
-  if (norm.startsWith("fe8") || norm.startsWith("fe9") || norm.startsWith("fea") || norm.startsWith("feb")) return true; // fe80::/10
+  if (
+    norm.startsWith("fe8") ||
+    norm.startsWith("fe9") ||
+    norm.startsWith("fea") ||
+    norm.startsWith("feb")
+  )
+    return true; // fe80::/10
 
   // IPv4-mapped IPv6 dotted: ::ffff:a.b.c.d
   const mapped = norm.match(/^::ffff:(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
@@ -75,20 +94,37 @@ function isPrivateOrLoopback(ip: string): boolean {
   return false;
 }
 
-async function assertNotPrivate(hostname: string, allowLocalhost?: boolean): Promise<void> {
+async function assertNotPrivate(
+  hostname: string,
+  allowLocalhost?: boolean,
+): Promise<void> {
   // Layer 1: literal check
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+  if (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1"
+  ) {
     if (allowLocalhost) return;
     throw new Error("Requests to localhost are not allowed");
   }
   if (isPrivateOrLoopback(hostname)) {
-    throw new Error(`Requests to private/loopback address "${hostname}" are not allowed`);
+    throw new Error(
+      `Requests to private/loopback address "${hostname}" are not allowed`,
+    );
   }
 
   // Layer 2: DNS resolution check
   const ips: string[] = [];
-  try { ips.push(...await resolve4(hostname)); } catch { /* no A records */ }
-  try { ips.push(...await resolve6(hostname)); } catch { /* no AAAA records */ }
+  try {
+    ips.push(...(await resolve4(hostname)));
+  } catch {
+    /* no A records */
+  }
+  try {
+    ips.push(...(await resolve6(hostname)));
+  } catch {
+    /* no AAAA records */
+  }
   for (const ip of ips) {
     if (isPrivateOrLoopback(ip)) {
       throw new Error(`Domain "${hostname}" resolves to private address ${ip}`);
@@ -98,20 +134,32 @@ async function assertNotPrivate(hostname: string, allowLocalhost?: boolean): Pro
 
 // --- Auth header builder ---
 
-export function buildAuthHeader(secretValue: string, auth?: AuthConfig): { name: string; value: string } {
+export function buildAuthHeader(
+  secretValue: string,
+  auth?: AuthConfig,
+): { name: string; value: string } {
   const mode = auth?.mode ?? "bearer";
   const headerName = auth?.headerName ?? "Authorization";
 
   if (!ALLOWED_AUTH_HEADERS.has(headerName.toLowerCase())) {
-    throw new Error(`Auth header "${headerName}" not allowed. Use: ${[...ALLOWED_AUTH_HEADERS].join(", ")}`);
+    throw new Error(
+      `Auth header "${headerName}" not allowed. Use: ${[...ALLOWED_AUTH_HEADERS].join(", ")}`,
+    );
   }
 
   let value: string;
   switch (mode) {
-    case "bearer": value = `Bearer ${secretValue}`; break;
-    case "token": value = `token ${secretValue}`; break;
-    case "raw": value = secretValue; break;
-    default: throw new Error(`Invalid auth mode "${mode}". Use: bearer, token, raw`);
+    case "bearer":
+      value = `Bearer ${secretValue}`;
+      break;
+    case "token":
+      value = `token ${secretValue}`;
+      break;
+    case "raw":
+      value = secretValue;
+      break;
+    default:
+      throw new Error(`Invalid auth mode "${mode}". Use: bearer, token, raw`);
   }
 
   return { name: headerName, value };
@@ -133,7 +181,8 @@ export async function validateFetchParams(
   }
 
   // 2. HTTPS enforcement (localhost exempt if allowed)
-  const isLocalhost = parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  const isLocalhost =
+    parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
   if (parsed.protocol !== "https:" && !(isLocalhost && opts?.allowLocalhost)) {
     return { ok: false, error: "Only HTTPS URLs are allowed" };
   }
@@ -142,18 +191,30 @@ export async function validateFetchParams(
   try {
     await assertNotPrivate(parsed.hostname, opts?.allowLocalhost);
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "SSRF check failed" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "SSRF check failed",
+    };
   }
 
   // 4. Method
   const method = (params.method ?? "GET").toUpperCase();
   if (!ALLOWED_METHODS.has(method)) {
-    return { ok: false, error: `Invalid method "${method}". Allowed: ${[...ALLOWED_METHODS].join(", ")}` };
+    return {
+      ok: false,
+      error: `Invalid method "${method}". Allowed: ${[...ALLOWED_METHODS].join(", ")}`,
+    };
   }
 
   // 5. Request body size
-  if (params.body && Buffer.byteLength(params.body, "utf-8") > MAX_REQUEST_BODY) {
-    return { ok: false, error: `Request body exceeds ${MAX_REQUEST_BODY} byte limit` };
+  if (
+    params.body &&
+    Buffer.byteLength(params.body, "utf-8") > MAX_REQUEST_BODY
+  ) {
+    return {
+      ok: false,
+      error: `Request body exceeds ${MAX_REQUEST_BODY} byte limit`,
+    };
   }
 
   // 6. Auth header
@@ -161,7 +222,10 @@ export async function validateFetchParams(
   try {
     authHeader = buildAuthHeader(secretValue, params.auth);
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Invalid auth config" };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Invalid auth config",
+    };
   }
 
   // 7. Build headers: user headers first, strip blocked, auth header last (wins)
@@ -181,7 +245,10 @@ export async function validateFetchParams(
       url: params.url,
       method,
       headers,
-      body: params.body && method !== "GET" && method !== "HEAD" ? params.body : undefined,
+      body:
+        params.body && method !== "GET" && method !== "HEAD"
+          ? params.body
+          : undefined,
     },
   };
 }

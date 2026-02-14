@@ -15,7 +15,11 @@ export class Scheduler {
   private _intervalMs: number;
   private listeners: Array<(state: SchedulerState) => void> = [];
 
-  constructor(agents: Map<string, AgentHandle>, bus: MessageBus, intervalMs = 2000) {
+  constructor(
+    agents: Map<string, AgentHandle>,
+    bus: MessageBus,
+    intervalMs = 2000,
+  ) {
     this.agents = agents;
     this.bus = bus;
     this._intervalMs = intervalMs;
@@ -84,13 +88,13 @@ export class Scheduler {
 
       const payload = formatMailPayload(msg);
       const dispatch =
-        msg.type === "steer"
-          ? handle.steer(payload)
-          : handle.prompt(payload);
+        msg.type === "steer" ? handle.steer(payload) : handle.prompt(payload);
 
       // Non-blocking — agent runs concurrently
       dispatch
-        .then(() => { if (handle.status !== "dead") handle.setStatus("idle"); })
+        .then(() => {
+          if (handle.status !== "dead") handle.setStatus("idle");
+        })
         .catch((err) => {
           console.error(`[scheduler] Agent "${handle.name}" error:`, err);
           if (handle.status !== "dead") handle.setStatus("idle");

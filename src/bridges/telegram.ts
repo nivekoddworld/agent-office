@@ -5,13 +5,19 @@ import type { Workspace } from "../workspace.js";
  * Telegram bridge — routes incoming messages to agents via grammY.
  * Streams agent events back to the originating chat.
  */
-export function createTelegramBridge(workspace: Workspace, token: string, allowedUsers?: string[]): Bot {
+export function createTelegramBridge(
+  workspace: Workspace,
+  token: string,
+  allowedUsers?: string[],
+): Bot {
   const bot = new Bot(token);
   // Chat ID for the active Telegram session (all agent events route here)
   let activeChatId: number | null = null;
 
   const isAllowed = (username?: string): boolean =>
-    !allowedUsers || allowedUsers.length === 0 || (!!username && allowedUsers.includes(username));
+    !allowedUsers ||
+    allowedUsers.length === 0 ||
+    (!!username && allowedUsers.includes(username));
 
   workspace.onAgentEvent((agentName, event) => {
     if (!activeChatId) return;
@@ -54,18 +60,22 @@ export function createTelegramBridge(workspace: Workspace, token: string, allowe
     if (!isAllowed(ctx.from?.username)) return;
     await ctx.reply(
       "agent-office workspace bot\n\n" +
-      "/agents — list running agents\n" +
-      "@agentname message — send to a specific agent\n" +
-      "Or just type a message to send to the default agent.",
+        "/agents — list running agents\n" +
+        "@agentname message — send to a specific agent\n" +
+        "Or just type a message to send to the default agent.",
     );
   });
 
   bot.command("agents", async (ctx) => {
     if (!isAllowed(ctx.from?.username)) return;
     const agents = workspace.list();
-    if (agents.length === 0) { await ctx.reply("No agents running."); return; }
+    if (agents.length === 0) {
+      await ctx.reply("No agents running.");
+      return;
+    }
     const lines = agents.map((a) => {
-      const desc = a.description !== "No description" ? ` — ${a.description}` : "";
+      const desc =
+        a.description !== "No description" ? ` — ${a.description}` : "";
       return `${a.name} [${a.status}] pri=${a.priority} q=${a.queueDepth}${desc}`;
     });
     await ctx.reply(lines.join("\n"));
@@ -76,7 +86,9 @@ export function createTelegramBridge(workspace: Workspace, token: string, allowe
     const name = ctx.match[1]!;
     const message = ctx.match[2]!;
     if (!workspace.getAgent(name)) {
-      await ctx.reply(`Agent "${name}" not found. Use /agents to list available agents.`);
+      await ctx.reply(
+        `Agent "${name}" not found. Use /agents to list available agents.`,
+      );
       return;
     }
     activeChatId = ctx.chat.id;
@@ -88,8 +100,14 @@ export function createTelegramBridge(workspace: Workspace, token: string, allowe
     if (!isAllowed(ctx.from?.username)) return;
     const chatId = ctx.chat.id;
     const name = workspace.router.get(String(chatId)) ?? workspace.defaultAgent;
-    if (!name) { await ctx.reply("No agent configured for this chat."); return; }
-    if (!workspace.getAgent(name)) { await ctx.reply(`Agent "${name}" not found.`); return; }
+    if (!name) {
+      await ctx.reply("No agent configured for this chat.");
+      return;
+    }
+    if (!workspace.getAgent(name)) {
+      await ctx.reply(`Agent "${name}" not found.`);
+      return;
+    }
     activeChatId = chatId;
     workspace.send(name, ctx.message.text);
     await ctx.reply(`Queued for ${name}.`);

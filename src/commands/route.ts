@@ -1,8 +1,14 @@
 import type { Workspace } from "../workspace.js";
 
-export function routeCommand(workspace: Workspace, chatId: string, agentName: string): void {
+export function routeCommand(
+  workspace: Workspace,
+  chatId: string,
+  agentName: string,
+): void {
   if (!workspace.getAgent(agentName)) {
-    console.log(`[route] Warning: agent "${agentName}" not found (will route when spawned)`);
+    console.log(
+      `[route] Warning: agent "${agentName}" not found (will route when spawned)`,
+    );
   }
   workspace.router.set(chatId, agentName);
   console.log(`[route] Chat ${chatId} → ${agentName}`);

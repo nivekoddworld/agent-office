@@ -11,6 +11,8 @@ export interface PromptContext {
   envNames?: string[];
   secretNames?: string[];
   cronJobs?: string[];
+  officeName?: string;
+  officeDescription?: string;
 }
 
 export interface ComposedPrompt {
@@ -19,13 +21,23 @@ export interface ComposedPrompt {
   hash: string;
 }
 
+function buildOfficeBlock(ctx: PromptContext): string {
+  if (!ctx.officeName) return "";
+  const desc = ctx.officeDescription ? ` ${ctx.officeDescription}` : "";
+  return `\n\n## Office\nYou work at ${ctx.officeName}.${desc}`;
+}
+
 function buildRuntimeBlock(ctx: PromptContext): string {
   const lines: string[] = [];
   if (ctx.envNames?.length) {
-    lines.push(`Available environment variables: ${[...ctx.envNames].sort().join(", ")}`);
+    lines.push(
+      `Available environment variables: ${[...ctx.envNames].sort().join(", ")}`,
+    );
   }
   if (ctx.secretNames?.length) {
-    lines.push(`Available secrets (names only): ${[...ctx.secretNames].sort().join(", ")}`);
+    lines.push(
+      `Available secrets (names only): ${[...ctx.secretNames].sort().join(", ")}`,
+    );
   }
   if (ctx.cronJobs?.length) {
     lines.push(`Active cron jobs: ${[...ctx.cronJobs].sort().join("; ")}`);
@@ -54,6 +66,7 @@ export function hashPrompt(text: string): string {
 export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
   const text =
     buildBasePrompt() +
+    buildOfficeBlock(ctx) +
     buildRuntimeBlock(ctx) +
     buildIdentityBlock(ctx) +
     buildCustomBlock(ctx.customPrompt);

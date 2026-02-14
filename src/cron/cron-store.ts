@@ -1,18 +1,23 @@
 import { join } from "node:path";
-import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync, unlinkSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  renameSync,
+  mkdirSync,
+  unlinkSync,
+} from "node:fs";
 import { randomUUID } from "node:crypto";
-import { AGENT_OFFICE_DIR } from "../constants.js";
 import type { CronJobState } from "./types.js";
 
-const DEFAULT_DIR = join(AGENT_OFFICE_DIR, "cron");
 const STATE_FILE = "state.json";
 
 export class CronStore {
   private dir: string;
   private filePath: string;
 
-  constructor(dir?: string) {
-    this.dir = dir ?? DEFAULT_DIR;
+  constructor(dir: string) {
+    this.dir = dir;
     this.filePath = join(this.dir, STATE_FILE);
   }
 
@@ -38,6 +43,8 @@ export class CronStore {
   clear(): void {
     try {
       if (existsSync(this.filePath)) unlinkSync(this.filePath);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 }

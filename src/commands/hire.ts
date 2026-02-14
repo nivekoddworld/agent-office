@@ -2,9 +2,9 @@ import { getModel } from "@mariozechner/pi-ai";
 import type { Workspace } from "../workspace.js";
 import { Priority } from "../types.js";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { upsertAgentToYaml } from "../config/agents-yaml.js";
+import { upsertAgentToOfficeYaml } from "../config/office-yaml.js";
 
-export interface SpawnArgs {
+export interface HireArgs {
   name: string;
   model?: string;
   priority?: string;
@@ -18,13 +18,16 @@ export interface SpawnArgs {
   "secret-ref"?: Record<string, string>;
 }
 
-export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promise<void> {
+export async function hireCommand(
+  workspace: Workspace,
+  args: HireArgs,
+): Promise<void> {
+  const officeId = workspace.office?.id;
   const modelSpec = args.model ?? "anthropic:claude-sonnet-4-20250514";
   const [provider, modelId] = parseModel(modelSpec);
   const model = getModel(provider as any, modelId as any);
   const priority = parsePriority(args.priority ?? "2");
 
-  // Build secrets in ${VAR} format (matches YAML storage format for change detection)
   const secrets: Record<string, string> = {};
   if (args["secret-ref"]) {
     for (const [key, hostEnvName] of Object.entries(args["secret-ref"])) {
@@ -45,23 +48,30 @@ export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promi
     secrets: Object.keys(secrets).length > 0 ? secrets : undefined,
   });
 
-  console.log(`[spawn] Agent "${args.name}" created (cwd: ${handle.cwd})`);
+  console.log(`[hire] Agent "${args.name}" created (cwd: ${handle.cwd})`);
 
-  if (!args.ephemeral) {
-
+  if (!args.ephemeral && officeId) {
     try {
-      await upsertAgentToYaml(args.name, {
-        model: modelSpec,
-        priority: args.priority,
-        thinking: args.thinking,
-        description: args.desc,
-        prompt: args.prompt,
-        cwd: args.cwd,
-        api_key_ref: args["api-key-ref"],
-        env: args.env,
-      }, { rawSecrets: Object.keys(secrets).length > 0 ? secrets : undefined });
+      await upsertAgentToOfficeYaml(
+        officeId,
+        args.name,
+        {
+          model: modelSpec,
+          priority: args.priority,
+          thinking: args.thinking,
+          description: args.desc,
+          prompt: args.prompt,
+          cwd: args.cwd,
+          api_key_ref: args["api-key-ref"],
+          env: args.env,
+        },
+        Object.keys(secrets).length > 0 ? secrets : undefined,
+      );
     } catch (err) {
-      console.warn(`[spawn] Could not sync agents.yaml:`, err instanceof Error ? err.message : err);
+      console.warn(
+        `[hire] Could not sync office.yaml:`,
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 }
@@ -69,14 +79,15 @@ export async function spawnCommand(workspace: Workspace, args: SpawnArgs): Promi
 function parseModel(spec: string): [string, string] {
   const parts = spec.split(":");
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(`Invalid model spec "${spec}" — expected "provider:model-id"`);
+    throw new Error(
+      `Invalid model spec "${spec}" — expected "provider:model-id"`,
+    );
   }
   return [parts[0], parts[1]];
 }
 
 function parsePriority(val: string): Priority {
   if (/^[0-4]$/.test(val)) return Number(val) as Priority;
-
   const map: Record<string, Priority> = {
     idle: Priority.IDLE,
     low: Priority.LOW,
@@ -86,5 +97,7 @@ function parsePriority(val: string): Priority {
   };
   const p = map[val.toLowerCase()];
   if (p !== undefined) return p;
-  throw new Error(`Invalid priority "${val}" — use 0-4 or idle/low/normal/high/critical`);
+  throw new Error(
+    `Invalid priority "${val}" — use 0-4 or idle/low/normal/high/critical`,
+  );
 }

@@ -1,6 +1,7 @@
 import {
-  loadAgentsYaml,
+  loadOfficeYaml,
   resolveCwd,
+  mergeEnvAndSecrets,
   setAgentEnv,
   unsetAgentEnv,
   setAgentSecretRef,
@@ -9,46 +10,80 @@ import {
   appendAgentPrompt,
   clearAgentPrompt,
   getCronSummaries,
-} from "../config/agents-yaml.js";
+} from "../config/office-yaml.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { composeSystemPrompt } from "../agent/prompts/prompt-manager.js";
 
-export async function agentEnvSetCommand(agentName: string, key: string, value: string): Promise<void> {
-  await setAgentEnv(agentName, key, value);
+export async function agentEnvSetCommand(
+  officeId: string,
+  agentName: string,
+  key: string,
+  value: string,
+): Promise<void> {
+  await setAgentEnv(officeId, agentName, key, value);
   console.log(`[agent] Set env ${key} for "${agentName}"`);
 }
 
-export async function agentEnvUnsetCommand(agentName: string, key: string): Promise<void> {
-  await unsetAgentEnv(agentName, key);
+export async function agentEnvUnsetCommand(
+  officeId: string,
+  agentName: string,
+  key: string,
+): Promise<void> {
+  await unsetAgentEnv(officeId, agentName, key);
   console.log(`[agent] Removed env ${key} from "${agentName}"`);
 }
 
-export async function agentSecretRefSetCommand(agentName: string, key: string, hostEnvName: string): Promise<void> {
-  await setAgentSecretRef(agentName, key, hostEnvName);
-  console.log(`[agent] Set secret-ref ${key} -> \${${hostEnvName}} for "${agentName}"`);
+export async function agentSecretRefSetCommand(
+  officeId: string,
+  agentName: string,
+  key: string,
+  hostEnvName: string,
+): Promise<void> {
+  await setAgentSecretRef(officeId, agentName, key, hostEnvName);
+  console.log(
+    `[agent] Set secret-ref ${key} -> \${${hostEnvName}} for "${agentName}"`,
+  );
 }
 
-export async function agentSecretRefUnsetCommand(agentName: string, key: string): Promise<void> {
-  await unsetAgentSecretRef(agentName, key);
+export async function agentSecretRefUnsetCommand(
+  officeId: string,
+  agentName: string,
+  key: string,
+): Promise<void> {
+  await unsetAgentSecretRef(officeId, agentName, key);
   console.log(`[agent] Removed secret-ref ${key} from "${agentName}"`);
 }
 
-export function agentConfigShowCommand(agentName: string): void {
-  const yaml = loadAgentsYaml();
-  if (!yaml) { console.error("[agent] Could not load agents.yaml"); return; }
+export function agentConfigShowCommand(
+  officeId: string,
+  agentName: string,
+): void {
+  const yaml = loadOfficeYaml(officeId);
+  if (!yaml) {
+    console.error("[agent] Could not load office.yaml");
+    return;
+  }
 
   const entry = yaml.agents[agentName];
-  if (!entry) { console.error(`[agent] Agent "${agentName}" not found in agents.yaml`); return; }
+  if (!entry) {
+    console.error(`[agent] Agent "${agentName}" not found in office.yaml`);
+    return;
+  }
 
-  // Resolve secrets best-effort for redaction (never crash on missing env vars)
   const resolvedSecrets: Record<string, string> = {};
   if (entry.secrets) {
     for (const [k, ref] of Object.entries(entry.secrets)) {
       try {
-        const resolved = resolveEnvRefs({ [k]: ref }, process.env, `agents.${agentName}.secrets`);
+        const resolved = resolveEnvRefs(
+          { [k]: ref },
+          process.env,
+          `agents.${agentName}.secrets`,
+        );
         resolvedSecrets[k] = resolved[k]!;
-      } catch { /* missing env var — skip */ }
+      } catch {
+        /* missing env var — skip */
+      }
     }
   }
   const redact = createRedactor(resolvedSecrets);
@@ -72,7 +107,8 @@ export function agentConfigShowCommand(agentName: string): void {
     }
     display.secrets = redacted;
   }
-  if (entry.disclose_secrets !== undefined) display.disclose_secrets = entry.disclose_secrets;
+  if (entry.disclose_secrets !== undefined)
+    display.disclose_secrets = entry.disclose_secrets;
 
   console.log(`\nAgent "${agentName}" config:`);
   console.log(JSON.stringify(display, null, 2));
@@ -80,40 +116,77 @@ export function agentConfigShowCommand(agentName: string): void {
 
 // --- Prompt commands ---
 
-export function agentPromptShowCommand(agentName: string): void {
-  const yaml = loadAgentsYaml();
-  if (!yaml) { console.error("[agent] Could not load agents.yaml"); return; }
+export function agentPromptShowCommand(
+  officeId: string,
+  agentName: string,
+): void {
+  const yaml = loadOfficeYaml(officeId);
+  if (!yaml) {
+    console.error("[agent] Could not load office.yaml");
+    return;
+  }
 
   const entry = yaml.agents[agentName];
-  if (!entry) { console.error(`[agent] Agent "${agentName}" not found in agents.yaml`); return; }
+  if (!entry) {
+    console.error(`[agent] Agent "${agentName}" not found in office.yaml`);
+    return;
+  }
+
+  // Merge office + agent env/secrets to match runtime behavior
+  const merged = mergeEnvAndSecrets(
+    yaml.office.env ?? {},
+    yaml.office.secrets ?? {},
+    entry.env,
+    entry.secrets,
+  );
+  const mergedEnvKeys = Object.keys(merged.env);
+  const mergedSecretKeys = Object.keys(merged.secrets);
 
   const composed = composeSystemPrompt({
     name: agentName,
-    cwd: resolveCwd(agentName, entry.cwd),
+    cwd: resolveCwd(officeId, agentName, entry.cwd),
     description: entry.description,
     customPrompt: entry.prompt,
-    envNames: entry.env ? Object.keys(entry.env) : undefined,
-    secretNames: entry.disclose_secrets && entry.secrets ? Object.keys(entry.secrets) : undefined,
-    cronJobs: getCronSummaries(agentName),
+    envNames: mergedEnvKeys.length > 0 ? mergedEnvKeys : undefined,
+    secretNames:
+      entry.disclose_secrets && mergedSecretKeys.length > 0
+        ? mergedSecretKeys
+        : undefined,
+    cronJobs: getCronSummaries(officeId, agentName),
+    officeName: yaml.office.name,
+    officeDescription: yaml.office.description,
   });
 
-  console.log(`\nAgent "${agentName}" effective prompt (${composed.version}, hash ${composed.hash} — excludes skills; sandbox agents use cwd /workspace at runtime):`);
+  console.log(
+    `\nAgent "${agentName}" effective prompt (${composed.version}, hash ${composed.hash} — excludes skills; sandbox agents use cwd /workspace at runtime):`,
+  );
   console.log("---");
   console.log(composed.text);
   console.log("---");
 }
 
-export async function agentPromptSetCommand(agentName: string, text: string): Promise<void> {
-  await setAgentPrompt(agentName, text);
+export async function agentPromptSetCommand(
+  officeId: string,
+  agentName: string,
+  text: string,
+): Promise<void> {
+  await setAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Set prompt for "${agentName}"`);
 }
 
-export async function agentPromptAppendCommand(agentName: string, text: string): Promise<void> {
-  await appendAgentPrompt(agentName, text);
+export async function agentPromptAppendCommand(
+  officeId: string,
+  agentName: string,
+  text: string,
+): Promise<void> {
+  await appendAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Appended to prompt for "${agentName}"`);
 }
 
-export async function agentPromptClearCommand(agentName: string): Promise<void> {
-  await clearAgentPrompt(agentName);
+export async function agentPromptClearCommand(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  await clearAgentPrompt(officeId, agentName);
   console.log(`[agent] Cleared prompt for "${agentName}"`);
 }

@@ -2,12 +2,28 @@
  * Standalone agent process that runs inside a Docker sandbox.
  * Provides Pi agent with local coding tools + proxy tools to communicate with the host.
  */
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { Agent } from "@mariozechner/pi-agent-core";
-import { createCodingTools, createGrepTool, createFindTool, createLsTool, loadSkills, formatSkillsForPrompt } from "@mariozechner/pi-coding-agent";
+import {
+  createCodingTools,
+  createGrepTool,
+  createFindTool,
+  createLsTool,
+  loadSkills,
+  formatSkillsForPrompt,
+} from "@mariozechner/pi-coding-agent";
 import { getModel, streamSimple } from "@mariozechner/pi-ai";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { createSendMailProxy, createListAgentsProxy, createReadAgentFileProxy, createAuthenticatedFetchProxy } from "../tools/proxy/index.js";
+import {
+  createSendMailProxy,
+  createListAgentsProxy,
+  createReadAgentFileProxy,
+  createAuthenticatedFetchProxy,
+} from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
 
@@ -28,13 +44,17 @@ async function fetchSecrets(): Promise<Record<string, string>> {
         headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
       });
       if (!res.ok) throw new Error(`GET /api/secrets returned ${res.status}`);
-      return await res.json() as Record<string, string>;
+      return (await res.json()) as Record<string, string>;
     } catch (err) {
       if (attempt < delays.length) {
-        console.warn(`[agent-entry] Secrets fetch attempt ${attempt + 1} failed, retrying...`);
+        console.warn(
+          `[agent-entry] Secrets fetch attempt ${attempt + 1} failed, retrying...`,
+        );
         await new Promise((r) => setTimeout(r, delays[attempt]));
       } else {
-        throw new Error(`Failed to fetch secrets after ${delays.length + 1} attempts: ${err instanceof Error ? err.message : err}`);
+        throw new Error(
+          `Failed to fetch secrets after ${delays.length + 1} attempts: ${err instanceof Error ? err.message : err}`,
+        );
       }
     }
   }
@@ -44,7 +64,9 @@ async function fetchSecrets(): Promise<Record<string, string>> {
 const secrets = await fetchSecrets();
 const MODEL_API_KEY = secrets["MODEL_API_KEY"];
 if (!MODEL_API_KEY) {
-  throw new Error("[agent-entry] MODEL_API_KEY not found in secrets — agent cannot start without a model key");
+  throw new Error(
+    "[agent-entry] MODEL_API_KEY not found in secrets — agent cannot start without a model key",
+  );
 }
 const redact = createRedactor(secrets);
 
@@ -56,11 +78,15 @@ const DEDUP_SWEEP_MS = 60_000;
 
 // --- Host communication ---
 
-async function hostFetch(path: string, body: unknown, method = "POST"): Promise<Response> {
+async function hostFetch(
+  path: string,
+  body: unknown,
+  method = "POST",
+): Promise<Response> {
   const opts: RequestInit = {
     method,
     headers: {
-      "Authorization": `Bearer ${AUTH_TOKEN}`,
+      Authorization: `Bearer ${AUTH_TOKEN}`,
       "Content-Type": "application/json",
     },
   };
@@ -72,7 +98,10 @@ async function hostFetch(path: string, body: unknown, method = "POST"): Promise<
 
 function parseModelSpec(spec: string) {
   const idx = spec.indexOf(":");
-  if (idx <= 0) throw new Error(`Invalid MODEL_NAME "${spec}" — expected "provider:model-id"`);
+  if (idx <= 0)
+    throw new Error(
+      `Invalid MODEL_NAME "${spec}" — expected "provider:model-id"`,
+    );
   return getModel(spec.slice(0, idx) as any, spec.slice(idx + 1) as any);
 }
 
@@ -95,12 +124,22 @@ const tools: AgentTool<any>[] = [
 
 // Load skills from read-only mounts
 const SKILL_PATHS: string[] = JSON.parse(process.env["SKILL_PATHS"] ?? "[]");
-const { skills } = loadSkills({ cwd: WORKSPACE, skillPaths: SKILL_PATHS, includeDefaults: true });
-const skillsPrompt = skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
-if (skills.length > 0) console.log(`[agent-entry] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`);
+const { skills } = loadSkills({
+  cwd: WORKSPACE,
+  skillPaths: SKILL_PATHS,
+  includeDefaults: true,
+});
+const skillsPrompt =
+  skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
+if (skills.length > 0)
+  console.log(
+    `[agent-entry] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`,
+  );
 
 const finalPrompt = SYSTEM_PROMPT + skillsPrompt;
-console.log(`[agent-entry] Prompt ${PROMPT_VERSION} (${hashPrompt(finalPrompt)})`);
+console.log(
+  `[agent-entry] Prompt ${PROMPT_VERSION} (${hashPrompt(finalPrompt)})`,
+);
 
 const agent = new Agent({
   initialState: {
@@ -134,17 +173,23 @@ setInterval(() => {
 
 // --- HTTP server ---
 
-const server = createServer((req, res) => handleRequest(req, res).catch((err) => {
-  console.error("[agent-entry] Request error:", err);
-  res.writeHead(500); res.end();
-}));
+const server = createServer((req, res) =>
+  handleRequest(req, res).catch((err) => {
+    console.error("[agent-entry] Request error:", err);
+    res.writeHead(500);
+    res.end();
+  }),
+);
 
 function authenticateRequest(req: IncomingMessage): boolean {
   const auth = req.headers.authorization;
   return auth === `Bearer ${AUTH_TOKEN}`;
 }
 
-async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
 
   // Health is unauthenticated (used by Docker provider for polling)
@@ -178,7 +223,9 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise
     res.end(JSON.stringify({ ok: true }));
 
     // Run prompt and always notify host
-    console.log(`[agent-entry] Prompt received (${promptId}): ${text.slice(0, 100)}`);
+    console.log(
+      `[agent-entry] Prompt received (${promptId}): ${text.slice(0, 100)}`,
+    );
     let error: string | undefined;
     try {
       await agent.prompt(text);

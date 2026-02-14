@@ -6,7 +6,11 @@ function buildCommand(): Command {
   return new Command()
     .exitOverride() // throw instead of process.exit
     .configureOutput({ writeErr: () => {} }) // suppress stderr
-    .addOption(new Option("--sandbox <mode>", "Sandbox mode").choices(["none", "docker"]).default("none"))
+    .addOption(
+      new Option("--sandbox <mode>", "Sandbox mode")
+        .choices(["none", "docker"])
+        .default("none"),
+    )
     .action(() => {});
 }
 

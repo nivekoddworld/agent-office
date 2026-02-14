@@ -4,7 +4,11 @@ import { homedir } from "node:os";
 import { AgentHandle, type AgentHandleDeps } from "../src/agent/handle.js";
 import type { AgentConfig } from "../src/types.js";
 import { Priority } from "../src/types.js";
-import type { SandboxProvider, SandboxInfo, SandboxStartOpts } from "../src/sandbox/types.js";
+import type {
+  SandboxProvider,
+  SandboxInfo,
+  SandboxStartOpts,
+} from "../src/sandbox/types.js";
 import type { MessageBus } from "../src/transport/message-bus.js";
 import { AGENT_OFFICE_DIR } from "../src/constants.js";
 
@@ -27,14 +31,18 @@ vi.mock("@mariozechner/pi-ai", () => ({
 
 // Mock prompt module
 vi.mock("../src/agent/prompt.js", () => ({
-  buildDefaultPrompt: (_name: string, _cwd: string, desc?: string) => `default-prompt(${desc ?? ""})`,
+  buildDefaultPrompt: (_name: string, _cwd: string, desc?: string) =>
+    `default-prompt(${desc ?? ""})`,
 }));
 
 // Mock tools
 vi.mock("../src/agent/tools/index.js", () => ({
   createMailboxTool: () => ({ name: "send_mail", execute: vi.fn() }),
   createListAgentsTool: () => ({ name: "list_agents", execute: vi.fn() }),
-  createReadAgentFileTool: () => ({ name: "read_agent_file", execute: vi.fn() }),
+  createReadAgentFileTool: () => ({
+    name: "read_agent_file",
+    execute: vi.fn(),
+  }),
 }));
 
 function makeBus(): MessageBus {
@@ -43,9 +51,13 @@ function makeBus(): MessageBus {
 
 function makeProvider(): SandboxProvider {
   return {
-    start: vi.fn(async (_name: string, _opts: SandboxStartOpts): Promise<SandboxInfo> => ({
-      id: "sandbox-1", agentName: _name, url: "http://localhost:13100",
-    })),
+    start: vi.fn(
+      async (_name: string, _opts: SandboxStartOpts): Promise<SandboxInfo> => ({
+        id: "sandbox-1",
+        agentName: _name,
+        url: "http://localhost:13100",
+      }),
+    ),
     stop: vi.fn(async () => {}),
     isAlive: vi.fn(async () => true),
     prompt: vi.fn(async () => {}),
@@ -80,8 +92,15 @@ describe("AgentHandle sandbox skills", () => {
       bus,
       listAgentsFn: () => [],
       provider,
-      hostApi: { getHeartbeat: vi.fn(), onAgentEvent: vi.fn(), offAgentEvent: vi.fn() } as any,
+      hostApi: {
+        getHeartbeat: vi.fn(),
+        onAgentEvent: vi.fn(),
+        offAgentEvent: vi.fn(),
+      } as any,
       sandboxToken: "tok-1",
+      baseDir: AGENT_OFFICE_DIR,
+      officeId: "test",
+      officeName: "Test",
     };
 
     const handle = new AgentHandle(config, deps);
@@ -89,17 +108,28 @@ describe("AgentHandle sandbox skills", () => {
 
     expect(provider.start).toHaveBeenCalledOnce();
     const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
-    expect(opts.skillsPaths).toEqual([join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills")]);
+    expect(opts.skillsPaths).toEqual([
+      join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills"),
+    ]);
   });
 
   it("includes custom skillDirs in sandbox skillsPaths", async () => {
-    const config = makeConfig({ skillDirs: ["/extra/skills-a", "./relative-skills", "~/my-skills"] });
+    const config = makeConfig({
+      skillDirs: ["/extra/skills-a", "./relative-skills", "~/my-skills"],
+    });
     const deps: AgentHandleDeps = {
       bus,
       listAgentsFn: () => [],
       provider,
-      hostApi: { getHeartbeat: vi.fn(), onAgentEvent: vi.fn(), offAgentEvent: vi.fn() } as any,
+      hostApi: {
+        getHeartbeat: vi.fn(),
+        onAgentEvent: vi.fn(),
+        offAgentEvent: vi.fn(),
+      } as any,
       sandboxToken: "tok-1",
+      baseDir: AGENT_OFFICE_DIR,
+      officeId: "test",
+      officeName: "Test",
     };
 
     const handle = new AgentHandle(config, deps);
@@ -109,9 +139,9 @@ describe("AgentHandle sandbox skills", () => {
     const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
     expect(opts.skillsPaths).toEqual([
       join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills"),
-      "/extra/skills-a",                   // absolute stays absolute
-      resolve(cwd, "./relative-skills"),   // relative resolved against cwd
-      join(homedir(), "my-skills"),        // tilde expanded
+      "/extra/skills-a", // absolute stays absolute
+      resolve(cwd, "./relative-skills"), // relative resolved against cwd
+      join(homedir(), "my-skills"), // tilde expanded
     ]);
   });
 
@@ -120,7 +150,13 @@ describe("AgentHandle sandbox skills", () => {
     (loadSkills as any).mockReturnValue({ skills: [], diagnostics: [] });
 
     const config = makeConfig();
-    const deps: AgentHandleDeps = { bus, listAgentsFn: () => [] };
+    const deps: AgentHandleDeps = {
+      bus,
+      listAgentsFn: () => [],
+      baseDir: AGENT_OFFICE_DIR,
+      officeId: "test",
+      officeName: "Test",
+    };
 
     const handle = new AgentHandle(config, deps);
     await handle.init();

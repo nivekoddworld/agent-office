@@ -7,7 +7,13 @@ describe("MessageBus", () => {
     const bus = new MessageBus();
     bus.register("agent-a");
 
-    bus.send({ from: "user", to: "agent-a", type: "prompt", payload: "hello", priority: Priority.NORMAL });
+    bus.send({
+      from: "user",
+      to: "agent-a",
+      type: "prompt",
+      payload: "hello",
+      priority: Priority.NORMAL,
+    });
     expect(bus.peek("agent-a")).toBe(1);
 
     const msgs = bus.drain("agent-a");
@@ -20,7 +26,13 @@ describe("MessageBus", () => {
     const bus = new MessageBus();
     bus.register("agent-a");
 
-    bus.send({ from: "user", to: "agent-a", type: "prompt", payload: "first", priority: Priority.NORMAL });
+    bus.send({
+      from: "user",
+      to: "agent-a",
+      type: "prompt",
+      payload: "first",
+      priority: Priority.NORMAL,
+    });
     const msgs = bus.drain("agent-a");
 
     bus.requeue("agent-a", msgs[0]!);
@@ -36,7 +48,13 @@ describe("MessageBus", () => {
     bus.register("target");
 
     for (let i = 0; i < 12; i++) {
-      bus.send({ from: "sender", to: "target", type: "prompt", payload: `msg-${i}`, priority: Priority.NORMAL });
+      bus.send({
+        from: "sender",
+        to: "target",
+        type: "prompt",
+        payload: `msg-${i}`,
+        priority: Priority.NORMAL,
+      });
     }
 
     // Only 10 should arrive (11th and 12th dropped)
@@ -48,7 +66,13 @@ describe("MessageBus", () => {
     bus.register("target");
 
     for (let i = 0; i < 15; i++) {
-      bus.send({ from: "__user__", to: "target", type: "prompt", payload: `msg-${i}`, priority: Priority.NORMAL });
+      bus.send({
+        from: "__user__",
+        to: "target",
+        type: "prompt",
+        payload: `msg-${i}`,
+        priority: Priority.NORMAL,
+      });
     }
 
     expect(bus.peek("target")).toBe(15);
@@ -59,7 +83,13 @@ describe("MessageBus", () => {
     bus.register("target");
 
     for (let i = 0; i < 15; i++) {
-      bus.send({ from: "__cron__", to: "target", type: "prompt", payload: `cron-${i}`, priority: Priority.NORMAL });
+      bus.send({
+        from: "__cron__",
+        to: "target",
+        type: "prompt",
+        payload: `cron-${i}`,
+        priority: Priority.NORMAL,
+      });
     }
 
     expect(bus.peek("target")).toBe(15);

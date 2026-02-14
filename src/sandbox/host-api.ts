@@ -1,12 +1,22 @@
-import { createServer, type Server, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type Server,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { readFile, realpath } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentInfo } from "../types.js";
 import { Priority } from "../types.js";
-import { AGENT_OFFICE_DIR } from "../constants.js";
 import { createRedactor, redactText } from "../security/redact.js";
-import { validateFetchParams, FETCH_TIMEOUT_MS, MAX_RESPONSE_BODY, RESERVED_SECRET_NAMES, type FetchParams } from "../agent/tools/fetch-helpers.js";
+import {
+  validateFetchParams,
+  FETCH_TIMEOUT_MS,
+  MAX_RESPONSE_BODY,
+  RESERVED_SECRET_NAMES,
+  type FetchParams,
+} from "../agent/tools/fetch-helpers.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const MAX_BODY = 1_048_576; // 1 MB
@@ -22,20 +32,33 @@ export class HostApi {
   private tokens = new Map<string, string>(); // token -> agentName
   private agentSecrets = new Map<string, Record<string, string>>(); // token -> secrets
   private redactors = new Map<string, { deep: (obj: unknown) => unknown }>(); // token -> redactor
-  private pendingPrompts = new Map<string, { resolve: () => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private pendingPrompts = new Map<
+    string,
+    {
+      resolve: () => void;
+      reject: (e: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   private seenMessages = new Map<string, number>(); // messageId -> timestamp
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeats = new Map<string, number>(); // agentName -> timestamp
   private eventListeners = new Map<string, (event: unknown) => void>();
   private bus: MessageBus;
   private listFn: () => AgentInfo[];
+  private baseDir: string;
 
-  constructor(bus: MessageBus, listFn: () => AgentInfo[]) {
+  constructor(bus: MessageBus, listFn: () => AgentInfo[], baseDir: string) {
     this.bus = bus;
     this.listFn = listFn;
+    this.baseDir = baseDir;
   }
 
-  registerAgent(name: string, token: string, secrets: Record<string, string> = {}): void {
+  registerAgent(
+    name: string,
+    token: string,
+    secrets: Record<string, string> = {},
+  ): void {
     this.tokens.set(token, name);
     this.agentSecrets.set(token, secrets);
     this.redactors.set(token, createRedactor(secrets));
@@ -65,7 +88,11 @@ export class HostApi {
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingPrompts.delete(key);
-        reject(new Error(`Prompt ${promptId} timed out after ${PROMPT_TIMEOUT_MS}ms`));
+        reject(
+          new Error(
+            `Prompt ${promptId} timed out after ${PROMPT_TIMEOUT_MS}ms`,
+          ),
+        );
       }, PROMPT_TIMEOUT_MS);
       this.pendingPrompts.set(key, { resolve, reject, timer });
     });
@@ -127,7 +154,10 @@ export class HostApi {
     return this.tokens.get(token) ?? null;
   }
 
-  private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  private async handleRequest(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const path = url.pathname;
 
@@ -177,21 +207,37 @@ export class HostApi {
     res.end(JSON.stringify(secrets));
   }
 
-  private async handleSendMail(req: IncomingMessage, res: ServerResponse, agentName: string): Promise<void> {
+  private async handleSendMail(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
     const body = await readBody(req, MAX_SEND_BODY);
-    if (!body) { res.writeHead(413); res.end(); return; }
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
 
     const { to, payload, priority, messageId } = JSON.parse(body);
     if (!to || !payload || !messageId) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing required fields: to, payload, messageId" }));
+      res.end(
+        JSON.stringify({
+          error: "Missing required fields: to, payload, messageId",
+        }),
+      );
       return;
     }
 
     // Reject system senders that are trigger sources, not mailbox recipients
     if (to === "__cron__" || to === "__user__") {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: `"${to}" is a system address and cannot receive mail` }));
+      res.end(
+        JSON.stringify({
+          error: `"${to}" is a system address and cannot receive mail`,
+        }),
+      );
       return;
     }
 
@@ -243,7 +289,7 @@ export class HostApi {
       return;
     }
 
-    const agentWs = join(AGENT_OFFICE_DIR, "agents", agent, "workspace");
+    const agentWs = join(this.baseDir, "agents", agent, "workspace");
     try {
       const resolvedWs = await realpath(agentWs);
       const resolved = await realpath(join(agentWs, filePath));
@@ -257,7 +303,10 @@ export class HostApi {
       const timeout = setTimeout(() => ac.abort(), FILE_READ_TIMEOUT_MS);
       let content: string;
       try {
-        content = await readFile(resolved, { encoding: "utf-8", signal: ac.signal });
+        content = await readFile(resolved, {
+          encoding: "utf-8",
+          signal: ac.signal,
+        });
       } finally {
         clearTimeout(timeout);
       }
@@ -276,9 +325,17 @@ export class HostApi {
     }
   }
 
-  private async handlePromptDone(req: IncomingMessage, res: ServerResponse, agentName: string): Promise<void> {
+  private async handlePromptDone(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
     const body = await readBody(req, MAX_BODY);
-    if (!body) { res.writeHead(413); res.end(); return; }
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
 
     const { promptId, error } = JSON.parse(body);
     if (!promptId) {
@@ -300,9 +357,17 @@ export class HostApi {
     res.end(JSON.stringify({ ok: true }));
   }
 
-  private async handleAgentEvent(req: IncomingMessage, res: ServerResponse, agentName: string): Promise<void> {
+  private async handleAgentEvent(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
     const body = await readBody(req, MAX_BODY);
-    if (!body) { res.writeHead(413); res.end(); return; }
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
 
     const { event } = JSON.parse(body);
     const fn = this.eventListeners.get(agentName);
@@ -317,19 +382,33 @@ export class HostApi {
     res.end(JSON.stringify({ ok: true }));
   }
 
-  private async handleAuthenticatedFetch(req: IncomingMessage, res: ServerResponse, agentName: string): Promise<void> {
+  private async handleAuthenticatedFetch(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
     const body = await readBody(req, MAX_BODY);
-    if (!body) { res.writeHead(413); res.end(); return; }
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
 
     const params = JSON.parse(body) as FetchParams;
     if (!params.url || !params.secretName) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Missing required fields: url, secretName" }));
+      res.end(
+        JSON.stringify({ error: "Missing required fields: url, secretName" }),
+      );
       return;
     }
     if (RESERVED_SECRET_NAMES.has(params.secretName)) {
       res.writeHead(403, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: `Secret "${params.secretName}" cannot be used with authenticated_fetch` }));
+      res.end(
+        JSON.stringify({
+          error: `Secret "${params.secretName}" cannot be used with authenticated_fetch`,
+        }),
+      );
       return;
     }
 
@@ -338,11 +417,18 @@ export class HostApi {
     const secrets = this.agentSecrets.get(token);
     if (!secrets || !(params.secretName in secrets)) {
       res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: `Secret "${params.secretName}" not found for agent "${agentName}"` }));
+      res.end(
+        JSON.stringify({
+          error: `Secret "${params.secretName}" not found for agent "${agentName}"`,
+        }),
+      );
       return;
     }
 
-    const validation = await validateFetchParams(params, secrets[params.secretName]!);
+    const validation = await validateFetchParams(
+      params,
+      secrets[params.secretName]!,
+    );
     if (!validation.ok) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: validation.error }));
@@ -373,12 +459,14 @@ export class HostApi {
       }
 
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({
-        status: fetchRes.status,
-        statusText: fetchRes.statusText,
-        headers: safeHeaders,
-        body: safeBody,
-      }));
+      res.end(
+        JSON.stringify({
+          status: fetchRes.status,
+          statusText: fetchRes.statusText,
+          headers: safeHeaders,
+          body: safeBody,
+        }),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.writeHead(502, { "Content-Type": "application/json" });
@@ -395,13 +483,20 @@ export class HostApi {
 }
 
 /** Read request body with size limit. Returns null if exceeded. */
-function readBody(req: IncomingMessage, maxSize: number): Promise<string | null> {
+function readBody(
+  req: IncomingMessage,
+  maxSize: number,
+): Promise<string | null> {
   return new Promise((resolve) => {
     const chunks: Buffer[] = [];
     let size = 0;
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
-      if (size > maxSize) { req.destroy(); resolve(null); return; }
+      if (size > maxSize) {
+        req.destroy();
+        resolve(null);
+        return;
+      }
       chunks.push(chunk);
     });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));

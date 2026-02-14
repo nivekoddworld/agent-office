@@ -1,5 +1,6 @@
-# Basic two-agent workspace
-# Copy to ~/.agent-office/agents.yaml and run: pnpm dev start
+office:
+  name: Basic Team
+  description: "A three-agent product development team"
 
 agents:
   coder:

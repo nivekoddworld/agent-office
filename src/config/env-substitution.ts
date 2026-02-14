@@ -6,7 +6,9 @@ export class MissingEnvVarError extends Error {
     public readonly varName: string,
     public readonly configPath: string,
   ) {
-    super(`Missing environment variable "${varName}" referenced in ${configPath}`);
+    super(
+      `Missing environment variable "${varName}" referenced in ${configPath}`,
+    );
     this.name = "MissingEnvVarError";
   }
 }
@@ -25,7 +27,11 @@ export function resolveEnvRefs(
   return out;
 }
 
-function resolveValue(raw: string, env: NodeJS.ProcessEnv, path: string): string {
+function resolveValue(
+  raw: string,
+  env: NodeJS.ProcessEnv,
+  path: string,
+): string {
   // First replace escaped $${VAR} with a placeholder
   const placeholder = "\0ESC\0";
   let value = raw.replace(ESCAPED_PATTERN, `${placeholder}$1}`);
@@ -38,7 +44,10 @@ function resolveValue(raw: string, env: NodeJS.ProcessEnv, path: string): string
   });
 
   // Restore escaped refs as literal ${VAR}
-  return value.replace(new RegExp(`${placeholder.replace(/\0/g, "\\0")}`, "g"), "${");
+  return value.replace(
+    new RegExp(`${placeholder.replace(/\0/g, "\\0")}`, "g"),
+    "${",
+  );
 }
 
 // Non-global version for .test() calls (avoids stateful lastIndex)

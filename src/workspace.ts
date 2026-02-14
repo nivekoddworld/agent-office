@@ -8,8 +8,16 @@ import { Watchdog } from "./scheduler/watchdog.js";
 import { HostApi } from "./sandbox/host-api.js";
 import { DockerProvider } from "./sandbox/docker-provider.js";
 import type { SandboxProvider } from "./sandbox/types.js";
-import type { AgentConfig, AgentInfo, Priority, WorkspaceConfig } from "./types.js";
+import { join } from "node:path";
+import type {
+  AgentConfig,
+  AgentInfo,
+  OfficeContext,
+  Priority,
+  WorkspaceConfig,
+} from "./types.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
+import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { CronService } from "./cron/cron-service.js";
 import { CronStore } from "./cron/cron-store.js";
 
@@ -25,6 +33,7 @@ export class Workspace {
   readonly watchdog: Watchdog;
   readonly cron: CronService;
   readonly router = new Router();
+  readonly office: OfficeContext;
   defaultAgent: string | undefined;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
   private hostApi: HostApi | null = null;
@@ -32,16 +41,29 @@ export class Workspace {
   private sandboxMode: string;
   private hostApiPort: number;
 
-  constructor(config: WorkspaceConfig = {}) {
+  constructor(config: WorkspaceConfig) {
+    this.office = config.office;
     this.defaultAgent = config.defaultAgent;
     this.sandboxMode = config.sandbox?.mode ?? "none";
     this.hostApiPort = config.sandbox?.hostPort ?? DEFAULT_HOST_PORT;
-    this.scheduler = new Scheduler(this.agents, this.bus, config.tickIntervalMs ?? 2000);
-    this.watchdog = new Watchdog(this.agents, (name) => this.handleStuck(name), config.watchdog);
-    this.cron = new CronService(this.bus, this.agents, new CronStore());
+    this.scheduler = new Scheduler(
+      this.agents,
+      this.bus,
+      config.tickIntervalMs ?? 2000,
+    );
+    this.watchdog = new Watchdog(
+      this.agents,
+      (name) => this.handleStuck(name),
+      config.watchdog,
+    );
+    this.cron = new CronService(
+      this.bus,
+      this.agents,
+      new CronStore(join(this.office.dir, "cron")),
+    );
 
     if (this.sandboxMode === "docker") {
-      this.hostApi = new HostApi(this.bus, () => this.list());
+      this.hostApi = new HostApi(this.bus, () => this.list(), this.office.dir);
       this.sandboxProvider = new DockerProvider(this.hostApi, this.hostApiPort);
     }
   }
@@ -66,13 +88,26 @@ export class Workspace {
 
   async spawn(config: AgentConfig): Promise<AgentHandle> {
     if (!/^[a-zA-Z0-9_-]+$/.test(config.name)) {
-      throw new Error("Agent name must be alphanumeric with hyphens/underscores only");
+      throw new Error(
+        "Agent name must be alphanumeric with hyphens/underscores only",
+      );
     }
     if (this.agents.has(config.name)) {
       throw new Error(`Agent "${config.name}" already exists`);
     }
 
-    const useSandbox = config.sandbox === "docker" || (config.sandbox !== "none" && this.sandboxMode === "docker");
+    // Merge office-level env/secrets into agent config (agent overrides office)
+    const merged = mergeEnvAndSecrets(
+      this.office.env,
+      this.office.secrets,
+      config.env,
+      config.secrets,
+    );
+    config = { ...config, env: merged.env, secrets: merged.secrets };
+
+    const useSandbox =
+      config.sandbox === "docker" ||
+      (config.sandbox !== "none" && this.sandboxMode === "docker");
 
     // Register token with host API for sandboxed agents
     let provider: SandboxProvider | undefined;
@@ -84,7 +119,11 @@ export class Workspace {
       const modelKey = resolveModelKey(config);
       const secrets: Record<string, string> = { MODEL_API_KEY: modelKey };
       if (config.secrets) {
-        const resolved = resolveEnvRefs(config.secrets, process.env, `agents.${config.name}.secrets`);
+        const resolved = resolveEnvRefs(
+          config.secrets,
+          process.env,
+          `agents.${config.name}.secrets`,
+        );
         Object.assign(secrets, resolved);
       }
       this.hostApi.registerAgent(config.name, sandboxToken, secrets);
@@ -98,6 +137,10 @@ export class Workspace {
       provider,
       hostApi,
       sandboxToken,
+      baseDir: this.office.dir,
+      officeId: this.office.id,
+      officeName: this.office.name,
+      officeDescription: this.office.description,
     });
     try {
       await handle.init();
@@ -117,7 +160,11 @@ export class Workspace {
 
     // Forward agent events to workspace listeners (telegram, etc.)
     handle.onEvent((e) => {
-      if (e.type === "tool_execution_start" || e.type === "message_end" || e.type === "agent_end") {
+      if (
+        e.type === "tool_execution_start" ||
+        e.type === "message_end" ||
+        e.type === "agent_end"
+      ) {
         console.log(`[event] ${config.name}: ${e.type}`);
       }
       for (const fn of this.listeners) fn(config.name, e);
@@ -136,7 +183,12 @@ export class Workspace {
     if (this.defaultAgent === name) this.defaultAgent = undefined;
   }
 
-  send(agentName: string, text: string, type: "prompt" | "steer" = "prompt", priority?: Priority): void {
+  send(
+    agentName: string,
+    text: string,
+    type: "prompt" | "steer" = "prompt",
+    priority?: Priority,
+  ): void {
     const handle = this.agents.get(agentName);
     if (!handle) throw new Error(`Agent "${agentName}" not found`);
     this.bus.send({
@@ -198,7 +250,9 @@ function resolveModelKey(config: AgentConfig): string {
   if (config.apiKeyRef) {
     const key = process.env[config.apiKeyRef];
     if (key) return key;
-    throw new Error(`Agent "${config.name}": model key not found. env var "${config.apiKeyRef}" is not set (from api_key_ref).`);
+    throw new Error(
+      `Agent "${config.name}": model key not found. env var "${config.apiKeyRef}" is not set (from api_key_ref).`,
+    );
   }
   // Explicit apiKey (legacy in-process path)
   if (config.apiKey) return config.apiKey;
@@ -206,5 +260,7 @@ function resolveModelKey(config: AgentConfig): string {
   const envVar = PROVIDER_ENV_KEYS[config.model.provider];
   const key = envVar ? process.env[envVar] : undefined;
   if (key) return key;
-  throw new Error(`Agent "${config.name}": model key not found. Set ${envVar ?? "provider API key"} in host env or use api_key_ref.`);
+  throw new Error(
+    `Agent "${config.name}": model key not found. Set ${envVar ?? "provider API key"} in host env or use api_key_ref.`,
+  );
 }

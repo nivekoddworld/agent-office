@@ -14,13 +14,21 @@ function parse(schedule: string, timezone?: string, currentDate?: Date) {
 }
 
 /** Next fire time from a 5-field cron schedule. */
-export function nextFireTime(schedule: string, timezone?: string, after?: Date): Date {
+export function nextFireTime(
+  schedule: string,
+  timezone?: string,
+  after?: Date,
+): Date {
   const expr = parse(schedule, timezone, after);
   return expr.next().toDate();
 }
 
 /** Previous fire time from a 5-field cron schedule. */
-export function prevFireTime(schedule: string, timezone?: string, before?: Date): Date {
+export function prevFireTime(
+  schedule: string,
+  timezone?: string,
+  before?: Date,
+): Date {
   const expr = parse(schedule, timezone, before);
   return expr.prev().toDate();
 }
@@ -42,18 +50,36 @@ export function isValidCron(schedule: string): boolean {
 export function describeCron(schedule: string): string {
   const parts = schedule.trim().split(/\s+/);
   if (parts.length !== 5) return schedule;
-  const [min, hour, dom, month, dow] = parts as [string, string, string, string, string];
+  const [min, hour, dom, month, dow] = parts as [
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
 
   const allStar = (f: string) => f === "*";
   const pad = (n: string) => n.padStart(2, "0");
 
   // "* * * * *" → every minute
-  if (allStar(min) && allStar(hour) && allStar(dom) && allStar(month) && allStar(dow)) {
+  if (
+    allStar(min) &&
+    allStar(hour) &&
+    allStar(dom) &&
+    allStar(month) &&
+    allStar(dow)
+  ) {
     return "every minute";
   }
 
   // "N * * * *" → every hour at :N
-  if (!allStar(min) && allStar(hour) && allStar(dom) && allStar(month) && allStar(dow)) {
+  if (
+    !allStar(min) &&
+    allStar(hour) &&
+    allStar(dom) &&
+    allStar(month) &&
+    allStar(dow)
+  ) {
     if (min === "0") return "every hour";
     return `every hour at :${pad(min)}`;
   }
@@ -61,12 +87,24 @@ export function describeCron(schedule: string): string {
   const dayLabel = describeDow(dow);
 
   // "N H * * *" → every day at HH:MM
-  if (!allStar(min) && !allStar(hour) && allStar(dom) && allStar(month) && allStar(dow)) {
+  if (
+    !allStar(min) &&
+    !allStar(hour) &&
+    allStar(dom) &&
+    allStar(month) &&
+    allStar(dow)
+  ) {
     return `every day at ${pad(hour)}:${pad(min)}`;
   }
 
   // "N H * * DOW" → <days> at HH:MM
-  if (!allStar(min) && !allStar(hour) && allStar(dom) && allStar(month) && !allStar(dow)) {
+  if (
+    !allStar(min) &&
+    !allStar(hour) &&
+    allStar(dom) &&
+    allStar(month) &&
+    !allStar(dow)
+  ) {
     return `${dayLabel} at ${pad(hour)}:${pad(min)}`;
   }
 
@@ -74,7 +112,14 @@ export function describeCron(schedule: string): string {
 }
 
 const DOW_NAMES: Record<string, string> = {
-  "0": "Sun", "1": "Mon", "2": "Tue", "3": "Wed", "4": "Thu", "5": "Fri", "6": "Sat", "7": "Sun",
+  "0": "Sun",
+  "1": "Mon",
+  "2": "Tue",
+  "3": "Wed",
+  "4": "Thu",
+  "5": "Fri",
+  "6": "Sat",
+  "7": "Sun",
 };
 
 function describeDow(dow: string): string {

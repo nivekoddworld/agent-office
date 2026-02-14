@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { createListAgentsTool, createReadAgentFileTool, createMailboxTool } from "../src/agent/tools/index.js";
+import {
+  createListAgentsTool,
+  createReadAgentFileTool,
+  createMailboxTool,
+} from "../src/agent/tools/index.js";
 import { Priority, type AgentInfo } from "../src/types.js";
 
 /** Extract text from tool result content[0]. */
@@ -19,7 +23,11 @@ const fakeInfo = (name: string): AgentInfo => ({
 
 describe("createListAgentsTool", () => {
   it("lists agents with (you) marker for self", async () => {
-    const tool = createListAgentsTool("me", () => [fakeInfo("me"), fakeInfo("other")]);
+    const tool = createListAgentsTool(
+      "me",
+      () => [fakeInfo("me"), fakeInfo("other")],
+      "/test/base",
+    );
     const result = await tool.execute("id-1", {});
 
     const text = getText(result);
@@ -29,13 +37,17 @@ describe("createListAgentsTool", () => {
   });
 
   it("returns fallback when no agents", async () => {
-    const tool = createListAgentsTool("me", () => []);
+    const tool = createListAgentsTool("me", () => [], "/test/base");
     const result = await tool.execute("id-1", {});
     expect(getText(result)).toBe("No agents running.");
   });
 
   it("includes workspace paths", async () => {
-    const tool = createListAgentsTool("me", () => [fakeInfo("designer")]);
+    const tool = createListAgentsTool(
+      "me",
+      () => [fakeInfo("designer")],
+      "/test/base",
+    );
     const result = await tool.execute("id-1", {});
     expect(getText(result)).toContain("workspace=");
     expect(getText(result)).toContain("designer");
@@ -44,14 +56,20 @@ describe("createListAgentsTool", () => {
 
 describe("createReadAgentFileTool", () => {
   it("rejects invalid agent names", async () => {
-    const tool = createReadAgentFileTool();
-    const result = await tool.execute("id-1", { agent: "../../etc", path: "passwd" });
+    const tool = createReadAgentFileTool("/test/base");
+    const result = await tool.execute("id-1", {
+      agent: "../../etc",
+      path: "passwd",
+    });
     expect(getText(result)).toContain("invalid agent name");
   });
 
   it("returns error for missing file", async () => {
-    const tool = createReadAgentFileTool();
-    const result = await tool.execute("id-1", { agent: "ghost", path: "missing.txt" });
+    const tool = createReadAgentFileTool("/test/base");
+    const result = await tool.execute("id-1", {
+      agent: "ghost",
+      path: "missing.txt",
+    });
     expect(getText(result)).toContain("File not found");
   });
 });
@@ -61,7 +79,10 @@ describe("createMailboxTool", () => {
     const bus = { send: vi.fn() } as any;
     const tool = createMailboxTool("sender", bus);
 
-    const result = await tool.execute("id-1", { to: "designer", message: "hello" });
+    const result = await tool.execute("id-1", {
+      to: "designer",
+      message: "hello",
+    });
 
     expect(bus.send).toHaveBeenCalledWith({
       from: "sender",

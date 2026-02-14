@@ -1,14 +1,36 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { join } from "node:path";
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 
 const TEST_DIR = join(tmpdir(), "ao-agent-config-test");
+const OFFICE_ID = "test-office";
+const OFFICE_DIR = join(TEST_DIR, "offices", OFFICE_ID);
 
 vi.mock("../src/constants.js", async () => {
   const os = await import("node:os");
   const path = await import("node:path");
-  return { AGENT_OFFICE_DIR: path.join(os.tmpdir(), "ao-agent-config-test") };
+  const base = path.join(os.tmpdir(), "ao-agent-config-test");
+  return {
+    AGENT_OFFICE_DIR: base,
+    OFFICES_DIR: path.join(base, "offices"),
+    OFFICE_ID_RE: /^[a-z0-9][a-z0-9_-]*$/,
+    validateOfficeId: (id: string) => {
+      if (!/^[a-z0-9][a-z0-9_-]*$/.test(id))
+        throw new Error("Invalid office id");
+    },
+    officeDir: (id: string) => path.join(base, "offices", id),
+    officeYamlPath: (id: string) =>
+      path.join(base, "offices", id, "office.yaml"),
+    officeAgentsDir: (id: string) => path.join(base, "offices", id, "agents"),
+    officeLockPath: (id: string) => path.join(base, "offices", id, ".lock"),
+  };
 });
 
 import {
@@ -19,27 +41,30 @@ import {
   setAgentPrompt,
   appendAgentPrompt,
   clearAgentPrompt,
-  loadAgentsYaml,
+  loadOfficeYaml,
   getCronSummaries,
-} from "../src/config/agents-yaml.js";
-import { agentConfigShowCommand, agentPromptShowCommand } from "../src/commands/agent-config.js";
+} from "../src/config/office-yaml.js";
+import {
+  agentConfigShowCommand,
+  agentPromptShowCommand,
+} from "../src/commands/agent-config.js";
 
 function writeYaml(content: string): void {
-  mkdirSync(TEST_DIR, { recursive: true });
-  writeFileSync(join(TEST_DIR, "agents.yaml"), content);
+  mkdirSync(OFFICE_DIR, { recursive: true });
+  writeFileSync(join(OFFICE_DIR, "office.yaml"), content);
 }
 
 function readYaml(): string {
-  return readFileSync(join(TEST_DIR, "agents.yaml"), "utf-8");
+  return readFileSync(join(OFFICE_DIR, "office.yaml"), "utf-8");
 }
 
 function removeYaml(): void {
-  const p = join(TEST_DIR, "agents.yaml");
+  const p = join(OFFICE_DIR, "office.yaml");
   if (existsSync(p)) rmSync(p);
 }
 
 beforeEach(() => {
-  mkdirSync(TEST_DIR, { recursive: true });
+  mkdirSync(OFFICE_DIR, { recursive: true });
 });
 
 afterEach(() => {
@@ -50,58 +75,75 @@ afterEach(() => {
 
 describe("setAgentEnv", () => {
   it("sets a new env key", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await setAgentEnv("bot", "LOG_LEVEL", "debug");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await setAgentEnv(OFFICE_ID, "bot", "LOG_LEVEL", "debug");
     const raw = readYaml();
     expect(raw).toContain("LOG_LEVEL");
     expect(raw).toContain("debug");
   });
 
   it("updates an existing env key", async () => {
-    writeYaml("agents:\n  bot:\n    env:\n      LOG_LEVEL: info\n");
-    await setAgentEnv("bot", "LOG_LEVEL", "debug");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    env:\n      LOG_LEVEL: info\n",
+    );
+    await setAgentEnv(OFFICE_ID, "bot", "LOG_LEVEL", "debug");
     const raw = readYaml();
     expect(raw).toContain("debug");
     expect(raw).not.toMatch(/info/);
   });
 
   it("creates env map if agent had none", async () => {
-    writeYaml("agents:\n  bot:\n    model: anthropic:claude-sonnet-4-20250514\n");
-    await setAgentEnv("bot", "NODE_ENV", "production");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:claude-sonnet-4-20250514\n",
+    );
+    await setAgentEnv(OFFICE_ID, "bot", "NODE_ENV", "production");
     const raw = readYaml();
     expect(raw).toContain("env:");
     expect(raw).toContain("NODE_ENV");
   });
 
   it("rejects invalid key format", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await expect(setAgentEnv("bot", "lower-case", "val")).rejects.toThrow("must match");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await expect(
+      setAgentEnv(OFFICE_ID, "bot", "lower-case", "val"),
+    ).rejects.toThrow("must match");
   });
 
   it("rejects reserved keys", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await expect(setAgentEnv("bot", "MODEL_API_KEY", "val")).rejects.toThrow("Reserved");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await expect(
+      setAgentEnv(OFFICE_ID, "bot", "MODEL_API_KEY", "val"),
+    ).rejects.toThrow("Reserved");
   });
 
   it("rejects collision with secrets", async () => {
-    writeYaml("agents:\n  bot:\n    secrets:\n      MY_TOKEN: ${HOST_TOKEN}\n");
-    await expect(setAgentEnv("bot", "MY_TOKEN", "val")).rejects.toThrow("already exists in secrets");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    secrets:\n      MY_TOKEN: ${HOST_TOKEN}\n",
+    );
+    await expect(
+      setAgentEnv(OFFICE_ID, "bot", "MY_TOKEN", "val"),
+    ).rejects.toThrow("already exists in secrets");
   });
 
   it("throws on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
-    await expect(setAgentEnv("bot", "KEY", "val")).rejects.toThrow('not found in agents.yaml');
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(setAgentEnv(OFFICE_ID, "bot", "KEY", "val")).rejects.toThrow(
+      "not found in office.yaml",
+    );
   });
 
-  it("throws on missing YAML with helpful message", async () => {
+  it("throws on missing YAML", async () => {
     removeYaml();
-    await expect(setAgentEnv("bot", "KEY", "val")).rejects.toThrow("agents.yaml not found");
-    await expect(setAgentEnv("bot", "KEY", "val")).rejects.toThrow("create it at");
+    await expect(setAgentEnv(OFFICE_ID, "bot", "KEY", "val")).rejects.toThrow(
+      "office.yaml not found",
+    );
   });
 
   it("preserves other agents", async () => {
-    writeYaml("agents:\n  bot: {}\n  other:\n    model: openai:gpt-4\n");
-    await setAgentEnv("bot", "LOG_LEVEL", "debug");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot: {}\n  other:\n    model: openai:gpt-4\n",
+    );
+    await setAgentEnv(OFFICE_ID, "bot", "LOG_LEVEL", "debug");
     const raw = readYaml();
     expect(raw).toContain("other:");
     expect(raw).toContain("openai:gpt-4");
@@ -112,28 +154,38 @@ describe("setAgentEnv", () => {
 
 describe("unsetAgentEnv", () => {
   it("removes an env key", async () => {
-    writeYaml("agents:\n  bot:\n    env:\n      LOG_LEVEL: debug\n      NODE_ENV: prod\n");
-    await unsetAgentEnv("bot", "LOG_LEVEL");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    env:\n      LOG_LEVEL: debug\n      NODE_ENV: prod\n",
+    );
+    await unsetAgentEnv(OFFICE_ID, "bot", "LOG_LEVEL");
     const raw = readYaml();
     expect(raw).not.toContain("LOG_LEVEL");
     expect(raw).toContain("NODE_ENV");
   });
 
   it("cleans up empty env map", async () => {
-    writeYaml("agents:\n  bot:\n    env:\n      LOG_LEVEL: debug\n");
-    await unsetAgentEnv("bot", "LOG_LEVEL");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    env:\n      LOG_LEVEL: debug\n",
+    );
+    await unsetAgentEnv(OFFICE_ID, "bot", "LOG_LEVEL");
     const raw = readYaml();
     expect(raw).not.toContain("env:");
   });
 
   it("throws on missing key", async () => {
-    writeYaml("agents:\n  bot:\n    env:\n      OTHER: val\n");
-    await expect(unsetAgentEnv("bot", "MISSING")).rejects.toThrow('not found for agent');
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    env:\n      OTHER: val\n",
+    );
+    await expect(unsetAgentEnv(OFFICE_ID, "bot", "MISSING")).rejects.toThrow(
+      "not found for agent",
+    );
   });
 
   it("throws on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
-    await expect(unsetAgentEnv("bot", "KEY")).rejects.toThrow('not found in agents.yaml');
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(unsetAgentEnv(OFFICE_ID, "bot", "KEY")).rejects.toThrow(
+      "not found in office.yaml",
+    );
   });
 });
 
@@ -141,44 +193,58 @@ describe("unsetAgentEnv", () => {
 
 describe("setAgentSecretRef", () => {
   it("stores ${VAR} format in YAML", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await setAgentSecretRef("bot", "GITHUB_TOKEN", "MY_GH_TOKEN");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await setAgentSecretRef(OFFICE_ID, "bot", "GITHUB_TOKEN", "MY_GH_TOKEN");
     const raw = readYaml();
     expect(raw).toContain("GITHUB_TOKEN");
     expect(raw).toContain("${MY_GH_TOKEN}");
   });
 
   it("creates secrets map if absent", async () => {
-    writeYaml("agents:\n  bot:\n    model: anthropic:claude-sonnet-4-20250514\n");
-    await setAgentSecretRef("bot", "DB_PASS", "HOST_DB_PASS");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:claude-sonnet-4-20250514\n",
+    );
+    await setAgentSecretRef(OFFICE_ID, "bot", "DB_PASS", "HOST_DB_PASS");
     const raw = readYaml();
     expect(raw).toContain("secrets:");
     expect(raw).toContain("${HOST_DB_PASS}");
   });
 
   it("rejects invalid key format", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await expect(setAgentSecretRef("bot", "bad-key", "VALID")).rejects.toThrow("must match");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await expect(
+      setAgentSecretRef(OFFICE_ID, "bot", "bad-key", "VALID"),
+    ).rejects.toThrow("must match");
   });
 
   it("rejects invalid host env name", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await expect(setAgentSecretRef("bot", "VALID_KEY", "bad-name")).rejects.toThrow("must match");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await expect(
+      setAgentSecretRef(OFFICE_ID, "bot", "VALID_KEY", "bad-name"),
+    ).rejects.toThrow("must match");
   });
 
   it("rejects reserved keys", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await expect(setAgentSecretRef("bot", "AUTH_TOKEN", "HOST_VAR")).rejects.toThrow("Reserved");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await expect(
+      setAgentSecretRef(OFFICE_ID, "bot", "AUTH_TOKEN", "HOST_VAR"),
+    ).rejects.toThrow("Reserved");
   });
 
   it("rejects collision with env", async () => {
-    writeYaml("agents:\n  bot:\n    env:\n      MY_VAR: value\n");
-    await expect(setAgentSecretRef("bot", "MY_VAR", "HOST_VAR")).rejects.toThrow("already exists in env");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    env:\n      MY_VAR: value\n",
+    );
+    await expect(
+      setAgentSecretRef(OFFICE_ID, "bot", "MY_VAR", "HOST_VAR"),
+    ).rejects.toThrow("already exists in env");
   });
 
   it("throws on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
-    await expect(setAgentSecretRef("bot", "KEY", "VAR")).rejects.toThrow('not found in agents.yaml');
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(
+      setAgentSecretRef(OFFICE_ID, "bot", "KEY", "VAR"),
+    ).rejects.toThrow("not found in office.yaml");
   });
 });
 
@@ -186,28 +252,38 @@ describe("setAgentSecretRef", () => {
 
 describe("unsetAgentSecretRef", () => {
   it("removes a secret ref", async () => {
-    writeYaml("agents:\n  bot:\n    secrets:\n      TOKEN_A: ${HOST_A}\n      TOKEN_B: ${HOST_B}\n");
-    await unsetAgentSecretRef("bot", "TOKEN_A");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    secrets:\n      TOKEN_A: ${HOST_A}\n      TOKEN_B: ${HOST_B}\n",
+    );
+    await unsetAgentSecretRef(OFFICE_ID, "bot", "TOKEN_A");
     const raw = readYaml();
     expect(raw).not.toContain("TOKEN_A");
     expect(raw).toContain("TOKEN_B");
   });
 
   it("cleans up empty secrets map", async () => {
-    writeYaml("agents:\n  bot:\n    secrets:\n      TOKEN: ${HOST_TOKEN}\n");
-    await unsetAgentSecretRef("bot", "TOKEN");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    secrets:\n      TOKEN: ${HOST_TOKEN}\n",
+    );
+    await unsetAgentSecretRef(OFFICE_ID, "bot", "TOKEN");
     const raw = readYaml();
     expect(raw).not.toContain("secrets:");
   });
 
   it("throws on missing key", async () => {
-    writeYaml("agents:\n  bot:\n    secrets:\n      OTHER: ${HOST_OTHER}\n");
-    await expect(unsetAgentSecretRef("bot", "MISSING")).rejects.toThrow('not found for agent');
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    secrets:\n      OTHER: ${HOST_OTHER}\n",
+    );
+    await expect(
+      unsetAgentSecretRef(OFFICE_ID, "bot", "MISSING"),
+    ).rejects.toThrow("not found for agent");
   });
 
   it("throws on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
-    await expect(unsetAgentSecretRef("bot", "KEY")).rejects.toThrow('not found in agents.yaml');
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(unsetAgentSecretRef(OFFICE_ID, "bot", "KEY")).rejects.toThrow(
+      "not found in office.yaml",
+    );
   });
 });
 
@@ -215,9 +291,11 @@ describe("unsetAgentSecretRef", () => {
 
 describe("agentConfigShowCommand", () => {
   it("shows config fields", async () => {
-    writeYaml("agents:\n  bot:\n    model: openai:gpt-4\n    env:\n      LOG_LEVEL: debug\n");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    model: openai:gpt-4\n    env:\n      LOG_LEVEL: debug\n",
+    );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    agentConfigShowCommand("bot");
+    agentConfigShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).toContain("openai:gpt-4");
     expect(output).toContain("LOG_LEVEL");
@@ -225,9 +303,11 @@ describe("agentConfigShowCommand", () => {
   });
 
   it("shows unresolved for missing env vars in secrets", async () => {
-    writeYaml("agents:\n  bot:\n    secrets:\n      TOKEN: ${NONEXISTENT_VAR_12345}\n");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    secrets:\n      TOKEN: ${NONEXISTENT_VAR_12345}\n",
+    );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    agentConfigShowCommand("bot");
+    agentConfigShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).toContain("unresolved");
     spy.mockRestore();
@@ -236,9 +316,11 @@ describe("agentConfigShowCommand", () => {
   it("redacts resolved secret values", async () => {
     const secretValue = "super-secret-value-that-is-long-enough";
     process.env["TEST_AGENT_CONFIG_SECRET"] = secretValue;
-    writeYaml("agents:\n  bot:\n    secrets:\n      MY_SECRET: ${TEST_AGENT_CONFIG_SECRET}\n");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    secrets:\n      MY_SECRET: ${TEST_AGENT_CONFIG_SECRET}\n",
+    );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    agentConfigShowCommand("bot");
+    agentConfigShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).not.toContain(secretValue);
     expect(output).toContain("***");
@@ -247,10 +329,10 @@ describe("agentConfigShowCommand", () => {
   });
 
   it("errors gracefully on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    agentConfigShowCommand("bot");
-    expect(spy).toHaveBeenCalledWith(expect.stringContaining('not found'));
+    agentConfigShowCommand(OFFICE_ID, "bot");
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("not found"));
     spy.mockRestore();
   });
 });
@@ -259,22 +341,26 @@ describe("agentConfigShowCommand", () => {
 
 describe("setAgentPrompt", () => {
   it("sets prompt field", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await setAgentPrompt("bot", "You are a copywriter.");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await setAgentPrompt(OFFICE_ID, "bot", "You are a copywriter.");
     expect(readYaml()).toContain("You are a copywriter.");
   });
 
   it("overwrites existing prompt", async () => {
-    writeYaml("agents:\n  bot:\n    prompt: Old prompt\n");
-    await setAgentPrompt("bot", "New prompt");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Old prompt\n",
+    );
+    await setAgentPrompt(OFFICE_ID, "bot", "New prompt");
     const raw = readYaml();
     expect(raw).toContain("New prompt");
     expect(raw).not.toContain("Old prompt");
   });
 
   it("throws on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
-    await expect(setAgentPrompt("bot", "text")).rejects.toThrow("not found");
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(setAgentPrompt(OFFICE_ID, "bot", "text")).rejects.toThrow(
+      "not found",
+    );
   });
 });
 
@@ -282,31 +368,35 @@ describe("setAgentPrompt", () => {
 
 describe("appendAgentPrompt", () => {
   it("appends with double newline separator", async () => {
-    writeYaml("agents:\n  bot:\n    prompt: First line\n");
-    await appendAgentPrompt("bot", "Second line");
-    const yaml = loadAgentsYaml()!;
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt: First line\n",
+    );
+    await appendAgentPrompt(OFFICE_ID, "bot", "Second line");
+    const yaml = loadOfficeYaml(OFFICE_ID)!;
     expect(yaml.agents["bot"]!.prompt).toBe("First line\n\nSecond line");
   });
 
   it("sets prompt when none exists", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await appendAgentPrompt("bot", "First line");
-    const yaml = loadAgentsYaml()!;
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await appendAgentPrompt(OFFICE_ID, "bot", "First line");
+    const yaml = loadOfficeYaml(OFFICE_ID)!;
     expect(yaml.agents["bot"]!.prompt).toBe("First line");
   });
 
   it("repeated appends stay readable", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await appendAgentPrompt("bot", "Line 1");
-    await appendAgentPrompt("bot", "Line 2");
-    await appendAgentPrompt("bot", "Line 3");
-    const yaml = loadAgentsYaml()!;
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await appendAgentPrompt(OFFICE_ID, "bot", "Line 1");
+    await appendAgentPrompt(OFFICE_ID, "bot", "Line 2");
+    await appendAgentPrompt(OFFICE_ID, "bot", "Line 3");
+    const yaml = loadOfficeYaml(OFFICE_ID)!;
     expect(yaml.agents["bot"]!.prompt).toBe("Line 1\n\nLine 2\n\nLine 3");
   });
 
   it("throws on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
-    await expect(appendAgentPrompt("bot", "text")).rejects.toThrow("not found");
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(appendAgentPrompt(OFFICE_ID, "bot", "text")).rejects.toThrow(
+      "not found",
+    );
   });
 });
 
@@ -314,21 +404,25 @@ describe("appendAgentPrompt", () => {
 
 describe("clearAgentPrompt", () => {
   it("removes prompt field", async () => {
-    writeYaml("agents:\n  bot:\n    prompt: Some prompt\n    model: openai:gpt-4\n");
-    await clearAgentPrompt("bot");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Some prompt\n    model: openai:gpt-4\n",
+    );
+    await clearAgentPrompt(OFFICE_ID, "bot");
     const raw = readYaml();
     expect(raw).not.toContain("prompt:");
     expect(raw).toContain("model:");
   });
 
   it("is idempotent when no prompt exists", async () => {
-    writeYaml("agents:\n  bot: {}\n");
-    await clearAgentPrompt("bot"); // no throw
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await clearAgentPrompt(OFFICE_ID, "bot"); // no throw
   });
 
   it("throws on missing agent", async () => {
-    writeYaml("agents:\n  other: {}\n");
-    await expect(clearAgentPrompt("bot")).rejects.toThrow("not found");
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(clearAgentPrompt(OFFICE_ID, "bot")).rejects.toThrow(
+      "not found",
+    );
   });
 });
 
@@ -336,9 +430,11 @@ describe("clearAgentPrompt", () => {
 
 describe("agentPromptShowCommand", () => {
   it("shows effective prompt with version and hash", () => {
-    writeYaml("agents:\n  bot:\n    description: A helper bot\n");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    description: A helper bot\n",
+    );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    agentPromptShowCommand("bot");
+    agentPromptShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).toContain("v1");
     expect(output).toContain("hash");
@@ -349,9 +445,11 @@ describe("agentPromptShowCommand", () => {
   });
 
   it("includes custom prompt in effective output", () => {
-    writeYaml("agents:\n  bot:\n    prompt: Custom rules here\n");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Custom rules here\n",
+    );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    agentPromptShowCommand("bot");
+    agentPromptShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).toContain("Custom Instructions");
     expect(output).toContain("Custom rules here");
@@ -363,26 +461,30 @@ describe("agentPromptShowCommand", () => {
 
 describe("getCronSummaries", () => {
   it("returns summaries for enabled cron jobs", () => {
-    writeYaml("agents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n");
-    const summaries = getCronSummaries("bot");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n",
+    );
+    const summaries = getCronSummaries(OFFICE_ID, "bot");
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toContain("daily");
     expect(summaries[0]).toContain("Run report");
   });
 
   it("skips disabled cron jobs", () => {
-    writeYaml("agents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n        enabled: false\n");
-    expect(getCronSummaries("bot")).toHaveLength(0);
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n        enabled: false\n",
+    );
+    expect(getCronSummaries(OFFICE_ID, "bot")).toHaveLength(0);
   });
 
   it("returns empty for agent without cron", () => {
-    writeYaml("agents:\n  bot: {}\n");
-    expect(getCronSummaries("bot")).toHaveLength(0);
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    expect(getCronSummaries(OFFICE_ID, "bot")).toHaveLength(0);
   });
 
   it("returns empty for unknown agent", () => {
-    writeYaml("agents:\n  other: {}\n");
-    expect(getCronSummaries("bot")).toHaveLength(0);
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    expect(getCronSummaries(OFFICE_ID, "bot")).toHaveLength(0);
   });
 });
 
@@ -390,9 +492,11 @@ describe("getCronSummaries", () => {
 
 describe("agentPromptShowCommand cron integration", () => {
   it("includes cron summaries in effective prompt", () => {
-    writeYaml("agents:\n  bot:\n    cron:\n      standup:\n        schedule: '0 9 * * 1-5'\n        message: Run standup\n");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      standup:\n        schedule: '0 9 * * 1-5'\n        message: Run standup\n",
+    );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    agentPromptShowCommand("bot");
+    agentPromptShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).toContain("Active cron jobs");
     expect(output).toContain("standup");
@@ -401,9 +505,9 @@ describe("agentPromptShowCommand cron integration", () => {
   });
 
   it("omits cron section when no cron jobs", () => {
-    writeYaml("agents:\n  bot: {}\n");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
-    agentPromptShowCommand("bot");
+    agentPromptShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).not.toContain("Active cron jobs");
     spy.mockRestore();
@@ -414,10 +518,10 @@ describe("agentPromptShowCommand cron integration", () => {
 
 describe("concurrency", () => {
   it("two concurrent setAgentEnv calls both persist", async () => {
-    writeYaml("agents:\n  bot: {}\n");
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
     await Promise.all([
-      setAgentEnv("bot", "KEY_A", "val-a"),
-      setAgentEnv("bot", "KEY_B", "val-b"),
+      setAgentEnv(OFFICE_ID, "bot", "KEY_A", "val-a"),
+      setAgentEnv(OFFICE_ID, "bot", "KEY_B", "val-b"),
     ]);
     const raw = readYaml();
     expect(raw).toContain("KEY_A");

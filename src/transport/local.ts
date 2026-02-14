@@ -13,7 +13,9 @@ export class LocalTransport {
     this.mailboxes.delete(name);
   }
 
-  send(msg: Omit<MailboxMessage, "id" | "timestamp"> & { priority: Priority }): void {
+  send(
+    msg: Omit<MailboxMessage, "id" | "timestamp"> & { priority: Priority },
+  ): void {
     const full: MailboxMessage = {
       ...msg,
       id: randomUUID(),

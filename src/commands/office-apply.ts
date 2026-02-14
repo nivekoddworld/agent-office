@@ -1,16 +1,18 @@
 import { getModel } from "@mariozechner/pi-ai";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import { existsSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import type { Workspace } from "../workspace.js";
+import { officeYamlPath, officeDir } from "../constants.js";
+import { loadOfficeYaml, validateOfficeConfig } from "../config/office-yaml.js";
+import type { AgentYamlEntry } from "../config/yaml-utils.js";
+import { withOfficeLock } from "../config/lock.js";
 import {
-  loadAgentsYaml,
-  validateAgentEntry,
-  resolveCwd,
   resolvePriority,
-  getAgentsYamlPath,
   extractCronJobs,
-  type AgentYamlEntry,
-} from "../config/agents-yaml.js";
-import { withConfigLock } from "../config/lock.js";
+  validateAgentEntry,
+} from "../config/yaml-utils.js";
 import {
   fetchSkills,
   isSkillInstalled,
@@ -19,8 +21,6 @@ import {
   readSourceMap,
   installedSourcesForAgent,
 } from "../skills/fetch.js";
-import { mkdirSync, writeFileSync, readdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
 
 // --- Normalized config for change detection ---
 
@@ -38,14 +38,25 @@ interface NormalizedConfig {
   discloseSecrets: boolean;
 }
 
-function normalizeEntry(name: string, entry: AgentYamlEntry): NormalizedConfig {
+function resolveCwd(baseDir: string, name: string, cwd?: string): string {
+  if (!cwd) return join(baseDir, "agents", name, "workspace");
+  if (cwd.startsWith("~/")) return join(homedir(), cwd.slice(2));
+  if (cwd.startsWith("/")) return cwd;
+  return join(baseDir, cwd);
+}
+
+function normalizeEntry(
+  baseDir: string,
+  name: string,
+  entry: AgentYamlEntry,
+): NormalizedConfig {
   return {
     model: entry.model ?? "anthropic:claude-sonnet-4-20250514",
     priority: resolvePriority(entry.priority),
     thinking: entry.thinking ?? "low",
     description: entry.description ?? "",
     prompt: (entry.prompt ?? "").trimEnd(),
-    cwd: resolveCwd(name, entry.cwd),
+    cwd: resolveCwd(baseDir, name, entry.cwd),
     skills: [...(entry.skills ?? [])].sort(),
     env: JSON.stringify(entry.env ?? {}),
     secrets: JSON.stringify(entry.secrets ?? {}),
@@ -54,7 +65,11 @@ function normalizeEntry(name: string, entry: AgentYamlEntry): NormalizedConfig {
   };
 }
 
-function normalizeRunning(name: string, ws: Workspace): NormalizedConfig | null {
+function normalizeRunning(
+  baseDir: string,
+  name: string,
+  ws: Workspace,
+): NormalizedConfig | null {
   const handle = ws.getAgent(name);
   if (!handle) return null;
   const cfg = handle.config;
@@ -65,7 +80,7 @@ function normalizeRunning(name: string, ws: Workspace): NormalizedConfig | null 
     description: cfg.description ?? "",
     prompt: (cfg.systemPrompt ?? "").trimEnd(),
     cwd: handle.cwd,
-    skills: installedSourcesForAgent(name),
+    skills: installedSourcesForAgent(baseDir, name),
     env: JSON.stringify(cfg.env ?? {}),
     secrets: JSON.stringify(cfg.secrets ?? {}),
     apiKeyRef: cfg.apiKeyRef ?? "",
@@ -91,10 +106,15 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
 
 // --- Apply ---
 
-export async function applyAgentsYaml(workspace: Workspace, opts?: { force?: boolean }): Promise<void> {
-  const yaml = loadAgentsYaml();
+export async function applyOfficeYaml(
+  workspace: Workspace,
+  officeId: string,
+  opts?: { force?: boolean },
+): Promise<void> {
+  const yaml = loadOfficeYaml(officeId);
   if (!yaml) return;
 
+  const baseDir = officeDir(officeId);
   const entries = Object.entries(yaml.agents);
   let spawned = 0;
   let skipped = 0;
@@ -102,44 +122,41 @@ export async function applyAgentsYaml(workspace: Workspace, opts?: { force?: boo
 
   for (const [name, entry] of entries) {
     try {
-      // Validate
       const errors = validateAgentEntry(name, entry);
       if (errors.length > 0) {
-        console.warn(`[agents.yaml] Skipping "${name}": ${errors.join("; ")}`);
+        console.warn(`[office] Skipping "${name}": ${errors.join("; ")}`);
         failures.push(`${name}: ${errors[0]}`);
         continue;
       }
 
-      // Check if already running
-      const running = normalizeRunning(name, workspace);
+      const running = normalizeRunning(baseDir, name, workspace);
       if (running) {
-        const desired = normalizeEntry(name, entry);
+        const desired = normalizeEntry(baseDir, name, entry);
         if (configsEqual(desired, running)) {
           skipped++;
           continue;
         }
         if (!opts?.force) {
-          console.warn(`[agents.yaml] "${name}" already running with different config — use: agents reload --force`);
+          console.warn(
+            `[office] "${name}" already running with different config — use: office reload --force`,
+          );
           skipped++;
           continue;
         }
-        // Force: kill and re-spawn
-        await withConfigLock(async () => {
+        await withOfficeLock(officeId, async () => {
           await workspace.kill(name);
         });
       }
 
-      // Install missing skills
-      await installMissingSkills(name, entry.skills ?? []);
+      await installMissingSkills(baseDir, name, entry.skills ?? []);
+      await backfillSourceMap(baseDir, name, entry.skills ?? []);
 
-      // Backfill .sources.json for old installs
-      await backfillSourceMap(name, entry.skills ?? []);
-
-      // Spawn
       const modelSpec = entry.model ?? "anthropic:claude-sonnet-4-20250514";
       const parts = modelSpec.split(":");
       if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        throw new Error(`Invalid model "${modelSpec}" — must be "provider:model-id"`);
+        throw new Error(
+          `Invalid model "${modelSpec}" — must be "provider:model-id"`,
+        );
       }
       const model = getModel(parts[0] as any, parts[1] as any);
 
@@ -148,7 +165,7 @@ export async function applyAgentsYaml(workspace: Workspace, opts?: { force?: boo
         model,
         priority: resolvePriority(entry.priority),
         thinkingLevel: (entry.thinking as ThinkingLevel) ?? "low",
-        cwd: resolveCwd(name, entry.cwd),
+        cwd: resolveCwd(baseDir, name, entry.cwd),
         systemPrompt: entry.prompt,
         description: entry.description,
         apiKeyRef: entry.api_key_ref,
@@ -160,65 +177,84 @@ export async function applyAgentsYaml(workspace: Workspace, opts?: { force?: boo
       spawned++;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[agents.yaml] Failed to spawn "${name}": ${msg}`);
+      console.error(`[office] Failed to spawn "${name}": ${msg}`);
       failures.push(`${name}: ${msg}`);
     }
   }
 
-  const parts = [`${spawned} spawned`];
-  if (skipped > 0) parts.push(`${skipped} skipped`);
-  if (failures.length > 0) parts.push(`${failures.length} failed (${failures.join(", ")})`);
-  console.log(`[agents.yaml] ${parts.join(", ")}`);
+  const summary = [`${spawned} spawned`];
+  if (skipped > 0) summary.push(`${skipped} skipped`);
+  if (failures.length > 0)
+    summary.push(`${failures.length} failed (${failures.join(", ")})`);
+  console.log(`[office] ${summary.join(", ")}`);
 
-  // Reconcile cron jobs — full sync (add/update/remove)
-  // Wrapped per-agent so invalid cron in one agent doesn't crash the whole reload.
-  const yamlCronJobs = extractCronJobs(yaml);
+  // Reconcile cron jobs
+  const yamlCronJobs = extractCronJobs(yaml.agents);
   const yamlAgentNames = new Set(yamlCronJobs.keys());
   for (const [name, jobs] of yamlCronJobs) {
     if (!workspace.agents.has(name)) continue;
     try {
       workspace.cron.setJobs(name, jobs);
     } catch (err) {
-      console.warn(`[agents.yaml] Cron setup failed for "${name}": ${err instanceof Error ? err.message : err}`);
+      console.warn(
+        `[office] Cron setup failed for "${name}": ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
   for (const activeAgent of workspace.cron.activeAgents()) {
-    if (!yamlAgentNames.has(activeAgent)) workspace.cron.removeJobs(activeAgent);
+    if (!yamlAgentNames.has(activeAgent))
+      workspace.cron.removeJobs(activeAgent);
   }
 }
 
-async function installMissingSkills(agentName: string, sources: string[]): Promise<void> {
+async function installMissingSkills(
+  baseDir: string,
+  agentName: string,
+  sources: string[],
+): Promise<void> {
   for (const source of sources) {
-    // Quick check: skip fetch only if every known skill from this source is on disk
-    const map = readSourceMap(agentName);
+    const map = readSourceMap(baseDir, agentName);
     const knownSkills = Object.entries(map)
       .filter(([, s]) => s === source)
       .map(([name]) => name);
-    if (knownSkills.length > 0 && knownSkills.every((n) => isSkillInstalled(agentName, n))) continue;
+    if (
+      knownSkills.length > 0 &&
+      knownSkills.every((n) => isSkillInstalled(baseDir, agentName, n))
+    )
+      continue;
 
     try {
       const skills = await fetchSkills(source);
-      const dir = skillsDir(agentName);
+      const dir = skillsDir(baseDir, agentName);
       for (const skill of skills) {
-        if (isSkillInstalled(agentName, skill.name)) continue;
+        if (isSkillInstalled(baseDir, agentName, skill.name)) continue;
         const dest = join(dir, skill.name);
         mkdirSync(dest, { recursive: true });
         writeFileSync(join(dest, "SKILL.md"), skill.content);
-        await addSourceMapping(agentName, skill.name, source);
-        console.log(`[agents.yaml] Installed skill "${skill.name}" for "${agentName}"`);
+        addSourceMapping(baseDir, agentName, skill.name, source);
+        console.log(
+          `[office] Installed skill "${skill.name}" for "${agentName}"`,
+        );
       }
     } catch (err) {
-      console.warn(`[agents.yaml] Skill fetch failed for "${source}":`, err instanceof Error ? err.message : err);
+      console.warn(
+        `[office] Skill fetch failed for "${source}":`,
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 }
 
-async function backfillSourceMap(agentName: string, yamlSources: string[]): Promise<void> {
+async function backfillSourceMap(
+  baseDir: string,
+  agentName: string,
+  yamlSources: string[],
+): Promise<void> {
   if (yamlSources.length === 0) return;
-  const dir = skillsDir(agentName);
+  const dir = skillsDir(baseDir, agentName);
   if (!existsSync(dir)) return;
 
-  const map = readSourceMap(agentName);
+  const map = readSourceMap(baseDir, agentName);
   const installed = readdirSync(dir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && d.name !== ".sources.json")
     .map((d) => d.name);
@@ -226,49 +262,47 @@ async function backfillSourceMap(agentName: string, yamlSources: string[]): Prom
   const unmapped = installed.filter((name) => !(name in map));
   if (unmapped.length === 0) return;
 
-  // Simple heuristic: if only one source in YAML, all unmapped skills are from it
   if (yamlSources.length === 1) {
     for (const name of unmapped) {
-      await addSourceMapping(agentName, name, yamlSources[0]!);
+      addSourceMapping(baseDir, agentName, name, yamlSources[0]!);
     }
   }
-  // Multi-source: would need reverse lookup; skip at startup to avoid stalling
 }
 
 // --- REPL commands ---
 
-export async function agentsReloadCommand(workspace: Workspace, force: boolean): Promise<void> {
-  console.log(`[agents.yaml] Reloading${force ? " (force)" : ""}...`);
-  await applyAgentsYaml(workspace, { force });
+export async function officeReloadCommand(
+  workspace: Workspace,
+  officeId: string,
+  force: boolean,
+): Promise<void> {
+  console.log(`[office] Reloading${force ? " (force)" : ""}...`);
+  await applyOfficeYaml(workspace, officeId, { force });
 }
 
-export function agentsValidateCommand(): boolean {
-  const path = getAgentsYamlPath();
+export function officeValidateCommand(officeId: string): boolean {
+  const path = officeYamlPath(officeId);
   if (!existsSync(path)) {
-    console.log(`[agents.yaml] No agents.yaml found at ${path} (ok — none required)`);
-    return true;
+    console.log(`[office] No office.yaml found at ${path}`);
+    return false;
   }
 
-  const yaml = loadAgentsYaml();
-  if (!yaml) return false; // File exists but is malformed
+  const yaml = loadOfficeYaml(officeId);
+  if (!yaml) return false;
 
-  const entries = Object.entries(yaml.agents);
-  let valid = true;
-
-  for (const [name, entry] of entries) {
-    const errors = validateAgentEntry(name, entry);
-    if (errors.length > 0) {
-      console.error(`[agents.yaml] "${name}": ${errors.join("; ")}`);
-      valid = false;
-    }
+  const errors = validateOfficeConfig(yaml);
+  if (errors.length > 0) {
+    for (const e of errors) console.error(`[office] ${e}`);
+    return false;
   }
 
-  if (valid) {
-    console.log(`[agents.yaml] Valid (${entries.length} agent${entries.length !== 1 ? "s" : ""})`);
-  }
-  return valid;
+  const agents = Object.keys(yaml.agents);
+  console.log(
+    `[office] Valid (${agents.length} agent${agents.length !== 1 ? "s" : ""})`,
+  );
+  return true;
 }
 
-export function agentsPathCommand(): void {
-  console.log(getAgentsYamlPath());
+export function officePathCommand(officeId: string): void {
+  console.log(officeYamlPath(officeId));
 }

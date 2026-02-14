@@ -28,7 +28,11 @@ export class CronService {
   private jobs = new Map<string, ActiveJob>(); // key: "agent:job"
   private dispatchLog: number[] = []; // timestamps of recent dispatches
 
-  constructor(bus: MessageBus, agents: Map<string, AgentHandle>, store: CronStore) {
+  constructor(
+    bus: MessageBus,
+    agents: Map<string, AgentHandle>,
+    store: CronStore,
+  ) {
     this.bus = bus;
     this.agents = agents;
     this.store = store;
@@ -47,7 +51,10 @@ export class CronService {
   /** Clear all timers. */
   stop(): void {
     for (const job of this.jobs.values()) {
-      if (job.timer) { clearTimeout(job.timer); job.timer = null; }
+      if (job.timer) {
+        clearTimeout(job.timer);
+        job.timer = null;
+      }
     }
   }
 
@@ -79,7 +86,11 @@ export class CronService {
 
       // Catch-up logic
       if (job.config.catchUp === "once" && job.state.lastRunAt !== null) {
-        const prev = prevFireTime(job.config.schedule, job.config.timezone, new Date(now));
+        const prev = prevFireTime(
+          job.config.schedule,
+          job.config.timezone,
+          new Date(now),
+        );
         if (prev.getTime() > job.state.lastRunAt && prev.getTime() <= now) {
           this.fireJob(job);
         }
@@ -126,10 +137,17 @@ export class CronService {
   }
 
   private scheduleNext(job: ActiveJob): void {
-    if (job.timer) { clearTimeout(job.timer); job.timer = null; }
+    if (job.timer) {
+      clearTimeout(job.timer);
+      job.timer = null;
+    }
 
     const now = Date.now();
-    const next = nextFireTime(job.config.schedule, job.config.timezone, new Date(now));
+    const next = nextFireTime(
+      job.config.schedule,
+      job.config.timezone,
+      new Date(now),
+    );
     job.state.nextRunAt = next.getTime();
     const delay = next.getTime() - now;
 
@@ -137,10 +155,13 @@ export class CronService {
       // Chunk: sleep MAX_TIMEOUT, then re-evaluate
       job.timer = setTimeout(() => this.scheduleNext(job), MAX_TIMEOUT);
     } else {
-      job.timer = setTimeout(() => {
-        this.fireJob(job);
-        this.scheduleNext(job);
-      }, Math.max(delay, 0));
+      job.timer = setTimeout(
+        () => {
+          this.fireJob(job);
+          this.scheduleNext(job);
+        },
+        Math.max(delay, 0),
+      );
     }
   }
 
@@ -148,9 +169,13 @@ export class CronService {
     const now = Date.now();
 
     // Global dispatch cap
-    this.dispatchLog = this.dispatchLog.filter((t) => now - t < DISPATCH_WINDOW_MS);
+    this.dispatchLog = this.dispatchLog.filter(
+      (t) => now - t < DISPATCH_WINDOW_MS,
+    );
     if (this.dispatchLog.length >= DISPATCH_CAP) {
-      console.warn(`[cron] Global dispatch cap reached (${DISPATCH_CAP}/min) — skipping ${job.agentName}:${job.jobName}`);
+      console.warn(
+        `[cron] Global dispatch cap reached (${DISPATCH_CAP}/min) — skipping ${job.agentName}:${job.jobName}`,
+      );
       job.state.lastRunAt = now;
       job.state.lastStatus = "skipped_cap";
       this.persistState();
@@ -160,7 +185,9 @@ export class CronService {
     // Check if agent is running (busy)
     const handle = this.agents.get(job.agentName);
     if (handle && handle.status === "running") {
-      console.warn(`[cron] Agent "${job.agentName}" busy — skipping ${job.jobName}`);
+      console.warn(
+        `[cron] Agent "${job.agentName}" busy — skipping ${job.jobName}`,
+      );
       job.state.lastRunAt = now;
       job.state.lastStatus = "skipped_busy";
       this.persistState();

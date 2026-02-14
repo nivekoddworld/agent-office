@@ -2,21 +2,23 @@
 
 Four-agent workspace for building on the OpenServ platform.
 
-| Agent | Role | Skills |
-|---|---|---|
-| `scout` | Monitors the Ideaboard for ideas and bounties, reports to lead | `openserv-labs/skills` |
-| `lead` | Coordinates the team, reviews ideas, assigns work | `openserv-labs/skills` |
-| `agent-dev` | Builds and deploys OpenServ agents using the SDK | `openserv-labs/skills` |
-| `launcher` | Launches ERC-20 tokens via the OpenServ Launch API | `openserv-labs/skills` |
+| Agent       | Role                                                           | Skills                 |
+| ----------- | -------------------------------------------------------------- | ---------------------- |
+| `scout`     | Monitors the Ideaboard for ideas and bounties, reports to lead | `openserv-labs/skills` |
+| `lead`      | Coordinates the team, reviews ideas, assigns work              | `openserv-labs/skills` |
+| `agent-dev` | Builds and deploys OpenServ agents using the SDK               | `openserv-labs/skills` |
+| `launcher`  | Launches ERC-20 tokens via the OpenServ Launch API             | `openserv-labs/skills` |
 
 The scout runs on a cron schedule (every 4 hours) to fetch new ideas from the Ideaboard and share them with the lead. The lead then delegates to agent-dev or launcher as needed.
+
+`WALLET_PRIVATE_KEY` is defined at the office level and shared by all agents — no need to set it per agent.
 
 ## Usage
 
 ```bash
-mkdir -p ~/.agent-office
-cp examples/openserv-team/agents.yaml ~/.agent-office/agents.yaml
-pnpm dev start --sandbox docker
+mkdir -p ~/.agent-office/offices/openserv-team
+cp examples/openserv-team/office.yaml ~/.agent-office/offices/openserv-team/office.yaml
+pnpm dev start --office openserv-team --sandbox docker
 ```
 
 Then in the REPL or via Telegram:

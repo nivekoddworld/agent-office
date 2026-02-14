@@ -1,13 +1,11 @@
 import { join } from "node:path";
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { AGENT_OFFICE_DIR } from "../constants.js";
-import { withConfigLock } from "../config/lock.js";
 
 const SOURCE_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
 
-export function skillsDir(agentName: string): string {
-  return join(AGENT_OFFICE_DIR, "agents", agentName, "skills");
+export function skillsDir(baseDir: string, agentName: string): string {
+  return join(baseDir, "agents", agentName, "skills");
 }
 
 /** Fetch SKILL.md files from a GitHub repo (owner/repo format). */
@@ -15,7 +13,8 @@ export async function fetchSkills(
   source: string,
   signal?: AbortSignal,
 ): Promise<Array<{ name: string; content: string }>> {
-  if (!SOURCE_RE.test(source)) throw new Error(`Invalid source "${source}" — expected "owner/repo"`);
+  if (!SOURCE_RE.test(source))
+    throw new Error(`Invalid source "${source}" — expected "owner/repo"`);
 
   const headers = { "User-Agent": "agent-office" };
   const skills: Array<{ name: string; content: string }> = [];
@@ -25,7 +24,11 @@ export async function fetchSkills(
   const res = await fetch(apiUrl, { headers, signal });
 
   if (res.ok) {
-    const entries = (await res.json()) as Array<{ name: string; type: string; path: string }>;
+    const entries = (await res.json()) as Array<{
+      name: string;
+      type: string;
+      path: string;
+    }>;
     const dirs = entries.filter((e) => e.type === "dir");
 
     for (const dir of dirs) {
@@ -64,18 +67,25 @@ export async function fetchSkillsWithTimeout(
   }
 }
 
-export function isSkillInstalled(agentName: string, skillName: string): boolean {
-  return existsSync(join(skillsDir(agentName), skillName, "SKILL.md"));
+export function isSkillInstalled(
+  baseDir: string,
+  agentName: string,
+  skillName: string,
+): boolean {
+  return existsSync(join(skillsDir(baseDir, agentName), skillName, "SKILL.md"));
 }
 
 // --- Source map: maps installed skill folder names → GitHub source (owner/repo) ---
 
-function sourceMapPath(agentName: string): string {
-  return join(skillsDir(agentName), ".sources.json");
+function sourceMapPath(baseDir: string, agentName: string): string {
+  return join(skillsDir(baseDir, agentName), ".sources.json");
 }
 
-export function readSourceMap(agentName: string): Record<string, string> {
-  const p = sourceMapPath(agentName);
+export function readSourceMap(
+  baseDir: string,
+  agentName: string,
+): Record<string, string> {
+  const p = sourceMapPath(baseDir, agentName);
   if (!existsSync(p)) return {};
   try {
     return JSON.parse(readFileSync(p, "utf-8"));
@@ -84,35 +94,47 @@ export function readSourceMap(agentName: string): Record<string, string> {
   }
 }
 
-export function writeSourceMap(agentName: string, map: Record<string, string>): void {
-  const p = sourceMapPath(agentName);
+export function writeSourceMap(
+  baseDir: string,
+  agentName: string,
+  map: Record<string, string>,
+): void {
+  const p = sourceMapPath(baseDir, agentName);
   const tmp = p + "." + randomUUID() + ".tmp";
   writeFileSync(tmp, JSON.stringify(map, null, 2) + "\n");
   renameSync(tmp, p);
 }
 
-export async function addSourceMapping(agentName: string, skillName: string, source: string): Promise<void> {
-  return withConfigLock(async () => {
-    const map = readSourceMap(agentName);
-    map[skillName] = source;
-    writeSourceMap(agentName, map);
-  });
+export function addSourceMapping(
+  baseDir: string,
+  agentName: string,
+  skillName: string,
+  source: string,
+): void {
+  const map = readSourceMap(baseDir, agentName);
+  map[skillName] = source;
+  writeSourceMap(baseDir, agentName, map);
 }
 
-export async function removeSourceMapping(agentName: string, skillName: string): Promise<string | undefined> {
-  return withConfigLock(async () => {
-    const map = readSourceMap(agentName);
-    const source = map[skillName];
-    if (source === undefined) return undefined;
-    delete map[skillName];
-    writeSourceMap(agentName, map);
-    return source;
-  });
+export function removeSourceMapping(
+  baseDir: string,
+  agentName: string,
+  skillName: string,
+): string | undefined {
+  const map = readSourceMap(baseDir, agentName);
+  const source = map[skillName];
+  if (source === undefined) return undefined;
+  delete map[skillName];
+  writeSourceMap(baseDir, agentName, map);
+  return source;
 }
 
 /** Get unique sorted sources for an agent from its .sources.json. */
-export function installedSourcesForAgent(agentName: string): string[] {
-  const map = readSourceMap(agentName);
+export function installedSourcesForAgent(
+  baseDir: string,
+  agentName: string,
+): string[] {
+  const map = readSourceMap(baseDir, agentName);
   return [...new Set(Object.values(map))].sort();
 }
 

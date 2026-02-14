@@ -11,9 +11,9 @@ Try one of these examples to get up and running quickly. Set env vars in the pro
 ```bash
 pnpm install
 cp .env.example .env
-mkdir -p ~/.agent-office
-cp examples/basic-team/agents.yaml ~/.agent-office/agents.yaml
-pnpm dev start --sandbox docker
+mkdir -p ~/.agent-office/offices/basic-team
+cp examples/basic-team/office.yaml ~/.agent-office/offices/basic-team/office.yaml
+pnpm dev start --office basic-team --sandbox docker
 ```
 
 ```env
@@ -27,9 +27,9 @@ ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
 ```bash
 pnpm install
 cp .env.example .env
-mkdir -p ~/.agent-office
-cp examples/openserv-team/agents.yaml ~/.agent-office/agents.yaml
-pnpm dev start --sandbox docker
+mkdir -p ~/.agent-office/offices/openserv-team
+cp examples/openserv-team/office.yaml ~/.agent-office/offices/openserv-team/office.yaml
+pnpm dev start --office openserv-team --sandbox docker
 ```
 
 ```env
@@ -45,10 +45,13 @@ See [`examples/`](examples/) for more details — each has a README describing t
 
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
-- [Declarative Configuration](#declarative-configuration-agentsyaml)
+- [Multi-Office Architecture](#multi-office-architecture)
+  - [Creating an Office](#creating-an-office)
+  - [Office Configuration](#office-configuration-officeyaml)
   - [Auto-Sync](#auto-sync)
   - [Reload](#reload)
   - [Cron Jobs](#cron-jobs)
+  - [Migration from agents.yaml](#migration-from-agentsyaml)
 - [Sandbox Modes](#sandbox-modes)
   - [In-Process Mode](#in-process-mode-default)
   - [Docker Sandbox Mode](#docker-sandbox-mode)
@@ -79,7 +82,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
 
 ```mermaid
 graph TD
-    YAML[agents.yaml] --> WS
+    YAML[office.yaml] --> WS
     CLI[CLI REPL] --> WS[Workspace]
     TG[Telegram / grammY] --> WS
 
@@ -100,7 +103,7 @@ graph TD
     BUS --> HA
 ```
 
-**Core flow:** `agents.yaml` (auto-spawn) / CLI / Telegram / Cron -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
+**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
 Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
@@ -114,11 +117,14 @@ pnpm install
 # Configure .env
 cp .env.example .env   # then fill in your keys
 
+# Create an office
+pnpm dev office create my-team
+
 # Start the REPL (in-process agents, Telegram auto-connects if token set)
-pnpm dev start
+pnpm dev start --office my-team
 
 # Start with Docker sandbox isolation
-pnpm dev start --sandbox docker
+pnpm dev start --office my-team --sandbox docker
 ```
 
 Create a `.env` file with your provider keys:
@@ -130,15 +136,39 @@ OPENAI_API_KEY=sk-...
 TELEGRAM_BOT_TOKEN=...          # Telegram bridge auto-enables when set
 # TELEGRAM_ENABLED=false        # Set to disable Telegram
 # ALLOWED_USERS=alice,bob       # Comma-separated allowlist (empty = open access)
-# MY_GH_TOKEN=ghp_...           # Host env vars for secret refs (agents.yaml secrets)
+# MY_GH_TOKEN=ghp_...           # Host env vars for secret refs (office.yaml secrets)
 ```
 
-## Declarative Configuration (`agents.yaml`)
+## Multi-Office Architecture
 
-Define your workspace once in `~/.agent-office/agents.yaml` and agents auto-spawn on startup. No more manual REPL commands on every restart.
+Each office represents a company or team with shared identity, env vars, and secrets. Offices live under `~/.agent-office/offices/<id>/`.
+
+### Creating an Office
+
+```bash
+# Create with default display name (same as id)
+pnpm dev office create acme
+
+# Create with a custom display name
+pnpm dev office create acme --name "Acme Corp"
+```
+
+Office IDs must be path-safe: lowercase letters, digits, hyphens, underscores (matching `[a-z0-9][a-z0-9_-]*`). The display name (`office.name` in YAML) is free-form.
+
+### Office Configuration (`office.yaml`)
+
+Define your office once in `~/.agent-office/offices/<id>/office.yaml` and agents auto-spawn on startup.
 
 ```yaml
-# ~/.agent-office/agents.yaml
+# ~/.agent-office/offices/acme/office.yaml
+office:
+  name: Acme Corp
+  description: "We build AI-powered widgets"
+  env:
+    SHARED_API_URL: https://api.acme.com
+  secrets:
+    SHARED_TOKEN: ${ACME_TOKEN}
+
 agents:
   designer:
     model: anthropic:claude-sonnet-4-20250514
@@ -151,7 +181,7 @@ agents:
     skills:
       - nichochar/web-skills
     api_key_ref: MY_CUSTOM_KEY # optional — host env var name for model key override
-    env: # non-sensitive, passed as Docker --env
+    env: # non-sensitive, passed as Docker --env (agent overrides office)
       LOG_LEVEL: debug
       WORKSPACE_NAME: designer
     secrets: # sensitive, ${VAR} refs only — delivered via authenticated_fetch
@@ -165,41 +195,43 @@ agents:
     description: "Code reviewer"
 ```
 
-All fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start.
+Office-level `env` and `secrets` are inherited by all agents. Agent-level values override office-level.
 
-| Field              | Type             | Default                                   | Description                                                          |
-| ------------------ | ---------------- | ----------------------------------------- | -------------------------------------------------------------------- |
-| `model`            | string           | `anthropic:claude-sonnet-4-20250514`      | `provider:model-id`                                                  |
-| `priority`         | string \| number | `normal`                                  | Priority name or 0-4                                                 |
-| `thinking`         | string           | `low`                                     | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`              |
-| `description`      | string           | `""`                                      | Visible to other agents                                              |
-| `prompt`           | string           | _(none)_                                  | Custom instructions (appended to base prompt)                        |
-| `cwd`              | string           | `~/.agent-office/agents/<name>/workspace` | Working directory                                                    |
-| `skills`           | string[]         | `[]`                                      | GitHub sources to auto-install (`owner/repo`)                        |
-| `api_key_ref`      | string           | _(auto from provider)_                    | Host env var name for model API key                                  |
-| `env`              | map              | `{}`                                      | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)      |
-| `secrets`          | map              | `{}`                                      | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
-| `disclose_secrets` | boolean          | `false`                                   | Show secret names in system prompt                                   |
-| `cron`             | map              | `{}`                                      | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
+All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start.
+
+| Field              | Type             | Default                                                | Description                                                          |
+| ------------------ | ---------------- | ------------------------------------------------------ | -------------------------------------------------------------------- |
+| `model`            | string           | `anthropic:claude-sonnet-4-20250514`                   | `provider:model-id`                                                  |
+| `priority`         | string \| number | `normal`                                               | Priority name or 0-4                                                 |
+| `thinking`         | string           | `low`                                                  | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`              |
+| `description`      | string           | `""`                                                   | Visible to other agents                                              |
+| `prompt`           | string           | _(none)_                                               | Custom instructions (appended to base prompt)                        |
+| `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                    |
+| `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                        |
+| `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                  |
+| `env`              | map              | `{}`                                                   | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)      |
+| `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
+| `disclose_secrets` | boolean          | `false`                                                | Show secret names in system prompt                                   |
+| `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
 
 ### Auto-Sync
 
-REPL commands automatically keep `agents.yaml` in sync:
+REPL commands automatically keep `office.yaml` in sync:
 
-- **`spawn`** persists the agent to YAML (use `--ephemeral` to skip)
-- **`kill`** removes the agent from YAML
+- **`hire`** persists the agent to YAML (use `--ephemeral` to skip)
+- **`fire`** removes the agent from YAML
 - **`skill add/remove`** updates the agent's `skills` array in YAML
 
-All writes are atomic (temp file + rename) and serialized through an in-process config lock to prevent concurrent corruption.
+All writes are atomic (temp file + rename) and serialized through a two-layer lock (in-process queue + cross-process file lock) per office.
 
 ### Reload
 
 ```bash
 # In the REPL:
-ao> agents reload              # Spawn new agents from YAML, skip already-running
-ao> agents reload --force      # Kill and re-spawn agents with changed config
-ao> agents validate            # Dry-run: parse + validate without spawning
-ao> agents path                # Print path to agents.yaml
+ao> office reload              # Spawn new agents from YAML, skip already-running
+ao> office reload --force      # Kill and re-spawn agents with changed config
+ao> office validate            # Dry-run: parse + validate without spawning
+ao> office path                # Print path to office.yaml
 ```
 
 ### Cron Jobs
@@ -207,7 +239,7 @@ ao> agents path                # Print path to agents.yaml
 Agents can run proactively on schedules via per-agent cron jobs. The host-side `CronService` manages timers and injects messages into the bus with `from: "__cron__"` — agents never see cron internals.
 
 ```yaml
-# ~/.agent-office/agents.yaml
+# In office.yaml under the agents section:
 agents:
   standup-bot:
     model: anthropic:claude-sonnet-4-20250514
@@ -230,7 +262,7 @@ agents:
 
 Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 
-**Catch-up behavior:** On restart, if `catch_up: once` and a fire was missed since the last run, one immediate message is sent. First-ever run (no prior state) never catches up. State persists to `~/.agent-office/cron/state.json`.
+**Catch-up behavior:** On restart, if `catch_up: once` and a fire was missed since the last run, one immediate message is sent. First-ever run (no prior state) never catches up. State persists to `~/.agent-office/offices/<id>/cron/state.json`.
 
 **Safety guards:** Busy agents (status `running`) are skipped. A global dispatch cap of 60 cron messages per minute prevents misconfigured schedules from flooding the bus.
 
@@ -247,9 +279,29 @@ ao> cron enable <agent> <job> [--apply]                # Re-enable a paused job
 ao> cron disable <agent> <job> [--apply]               # Pause a job
 ```
 
-Without `--apply`, commands write to `agents.yaml` only — run `agents reload` to activate. With `--apply`, changes take effect immediately if the agent is running.
+Without `--apply`, commands write to `office.yaml` only — run `office reload` to activate. With `--apply`, changes take effect immediately if the agent is running.
 
 Change detection uses normalized config comparison (resolved model, numeric priority, sorted skills, trimmed prompt) so cosmetic YAML differences like `normal` vs `2` or reordered skills don't trigger false warnings.
+
+### Migration from `agents.yaml`
+
+If you have a legacy `~/.agent-office/agents.yaml`, migrate to the multi-office format:
+
+```bash
+# Preview what will happen
+pnpm dev office migrate --name my-team --dry-run
+
+# Run the migration (copies data, renames agents.yaml → agents.yaml.bak)
+pnpm dev office migrate --name my-team
+
+# Verify everything works
+pnpm dev start --office my-team
+
+# Clean up old files (prompts for confirmation)
+pnpm dev office migrate --name my-team --finalize
+```
+
+Starting with a legacy `agents.yaml` present will fail with a migration prompt.
 
 ## Sandbox Modes
 
@@ -258,8 +310,8 @@ agent-office supports two execution modes for agents:
 ### In-Process Mode (default)
 
 ```bash
-pnpm dev start                  # or explicitly:
-pnpm dev start --sandbox none
+pnpm dev start --office my-team                  # or explicitly:
+pnpm dev start --office my-team --sandbox none
 ```
 
 Agents run in the same Node.js process as the scheduler. Simple, fast, zero setup. Tools call directly into the message bus and filesystem.
@@ -269,7 +321,7 @@ Agents run in the same Node.js process as the scheduler. Simple, fast, zero setu
 ### Docker Sandbox Mode
 
 ```bash
-pnpm dev start --sandbox docker
+pnpm dev start --office my-team --sandbox docker
 ```
 
 Each agent runs inside an isolated Docker container with hardened security. Agents communicate with the host via HTTP through the Host API.
@@ -328,18 +380,18 @@ Host Process                        Docker Container (per agent)
 
 ```bash
 # Terminal 1: Start with Docker sandbox
-pnpm dev start --sandbox docker
+pnpm dev start --office acme --sandbox docker
 
 # In the REPL:
-ao> spawn designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
+ao> hire designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
 # → [agent:designer] Started in sandbox (http://localhost:13100)
 
-ao> spawn reviewer --model openai:gpt-4.1 --desc "Code reviewer"
+ao> hire reviewer --model openai:gpt-4.1 --desc "Code reviewer"
 # → [agent:reviewer] Started in sandbox (http://localhost:13101)
 
 ao> send designer "Create a responsive landing page with hero section"
 # → designer works inside its Docker container, edits files in /workspace
-# → Files persist at ~/.agent-office/agents/designer/workspace/ on the host
+# → Files persist at ~/.agent-office/offices/acme/agents/designer/workspace/ on the host
 
 ao> send reviewer "Review designer's index.html and send feedback"
 # → reviewer uses read_agent_file (proxied via Host API) to read designer's files
@@ -349,7 +401,7 @@ ao> send reviewer "Review designer's index.html and send feedback"
 Verify files created by sandboxed agents persist on the host:
 
 ```bash
-ls ~/.agent-office/agents/designer/workspace/
+ls ~/.agent-office/offices/acme/agents/designer/workspace/
 # index.html  styles.css  ...
 ```
 
@@ -374,26 +426,26 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 
 | Command                                            | Description                                                |
 | -------------------------------------------------- | ---------------------------------------------------------- |
-| `spawn <name> [options]`                           | Create a new agent (persists to YAML unless `--ephemeral`) |
-| `list`                                             | Show all agents with status table                          |
+| `hire <name> [options]`                            | Create a new agent (persists to YAML unless `--ephemeral`) |
+| `roster`                                           | Show all agents with status table                          |
 | `send <agent> <message>`                           | Queue a message for an agent                               |
-| `kill <agent>`                                     | Stop and remove an agent (removes from YAML)               |
+| `fire <agent>`                                     | Stop and remove an agent (removes from YAML)               |
 | `status`                                           | Show scheduler, watchdog, and resource state               |
 | `skill add <agent> <source>`                       | Install skills from GitHub (`owner/repo`)                  |
 | `skill list <agent>`                               | List installed skills                                      |
 | `skill remove <agent> <name>`                      | Remove an installed skill                                  |
-| `agent env set <agent> <KEY> <VALUE>`              | Set env var in `agents.yaml`                               |
-| `agent env unset <agent> <KEY>`                    | Remove env var from `agents.yaml`                          |
-| `agent secret-ref set <agent> <KEY> <ENV>`         | Set secret ref in `agents.yaml`                            |
-| `agent secret-ref unset <agent> <KEY>`             | Remove secret ref from `agents.yaml`                       |
+| `agent env set <agent> <KEY> <VALUE>`              | Set env var in `office.yaml`                               |
+| `agent env unset <agent> <KEY>`                    | Remove env var from `office.yaml`                          |
+| `agent secret-ref set <agent> <KEY> <ENV>`         | Set secret ref in `office.yaml`                            |
+| `agent secret-ref unset <agent> <KEY>`             | Remove secret ref from `office.yaml`                       |
 | `agent config show <agent>`                        | Show agent config (secrets redacted)                       |
 | `agent prompt show <agent>`                        | Show effective prompt (version/hash)                       |
 | `agent prompt set <agent> <text>`                  | Set custom prompt                                          |
 | `agent prompt append <agent> <text>`               | Append to custom prompt                                    |
 | `agent prompt clear <agent>`                       | Remove custom prompt                                       |
-| `agents reload [--force]`                          | Re-apply `agents.yaml` (force kills changed agents)        |
-| `agents validate`                                  | Dry-run: parse + validate YAML without spawning            |
-| `agents path`                                      | Print path to `agents.yaml`                                |
+| `office reload [--force]`                          | Re-apply `office.yaml` (force kills changed agents)        |
+| `office validate`                                  | Dry-run: parse + validate YAML without spawning            |
+| `office path`                                      | Print path to `office.yaml`                                |
 | `cron list`                                        | List all cron jobs                                         |
 | `cron status [agent]`                              | Detailed cron job status                                   |
 | `cron add <agent> <job> "<sched>" <msg> [--apply]` | Add a cron job                                             |
@@ -406,26 +458,27 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `help`                                             | Show available commands                                    |
 | `exit`                                             | Shutdown                                                   |
 
-### Spawn Options
+### Hire Options
 
 ```
-spawn <name>
+hire <name>
   --model <provider:id>     Model (default: anthropic:claude-sonnet-4-20250514)
   --priority <0-4>          0=IDLE, 1=LOW, 2=NORMAL, 3=HIGH, 4=CRITICAL
   --thinking <level>        off, minimal, low, medium, high, xhigh
-  --cwd <path>              Custom workspace dir (default: ~/.agent-office/agents/<name>/workspace)
+  --cwd <path>              Custom workspace dir
   --desc <text>             Agent description (visible to other agents)
   --prompt <text>           Custom system prompt
   --api-key-ref <ENV_NAME>  Host env var for model API key override
   --env <KEY=VALUE>         Non-sensitive env var (repeatable)
   --secret-ref <KEY=ENV>    Secret ref mapping (repeatable)
-  --ephemeral               Don't persist to agents.yaml
+  --ephemeral               Don't persist to office.yaml
 ```
 
 ### CLI Flags
 
 ```
 pnpm dev start
+  --office <name>           Office to load (required)
   --tick-interval <ms>      Scheduler tick interval (default: 2000)
   --sandbox <mode>          Sandbox mode: none | docker (default: none)
 ```
@@ -463,7 +516,7 @@ reviewer calls read_agent_file:
   agent: "designer"
   path: "index.html"
 
--> Returns contents of ~/.agent-office/agents/designer/workspace/index.html
+-> Returns contents of ~/.agent-office/offices/<id>/agents/designer/workspace/index.html
 ```
 
 In Docker sandbox mode, this tool is proxied through the Host API. The agent sends an HTTP request to the host, which reads the file on disk and returns the content. The sandboxed agent never has direct filesystem access to other agents' workspaces.
@@ -487,7 +540,7 @@ agent calls authenticated_fetch:
 
 #### How It Works
 
-1. **Configuration** — secrets are declared in `agents.yaml` using `${VAR}` refs:
+1. **Configuration** — secrets are declared in `office.yaml` using `${VAR}` refs:
 
    ```yaml
    agents:
@@ -589,16 +642,17 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 
 ### Prompt System
 
-Every agent receives a **layered system prompt** composed from four ordered layers:
+Every agent receives a **layered system prompt** composed from five ordered layers:
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — collaboration rules, tool guidance, anti-loop rules, workflow, reporting, safety. Always included, never overridden.
-2. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
-3. **Identity** — agent name, description, workspace path.
-4. **Custom instructions** — the `prompt` field from `agents.yaml`, appended under a `## Custom Instructions` header.
+2. **Office context** — office name and description (e.g. "You work at Acme Corp. We build AI-powered widgets"). Only present when an office has a display name.
+3. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
+4. **Identity** — agent name, description, workspace path.
+5. **Custom instructions** — the `prompt` field from `office.yaml`, appended under a `## Custom Instructions` header.
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn.
 
-The `prompt` field in `agents.yaml` is **append-only** — it adds your custom instructions after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
+The `prompt` field in `office.yaml` is **append-only** — it adds your custom instructions after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
 
 ## Telegram Integration
 
@@ -656,21 +710,28 @@ Higher-priority agents are always served first. One message per tick per agent p
 
 ### Workspace Sandboxing
 
-Each agent gets an isolated workspace on the host filesystem:
+Each office gets an isolated directory, and each agent within it gets its own workspace:
 
 ```
 ~/.agent-office/
-  agents.yaml               # declarative agent definitions
-  cron/
-    state.json              # cron job state (last run times, run counts)
-  agents/
-    designer/
-      workspace/            # agent's cwd — all file tools scoped here
-      skills/               # installed skill directories
-        .sources.json       # skill folder → GitHub source mapping
-    reviewer/
-      workspace/
-      skills/
+  offices/
+    acme/
+      office.yaml           # office + agent definitions
+      .lock                 # per-office config lock
+      cron/
+        state.json          # cron job state
+      agents/
+        designer/
+          workspace/        # agent's cwd — all file tools scoped here
+          skills/           # installed skill directories
+            .sources.json   # skill folder → GitHub source mapping
+        reviewer/
+          workspace/
+          skills/
+    defi-lab/
+      office.yaml
+      agents/
+        ...
 ```
 
 All file tools (read, write, edit, bash) are scoped to the agent's workspace directory. Agents can read each other's files via `read_agent_file` but cannot write to them.
@@ -681,10 +742,10 @@ In Docker sandbox mode, the workspace directory is volume-mounted into the conta
 
 Markdown files loaded from each agent's `skills/` directory and injected into the system prompt. Skills work in both in-process and Docker sandbox modes.
 
-Skills can be installed via REPL or declared in `agents.yaml`:
+Skills can be installed via REPL or declared in `office.yaml`:
 
 ```yaml
-# agents.yaml — skills auto-install on startup
+# office.yaml — skills auto-install on startup
 agents:
   designer:
     skills:
@@ -692,13 +753,13 @@ agents:
 ```
 
 ```bash
-# REPL — installs to disk + updates agents.yaml
+# REPL — installs to disk + updates office.yaml
 ao> skill add designer nichochar/web-skills
 ao> skill list designer
 ao> skill remove designer web-tools
 ```
 
-A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `agents.yaml` entries when the last skill from a source is removed.
+A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `office.yaml` entries when the last skill from a source is removed.
 
 ### Watchdog
 
@@ -728,9 +789,9 @@ release();
 Three agents collaborate on a landing page, all running in-process:
 
 ```
-ao> spawn designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
-ao> spawn copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marketing copy"
-ao> spawn reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
+ao> hire designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
+ao> hire copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marketing copy"
+ao> hire reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
 ```
 
 Via Telegram:
@@ -756,14 +817,14 @@ Isolated agents working on a Node.js API project:
 
 ```bash
 # Start with Docker isolation
-pnpm dev start --sandbox docker
+pnpm dev start --office my-team --sandbox docker
 ```
 
 ```
-ao> spawn backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
+ao> hire backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
 # → Container started with --cap-drop=ALL, --user 1000:1000
 
-ao> spawn tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
+ao> hire tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
 
 ao> send backend "Build a REST API for a todo app with CRUD endpoints using Express"
 ```
@@ -775,7 +836,7 @@ What happens behind the scenes:
 3. **backend** agent runs inside its container:
    - Uses `bash`, `write_file`, `edit_file` tools locally in `/workspace`
    - Creates `server.js`, `package.json`, route files
-   - Files appear at `~/.agent-office/agents/backend/workspace/` on host
+   - Files appear at `~/.agent-office/offices/<id>/agents/backend/workspace/` on host
 4. You send: `@tester Review backend's code and write tests`
 5. **tester** calls `list_agents` (proxy -> Host API -> returns agent list)
 6. **tester** calls `read_agent_file` (proxy -> Host API -> reads backend's files from host disk)
@@ -796,17 +857,20 @@ export MY_GH_TOKEN="ghp_..."
 **Option A: Via REPL**
 
 ```
-ao> spawn github-bot --model anthropic:claude-sonnet-4-20250514 \
+ao> hire github-bot --model anthropic:claude-sonnet-4-20250514 \
     --desc "GitHub integration bot" \
     --secret-ref GITHUB_TOKEN=MY_GH_TOKEN
 
 ao> send github-bot "List my GitHub repos using authenticated_fetch with secretName GITHUB_TOKEN"
 ```
 
-**Option B: Via agents.yaml**
+**Option B: Via office.yaml**
 
 ```yaml
-# ~/.agent-office/agents.yaml
+# ~/.agent-office/offices/my-team/office.yaml
+office:
+  name: My Team
+
 agents:
   github-bot:
     model: anthropic:claude-sonnet-4-20250514
@@ -817,7 +881,7 @@ agents:
 ```
 
 ```
-ao> agents reload
+ao> office reload
 ao> send github-bot "List my GitHub repos"
 ```
 
@@ -838,7 +902,7 @@ The agent never sees `ghp_...` — only the name `GITHUB_TOKEN`. In Docker sandb
 ### Example 4: Mixed Mode with Telegram
 
 ```bash
-TELEGRAM_BOT_TOKEN=xxx pnpm dev start --sandbox docker
+TELEGRAM_BOT_TOKEN=xxx pnpm dev start --office my-team --sandbox docker
 ```
 
 ```
@@ -857,14 +921,16 @@ TELEGRAM_BOT_TOKEN=xxx pnpm dev start --sandbox docker
 src/
   index.ts                    CLI entry + REPL
   workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox)
-  types.ts                    Shared types (Priority, AgentConfig, SandboxMode, etc.)
-  constants.ts                Shared constants (AGENT_OFFICE_DIR)
+  types.ts                    Shared types (Priority, AgentConfig, OfficeYaml, OfficeContext, etc.)
+  constants.ts                Shared constants, office path helpers, officeId validation
   routing.ts                  Telegram chat -> agent routing
 
   config/
-    agents-yaml.ts            YAML loader, validator, write-back, env/secret mutation
+    office-yaml.ts            Office loader, validator, mutations, env/secret merge
+    yaml-utils.ts             Shared validation, cron extraction, atomic writes
+    agents-yaml.ts            Legacy YAML support (kept for migration)
     env-substitution.ts       ${VAR} env ref resolution with validation
-    lock.ts                   In-process mutex for config read-modify-write
+    lock.ts                   Two-layer lock (in-process queue + cross-process file lock)
 
   security/
     redact.ts                 Secret redaction (text + deep object walker)
@@ -922,19 +988,21 @@ src/
     telegram.ts               grammY Telegram bridge
 
   commands/
-    agents-yaml.ts            Apply logic + agents reload/validate/path commands
-    spawn.ts                  Agent creation with YAML auto-sync
-    list.ts                   Agent status table
+    office-apply.ts           Apply office.yaml + reload/validate/path commands
+    hire.ts                   Agent creation with YAML auto-sync
+    roster.ts                 Agent status table
     send.ts                   Message queueing
-    kill.ts                   Agent teardown with YAML auto-sync
+    fire.ts                   Agent teardown with YAML auto-sync
     status.ts                 Scheduler/watchdog overview
     route.ts                  Telegram chat routing
     skill.ts                  Skill install/remove with YAML + source map sync
     agent-config.ts           Per-agent env/secret-ref/prompt commands + config show
     cron.ts                   Cron CLI handlers (add/remove/enable/disable/list/status/trigger)
+    migrate.ts                Two-step legacy migration (copy + finalize)
 
 test/
-  agents-yaml.test.ts        YAML config: parsing, validation, apply, write-back, locking
+  office-yaml.test.ts        Office config: officeId validation, load, validate, merge, mutations, lock
+  agents-yaml.test.ts        Legacy YAML config tests
   agent-config.test.ts        Per-agent env/secret-ref/prompt CLI commands + config show
   env-substitution.test.ts    ${VAR} resolution, missing vars, reserved keys
   redact.test.ts              Secret redaction (text, deep objects, edge cases)
@@ -954,7 +1022,7 @@ test/
   cron-service.test.ts        Timer lifecycle, catch-up, dispatch cap, busy skip
   cron-commands.test.ts       Cron CLI add/remove/enable/disable + validation
   prompt.test.ts              System prompt composition
-  prompt-manager.test.ts      Prompt composition, layering, hashing, determinism
+  prompt-manager.test.ts      Prompt composition, layering, hashing, office block, determinism
 ```
 
 ## Dependencies
@@ -970,6 +1038,7 @@ test/
 | `grammy`                        | Telegram Bot API                                                |
 | `cron-parser`                   | Cron expression parsing (next/prev fire times)                  |
 | `yaml`                          | YAML parsing with comment-preserving Document API               |
+| `proper-lockfile`               | Cross-process file locking for per-office config safety         |
 
 ## Development
 
@@ -977,7 +1046,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 422+ tests
+pnpm test             # Run test suite (vitest) — 468+ tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```

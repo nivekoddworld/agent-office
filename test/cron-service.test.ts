@@ -13,12 +13,21 @@ function makeBus(): MessageBus {
   return bus;
 }
 
-function makeAgent(name: string, status: "idle" | "running" | "dead" = "idle"): AgentHandle {
+function makeAgent(
+  name: string,
+  status: "idle" | "running" | "dead" = "idle",
+): AgentHandle {
   return { status, config: { name } } as any;
 }
 
 function makeConfig(overrides?: Partial<CronJobConfig>): CronJobConfig {
-  return { schedule: "0 * * * *", message: "tick", catchUp: "skip", enabled: true, ...overrides };
+  return {
+    schedule: "0 * * * *",
+    message: "tick",
+    catchUp: "skip",
+    enabled: true,
+    ...overrides,
+  };
 }
 
 describe("CronService", () => {
@@ -289,7 +298,9 @@ describe("CronService", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const svc = new CronService(bus, agents, store);
-    svc.setJobs("bot", { fast: makeConfig({ schedule: "* * * * *", message: "ping" }) });
+    svc.setJobs("bot", {
+      fast: makeConfig({ schedule: "* * * * *", message: "ping" }),
+    });
 
     // Fire 60 times manually
     for (let i = 0; i < 60; i++) svc.trigger("bot", "fast");
@@ -371,7 +382,9 @@ describe("CronService", () => {
     expect(svc.listJobs()).toHaveLength(1);
 
     // Attempt setJobs with a bad schedule — should throw and leave existing jobs intact
-    expect(() => svc.setJobs("bot", { bad: makeConfig({ schedule: "invalid cron" }) })).toThrow();
+    expect(() =>
+      svc.setJobs("bot", { bad: makeConfig({ schedule: "invalid cron" }) }),
+    ).toThrow();
     expect(svc.listJobs()).toHaveLength(1);
     expect(svc.listJobs()[0]!.jobName).toBe("good");
     svc.stop();

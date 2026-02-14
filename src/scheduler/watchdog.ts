@@ -57,7 +57,9 @@ export class Watchdog {
         this.restartCounts.set(name, count);
         this.lastStuck.set(name, now);
         if (count > this.config.maxRestarts) {
-          console.error(`[watchdog] Agent "${name}" exceeded max restarts (${this.config.maxRestarts}) — marking dead`);
+          console.error(
+            `[watchdog] Agent "${name}" exceeded max restarts (${this.config.maxRestarts}) — marking dead`,
+          );
           handle.setStatus("dead");
         } else {
           this.onStuck(name);
@@ -74,7 +76,10 @@ export class Watchdog {
     const now = Date.now();
     let count = 0;
     for (const [, handle] of this.agents) {
-      if (handle.status === "running" && now - handle.lastHeartbeat > this.config.stuckThresholdMs) {
+      if (
+        handle.status === "running" &&
+        now - handle.lastHeartbeat > this.config.stuckThresholdMs
+      ) {
         count++;
       }
     }

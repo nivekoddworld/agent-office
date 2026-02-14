@@ -2,19 +2,31 @@ import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
-import { Agent, type AgentEvent, type AgentTool } from "@mariozechner/pi-agent-core";
-import { createCodingTools, loadSkills, formatSkillsForPrompt } from "@mariozechner/pi-coding-agent";
+import {
+  Agent,
+  type AgentEvent,
+  type AgentTool,
+} from "@mariozechner/pi-agent-core";
+import {
+  createCodingTools,
+  loadSkills,
+  formatSkillsForPrompt,
+} from "@mariozechner/pi-coding-agent";
 import { streamSimple } from "@mariozechner/pi-ai";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentConfig, AgentInfo, AgentStatus } from "../types.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
-import { AGENT_OFFICE_DIR } from "../constants.js";
 import { composeSystemPrompt, hashPrompt } from "./prompts/prompt-manager.js";
-import { createListAgentsTool, createReadAgentFileTool, createMailboxTool, createAuthenticatedFetchTool } from "./tools/index.js";
+import {
+  createListAgentsTool,
+  createReadAgentFileTool,
+  createMailboxTool,
+  createAuthenticatedFetchTool,
+} from "./tools/index.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
-import { getCronSummaries } from "../config/agents-yaml.js";
+import { getCronSummaries } from "../config/office-yaml.js";
 
 export interface AgentHandleDeps {
   bus: MessageBus;
@@ -22,6 +34,10 @@ export interface AgentHandleDeps {
   provider?: SandboxProvider;
   hostApi?: HostApi;
   sandboxToken?: string;
+  baseDir: string;
+  officeId: string;
+  officeName: string;
+  officeDescription?: string;
 }
 
 export class AgentHandle {
@@ -37,6 +53,10 @@ export class AgentHandle {
   private _turns = 0;
   private _lastHeartbeat = Date.now();
   private listeners: Array<(e: AgentEvent) => void> = [];
+  private baseDir: string;
+  private officeId: string;
+  private officeName: string;
+  private officeDescription?: string;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
     this.config = config;
@@ -45,11 +65,21 @@ export class AgentHandle {
     this.provider = deps.provider;
     this.hostApi = deps.hostApi;
     this.sandboxToken = deps.sandboxToken;
+    this.baseDir = deps.baseDir;
+    this.officeId = deps.officeId;
+    this.officeName = deps.officeName;
+    this.officeDescription = deps.officeDescription;
   }
 
-  get name(): string { return this.config.name; }
-  get status(): AgentStatus { return this._status; }
-  get turns(): number { return this._turns; }
+  get name(): string {
+    return this.config.name;
+  }
+  get status(): AgentStatus {
+    return this._status;
+  }
+  get turns(): number {
+    return this._turns;
+  }
   get lastHeartbeat(): number {
     // For sandboxed agents, prefer the heartbeat timestamp from HostApi
     if (this.hostApi) {
@@ -57,14 +87,19 @@ export class AgentHandle {
     }
     return this._lastHeartbeat;
   }
-  get sandboxed(): boolean { return !!this.provider; }
+  get sandboxed(): boolean {
+    return !!this.provider;
+  }
 
   get cwd(): string {
-    return this.config.cwd ?? join(AGENT_OFFICE_DIR, "agents", this.config.name, "workspace");
+    return (
+      this.config.cwd ??
+      join(this.baseDir, "agents", this.config.name, "workspace")
+    );
   }
 
   private get agentDir(): string {
-    return join(AGENT_OFFICE_DIR, "agents", this.config.name);
+    return join(this.baseDir, "agents", this.config.name);
   }
 
   async init(): Promise<void> {
@@ -82,8 +117,12 @@ export class AgentHandle {
         description: this.config.description,
         customPrompt: this.config.systemPrompt,
         envNames: Object.keys(this.config.env ?? {}),
-        secretNames: this.config.discloseSecrets ? Object.keys(this.config.secrets ?? {}) : undefined,
-        cronJobs: getCronSummaries(this.name),
+        secretNames: this.config.discloseSecrets
+          ? Object.keys(this.config.secrets ?? {})
+          : undefined,
+        cronJobs: getCronSummaries(this.officeId, this.name),
+        officeName: this.officeName,
+        officeDescription: this.officeDescription,
       });
       const systemPrompt = composed.text;
 
@@ -93,7 +132,15 @@ export class AgentHandle {
         systemPrompt,
         modelName: `${model.provider}:${model.id}`,
         workspacePath: this.cwd,
-        skillsPaths: [join(this.agentDir, "skills"), ...(this.config.skillDirs ?? []).map((d) => resolve(this.cwd, d.startsWith("~/") ? join(homedir(), d.slice(2)) : d))],
+        skillsPaths: [
+          join(this.agentDir, "skills"),
+          ...(this.config.skillDirs ?? []).map((d) =>
+            resolve(
+              this.cwd,
+              d.startsWith("~/") ? join(homedir(), d.slice(2)) : d,
+            ),
+          ),
+        ],
         env: this.config.env,
       });
       // Register event listener so sandbox events flow to workspace/Telegram
@@ -105,7 +152,9 @@ export class AgentHandle {
           for (const fn of this.listeners) fn(e);
         });
       }
-      console.log(`[agent:${this.name}] Started in sandbox (${this.sandboxInfo.url})`);
+      console.log(
+        `[agent:${this.name}] Started in sandbox (${this.sandboxInfo.url})`,
+      );
       return;
     }
 
@@ -116,7 +165,9 @@ export class AgentHandle {
     if (this.config.apiKeyRef) {
       resolvedApiKey = process.env[this.config.apiKeyRef];
       if (!resolvedApiKey) {
-        throw new Error(`Agent "${this.name}": model key not found. env var "${this.config.apiKeyRef}" is not set (from api_key_ref).`);
+        throw new Error(
+          `Agent "${this.name}": model key not found. env var "${this.config.apiKeyRef}" is not set (from api_key_ref).`,
+        );
       }
     } else if (this.config.apiKey) {
       resolvedApiKey = this.config.apiKey;
@@ -125,16 +176,22 @@ export class AgentHandle {
     // Resolve user-defined secrets (fail fast on missing refs)
     const resolvedSecrets: Record<string, string> = {};
     if (this.config.secrets) {
-      const resolved = resolveEnvRefs(this.config.secrets, process.env, `agents.${this.name}.secrets`);
+      const resolved = resolveEnvRefs(
+        this.config.secrets,
+        process.env,
+        `agents.${this.name}.secrets`,
+      );
       Object.assign(resolvedSecrets, resolved);
     }
 
     const tools: AgentTool<any>[] = [
       ...createCodingTools(this.cwd),
       createMailboxTool(this.name, this.bus),
-      createListAgentsTool(this.name, this.listAgentsFn),
-      createReadAgentFileTool(),
-      ...(Object.keys(resolvedSecrets).length > 0 ? [createAuthenticatedFetchTool(resolvedSecrets)] : []),
+      createListAgentsTool(this.name, this.listAgentsFn, this.baseDir),
+      createReadAgentFileTool(this.baseDir),
+      ...(Object.keys(resolvedSecrets).length > 0
+        ? [createAuthenticatedFetchTool(resolvedSecrets)]
+        : []),
       ...(this.config.tools ?? []),
     ];
 
@@ -143,20 +200,30 @@ export class AgentHandle {
       agentDir: this.agentDir,
       skillPaths: this.config.skillDirs,
     });
-    if (skills.length > 0) console.log(`[agent:${this.name}] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`);
-    const skillsPrompt = skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
+    if (skills.length > 0)
+      console.log(
+        `[agent:${this.name}] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`,
+      );
+    const skillsPrompt =
+      skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
     const composed = composeSystemPrompt({
       name: this.name,
       cwd: this.cwd,
       description: this.config.description,
       customPrompt: this.config.systemPrompt,
       envNames: Object.keys(this.config.env ?? {}),
-      secretNames: this.config.discloseSecrets ? Object.keys(this.config.secrets ?? {}) : undefined,
-      cronJobs: getCronSummaries(this.name),
+      secretNames: this.config.discloseSecrets
+        ? Object.keys(this.config.secrets ?? {})
+        : undefined,
+      cronJobs: this.officeId ? getCronSummaries(this.officeId, this.name) : [],
+      officeName: this.officeName,
+      officeDescription: this.officeDescription,
     });
     const systemPrompt = composed.text + skillsPrompt;
     const finalHash = hashPrompt(systemPrompt);
-    console.log(`[agent:${this.name}] Prompt ${composed.version} (${finalHash})`);
+    console.log(
+      `[agent:${this.name}] Prompt ${composed.version} (${finalHash})`,
+    );
 
     this.agent = new Agent({
       initialState: {
@@ -217,9 +284,11 @@ export class AgentHandle {
 
   abort(): void {
     if (this.provider && this.sandboxInfo) {
-      this.provider.abort(this.sandboxInfo.id).catch((e) =>
-        console.error(`[agent:${this.name}] Sandbox abort failed:`, e),
-      );
+      this.provider
+        .abort(this.sandboxInfo.id)
+        .catch((e) =>
+          console.error(`[agent:${this.name}] Sandbox abort failed:`, e),
+        );
       return;
     }
     this.agent?.abort();
@@ -227,7 +296,9 @@ export class AgentHandle {
 
   onEvent(fn: (e: AgentEvent) => void): () => void {
     this.listeners.push(fn);
-    return () => { this.listeners = this.listeners.filter((l) => l !== fn); };
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== fn);
+    };
   }
 
   info(): AgentInfo {
@@ -245,9 +316,11 @@ export class AgentHandle {
 
   async destroy(): Promise<void> {
     if (this.provider && this.sandboxInfo) {
-      await this.provider.stop(this.sandboxInfo.id).catch((e) =>
-        console.error(`[agent:${this.name}] Sandbox stop failed:`, e),
-      );
+      await this.provider
+        .stop(this.sandboxInfo.id)
+        .catch((e) =>
+          console.error(`[agent:${this.name}] Sandbox stop failed:`, e),
+        );
       this.hostApi?.clearPendingPrompts(this.name);
       this.hostApi?.offAgentEvent(this.name);
       this.sandboxInfo = null;

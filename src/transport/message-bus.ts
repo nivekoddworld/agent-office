@@ -10,7 +10,10 @@ const RATE_WINDOW_MS = 30_000;
 
 export class MessageBus {
   private transport = new LocalTransport();
-  private sendCounts = new Map<string, { count: number; windowStart: number }>();
+  private sendCounts = new Map<
+    string,
+    { count: number; windowStart: number }
+  >();
 
   register(name: string): void {
     this.transport.register(name);
@@ -38,7 +41,9 @@ export class MessageBus {
       }
       entry.count++;
       if (entry.count > RATE_LIMIT) {
-        console.warn(`[bus] Rate limit: agent "${opts.from}" exceeded ${RATE_LIMIT} messages/${RATE_WINDOW_MS / 1000}s — dropping`);
+        console.warn(
+          `[bus] Rate limit: agent "${opts.from}" exceeded ${RATE_LIMIT} messages/${RATE_WINDOW_MS / 1000}s — dropping`,
+        );
         return;
       }
     }

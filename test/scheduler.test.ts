@@ -4,12 +4,18 @@ import { MessageBus } from "../src/transport/message-bus.js";
 import { Priority } from "../src/types.js";
 
 /** Minimal AgentHandle mock. */
-function mockHandle(name: string, priority: Priority, status: "idle" | "running" = "idle") {
+function mockHandle(
+  name: string,
+  priority: Priority,
+  status: "idle" | "running" = "idle",
+) {
   return {
     name,
     config: { name, priority },
     status,
-    setStatus: vi.fn(function (this: any, s: string) { this.status = s; }),
+    setStatus: vi.fn(function (this: any, s: string) {
+      this.status = s;
+    }),
     prompt: vi.fn(async () => {}),
     steer: vi.fn(async () => {}),
     info: vi.fn(() => ({
@@ -41,8 +47,20 @@ describe("Scheduler", () => {
     bus.register("low");
     bus.register("high");
 
-    bus.send({ from: "__user__", to: "low", type: "prompt", payload: "lo", priority: Priority.LOW });
-    bus.send({ from: "__user__", to: "high", type: "prompt", payload: "hi", priority: Priority.HIGH });
+    bus.send({
+      from: "__user__",
+      to: "low",
+      type: "prompt",
+      payload: "lo",
+      priority: Priority.LOW,
+    });
+    bus.send({
+      from: "__user__",
+      to: "high",
+      type: "prompt",
+      payload: "hi",
+      priority: Priority.HIGH,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();
@@ -64,7 +82,13 @@ describe("Scheduler", () => {
     agents.set("busy", busy);
     bus.register("busy");
 
-    bus.send({ from: "user", to: "busy", type: "prompt", payload: "work", priority: Priority.NORMAL });
+    bus.send({
+      from: "user",
+      to: "busy",
+      type: "prompt",
+      payload: "work",
+      priority: Priority.NORMAL,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();
@@ -84,14 +108,22 @@ describe("Scheduler", () => {
     agents.set("target", target);
     bus.register("target");
 
-    bus.send({ from: "copywriter", to: "target", type: "prompt", payload: "here's the copy", priority: Priority.NORMAL });
+    bus.send({
+      from: "copywriter",
+      to: "target",
+      type: "prompt",
+      payload: "here's the copy",
+      priority: Priority.NORMAL,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();
     vi.advanceTimersByTime(100);
     sched.stop();
 
-    expect(target.prompt).toHaveBeenCalledWith("[Mail from copywriter]\nhere's the copy");
+    expect(target.prompt).toHaveBeenCalledWith(
+      "[Mail from copywriter]\nhere's the copy",
+    );
   });
 
   it("passes user messages without prefix", () => {
@@ -102,7 +134,13 @@ describe("Scheduler", () => {
     agents.set("target", target);
     bus.register("target");
 
-    bus.send({ from: "__user__", to: "target", type: "prompt", payload: "do stuff", priority: Priority.NORMAL });
+    bus.send({
+      from: "__user__",
+      to: "target",
+      type: "prompt",
+      payload: "do stuff",
+      priority: Priority.NORMAL,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();
@@ -120,14 +158,22 @@ describe("Scheduler", () => {
     agents.set("target", target);
     bus.register("target");
 
-    bus.send({ from: "__cron__", to: "target", type: "prompt", payload: "Run standup", priority: Priority.NORMAL });
+    bus.send({
+      from: "__cron__",
+      to: "target",
+      type: "prompt",
+      payload: "Run standup",
+      priority: Priority.NORMAL,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();
     vi.advanceTimersByTime(100);
     sched.stop();
 
-    expect(target.prompt).toHaveBeenCalledWith("[Scheduled trigger]\nRun standup");
+    expect(target.prompt).toHaveBeenCalledWith(
+      "[Scheduled trigger]\nRun standup",
+    );
   });
 
   it("dispatches steer messages via steer()", () => {
@@ -138,7 +184,13 @@ describe("Scheduler", () => {
     agents.set("target", target);
     bus.register("target");
 
-    bus.send({ from: "__user__", to: "target", type: "steer", payload: "redirect", priority: Priority.NORMAL });
+    bus.send({
+      from: "__user__",
+      to: "target",
+      type: "steer",
+      payload: "redirect",
+      priority: Priority.NORMAL,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();
@@ -157,8 +209,20 @@ describe("Scheduler", () => {
     agents.set("target", target);
     bus.register("target");
 
-    bus.send({ from: "a", to: "target", type: "prompt", payload: "first", priority: Priority.HIGH });
-    bus.send({ from: "b", to: "target", type: "prompt", payload: "second", priority: Priority.LOW });
+    bus.send({
+      from: "a",
+      to: "target",
+      type: "prompt",
+      payload: "first",
+      priority: Priority.HIGH,
+    });
+    bus.send({
+      from: "b",
+      to: "target",
+      type: "prompt",
+      payload: "second",
+      priority: Priority.LOW,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();
@@ -181,7 +245,9 @@ describe("Scheduler", () => {
       name: "target",
       config: { name: "target", priority: Priority.NORMAL },
       status: "idle" as "idle" | "running" | "dead",
-      setStatus: vi.fn(function (this: any, s: "idle" | "running" | "dead") { this.status = s; }),
+      setStatus: vi.fn(function (this: any, s: "idle" | "running" | "dead") {
+        this.status = s;
+      }),
       prompt: vi.fn(async () => promptPromise),
       steer: vi.fn(async () => {}),
       info: vi.fn(() => ({
@@ -200,7 +266,13 @@ describe("Scheduler", () => {
     const bus = new MessageBus();
     agents.set("target", target);
     bus.register("target");
-    bus.send({ from: "__user__", to: "target", type: "prompt", payload: "work", priority: Priority.NORMAL });
+    bus.send({
+      from: "__user__",
+      to: "target",
+      type: "prompt",
+      payload: "work",
+      priority: Priority.NORMAL,
+    });
 
     const sched = new Scheduler(agents, bus, 100);
     sched.start();

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { nextFireTime, prevFireTime, isValidCron, describeCron } from "../src/cron/cron-parser.js";
+import {
+  nextFireTime,
+  prevFireTime,
+  isValidCron,
+  describeCron,
+} from "../src/cron/cron-parser.js";
 
 describe("isValidCron", () => {
   it("accepts valid 5-field expressions", () => {
@@ -15,8 +20,8 @@ describe("isValidCron", () => {
   });
 
   it("rejects non-5-field expressions", () => {
-    expect(isValidCron("* * * *")).toBe(false);       // 4 fields
-    expect(isValidCron("0 0 0 * * *")).toBe(false);   // 6 fields
+    expect(isValidCron("* * * *")).toBe(false); // 4 fields
+    expect(isValidCron("0 0 0 * * *")).toBe(false); // 6 fields
     expect(isValidCron("")).toBe(false);
   });
 

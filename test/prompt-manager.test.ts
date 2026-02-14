@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { composeSystemPrompt, hashPrompt, PROMPT_VERSION } from "../src/agent/prompts/prompt-manager.js";
+import {
+  composeSystemPrompt,
+  hashPrompt,
+  PROMPT_VERSION,
+} from "../src/agent/prompts/prompt-manager.js";
 import { buildBasePrompt } from "../src/agent/prompts/base-v1.js";
 
 const BASE_CTX = { name: "test-agent", cwd: "/workspace/test" };
@@ -13,13 +17,19 @@ describe("composeSystemPrompt", () => {
   });
 
   it("includes base prompt even with custom prompt", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, customPrompt: "You are a copywriter." });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: "You are a copywriter.",
+    });
     expect(text).toContain("Agent-to-Agent Collaboration");
     expect(text).toContain("You are a copywriter.");
   });
 
   it("custom prompt appended after base, not replacing", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, customPrompt: "Custom rules here." });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: "Custom rules here.",
+    });
     const baseEnd = text.indexOf("Custom Instructions");
     const baseStart = text.indexOf("Agent-to-Agent Collaboration");
     expect(baseStart).toBeLessThan(baseEnd);
@@ -31,7 +41,10 @@ describe("composeSystemPrompt", () => {
   });
 
   it("identity block includes description when provided", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, description: "A research assistant" });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      description: "A research assistant",
+    });
     expect(text).toContain("A research assistant");
   });
 
@@ -41,24 +54,36 @@ describe("composeSystemPrompt", () => {
   });
 
   it("runtime block includes sorted env names", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, envNames: ["ZZ_VAR", "AA_VAR", "MM_VAR"] });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      envNames: ["ZZ_VAR", "AA_VAR", "MM_VAR"],
+    });
     expect(text).toContain("AA_VAR, MM_VAR, ZZ_VAR");
   });
 
   it("runtime block includes sorted secret names", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, secretNames: ["SECRET_B", "SECRET_A"] });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      secretNames: ["SECRET_B", "SECRET_A"],
+    });
     expect(text).toContain("SECRET_A, SECRET_B");
   });
 
   it("runtime block never includes secret values", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, secretNames: ["MY_KEY"] });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      secretNames: ["MY_KEY"],
+    });
     expect(text).toContain("MY_KEY");
     expect(text).toContain("names only");
     expect(text).not.toContain("sk-");
   });
 
   it("runtime block includes sorted cron job summaries", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, cronJobs: ["standup every 9am", "deploy at midnight"] });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      cronJobs: ["standup every 9am", "deploy at midnight"],
+    });
     expect(text).toContain("deploy at midnight; standup every 9am");
   });
 
@@ -73,7 +98,10 @@ describe("composeSystemPrompt", () => {
   });
 
   it("whitespace-only custom prompt produces no custom section", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, customPrompt: "   \n  " });
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: "   \n  ",
+    });
     expect(text).not.toContain("Custom Instructions");
   });
 
@@ -95,20 +123,46 @@ describe("composeSystemPrompt", () => {
     expect(a.hash).toBe(b.hash);
   });
 
-  it("layer order: base → runtime → identity → custom", () => {
+  it("layer order: base → office → runtime → identity → custom", () => {
     const { text } = composeSystemPrompt({
       ...BASE_CTX,
+      officeName: "Acme Corp",
       envNames: ["VAR"],
       customPrompt: "My rules",
       description: "helper",
     });
     const baseIdx = text.indexOf("Agent-to-Agent Collaboration");
+    const officeIdx = text.indexOf("## Office");
     const runtimeIdx = text.indexOf("Runtime Context");
     const identityIdx = text.indexOf('You are agent "test-agent"');
     const customIdx = text.indexOf("Custom Instructions");
-    expect(baseIdx).toBeLessThan(runtimeIdx);
+    expect(baseIdx).toBeLessThan(officeIdx);
+    expect(officeIdx).toBeLessThan(runtimeIdx);
     expect(runtimeIdx).toBeLessThan(identityIdx);
     expect(identityIdx).toBeLessThan(customIdx);
+  });
+
+  it("office block includes office name", () => {
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      officeName: "Acme Corp",
+    });
+    expect(text).toContain("## Office");
+    expect(text).toContain("Acme Corp");
+  });
+
+  it("office block includes description when provided", () => {
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      officeName: "Acme Corp",
+      officeDescription: "We build widgets",
+    });
+    expect(text).toContain("We build widgets");
+  });
+
+  it("omits office block when no officeName", () => {
+    const { text } = composeSystemPrompt(BASE_CTX);
+    expect(text).not.toContain("## Office");
   });
 
   it("version matches PROMPT_VERSION", () => {

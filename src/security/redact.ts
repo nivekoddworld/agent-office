@@ -20,7 +20,9 @@ export function redactText(text: string, knownSecrets: string[] = []): string {
   let result = text;
 
   // Phase 1: exact-match replacements (longest-first to avoid partial matches)
-  const sorted = [...knownSecrets].filter((s) => s.length > 0).sort((a, b) => b.length - a.length);
+  const sorted = [...knownSecrets]
+    .filter((s) => s.length > 0)
+    .sort((a, b) => b.length - a.length);
   for (const secret of sorted) {
     const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     result = result.replace(new RegExp(escaped, "g"), mask(secret));

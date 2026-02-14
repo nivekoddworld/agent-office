@@ -7,18 +7,26 @@ import {
 } from "../src/config/env-substitution.js";
 
 describe("resolveEnvRefs", () => {
-  const env = { MY_VAR: "hello", OTHER: "world", EMPTY: "" } as NodeJS.ProcessEnv;
+  const env = {
+    MY_VAR: "hello",
+    OTHER: "world",
+    EMPTY: "",
+  } as NodeJS.ProcessEnv;
 
   it("resolves single ${VAR}", () => {
     expect(resolveEnvRefs({ FOO: "${MY_VAR}" }, env)).toEqual({ FOO: "hello" });
   });
 
   it("resolves multiple vars in one value", () => {
-    expect(resolveEnvRefs({ FOO: "${MY_VAR}-${OTHER}" }, env)).toEqual({ FOO: "hello-world" });
+    expect(resolveEnvRefs({ FOO: "${MY_VAR}-${OTHER}" }, env)).toEqual({
+      FOO: "hello-world",
+    });
   });
 
   it("resolves mixed text and refs", () => {
-    expect(resolveEnvRefs({ FOO: "prefix_${MY_VAR}_suffix" }, env)).toEqual({ FOO: "prefix_hello_suffix" });
+    expect(resolveEnvRefs({ FOO: "prefix_${MY_VAR}_suffix" }, env)).toEqual({
+      FOO: "prefix_hello_suffix",
+    });
   });
 
   it("passes through literal values (no refs)", () => {
@@ -26,8 +34,9 @@ describe("resolveEnvRefs", () => {
   });
 
   it("throws MissingEnvVarError on missing var", () => {
-    expect(() => resolveEnvRefs({ FOO: "${MISSING}" }, env, "agents.bot.env"))
-      .toThrow(MissingEnvVarError);
+    expect(() =>
+      resolveEnvRefs({ FOO: "${MISSING}" }, env, "agents.bot.env"),
+    ).toThrow(MissingEnvVarError);
     try {
       resolveEnvRefs({ FOO: "${MISSING}" }, env, "agents.bot.env");
     } catch (e) {
@@ -38,15 +47,21 @@ describe("resolveEnvRefs", () => {
   });
 
   it("treats empty string as missing", () => {
-    expect(() => resolveEnvRefs({ FOO: "${EMPTY}" }, env)).toThrow(MissingEnvVarError);
+    expect(() => resolveEnvRefs({ FOO: "${EMPTY}" }, env)).toThrow(
+      MissingEnvVarError,
+    );
   });
 
   it("ignores lowercase vars (not matched by pattern)", () => {
-    expect(resolveEnvRefs({ FOO: "${lowercase}" }, env)).toEqual({ FOO: "${lowercase}" });
+    expect(resolveEnvRefs({ FOO: "${lowercase}" }, env)).toEqual({
+      FOO: "${lowercase}",
+    });
   });
 
   it("unescapes $${VAR} to literal ${VAR}", () => {
-    expect(resolveEnvRefs({ FOO: "$${MY_VAR}" }, env)).toEqual({ FOO: "${MY_VAR}" });
+    expect(resolveEnvRefs({ FOO: "$${MY_VAR}" }, env)).toEqual({
+      FOO: "${MY_VAR}",
+    });
   });
 
   it("resolves multiple entries", () => {
@@ -55,8 +70,9 @@ describe("resolveEnvRefs", () => {
   });
 
   it("includes pathPrefix in error message", () => {
-    expect(() => resolveEnvRefs({ KEY: "${NOPE}" }, env, "agents.x.env"))
-      .toThrow("agents.x.env.KEY");
+    expect(() =>
+      resolveEnvRefs({ KEY: "${NOPE}" }, env, "agents.x.env"),
+    ).toThrow("agents.x.env.KEY");
   });
 });
 

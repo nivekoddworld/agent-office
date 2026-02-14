@@ -1,16 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { redactText, redactDeep, createRedactor } from "../src/security/redact.js";
+import {
+  redactText,
+  redactDeep,
+  createRedactor,
+} from "../src/security/redact.js";
 
 describe("redactText", () => {
   // --- Regex pattern matching ---
 
   it("redacts KEY=value patterns", () => {
-    const result = redactText('API_KEY=sk-ant-abcdefghijklmnop1234');
+    const result = redactText("API_KEY=sk-ant-abcdefghijklmnop1234");
     expect(result).not.toContain("sk-ant-abcdefghijklmnop1234");
   });
 
   it("redacts Bearer token", () => {
-    const result = redactText("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc");
+    const result = redactText(
+      "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc",
+    );
     expect(result).not.toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc");
   });
 
@@ -26,7 +32,8 @@ describe("redactText", () => {
   });
 
   it("redacts PEM private keys", () => {
-    const pem = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----";
+    const pem =
+      "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----";
     const result = redactText(pem);
     expect(result).not.toContain("MIIEowIBAAKCAQEA");
   });
@@ -37,8 +44,12 @@ describe("redactText", () => {
   });
 
   it("redacts Slack tokens", () => {
-    const result = redactText("xoxb-123456789012-123456789012-abcdefghijklmnop");
-    expect(result).not.toContain("xoxb-123456789012-123456789012-abcdefghijklmnop");
+    const result = redactText(
+      "xoxb-123456789012-123456789012-abcdefghijklmnop",
+    );
+    expect(result).not.toContain(
+      "xoxb-123456789012-123456789012-abcdefghijklmnop",
+    );
   });
 
   // --- Exact-match known secrets ---
@@ -118,7 +129,10 @@ describe("redactDeep", () => {
   });
 
   it("preserves JSON structure (no broken keys or nesting)", () => {
-    const obj = { apiKey: "sk-secret123456789012345", nested: { token: "ghp_" + "a".repeat(36) } };
+    const obj = {
+      apiKey: "sk-secret123456789012345",
+      nested: { token: "ghp_" + "a".repeat(36) },
+    };
     const result = redactDeep(obj, ["sk-secret123456789012345"]);
     // Should be valid JSON — no structural breakage
     expect(() => JSON.stringify(result)).not.toThrow();
@@ -138,7 +152,9 @@ describe("createRedactor", () => {
       MODEL_API_KEY: "sk-ant-super-secret-model-key-123",
       DB_PASSWORD: "short",
     });
-    const result = redact.text("The key is sk-ant-super-secret-model-key-123 and db is short");
+    const result = redact.text(
+      "The key is sk-ant-super-secret-model-key-123 and db is short",
+    );
     expect(result).not.toContain("sk-ant-super-secret-model-key-123");
     expect(result).not.toContain("short");
   });
@@ -150,7 +166,10 @@ describe("createRedactor", () => {
   });
 
   it("skips empty values", () => {
-    const redact = createRedactor({ EMPTY: "", VALID: "real-secret-value-here" });
+    const redact = createRedactor({
+      EMPTY: "",
+      VALID: "real-secret-value-here",
+    });
     const result = redact.text("real-secret-value-here");
     expect(result).not.toContain("real-secret-value-here");
   });

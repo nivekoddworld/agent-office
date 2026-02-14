@@ -75,9 +75,31 @@ export interface WatchdogConfig {
   healthyResetMs: number;
 }
 
+// --- Office ---
+
+export interface OfficeYaml {
+  office: {
+    name: string;
+    description?: string;
+    env?: Record<string, string>;
+    secrets?: Record<string, string>;
+  };
+  agents: Record<string, import("./config/yaml-utils.js").AgentYamlEntry>;
+}
+
+export interface OfficeContext {
+  id: string;
+  name: string;
+  description?: string;
+  env: Record<string, string>;
+  secrets: Record<string, string>;
+  dir: string;
+}
+
 // --- Workspace ---
 
 export interface WorkspaceConfig {
+  office: OfficeContext;
   tickIntervalMs?: number;
   watchdog?: Partial<WatchdogConfig>;
   defaultAgent?: string;

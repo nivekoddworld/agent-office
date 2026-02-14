@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Watchdog } from "../src/scheduler/watchdog.js";
 
 /** Minimal mock matching what Watchdog reads from AgentHandle. */
-function mockAgent(name: string, status: "idle" | "running", lastHeartbeat: number) {
+function mockAgent(
+  name: string,
+  status: "idle" | "running",
+  lastHeartbeat: number,
+) {
   return { name, status, lastHeartbeat } as any;
 }
 
@@ -15,7 +19,7 @@ describe("Watchdog", () => {
     const stuck: string[] = [];
 
     agents.set("a", mockAgent("a", "running", Date.now() - 200_000)); // stuck
-    agents.set("b", mockAgent("b", "idle", Date.now()));               // idle, skip
+    agents.set("b", mockAgent("b", "idle", Date.now())); // idle, skip
 
     const wd = new Watchdog(agents, (name) => stuck.push(name), {
       checkIntervalMs: 100,
@@ -67,7 +71,12 @@ describe("Watchdog", () => {
   it("marks agent dead after exceeding maxRestarts", () => {
     const agents = new Map<string, any>();
     const setStatus = vi.fn();
-    agents.set("a", { name: "a", status: "running", lastHeartbeat: Date.now() - 200_000, setStatus });
+    agents.set("a", {
+      name: "a",
+      status: "running",
+      lastHeartbeat: Date.now() - 200_000,
+      setStatus,
+    });
 
     const stuck: string[] = [];
     const wd = new Watchdog(agents, (name) => stuck.push(name), {
@@ -93,7 +102,10 @@ describe("Watchdog", () => {
     agents.set("b", mockAgent("b", "running", Date.now()));
     agents.set("c", mockAgent("c", "idle", Date.now() - 200_000));
 
-    const wd = new Watchdog(agents, () => {}, { checkIntervalMs: 100, stuckThresholdMs: 120_000 });
+    const wd = new Watchdog(agents, () => {}, {
+      checkIntervalMs: 100,
+      stuckThresholdMs: 120_000,
+    });
     expect(wd.stuckCount()).toBe(1);
   });
 });

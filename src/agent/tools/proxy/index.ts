@@ -1,4 +1,8 @@
-export type HostFetch = (path: string, body: unknown, method?: string) => Promise<Response>;
+export type HostFetch = (
+  path: string,
+  body: unknown,
+  method?: string,
+) => Promise<Response>;
 
 export { createAuthenticatedFetchProxy } from "./authenticated-fetch.js";
 export { createSendMailProxy } from "./send-mail.js";

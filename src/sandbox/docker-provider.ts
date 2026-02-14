@@ -2,7 +2,11 @@ import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SandboxProvider, SandboxInfo, SandboxStartOpts } from "./types.js";
+import type {
+  SandboxProvider,
+  SandboxInfo,
+  SandboxStartOpts,
+} from "./types.js";
 import type { HostApi } from "./host-api.js";
 
 const IMAGE_NAME = "pi-sandbox";
@@ -47,28 +51,51 @@ export class DockerProvider implements SandboxProvider {
     const hostUrl = `http://host.docker.internal:${this.hostApiPort}`;
 
     const containerId = await exec("docker", [
-      "run", "-d",
-      "--name", containerName,
+      "run",
+      "-d",
+      "--name",
+      containerName,
       "--add-host=host.docker.internal:host-gateway",
-      "--user", "1000:1000",
+      "--user",
+      "1000:1000",
       "--cap-drop=ALL",
-      "--security-opt", "no-new-privileges",
-      "-v", `${opts.workspacePath}:/workspace`,
-      ...opts.skillsPaths.flatMap((p, i) => ["-v", `${p}:${containerSkillPath(i)}:ro`]),
-      "-e", `AGENT_NAME=${agentName}`,
-      "-e", `SKILL_PATHS=${JSON.stringify(opts.skillsPaths.map((_, i) => containerSkillPath(i)))}`,
-      "-e", `AUTH_TOKEN=${opts.token}`,
-      "-e", `HOST_URL=${hostUrl}`,
-      "-e", `SYSTEM_PROMPT=${opts.systemPrompt}`,
-      "-e", `MODEL_NAME=${opts.modelName}`,
-      ...Object.entries(opts.env ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]),
-      "-p", `${port}:3100`,
+      "--security-opt",
+      "no-new-privileges",
+      "-v",
+      `${opts.workspacePath}:/workspace`,
+      ...opts.skillsPaths.flatMap((p, i) => [
+        "-v",
+        `${p}:${containerSkillPath(i)}:ro`,
+      ]),
+      "-e",
+      `AGENT_NAME=${agentName}`,
+      "-e",
+      `SKILL_PATHS=${JSON.stringify(opts.skillsPaths.map((_, i) => containerSkillPath(i)))}`,
+      "-e",
+      `AUTH_TOKEN=${opts.token}`,
+      "-e",
+      `HOST_URL=${hostUrl}`,
+      "-e",
+      `SYSTEM_PROMPT=${opts.systemPrompt}`,
+      "-e",
+      `MODEL_NAME=${opts.modelName}`,
+      ...Object.entries(opts.env ?? {}).flatMap(([k, v]) => [
+        "-e",
+        `${k}=${v}`,
+      ]),
+      "-p",
+      `${port}:3100`,
       IMAGE_NAME,
     ]);
 
     const id = containerId.trim();
     const url = `http://localhost:${port}`;
-    const entry: ContainerEntry = { containerId: id, port, agentName, token: opts.token };
+    const entry: ContainerEntry = {
+      containerId: id,
+      port,
+      agentName,
+      token: opts.token,
+    };
 
     // Wait for health
     const healthy = await this.pollHealth(url);
@@ -95,7 +122,11 @@ export class DockerProvider implements SandboxProvider {
     const entry = this.containers.get(id);
     if (!entry) return false;
     try {
-      const out = await exec("docker", ["inspect", "--format={{.State.Running}}", entry.containerId]);
+      const out = await exec("docker", [
+        "inspect",
+        "--format={{.State.Running}}",
+        entry.containerId,
+      ]);
       return out.trim() === "true";
     } catch {
       return false;
@@ -121,13 +152,17 @@ export class DockerProvider implements SandboxProvider {
       const res = await fetch(`http://localhost:${entry.port}/health`, {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      return await res.json() as { ok: boolean; turns: number };
+      return (await res.json()) as { ok: boolean; turns: number };
     } catch {
       return { ok: false, turns: 0 };
     }
   }
 
-  private async sandboxFetch(id: string, path: string, body: unknown): Promise<void> {
+  private async sandboxFetch(
+    id: string,
+    path: string,
+    body: unknown,
+  ): Promise<void> {
     const entry = this.containers.get(id);
     if (!entry) throw new Error(`Sandbox ${id} not found`);
 
@@ -141,7 +176,7 @@ export class DockerProvider implements SandboxProvider {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${entry.token}`,
+            Authorization: `Bearer ${entry.token}`,
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -152,7 +187,10 @@ export class DockerProvider implements SandboxProvider {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
         // Only retry network/timeout errors (TypeError from fetch, AbortError from timeout)
-        const isNetworkError = err instanceof TypeError || (err instanceof DOMException && (err.name === "AbortError" || err.name === "TimeoutError"));
+        const isNetworkError =
+          err instanceof TypeError ||
+          (err instanceof DOMException &&
+            (err.name === "AbortError" || err.name === "TimeoutError"));
         if (!isNetworkError) throw lastError;
         if (attempt === 0) await new Promise((r) => setTimeout(r, 500));
       }
@@ -163,9 +201,24 @@ export class DockerProvider implements SandboxProvider {
   private async ensureImage(): Promise<void> {
     if (!this.buildPromise) {
       const srcDir = join(dirname(fileURLToPath(import.meta.url)), "..");
-      this.buildPromise = exec("docker", [
-        "build", "-t", IMAGE_NAME, "-f", join(srcDir, "sandbox", "Dockerfile"), srcDir,
-      ], BUILD_TIMEOUT_MS).then(() => {}, (err) => { this.buildPromise = null; throw err; });
+      this.buildPromise = exec(
+        "docker",
+        [
+          "build",
+          "-t",
+          IMAGE_NAME,
+          "-f",
+          join(srcDir, "sandbox", "Dockerfile"),
+          srcDir,
+        ],
+        BUILD_TIMEOUT_MS,
+      ).then(
+        () => {},
+        (err) => {
+          this.buildPromise = null;
+          throw err;
+        },
+      );
     }
     await this.buildPromise;
   }
@@ -174,9 +227,13 @@ export class DockerProvider implements SandboxProvider {
     const deadline = Date.now() + HEALTH_TIMEOUT_MS;
     while (Date.now() < deadline) {
       try {
-        const res = await fetch(`${url}/health`, { signal: AbortSignal.timeout(2000) });
+        const res = await fetch(`${url}/health`, {
+          signal: AbortSignal.timeout(2000),
+        });
         if (res.ok) return true;
-      } catch { /* retry */ }
+      } catch {
+        /* retry */
+      }
       await new Promise((r) => setTimeout(r, HEALTH_POLL_MS));
     }
     return false;
@@ -188,10 +245,15 @@ function containerSkillPath(index: number): string {
   return index === 0 ? "/skills" : `/skills-${index}`;
 }
 
-function exec(cmd: string, args: string[], timeoutMs = 30_000): Promise<string> {
+function exec(
+  cmd: string,
+  args: string[],
+  timeoutMs = 30_000,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(cmd, args, { timeout: timeoutMs }, (err, stdout, stderr) => {
-      if (err) reject(new Error(`${cmd} ${args[0]} failed: ${stderr || err.message}`));
+      if (err)
+        reject(new Error(`${cmd} ${args[0]} failed: ${stderr || err.message}`));
       else resolve(stdout);
     });
   });
