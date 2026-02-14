@@ -6,6 +6,9 @@ import {
   AUTHENTICATED_FETCH,
   MEMORY_SEARCH,
   MEMORY_GET,
+  CRON_ADD,
+  CRON_REMOVE,
+  CRON_LIST,
 } from "../src/agent/tools/contracts.js";
 import { createMailboxTool } from "../src/agent/tools/send-mail.js";
 import { createListAgentsTool } from "../src/agent/tools/list-agents.js";
@@ -13,12 +16,18 @@ import { createReadAgentFileTool } from "../src/agent/tools/read-agent-file.js";
 import { createAuthenticatedFetchTool } from "../src/agent/tools/authenticated-fetch.js";
 import { createMemorySearchTool } from "../src/agent/tools/memory-search.js";
 import { createMemoryGetTool } from "../src/agent/tools/memory-get.js";
+import { createCronAddTool } from "../src/agent/tools/cron-add.js";
+import { createCronRemoveTool } from "../src/agent/tools/cron-remove.js";
+import { createCronListTool } from "../src/agent/tools/cron-list.js";
 import { createSendMailProxy } from "../src/agent/tools/proxy/send-mail.js";
 import { createListAgentsProxy } from "../src/agent/tools/proxy/list-agents.js";
 import { createReadAgentFileProxy } from "../src/agent/tools/proxy/read-agent-file.js";
 import { createAuthenticatedFetchProxy } from "../src/agent/tools/proxy/authenticated-fetch.js";
 import { createMemorySearchProxy } from "../src/agent/tools/proxy/memory-search.js";
 import { createMemoryGetProxy } from "../src/agent/tools/proxy/memory-get.js";
+import { createCronAddProxy } from "../src/agent/tools/proxy/cron-add.js";
+import { createCronRemoveProxy } from "../src/agent/tools/proxy/cron-remove.js";
+import { createCronListProxy } from "../src/agent/tools/proxy/cron-list.js";
 import { Priority, type AgentInfo } from "../src/types.js";
 
 const noopFetch = vi.fn() as any;
@@ -56,6 +65,36 @@ describe("Tool contracts — host and proxy tools share metadata", () => {
       contract: MEMORY_GET,
       tool: createMemoryGetTool("self", "/test/base", "auto"),
     },
+    {
+      contract: CRON_ADD,
+      tool: createCronAddTool({
+        agentName: "self",
+        officeId: "test",
+        officeDir: "/test/base",
+        permissions: {},
+        cron: null,
+      }),
+    },
+    {
+      contract: CRON_REMOVE,
+      tool: createCronRemoveTool({
+        agentName: "self",
+        officeId: "test",
+        officeDir: "/test/base",
+        permissions: {},
+        cron: null,
+      }),
+    },
+    {
+      contract: CRON_LIST,
+      tool: createCronListTool({
+        agentName: "self",
+        officeId: "test",
+        officeDir: "/test/base",
+        permissions: {},
+        cron: null,
+      }),
+    },
   ];
 
   const proxyTools = [
@@ -68,6 +107,9 @@ describe("Tool contracts — host and proxy tools share metadata", () => {
     },
     { contract: MEMORY_SEARCH, tool: createMemorySearchProxy(noopFetch) },
     { contract: MEMORY_GET, tool: createMemoryGetProxy(noopFetch) },
+    { contract: CRON_ADD, tool: createCronAddProxy(noopFetch) },
+    { contract: CRON_REMOVE, tool: createCronRemoveProxy(noopFetch) },
+    { contract: CRON_LIST, tool: createCronListProxy(noopFetch) },
   ];
 
   for (const { contract, tool } of hostTools) {

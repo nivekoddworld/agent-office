@@ -25,6 +25,9 @@ import {
   createAuthenticatedFetchProxy,
   createMemorySearchProxy,
   createMemoryGetProxy,
+  createCronAddProxy,
+  createCronRemoveProxy,
+  createCronListProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
@@ -124,6 +127,9 @@ const tools: AgentTool<any>[] = [
   ...(hasToolSecrets ? [createAuthenticatedFetchProxy(hostFetch)] : []),
   createMemorySearchProxy(hostFetch),
   createMemoryGetProxy(hostFetch),
+  createCronAddProxy(hostFetch),
+  createCronRemoveProxy(hostFetch),
+  createCronListProxy(hostFetch),
 ];
 
 // Load skills from read-only mounts

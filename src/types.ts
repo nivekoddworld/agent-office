@@ -16,6 +16,10 @@ export enum Priority {
 
 export type AgentStatus = "idle" | "running" | "dead";
 
+export interface AgentPermissions {
+  office_cron?: boolean;
+}
+
 export interface AgentConfig {
   name: string;
   model: Model<any>;
@@ -32,6 +36,7 @@ export interface AgentConfig {
   secrets?: Record<string, string>;
   discloseSecrets?: boolean;
   sandbox?: SandboxMode;
+  permissions?: AgentPermissions;
 }
 
 export interface AgentInfo {

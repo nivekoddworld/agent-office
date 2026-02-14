@@ -369,6 +369,30 @@ describe("validateOfficeConfig", () => {
     });
     expect(errors).toEqual([]);
   });
+
+  it("accepts valid permissions", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { permissions: { office_cron: true } } },
+    });
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects unknown permission key", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { permissions: { unknown_perm: true } as any } },
+    });
+    expect(errors.some((e) => e.includes("Unknown permission"))).toBe(true);
+  });
+
+  it("rejects non-boolean permission value", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { permissions: { office_cron: "yes" } as any } },
+    });
+    expect(errors.some((e) => e.includes("must be a boolean"))).toBe(true);
+  });
 });
 
 // --- Build OfficeContext ---

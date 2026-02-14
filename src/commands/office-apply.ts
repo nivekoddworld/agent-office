@@ -37,6 +37,7 @@ interface NormalizedConfig {
   secrets: string;
   apiKeyRef: string;
   discloseSecrets: boolean;
+  permissions: string;
 }
 
 function resolveCwd(baseDir: string, name: string, cwd?: string): string {
@@ -63,6 +64,7 @@ function normalizeEntry(
     secrets: JSON.stringify(entry.secrets ?? {}),
     apiKeyRef: entry.api_key_ref ?? "",
     discloseSecrets: entry.disclose_secrets ?? false,
+    permissions: JSON.stringify(entry.permissions ?? {}),
   };
 }
 
@@ -86,6 +88,7 @@ function normalizeRunning(
     secrets: JSON.stringify(cfg.secrets ?? {}),
     apiKeyRef: cfg.apiKeyRef ?? "",
     discloseSecrets: cfg.discloseSecrets ?? false,
+    permissions: JSON.stringify(cfg.permissions ?? {}),
   };
 }
 
@@ -101,7 +104,8 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.env === b.env &&
     a.secrets === b.secrets &&
     a.apiKeyRef === b.apiKeyRef &&
-    a.discloseSecrets === b.discloseSecrets
+    a.discloseSecrets === b.discloseSecrets &&
+    a.permissions === b.permissions
   );
 }
 
@@ -189,6 +193,7 @@ export async function applyOfficeYaml(
         env: entry.env,
         secrets: entry.secrets,
         discloseSecrets: entry.disclose_secrets,
+        permissions: entry.permissions,
       });
 
       spawned++;

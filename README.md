@@ -484,42 +484,42 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 
 ## REPL Commands
 
-| Command                                            | Description                                                |
-| -------------------------------------------------- | ---------------------------------------------------------- |
-| `hire <name> [options]`                            | Create a new agent (persists to YAML unless `--ephemeral`) |
-| `roster`                                           | Show all agents with status table                          |
-| `send <agent> <message>`                           | Queue a message for an agent                               |
-| `fire <agent>`                                     | Stop and remove an agent (removes from YAML)               |
-| `status`                                           | Show scheduler, watchdog, and resource state               |
-| `skill add <agent> <source>`                       | Install skills from GitHub (`owner/repo`)                  |
-| `skill list <agent>`                               | List installed skills                                      |
-| `skill remove <agent> <name>`                      | Remove an installed skill                                  |
-| `agent env set <agent> <KEY> <VALUE>`              | Set env var in `office.yaml`                               |
-| `agent env unset <agent> <KEY>`                    | Remove env var from `office.yaml`                          |
-| `agent secret-ref set <agent> <KEY> <ENV>`         | Set secret ref in `office.yaml`                            |
-| `agent secret-ref unset <agent> <KEY>`             | Remove secret ref from `office.yaml`                       |
-| `agent config show <agent>`                        | Show agent config (secrets redacted)                       |
-| `agent prompt show <agent>`                        | Show effective prompt (version/hash)                       |
-| `agent prompt set <agent> <text>`                  | Set custom prompt                                          |
-| `agent prompt append <agent> <text>`               | Append to custom prompt                                    |
-| `agent prompt clear <agent>`                       | Remove custom prompt                                       |
-| `office reload [--force]`                          | Re-apply `office.yaml` (force kills changed agents)        |
-| `office validate`                                  | Dry-run: parse + validate YAML without spawning            |
-| `office path`                                      | Print path to `office.yaml`                                |
-| `cron list`                                        | List all cron jobs                                         |
-| `cron status [agent]`                              | Detailed cron job status                                   |
-| `cron add <agent> <job> "<sched>" <msg> [--apply]` | Add a cron job                                             |
-| `cron remove <agent> <job> [--apply]`              | Remove a cron job                                          |
-| `cron trigger <agent> <job>`                       | Fire a cron job immediately                                |
-| `cron enable <agent> <job> [--apply]`              | Re-enable a paused job                                     |
-| `cron disable <agent> <job> [--apply]`             | Pause a cron job                                           |
-| `cron add office <job> "<sched>" <msg> --targets a,b` | Add an office-level cron job (applies immediately)      |
-| `cron remove office <job>`                         | Remove an office-level cron job (applies immediately)      |
-| `cron trigger office <job>`                        | Fire an office cron job immediately                        |
-| `route <chatId> <agent>`                           | Route a Telegram chat to an agent                          |
-| `route list`                                       | List all Telegram chat routes                              |
-| `help`                                             | Show available commands                                    |
-| `exit`                                             | Shutdown                                                   |
+| Command                                               | Description                                                |
+| ----------------------------------------------------- | ---------------------------------------------------------- |
+| `hire <name> [options]`                               | Create a new agent (persists to YAML unless `--ephemeral`) |
+| `roster`                                              | Show all agents with status table                          |
+| `send <agent> <message>`                              | Queue a message for an agent                               |
+| `fire <agent>`                                        | Stop and remove an agent (removes from YAML)               |
+| `status`                                              | Show scheduler, watchdog, and resource state               |
+| `skill add <agent> <source>`                          | Install skills from GitHub (`owner/repo`)                  |
+| `skill list <agent>`                                  | List installed skills                                      |
+| `skill remove <agent> <name>`                         | Remove an installed skill                                  |
+| `agent env set <agent> <KEY> <VALUE>`                 | Set env var in `office.yaml`                               |
+| `agent env unset <agent> <KEY>`                       | Remove env var from `office.yaml`                          |
+| `agent secret-ref set <agent> <KEY> <ENV>`            | Set secret ref in `office.yaml`                            |
+| `agent secret-ref unset <agent> <KEY>`                | Remove secret ref from `office.yaml`                       |
+| `agent config show <agent>`                           | Show agent config (secrets redacted)                       |
+| `agent prompt show <agent>`                           | Show effective prompt (version/hash)                       |
+| `agent prompt set <agent> <text>`                     | Set custom prompt                                          |
+| `agent prompt append <agent> <text>`                  | Append to custom prompt                                    |
+| `agent prompt clear <agent>`                          | Remove custom prompt                                       |
+| `office reload [--force]`                             | Re-apply `office.yaml` (force kills changed agents)        |
+| `office validate`                                     | Dry-run: parse + validate YAML without spawning            |
+| `office path`                                         | Print path to `office.yaml`                                |
+| `cron list`                                           | List all cron jobs                                         |
+| `cron status [agent]`                                 | Detailed cron job status                                   |
+| `cron add <agent> <job> "<sched>" <msg> [--apply]`    | Add a cron job                                             |
+| `cron remove <agent> <job> [--apply]`                 | Remove a cron job                                          |
+| `cron trigger <agent> <job>`                          | Fire a cron job immediately                                |
+| `cron enable <agent> <job> [--apply]`                 | Re-enable a paused job                                     |
+| `cron disable <agent> <job> [--apply]`                | Pause a cron job                                           |
+| `cron add office <job> "<sched>" <msg> --targets a,b` | Add an office-level cron job (applies immediately)         |
+| `cron remove office <job>`                            | Remove an office-level cron job (applies immediately)      |
+| `cron trigger office <job>`                           | Fire an office cron job immediately                        |
+| `route <chatId> <agent>`                              | Route a Telegram chat to an agent                          |
+| `route list`                                          | List all Telegram chat routes                              |
+| `help`                                                | Show available commands                                    |
+| `exit`                                                | Shutdown                                                   |
 
 ### Hire Options
 

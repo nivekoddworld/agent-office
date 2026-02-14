@@ -64,6 +64,11 @@ export class Workspace {
 
     if (this.sandboxMode === "docker") {
       this.hostApi = new HostApi(this.bus, () => this.list(), this.office.dir);
+      this.hostApi.setCronDeps({
+        officeId: this.office.id,
+        officeDir: this.office.dir,
+        cron: this.cron,
+      });
       this.sandboxProvider = new DockerProvider(this.hostApi, this.hostApiPort);
     }
   }
@@ -131,6 +136,7 @@ export class Workspace {
         sandboxToken,
         secrets,
         this.office.citationMode,
+        config.permissions,
       );
       provider = this.sandboxProvider;
       hostApi = this.hostApi;
@@ -147,6 +153,7 @@ export class Workspace {
       officeName: this.office.name,
       officeDescription: this.office.description,
       citationMode: this.office.citationMode,
+      cronService: this.cron,
     });
     try {
       await handle.init();

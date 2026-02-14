@@ -7,8 +7,14 @@ import {
 import { readFile, realpath } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { MessageBus } from "../transport/message-bus.js";
-import type { AgentInfo } from "../types.js";
+import type { AgentInfo, AgentPermissions } from "../types.js";
 import { Priority } from "../types.js";
+import type { CronService } from "../cron/cron-service.js";
+import {
+  cronAddImpl,
+  cronRemoveImpl,
+  cronListImpl,
+} from "../agent/tools/cron-impl.js";
 import { createRedactor, redactText } from "../security/redact.js";
 import {
   validateFetchParams,
@@ -47,6 +53,12 @@ export class HostApi {
   private heartbeats = new Map<string, number>(); // agentName -> timestamp
   private citationModes = new Map<string, CitationMode>(); // agentName -> mode
   private eventListeners = new Map<string, (event: unknown) => void>();
+  private agentPermissions = new Map<string, AgentPermissions>();
+  private cronDeps: {
+    officeId: string;
+    officeDir: string;
+    cron: CronService;
+  } | null = null;
   private bus: MessageBus;
   private listFn: () => AgentInfo[];
   private baseDir: string;
@@ -57,16 +69,26 @@ export class HostApi {
     this.baseDir = baseDir;
   }
 
+  setCronDeps(deps: {
+    officeId: string;
+    officeDir: string;
+    cron: CronService;
+  }): void {
+    this.cronDeps = deps;
+  }
+
   registerAgent(
     name: string,
     token: string,
     secrets: Record<string, string> = {},
     citationMode: CitationMode = "auto",
+    permissions: AgentPermissions = {},
   ): void {
     this.tokens.set(token, name);
     this.agentSecrets.set(token, secrets);
     this.redactors.set(token, createRedactor(secrets));
     this.citationModes.set(name, citationMode);
+    this.agentPermissions.set(name, permissions);
   }
 
   unregisterAgent(token: string): void {
@@ -74,7 +96,10 @@ export class HostApi {
     this.tokens.delete(token);
     this.agentSecrets.delete(token);
     this.redactors.delete(token);
-    if (name) this.citationModes.delete(name);
+    if (name) {
+      this.citationModes.delete(name);
+      this.agentPermissions.delete(name);
+    }
   }
 
   getHeartbeat(name: string): number | undefined {
@@ -195,6 +220,12 @@ export class HostApi {
         await this.handleMemorySearch(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/memory-get") {
         await this.handleMemoryGet(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/cron-add") {
+        await this.handleCronAdd(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/cron-remove") {
+        await this.handleCronRemove(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/cron-list") {
+        await this.handleCronList(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
         this.heartbeats.set(agentName, Date.now());
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -563,6 +594,107 @@ export class HostApi {
     const header = cite ? `[${result.scope}] ${filePath}\n\n` : "";
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ result: header + result.content }));
+  }
+
+  private buildCronDeps(agentName: string) {
+    if (!this.cronDeps) return null;
+    return {
+      agentName,
+      officeId: this.cronDeps.officeId,
+      officeDir: this.cronDeps.officeDir,
+      permissions: this.agentPermissions.get(agentName) ?? {},
+      cron: this.cronDeps.cron,
+    };
+  }
+
+  private async handleCronAdd(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
+    const deps = this.buildCronDeps(agentName);
+    if (!deps) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Cron not available" }));
+      return;
+    }
+    let params: unknown;
+    try {
+      params = JSON.parse(body);
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON" }));
+      return;
+    }
+    const result = await cronAddImpl(deps, params as any);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ result }));
+  }
+
+  private async handleCronRemove(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
+    const deps = this.buildCronDeps(agentName);
+    if (!deps) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Cron not available" }));
+      return;
+    }
+    let params: unknown;
+    try {
+      params = JSON.parse(body);
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON" }));
+      return;
+    }
+    const result = await cronRemoveImpl(deps, params as any);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ result }));
+  }
+
+  private async handleCronList(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
+    const deps = this.buildCronDeps(agentName);
+    if (!deps) {
+      res.writeHead(503, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Cron not available" }));
+      return;
+    }
+    let params: unknown;
+    try {
+      params = JSON.parse(body);
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON" }));
+      return;
+    }
+    const result = cronListImpl(deps, params as any);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ result }));
   }
 
   private sweepDedup(): void {

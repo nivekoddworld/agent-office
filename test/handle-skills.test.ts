@@ -48,6 +48,9 @@ vi.mock("../src/agent/tools/index.js", () => ({
     execute: vi.fn(),
   }),
   createMemoryGetTool: () => ({ name: "memory_get", execute: vi.fn() }),
+  createCronAddTool: () => ({ name: "cron_add", execute: vi.fn() }),
+  createCronRemoveTool: () => ({ name: "cron_remove", execute: vi.fn() }),
+  createCronListTool: () => ({ name: "cron_list", execute: vi.fn() }),
 }));
 
 // Mock memory/search to avoid real disk access

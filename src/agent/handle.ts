@@ -31,7 +31,12 @@ import {
   createAuthenticatedFetchTool,
   createMemorySearchTool,
   createMemoryGetTool,
+  createCronAddTool,
+  createCronRemoveTool,
+  createCronListTool,
 } from "./tools/index.js";
+import type { CronService } from "../cron/cron-service.js";
+import type { CronToolDeps } from "./tools/cron-impl.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { getCronSummaries } from "../config/office-yaml.js";
@@ -47,6 +52,7 @@ export interface AgentHandleDeps {
   officeName: string;
   officeDescription?: string;
   citationMode?: CitationMode;
+  cronService?: CronService;
 }
 
 export class AgentHandle {
@@ -67,6 +73,7 @@ export class AgentHandle {
   private officeName: string;
   private officeDescription?: string;
   private citationMode: CitationMode;
+  private cronService?: CronService;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
     this.config = config;
@@ -80,6 +87,7 @@ export class AgentHandle {
     this.officeName = deps.officeName;
     this.officeDescription = deps.officeDescription;
     this.citationMode = deps.citationMode ?? "auto";
+    this.cronService = deps.cronService;
   }
 
   get name(): string {
@@ -209,6 +217,7 @@ export class AgentHandle {
         : []),
       createMemorySearchTool(this.name, this.baseDir, this.citationMode),
       createMemoryGetTool(this.name, this.baseDir, this.citationMode),
+      ...this.buildCronTools(),
       ...(this.config.tools ?? []),
     ];
 
@@ -269,6 +278,21 @@ export class AgentHandle {
       const safe = redact.deep(e) as AgentEvent;
       for (const fn of this.listeners) fn(safe);
     });
+  }
+
+  private buildCronTools(): AgentTool<any>[] {
+    const deps: CronToolDeps = {
+      agentName: this.name,
+      officeId: this.officeId,
+      officeDir: this.baseDir,
+      permissions: this.config.permissions ?? {},
+      cron: this.cronService ?? null,
+    };
+    return [
+      createCronAddTool(deps),
+      createCronRemoveTool(deps),
+      createCronListTool(deps),
+    ];
   }
 
   setStatus(s: AgentStatus): void {

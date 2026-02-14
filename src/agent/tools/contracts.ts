@@ -113,3 +113,73 @@ export const AUTHENTICATED_FETCH = {
     ),
   }),
 };
+
+export const CRON_ADD = {
+  name: "cron_add" as const,
+  label: "Cron Add",
+  description:
+    "Add or update a cron job. scope='agent' (default) manages your own jobs. scope='office' requires office_cron permission.",
+  parameters: Type.Object({
+    name: Type.String({ description: "Job name ([a-zA-Z0-9_-]+)" }),
+    schedule: Type.String({
+      description: "5-field cron expression (min hour dom month dow)",
+    }),
+    message: Type.String({ description: "Message sent when job fires" }),
+    scope: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["agent", "office"],
+        description: "Job scope (default: agent)",
+      }),
+    ),
+    timezone: Type.Optional(
+      Type.String({ description: "IANA timezone (default: UTC)" }),
+    ),
+    catch_up: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["skip", "once"],
+        description: "Catch-up policy (default: skip)",
+      }),
+    ),
+    targets: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Target agents (required for scope=office). Use '__broadcast__' for all.",
+      }),
+    ),
+  }),
+};
+
+export const CRON_REMOVE = {
+  name: "cron_remove" as const,
+  label: "Cron Remove",
+  description:
+    "Remove a cron job. scope='agent' (default) removes your own job. scope='office' requires office_cron permission.",
+  parameters: Type.Object({
+    name: Type.String({ description: "Job name to remove" }),
+    scope: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["agent", "office"],
+        description: "Job scope (default: agent)",
+      }),
+    ),
+  }),
+};
+
+export const CRON_LIST = {
+  name: "cron_list" as const,
+  label: "Cron List",
+  description:
+    "List active cron jobs. All agents can see office jobs regardless of permissions.",
+  parameters: Type.Object({
+    scope: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["agent", "office", "all"],
+        description: "Filter scope (default: all)",
+      }),
+    ),
+  }),
+};

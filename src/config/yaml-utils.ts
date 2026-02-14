@@ -20,6 +20,7 @@ export interface AgentYamlEntry {
   env?: Record<string, string>;
   secrets?: Record<string, string>;
   disclose_secrets?: boolean;
+  permissions?: { office_cron?: boolean };
   cron?: Record<
     string,
     {
@@ -175,6 +176,23 @@ export function validateAgentEntry(
         errors.push(`${p}: catch_up must be "skip" or "once"`);
       if (job.enabled !== undefined && typeof job.enabled !== "boolean")
         errors.push(`${p}: enabled must be a boolean`);
+    }
+  }
+
+  if (entry.permissions !== undefined) {
+    if (typeof entry.permissions !== "object" || entry.permissions === null) {
+      errors.push(`permissions must be an object`);
+    } else {
+      const known = new Set(["office_cron"]);
+      for (const key of Object.keys(entry.permissions)) {
+        if (!known.has(key))
+          errors.push(`Unknown permission "${key}" — known: office_cron`);
+      }
+      if (
+        entry.permissions.office_cron !== undefined &&
+        typeof entry.permissions.office_cron !== "boolean"
+      )
+        errors.push(`permissions.office_cron must be a boolean`);
     }
   }
 
@@ -348,5 +366,7 @@ export function buildYamlEntry(
     out.secrets = rawSecrets;
   if (entry.disclose_secrets) out.disclose_secrets = entry.disclose_secrets;
   if (entry.cron && Object.keys(entry.cron).length > 0) out.cron = entry.cron;
+  if (entry.permissions && Object.keys(entry.permissions).length > 0)
+    out.permissions = entry.permissions;
   return out;
 }
