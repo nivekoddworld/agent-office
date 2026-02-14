@@ -14,15 +14,23 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { streamSimple } from "@mariozechner/pi-ai";
 import type { MessageBus } from "../transport/message-bus.js";
-import type { AgentConfig, AgentInfo, AgentStatus } from "../types.js";
+import type {
+  AgentConfig,
+  AgentInfo,
+  AgentStatus,
+  CitationMode,
+} from "../types.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { composeSystemPrompt, hashPrompt } from "./prompts/prompt-manager.js";
+import { collectMemoryFiles } from "./memory/search.js";
 import {
   createListAgentsTool,
   createReadAgentFileTool,
   createMailboxTool,
   createAuthenticatedFetchTool,
+  createMemorySearchTool,
+  createMemoryGetTool,
 } from "./tools/index.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
@@ -38,6 +46,7 @@ export interface AgentHandleDeps {
   officeId: string;
   officeName: string;
   officeDescription?: string;
+  citationMode?: CitationMode;
 }
 
 export class AgentHandle {
@@ -57,6 +66,7 @@ export class AgentHandle {
   private officeId: string;
   private officeName: string;
   private officeDescription?: string;
+  private citationMode: CitationMode;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
     this.config = config;
@@ -69,6 +79,7 @@ export class AgentHandle {
     this.officeId = deps.officeId;
     this.officeName = deps.officeName;
     this.officeDescription = deps.officeDescription;
+    this.citationMode = deps.citationMode ?? "auto";
   }
 
   get name(): string {
@@ -111,6 +122,9 @@ export class AgentHandle {
       const model = this.config.model;
 
       // Build system prompt via prompt manager (sandbox path — skills appended in sandbox-entry)
+      const hasMemory =
+        collectMemoryFiles(join(this.baseDir, "agents", this.name, "workspace"))
+          .length > 0 || collectMemoryFiles(this.baseDir).length > 0;
       const composed = composeSystemPrompt({
         name: this.name,
         cwd: "/workspace",
@@ -123,6 +137,7 @@ export class AgentHandle {
         cronJobs: getCronSummaries(this.officeId, this.name),
         officeName: this.officeName,
         officeDescription: this.officeDescription,
+        hasMemory,
       });
       const systemPrompt = composed.text;
 
@@ -192,6 +207,8 @@ export class AgentHandle {
       ...(Object.keys(resolvedSecrets).length > 0
         ? [createAuthenticatedFetchTool(resolvedSecrets)]
         : []),
+      createMemorySearchTool(this.name, this.baseDir, this.citationMode),
+      createMemoryGetTool(this.name, this.baseDir, this.citationMode),
       ...(this.config.tools ?? []),
     ];
 
@@ -206,6 +223,9 @@ export class AgentHandle {
       );
     const skillsPrompt =
       skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
+    const hasMemoryFiles =
+      collectMemoryFiles(this.cwd).length > 0 ||
+      collectMemoryFiles(this.baseDir).length > 0;
     const composed = composeSystemPrompt({
       name: this.name,
       cwd: this.cwd,
@@ -218,6 +238,7 @@ export class AgentHandle {
       cronJobs: this.officeId ? getCronSummaries(this.officeId, this.name) : [],
       officeName: this.officeName,
       officeDescription: this.officeDescription,
+      hasMemory: hasMemoryFiles,
     });
     const systemPrompt = composed.text + skillsPrompt;
     const finalHash = hashPrompt(systemPrompt);

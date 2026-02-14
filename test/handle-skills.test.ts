@@ -43,6 +43,16 @@ vi.mock("../src/agent/tools/index.js", () => ({
     name: "read_agent_file",
     execute: vi.fn(),
   }),
+  createMemorySearchTool: () => ({
+    name: "memory_search",
+    execute: vi.fn(),
+  }),
+  createMemoryGetTool: () => ({ name: "memory_get", execute: vi.fn() }),
+}));
+
+// Mock memory/search to avoid real disk access
+vi.mock("../src/agent/memory/search.js", () => ({
+  collectMemoryFiles: () => [],
 }));
 
 function makeBus(): MessageBus {

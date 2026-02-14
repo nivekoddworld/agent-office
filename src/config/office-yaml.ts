@@ -8,18 +8,20 @@ import {
   officeAgentsDir,
   validateOfficeId,
 } from "../constants.js";
-import type { OfficeYaml, OfficeContext } from "../types.js";
+import type { OfficeYaml, OfficeContext, CitationMode } from "../types.js";
 import type { AgentYamlEntry } from "./yaml-utils.js";
 import { resolveEnvRefs } from "./env-substitution.js";
 import { withOfficeLock } from "./lock.js";
 import {
   validateAgentEntry,
+  validateOfficeCronEntry,
   atomicWriteYaml,
   buildYamlEntry,
   ENV_REF_RE,
   ENV_KEY_RE,
   RESERVED_KEYS,
 } from "./yaml-utils.js";
+import type { OfficeCronYamlEntry } from "../types.js";
 import { describeCron } from "../cron/cron-parser.js";
 
 // --- Existence check ---
@@ -138,6 +140,10 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       description: office.description as string | undefined,
       env: officeEnv,
       secrets: (office.secrets as Record<string, string>) ?? {},
+      cron: office.cron as Record<string, OfficeCronYamlEntry> | undefined,
+      memory: office.memory as
+        | { citations?: "on" | "off" | "auto" }
+        | undefined,
     },
     agents: result,
   };
@@ -148,8 +154,22 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
 export function validateOfficeConfig(config: OfficeYaml): string[] {
   const errors: string[] = [];
   if (!config.office.name?.trim()) errors.push("office.name is required");
+  const agentNames = Object.keys(config.agents);
   for (const [name, entry] of Object.entries(config.agents)) {
     errors.push(...validateAgentEntry(name, entry));
+  }
+  if (config.office.cron) {
+    for (const [name, entry] of Object.entries(config.office.cron)) {
+      errors.push(...validateOfficeCronEntry(name, entry, agentNames));
+    }
+  }
+  if (config.office.memory) {
+    const c = config.office.memory.citations;
+    if (c !== undefined && c !== "on" && c !== "off" && c !== "auto") {
+      errors.push(
+        `office.memory.citations must be "on", "off", or "auto" (got "${c}")`,
+      );
+    }
   }
   return errors;
 }
@@ -167,6 +187,7 @@ export function buildOfficeContext(
     env: yaml.office.env ?? {},
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),
+    citationMode: (yaml.office.memory?.citations as CitationMode) ?? "auto",
   };
 }
 

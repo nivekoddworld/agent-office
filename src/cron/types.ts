@@ -16,10 +16,17 @@ export interface CronJobState {
   lastError: string | null;
 }
 
+/** Office-level cron job with target agents. */
+export interface OfficeCronJobConfig extends CronJobConfig {
+  targets: string[]; // agent names or "__broadcast__"
+}
+
 /** Combined config + state for CLI display. */
 export interface CronJobEntry {
   agentName: string;
   jobName: string;
   config: CronJobConfig;
   state: CronJobState;
+  scope: "agent" | "office";
+  targets?: string[];
 }

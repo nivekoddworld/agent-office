@@ -13,6 +13,7 @@ export interface PromptContext {
   cronJobs?: string[];
   officeName?: string;
   officeDescription?: string;
+  hasMemory?: boolean;
 }
 
 export interface ComposedPrompt {
@@ -54,6 +55,16 @@ function buildIdentityBlock(ctx: PromptContext): string {
   );
 }
 
+function buildMemoryBlock(ctx: PromptContext): string {
+  if (!ctx.hasMemory) return "";
+  return (
+    "\n\n## Memory\n" +
+    "You have access to memory files. Before answering questions about past decisions, " +
+    "preferences, or established patterns, search memory first using memory_search. " +
+    "Office memory is shared across all agents; agent memory is private to you."
+  );
+}
+
 function buildCustomBlock(customPrompt?: string): string {
   if (!customPrompt?.trim()) return "";
   return `\n\n## Custom Instructions\n${customPrompt.trim()}`;
@@ -67,6 +78,7 @@ export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
   const text =
     buildBasePrompt() +
     buildOfficeBlock(ctx) +
+    buildMemoryBlock(ctx) +
     buildRuntimeBlock(ctx) +
     buildIdentityBlock(ctx) +
     buildCustomBlock(ctx.customPrompt);

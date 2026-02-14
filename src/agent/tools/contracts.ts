@@ -36,6 +36,40 @@ export const READ_AGENT_FILE = {
   }),
 };
 
+export const MEMORY_SEARCH = {
+  name: "memory_search" as const,
+  label: "Memory Search",
+  description:
+    "Search memory files for past decisions, preferences, and established patterns. Office memory is shared; agent memory is private.",
+  parameters: Type.Object({
+    query: Type.String({ description: "Search query" }),
+    scope: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["agent", "office", "all"],
+        description: "Search scope (default: all)",
+      }),
+    ),
+  }),
+};
+
+export const MEMORY_GET = {
+  name: "memory_get" as const,
+  label: "Memory Get",
+  description:
+    "Read a specific memory file by path. Use memory_search first to discover files.",
+  parameters: Type.Object({
+    path: Type.String({ description: "Relative file path (e.g. MEMORY.md)" }),
+    scope: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["agent", "office"],
+        description: "File scope (default: agent)",
+      }),
+    ),
+  }),
+};
+
 export const AUTHENTICATED_FETCH = {
   name: "authenticated_fetch" as const,
   label: "Authenticated Fetch",

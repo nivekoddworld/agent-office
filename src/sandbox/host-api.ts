@@ -17,6 +17,8 @@ import {
   RESERVED_SECRET_NAMES,
   type FetchParams,
 } from "../agent/tools/fetch-helpers.js";
+import { searchMemory, getMemoryFile } from "../agent/memory/search.js";
+import type { CitationMode } from "../types.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const MAX_BODY = 1_048_576; // 1 MB
@@ -43,6 +45,7 @@ export class HostApi {
   private seenMessages = new Map<string, number>(); // messageId -> timestamp
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeats = new Map<string, number>(); // agentName -> timestamp
+  private citationModes = new Map<string, CitationMode>(); // agentName -> mode
   private eventListeners = new Map<string, (event: unknown) => void>();
   private bus: MessageBus;
   private listFn: () => AgentInfo[];
@@ -58,16 +61,20 @@ export class HostApi {
     name: string,
     token: string,
     secrets: Record<string, string> = {},
+    citationMode: CitationMode = "auto",
   ): void {
     this.tokens.set(token, name);
     this.agentSecrets.set(token, secrets);
     this.redactors.set(token, createRedactor(secrets));
+    this.citationModes.set(name, citationMode);
   }
 
   unregisterAgent(token: string): void {
+    const name = this.tokens.get(token);
     this.tokens.delete(token);
     this.agentSecrets.delete(token);
     this.redactors.delete(token);
+    if (name) this.citationModes.delete(name);
   }
 
   getHeartbeat(name: string): number | undefined {
@@ -184,6 +191,10 @@ export class HostApi {
         await this.handleAgentEvent(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/authenticated-fetch") {
         await this.handleAuthenticatedFetch(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/memory-search") {
+        await this.handleMemorySearch(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/memory-get") {
+        await this.handleMemoryGet(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
         this.heartbeats.set(agentName, Date.now());
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -472,6 +483,86 @@ export class HostApi {
       res.writeHead(502, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: `Fetch failed: ${message}` }));
     }
+  }
+
+  private async handleMemorySearch(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
+
+    const { query, scope: rawScope } = JSON.parse(body);
+    if (!query) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing required field: query" }));
+      return;
+    }
+    const scope = ["agent", "office", "all"].includes(rawScope)
+      ? rawScope
+      : "all";
+
+    const matches = searchMemory({
+      query,
+      scope,
+      agentName,
+      officeDir: this.baseDir,
+    });
+    const cm = this.citationModes.get(agentName) ?? "auto";
+    const formatted = matches
+      .map((m) => {
+        const cite = cm === "on" || (cm === "auto" && m.scope === "office");
+        const prefix = cite ? `[${m.scope}] ` : "";
+        return `${prefix}${m.file}:${m.line}: ${m.content}`;
+      })
+      .join("\n");
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ result: formatted || "No matches found." }));
+  }
+
+  private async handleMemoryGet(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
+
+    const { path: filePath, scope: rawScope } = JSON.parse(body);
+    if (!filePath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing required field: path" }));
+      return;
+    }
+    const scope = ["agent", "office"].includes(rawScope) ? rawScope : "agent";
+
+    const result = getMemoryFile({
+      filePath,
+      scope,
+      agentName,
+      officeDir: this.baseDir,
+    });
+
+    if ("error" in result) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: result.error }));
+      return;
+    }
+
+    const cm = this.citationModes.get(agentName) ?? "auto";
+    const cite = cm === "on" || (cm === "auto" && result.scope === "office");
+    const header = cite ? `[${result.scope}] ${filePath}\n\n` : "";
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ result: header + result.content }));
   }
 
   private sweepDedup(): void {

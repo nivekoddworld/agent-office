@@ -353,6 +353,22 @@ describe("validateOfficeConfig", () => {
     });
     expect(errors.length).toBeGreaterThan(0);
   });
+
+  it("rejects agent names starting with __", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { __office__: { model: "openai:gpt-4" } },
+    });
+    expect(errors.some((e) => e.includes("__"))).toBe(true);
+  });
+
+  it("allows agent names with single underscore prefix", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { _helper: { model: "openai:gpt-4" } },
+    });
+    expect(errors).toEqual([]);
+  });
 });
 
 // --- Build OfficeContext ---

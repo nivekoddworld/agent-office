@@ -1,6 +1,11 @@
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
-import type { CronJobConfig, CronJobState, CronJobEntry } from "./types.js";
+import type {
+  CronJobConfig,
+  CronJobState,
+  CronJobEntry,
+  OfficeCronJobConfig,
+} from "./types.js";
 import type { CronStore } from "./cron-store.js";
 import { nextFireTime, prevFireTime } from "./cron-parser.js";
 import { Priority } from "../types.js";
@@ -17,6 +22,15 @@ interface ActiveJob {
   timer: ReturnType<typeof setTimeout> | null;
 }
 
+interface ActiveOfficeJob {
+  jobName: string;
+  config: OfficeCronJobConfig;
+  state: CronJobState;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const OFFICE_KEY_PREFIX = "__office__";
+
 /**
  * CronService — manages per-agent cron jobs with setTimeout-based timers.
  * Follows Watchdog lifecycle: constructor → start → stop.
@@ -26,6 +40,7 @@ export class CronService {
   private agents: Map<string, AgentHandle>;
   private store: CronStore;
   private jobs = new Map<string, ActiveJob>(); // key: "agent:job"
+  private officeJobs = new Map<string, ActiveOfficeJob>(); // key: jobName
   private dispatchLog: number[] = []; // timestamps of recent dispatches
 
   constructor(
@@ -46,6 +61,11 @@ export class CronService {
       if (saved) job.state = saved;
       this.scheduleNext(job);
     }
+    for (const [name, job] of this.officeJobs) {
+      const saved = states[`${OFFICE_KEY_PREFIX}:${name}`];
+      if (saved) job.state = saved;
+      this.scheduleNextOffice(job);
+    }
   }
 
   /** Clear all timers. */
@@ -56,10 +76,20 @@ export class CronService {
         job.timer = null;
       }
     }
+    for (const job of this.officeJobs.values()) {
+      if (job.timer) {
+        clearTimeout(job.timer);
+        job.timer = null;
+      }
+    }
   }
 
   /** Replace all jobs for an agent. Clears old timers, starts new ones. */
   setJobs(agentName: string, jobs: Record<string, CronJobConfig>): void {
+    if (agentName === OFFICE_KEY_PREFIX)
+      throw new Error(
+        `"${OFFICE_KEY_PREFIX}" is reserved and cannot be used as an agent name`,
+      );
     const states = this.store.load();
     const now = Date.now();
 
@@ -111,14 +141,24 @@ export class CronService {
     this.persistState();
   }
 
-  /** List all active jobs. */
+  /** List all active jobs (agent + office). */
   listJobs(): CronJobEntry[] {
-    return [...this.jobs.values()].map((j) => ({
+    const agent: CronJobEntry[] = [...this.jobs.values()].map((j) => ({
       agentName: j.agentName,
       jobName: j.jobName,
       config: j.config,
       state: { ...j.state },
+      scope: "agent" as const,
     }));
+    const office: CronJobEntry[] = [...this.officeJobs.values()].map((j) => ({
+      agentName: OFFICE_KEY_PREFIX,
+      jobName: j.jobName,
+      config: j.config,
+      state: { ...j.state },
+      scope: "office" as const,
+      targets: j.config.targets,
+    }));
+    return [...agent, ...office];
   }
 
   /** Trigger a job immediately (manual). */
@@ -134,6 +174,137 @@ export class CronService {
     const names = new Set<string>();
     for (const job of this.jobs.values()) names.add(job.agentName);
     return names;
+  }
+
+  // --- Office-level cron ---
+
+  /** Replace all office-level jobs. */
+  setOfficeJobs(jobs: Record<string, OfficeCronJobConfig>): void {
+    const states = this.store.load();
+
+    const pending: ActiveOfficeJob[] = [];
+    for (const [jobName, config] of Object.entries(jobs)) {
+      const key = `${OFFICE_KEY_PREFIX}:${jobName}`;
+      const saved = states[key];
+      const state: CronJobState = saved ?? {
+        lastRunAt: null,
+        nextRunAt: nextFireTime(config.schedule, config.timezone).getTime(),
+        runCount: 0,
+        lastStatus: null,
+        lastError: null,
+      };
+      pending.push({ jobName, config, state, timer: null });
+    }
+
+    this.removeOfficeJobs();
+
+    for (const job of pending) {
+      this.officeJobs.set(job.jobName, job);
+      this.scheduleNextOffice(job);
+    }
+  }
+
+  /** Remove all office-level jobs. */
+  removeOfficeJobs(): void {
+    for (const job of this.officeJobs.values()) {
+      if (job.timer) clearTimeout(job.timer);
+    }
+    this.officeJobs.clear();
+    this.persistState();
+  }
+
+  /** Trigger an office job immediately. */
+  triggerOffice(jobName: string): void {
+    const job = this.officeJobs.get(jobName);
+    if (!job) throw new Error(`Office cron job "${jobName}" not found`);
+    this.fireOfficeJob(job);
+  }
+
+  /** Resolve target list — expand __broadcast__ to all agent names. */
+  private resolveTargets(targets: string[]): string[] {
+    if (!Array.isArray(targets)) return [];
+    if (targets.includes("__broadcast__")) {
+      return [...this.agents.keys()];
+    }
+    return [...new Set(targets)];
+  }
+
+  private scheduleNextOffice(job: ActiveOfficeJob): void {
+    if (job.timer) {
+      clearTimeout(job.timer);
+      job.timer = null;
+    }
+    const now = Date.now();
+    const next = nextFireTime(
+      job.config.schedule,
+      job.config.timezone,
+      new Date(now),
+    );
+    job.state.nextRunAt = next.getTime();
+    const delay = next.getTime() - now;
+
+    if (delay > MAX_TIMEOUT) {
+      job.timer = setTimeout(() => this.scheduleNextOffice(job), MAX_TIMEOUT);
+    } else {
+      job.timer = setTimeout(
+        () => {
+          this.fireOfficeJob(job);
+          this.scheduleNextOffice(job);
+        },
+        Math.max(delay, 0),
+      );
+    }
+  }
+
+  private fireOfficeJob(job: ActiveOfficeJob): void {
+    const now = Date.now();
+    const resolved = this.resolveTargets(job.config.targets);
+    let sent = 0;
+    let skippedCap = 0;
+
+    for (const target of resolved) {
+      // Global dispatch cap
+      this.dispatchLog = this.dispatchLog.filter(
+        (t) => now - t < DISPATCH_WINDOW_MS,
+      );
+      if (this.dispatchLog.length >= DISPATCH_CAP) {
+        console.warn(
+          `[cron] Global dispatch cap reached (${DISPATCH_CAP}/min) — skipping office:${job.jobName} → ${target}`,
+        );
+        skippedCap++;
+        continue;
+      }
+
+      // Skip busy agents
+      const handle = this.agents.get(target);
+      if (handle && handle.status === "running") {
+        console.warn(
+          `[cron] Agent "${target}" busy — skipping office:${job.jobName}`,
+        );
+        continue;
+      }
+
+      try {
+        this.bus.send({
+          from: "__cron__",
+          to: target,
+          type: "prompt",
+          payload: job.config.message,
+          priority: Priority.NORMAL,
+        });
+        this.dispatchLog.push(now);
+        sent++;
+      } catch {
+        // individual target failure doesn't stop others
+      }
+    }
+
+    job.state.lastRunAt = now;
+    job.state.runCount++;
+    job.state.lastStatus =
+      sent > 0 ? "ok" : skippedCap > 0 ? "skipped_cap" : "skipped_busy";
+    job.state.lastError = null;
+    this.persistState();
   }
 
   private scheduleNext(job: ActiveJob): void {
@@ -220,6 +391,8 @@ export class CronService {
   private persistState(): void {
     const states: Record<string, CronJobState> = {};
     for (const [key, job] of this.jobs) states[key] = job.state;
+    for (const [name, job] of this.officeJobs)
+      states[`${OFFICE_KEY_PREFIX}:${name}`] = job.state;
     this.store.save(states);
   }
 }

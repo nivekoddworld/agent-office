@@ -126,7 +126,12 @@ export class Workspace {
         );
         Object.assign(secrets, resolved);
       }
-      this.hostApi.registerAgent(config.name, sandboxToken, secrets);
+      this.hostApi.registerAgent(
+        config.name,
+        sandboxToken,
+        secrets,
+        this.office.citationMode,
+      );
       provider = this.sandboxProvider;
       hostApi = this.hostApi;
     }
@@ -141,6 +146,7 @@ export class Workspace {
       officeId: this.office.id,
       officeName: this.office.name,
       officeDescription: this.office.description,
+      citationMode: this.office.citationMode,
     });
     try {
       await handle.init();

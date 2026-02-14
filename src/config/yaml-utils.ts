@@ -2,7 +2,8 @@ import { writeFileSync, renameSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import { isValidCron } from "../cron/cron-parser.js";
-import type { CronJobConfig } from "../cron/types.js";
+import type { CronJobConfig, OfficeCronJobConfig } from "../cron/types.js";
+import type { OfficeCronYamlEntry } from "../types.js";
 import { Priority } from "../types.js";
 
 // --- Agent YAML entry type (canonical definition) ---
@@ -74,6 +75,11 @@ export function validateAgentEntry(
 
   if (!AGENT_NAME_RE.test(name)) {
     errors.push(`Invalid agent name "${name}" — must match [a-zA-Z0-9_-]+`);
+  }
+  if (name.startsWith("__")) {
+    errors.push(
+      `Invalid agent name "${name}" — names starting with "__" are reserved`,
+    );
   }
 
   if (
@@ -214,6 +220,73 @@ export function extractCronJobs(
       };
     }
     if (Object.keys(jobs).length > 0) result.set(agent, jobs);
+  }
+  return result;
+}
+
+// --- Office cron validation ---
+
+export function validateOfficeCronEntry(
+  name: string,
+  entry: OfficeCronYamlEntry,
+  agentNames: string[],
+): string[] {
+  const errors: string[] = [];
+  const p = `office.cron.${name}`;
+
+  if (!CRON_JOB_NAME_RE.test(name))
+    errors.push(`${p}: invalid job name "${name}" — must match [a-zA-Z0-9_-]+`);
+  if (!entry.schedule || !isValidCron(entry.schedule))
+    errors.push(
+      `${p}: invalid schedule "${entry.schedule ?? ""}" — must be a valid 5-field cron expression`,
+    );
+  if (
+    !entry.message ||
+    typeof entry.message !== "string" ||
+    !entry.message.trim()
+  )
+    errors.push(`${p}: message is required`);
+  if (entry.timezone !== undefined && !isValidTimezone(entry.timezone))
+    errors.push(`${p}: invalid timezone "${entry.timezone}"`);
+  if (entry.catch_up !== undefined && !VALID_CATCH_UP.includes(entry.catch_up))
+    errors.push(`${p}: catch_up must be "skip" or "once"`);
+  if (entry.enabled !== undefined && typeof entry.enabled !== "boolean")
+    errors.push(`${p}: enabled must be a boolean`);
+
+  if (
+    !entry.targets ||
+    !Array.isArray(entry.targets) ||
+    entry.targets.length === 0
+  )
+    errors.push(`${p}: targets is required and must be a non-empty array`);
+  else {
+    for (const t of entry.targets) {
+      if (t === "__broadcast__") continue;
+      if (!agentNames.includes(t))
+        errors.push(`${p}: unknown target agent "${t}"`);
+    }
+  }
+
+  return errors;
+}
+
+export function extractOfficeCronJobs(
+  cron: Record<string, OfficeCronYamlEntry> | undefined,
+): Record<string, OfficeCronJobConfig> {
+  if (!cron) return {};
+  const result: Record<string, OfficeCronJobConfig> = {};
+  for (const [name, raw] of Object.entries(cron)) {
+    if (!raw || typeof raw !== "object") continue;
+    if (raw.enabled === false) continue;
+    if (!Array.isArray(raw.targets) || raw.targets.length === 0) continue;
+    result[name] = {
+      schedule: raw.schedule,
+      message: raw.message,
+      timezone: raw.timezone,
+      catchUp: (raw.catch_up as "skip" | "once") ?? "skip",
+      enabled: raw.enabled ?? true,
+      targets: raw.targets,
+    };
   }
   return result;
 }

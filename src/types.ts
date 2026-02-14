@@ -77,15 +77,28 @@ export interface WatchdogConfig {
 
 // --- Office ---
 
+export interface OfficeCronYamlEntry {
+  schedule: string;
+  message: string;
+  timezone?: string;
+  catch_up?: string;
+  enabled?: boolean;
+  targets: string[];
+}
+
 export interface OfficeYaml {
   office: {
     name: string;
     description?: string;
     env?: Record<string, string>;
     secrets?: Record<string, string>;
+    cron?: Record<string, OfficeCronYamlEntry>;
+    memory?: { citations?: "on" | "off" | "auto" };
   };
   agents: Record<string, import("./config/yaml-utils.js").AgentYamlEntry>;
 }
+
+export type CitationMode = "on" | "off" | "auto";
 
 export interface OfficeContext {
   id: string;
@@ -94,6 +107,7 @@ export interface OfficeContext {
   env: Record<string, string>;
   secrets: Record<string, string>;
   dir: string;
+  citationMode: CitationMode;
 }
 
 // --- Workspace ---

@@ -41,11 +41,15 @@ import {
   cronRemoveCommand,
   cronEnableCommand,
   cronDisableCommand,
+  cronTriggerOfficeCommand,
+  cronAddOfficeCommand,
+  cronRemoveOfficeCommand,
 } from "./commands/cron.js";
 import { AGENT_OFFICE_DIR, validateOfficeId } from "./constants.js";
 import {
   loadOfficeYaml,
   buildOfficeContext,
+  validateOfficeConfig,
   officeExists,
   createOffice,
 } from "./config/office-yaml.js";
@@ -175,6 +179,11 @@ program
       const yaml = loadOfficeYaml(opts.office);
       if (!yaml) {
         console.error(`Failed to load office.yaml for "${opts.office}"`);
+        process.exit(1);
+      }
+      const configErrors = validateOfficeConfig(yaml);
+      if (configErrors.length > 0) {
+        for (const e of configErrors) console.error(`[office] ${e}`);
         process.exit(1);
       }
       const office = buildOfficeContext(opts.office, yaml);
@@ -410,8 +419,58 @@ async function handleRepl(
         cronStatusCommand(workspace, parts[2]);
         break;
       }
+      if (sub === "trigger" && parts[2] === "office" && parts[3]) {
+        cronTriggerOfficeCommand(workspace, parts[3]);
+        break;
+      }
       if (sub === "trigger" && parts[2] && parts[3]) {
         cronTriggerCommand(workspace, parts[2], parts[3]);
+        break;
+      }
+      if (
+        sub === "add" &&
+        parts[2] === "office" &&
+        parts[3] &&
+        parts[4] &&
+        parts[5]
+      ) {
+        const schedule = parts[4];
+        const fieldCount = schedule.split(/\s+/).length;
+        if (fieldCount !== 5) {
+          console.log(
+            `Error: schedule must be a quoted 5-field cron expression (got ${fieldCount} field${fieldCount !== 1 ? "s" : ""}).`,
+          );
+          break;
+        }
+        const targetsIdx = parts.indexOf("--targets");
+        if (targetsIdx === -1 || !parts[targetsIdx + 1]) {
+          console.log("Error: --targets is required for office cron");
+          break;
+        }
+        const targets = parts[targetsIdx + 1]!.split(",");
+        const optStart = parts.findIndex(
+          (p, i) => i >= 5 && p.startsWith("--"),
+        );
+        const msgEnd = optStart === -1 ? parts.length : optStart;
+        const message = parts.slice(5, msgEnd).join(" ");
+        if (!message) {
+          console.log("Error: message is required");
+          break;
+        }
+        const cronOpts = parseCronAddOpts(parts.slice(msgEnd));
+        await cronAddOfficeCommand(
+          officeId,
+          parts[3],
+          schedule,
+          message,
+          targets,
+          cronOpts,
+          workspace,
+        );
+        break;
+      }
+      if (sub === "remove" && parts[2] === "office" && parts[3]) {
+        await cronRemoveOfficeCommand(officeId, parts[3], workspace);
         break;
       }
       if (sub === "add" && parts[2] && parts[3] && parts[4] && parts[5]) {
@@ -476,7 +535,7 @@ async function handleRepl(
         break;
       }
       console.log(
-        'Usage: cron list | status [agent] | trigger <agent> <job>\n       cron add <agent> <job> "<sched>" <msg> [--apply]\n       cron remove|enable|disable <agent> <job> [--apply]',
+        'Usage: cron list | status [agent] | trigger <agent> <job>\n       cron add <agent> <job> "<sched>" <msg> [--apply]\n       cron remove|enable|disable <agent> <job> [--apply]\n       cron trigger office <job> | cron add office <job> "<sched>" <msg> --targets a,b\n       cron remove office <job>',
       );
       break;
     }
@@ -588,8 +647,10 @@ function printHelp(): void {
   skill add <agent> <owner/repo> | skill list <agent> | skill remove <agent> <name>
   office reload [--force] | office validate | office path
   cron list | cron status [agent] | cron trigger <agent> <job>
-  cron add <agent> <job> "<sched>" <msg> [--apply] [--timezone TZ] [--catch-up latest|none]
+  cron add <agent> <job> "<sched>" <msg> [--apply] [--timezone TZ] [--catch-up skip|once]
   cron remove|enable|disable <agent> <job> [--apply]
+  cron trigger office <job> | cron add office <job> "<sched>" <msg> --targets a,b
+  cron remove office <job>
   route <chatId> <agent> | route list
   help | exit`);
 }

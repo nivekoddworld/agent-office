@@ -11,6 +11,7 @@ import { withOfficeLock } from "../config/lock.js";
 import {
   resolvePriority,
   extractCronJobs,
+  extractOfficeCronJobs,
   validateAgentEntry,
 } from "../config/yaml-utils.js";
 import {
@@ -114,6 +115,22 @@ export async function applyOfficeYaml(
   const yaml = loadOfficeYaml(officeId);
   if (!yaml) return;
 
+  // Validate office-level config (catches unknown cron targets, bad citations, etc.)
+  const configErrors = validateOfficeConfig(yaml);
+  if (configErrors.length > 0) {
+    for (const e of configErrors) console.warn(`[office] ${e}`);
+  }
+  const hasOfficeCronErrors = configErrors.some((e) =>
+    e.startsWith("office.cron."),
+  );
+  const hasOfficeConfigErrors = configErrors.some(
+    (e) => e.startsWith("office.") && !e.startsWith("office.cron."),
+  );
+  if (hasOfficeConfigErrors) {
+    console.error("[office] Aborting — fix office config errors above");
+    return;
+  }
+
   const baseDir = officeDir(officeId);
   const entries = Object.entries(yaml.agents);
   let spawned = 0;
@@ -204,6 +221,24 @@ export async function applyOfficeYaml(
   for (const activeAgent of workspace.cron.activeAgents()) {
     if (!yamlAgentNames.has(activeAgent))
       workspace.cron.removeJobs(activeAgent);
+  }
+
+  // Reconcile office-level cron jobs (skip if validation found errors)
+  if (hasOfficeCronErrors) {
+    console.warn(`[office] Skipping office cron — fix validation errors above`);
+  } else {
+    const officeCronJobs = extractOfficeCronJobs(yaml.office.cron);
+    if (Object.keys(officeCronJobs).length > 0) {
+      try {
+        workspace.cron.setOfficeJobs(officeCronJobs);
+      } catch (err) {
+        console.warn(
+          `[office] Office cron setup failed: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    } else {
+      workspace.cron.removeOfficeJobs();
+    }
   }
 }
 

@@ -5,6 +5,7 @@ import { loadOfficeYaml } from "../config/office-yaml.js";
 import { officeYamlPath } from "../constants.js";
 import {
   extractCronJobs,
+  extractOfficeCronJobs,
   isValidTimezone,
   atomicWriteYaml,
 } from "../config/yaml-utils.js";
@@ -23,8 +24,12 @@ export function cronListCommand(workspace: Workspace): void {
   for (const j of jobs) {
     const next = new Date(j.state.nextRunAt).toISOString();
     const desc = describeCron(j.config.schedule);
+    const scope = j.scope === "office" ? "[office]" : "[agent]";
+    const targets = j.targets ? ` → ${j.targets.join(",")}` : "";
+    const label =
+      j.scope === "office" ? j.jobName : `${j.agentName}:${j.jobName}`;
     console.log(
-      `  ${j.agentName}:${j.jobName}  ${j.config.schedule} (${desc})  next: ${next}`,
+      `  ${scope} ${label}  ${j.config.schedule} (${desc})  next: ${next}${targets}`,
     );
   }
 }
@@ -40,12 +45,16 @@ export function cronStatusCommand(
     return;
   }
   for (const j of jobs) {
-    console.log(`\n  ${j.agentName}:${j.jobName}`);
+    const label =
+      j.scope === "office" ? j.jobName : `${j.agentName}:${j.jobName}`;
+    const scope = j.scope === "office" ? "[office]" : "[agent]";
+    console.log(`\n  ${scope} ${label}`);
     console.log(
       `    schedule:  ${j.config.schedule} (${describeCron(j.config.schedule)})`,
     );
     console.log(`    message:   ${j.config.message}`);
     console.log(`    timezone:  ${j.config.timezone ?? "UTC"}`);
+    if (j.targets) console.log(`    targets:   ${j.targets.join(", ")}`);
     console.log(`    next run:  ${new Date(j.state.nextRunAt).toISOString()}`);
     console.log(
       `    last run:  ${j.state.lastRunAt ? new Date(j.state.lastRunAt).toISOString() : "never"}`,
@@ -253,4 +262,137 @@ async function reloadCronIfRunning(
   const jobs = cronJobs.get(agentName);
   if (jobs) workspace.cron.setJobs(agentName, jobs);
   else workspace.cron.removeJobs(agentName);
+}
+
+// --- Office-level cron commands ---
+
+export function cronTriggerOfficeCommand(
+  workspace: Workspace,
+  jobName: string,
+): void {
+  workspace.cron.triggerOffice(jobName);
+  console.log(`[cron] Triggered office:${jobName}`);
+}
+
+export async function cronAddOfficeCommand(
+  officeId: string,
+  jobName: string,
+  schedule: string,
+  message: string,
+  targets: string[],
+  opts?: { timezone?: string; catchUp?: string },
+  workspace?: Workspace,
+): Promise<void> {
+  if (!JOB_NAME_RE.test(jobName)) {
+    console.error(
+      `[cron] Invalid job name "${jobName}" — must match [a-zA-Z0-9_-]+`,
+    );
+    return;
+  }
+  if (!isValidCron(schedule)) {
+    console.error(`[cron] Invalid schedule: "${schedule}"`);
+    return;
+  }
+  if (!message || !message.trim()) {
+    console.error(`[cron] Message is required`);
+    return;
+  }
+  if (!targets || targets.length === 0) {
+    console.error(`[cron] At least one target is required`);
+    return;
+  }
+  if (opts?.timezone && !isValidTimezone(opts.timezone)) {
+    console.error(`[cron] Invalid timezone: "${opts.timezone}"`);
+    return;
+  }
+  if (opts?.catchUp && !VALID_CATCH_UP.includes(opts.catchUp)) {
+    console.error(`[cron] Invalid catch_up: "${opts.catchUp}"`);
+    return;
+  }
+
+  // Validate targets against roster
+  const yaml = loadOfficeYaml(officeId);
+  if (yaml) {
+    const agentNames = Object.keys(yaml.agents);
+    for (const t of targets) {
+      if (t === "__broadcast__") continue;
+      if (!agentNames.includes(t)) {
+        console.error(
+          `[cron] Unknown target agent "${t}" — not in office roster`,
+        );
+        return;
+      }
+    }
+  }
+
+  let written = false;
+  await withOfficeLock(officeId, async () => {
+    const path = officeYamlPath(officeId);
+    if (!existsSync(path)) {
+      console.error("[cron] office.yaml not found");
+      return;
+    }
+    const doc = parseDocument(readFileSync(path, "utf-8"));
+    const entry: Record<string, unknown> = { schedule, message, targets };
+    if (opts?.timezone) entry.timezone = opts.timezone;
+    if (opts?.catchUp) entry.catch_up = opts.catchUp;
+    doc.setIn(["office", "cron", jobName], entry);
+    atomicWriteYaml(path, doc.toString());
+    written = true;
+  });
+
+  if (!written) return;
+
+  if (workspace) {
+    const yaml = loadOfficeYaml(officeId);
+    if (yaml) {
+      const jobs = extractOfficeCronJobs(yaml.office.cron);
+      if (Object.keys(jobs).length > 0) workspace.cron.setOfficeJobs(jobs);
+    }
+    console.log(`[cron] Saved and activated.`);
+  } else {
+    console.log(`[cron] Saved. Run "office reload" to activate.`);
+  }
+}
+
+export async function cronRemoveOfficeCommand(
+  officeId: string,
+  jobName: string,
+  workspace?: Workspace,
+): Promise<void> {
+  let removed = false;
+  await withOfficeLock(officeId, async () => {
+    const path = officeYamlPath(officeId);
+    if (!existsSync(path)) {
+      console.error("[cron] office.yaml not found");
+      return;
+    }
+    const doc = parseDocument(readFileSync(path, "utf-8"));
+    if (!doc.getIn(["office", "cron", jobName])) {
+      console.warn(`[cron] Office job "${jobName}" not found in office.yaml`);
+      return;
+    }
+    doc.deleteIn(["office", "cron", jobName]);
+    const cronNode = doc.getIn(["office", "cron"]);
+    if (cronNode && typeof cronNode === "object") {
+      const js = (cronNode as any).toJSON?.() ?? cronNode;
+      if (Object.keys(js).length === 0) doc.deleteIn(["office", "cron"]);
+    }
+    atomicWriteYaml(path, doc.toString());
+    removed = true;
+  });
+
+  if (!removed) return;
+
+  if (workspace) {
+    const yaml = loadOfficeYaml(officeId);
+    if (yaml) {
+      const jobs = extractOfficeCronJobs(yaml.office.cron);
+      if (Object.keys(jobs).length > 0) workspace.cron.setOfficeJobs(jobs);
+      else workspace.cron.removeOfficeJobs();
+    }
+    console.log(`[cron] Removed and deactivated.`);
+  } else {
+    console.log(`[cron] Removed from office.yaml.`);
+  }
 }

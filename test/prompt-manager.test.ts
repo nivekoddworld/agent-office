@@ -123,21 +123,24 @@ describe("composeSystemPrompt", () => {
     expect(a.hash).toBe(b.hash);
   });
 
-  it("layer order: base → office → runtime → identity → custom", () => {
+  it("layer order: base → office → memory → runtime → identity → custom", () => {
     const { text } = composeSystemPrompt({
       ...BASE_CTX,
       officeName: "Acme Corp",
+      hasMemory: true,
       envNames: ["VAR"],
       customPrompt: "My rules",
       description: "helper",
     });
     const baseIdx = text.indexOf("Agent-to-Agent Collaboration");
     const officeIdx = text.indexOf("## Office");
+    const memoryIdx = text.indexOf("## Memory");
     const runtimeIdx = text.indexOf("Runtime Context");
     const identityIdx = text.indexOf('You are agent "test-agent"');
     const customIdx = text.indexOf("Custom Instructions");
     expect(baseIdx).toBeLessThan(officeIdx);
-    expect(officeIdx).toBeLessThan(runtimeIdx);
+    expect(officeIdx).toBeLessThan(memoryIdx);
+    expect(memoryIdx).toBeLessThan(runtimeIdx);
     expect(runtimeIdx).toBeLessThan(identityIdx);
     expect(identityIdx).toBeLessThan(customIdx);
   });
@@ -163,6 +166,22 @@ describe("composeSystemPrompt", () => {
   it("omits office block when no officeName", () => {
     const { text } = composeSystemPrompt(BASE_CTX);
     expect(text).not.toContain("## Office");
+  });
+
+  it("memory block present when hasMemory is true", () => {
+    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
+    expect(text).toContain("## Memory");
+    expect(text).toContain("memory_search");
+  });
+
+  it("memory block absent when hasMemory is false", () => {
+    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: false });
+    expect(text).not.toContain("## Memory");
+  });
+
+  it("memory block absent by default", () => {
+    const { text } = composeSystemPrompt(BASE_CTX);
+    expect(text).not.toContain("## Memory");
   });
 
   it("version matches PROMPT_VERSION", () => {

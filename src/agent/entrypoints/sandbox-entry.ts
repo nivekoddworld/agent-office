@@ -23,6 +23,8 @@ import {
   createListAgentsProxy,
   createReadAgentFileProxy,
   createAuthenticatedFetchProxy,
+  createMemorySearchProxy,
+  createMemoryGetProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
@@ -120,6 +122,8 @@ const tools: AgentTool<any>[] = [
   createListAgentsProxy(AGENT_NAME, hostFetch),
   createReadAgentFileProxy(hostFetch),
   ...(hasToolSecrets ? [createAuthenticatedFetchProxy(hostFetch)] : []),
+  createMemorySearchProxy(hostFetch),
+  createMemoryGetProxy(hostFetch),
 ];
 
 // Load skills from read-only mounts
