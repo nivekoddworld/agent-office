@@ -168,15 +168,32 @@ describe("composeSystemPrompt", () => {
     expect(text).not.toContain("## Office");
   });
 
-  it("memory block present when hasMemory is true", () => {
+  it("memory block includes reading instructions", () => {
     const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
     expect(text).toContain("## Memory");
+    expect(text).toContain("Reading:");
     expect(text).toContain("memory_search");
+  });
+
+  it("memory block includes writing instructions", () => {
+    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
+    expect(text).toContain("Writing:");
+    expect(text).toContain("MEMORY.md");
+    expect(text).toContain("memory/<topic>.md");
+  });
+
+  it("memory block includes activity log instructions", () => {
+    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
+    expect(text).toContain("Activity log:");
+    expect(text).toContain("logs/YYYY-MM-DD.md");
+    expect(text).toContain("logs/2026-02-14.md");
   });
 
   it("memory block absent when hasMemory is false", () => {
     const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: false });
     expect(text).not.toContain("## Memory");
+    expect(text).not.toContain("Writing:");
+    expect(text).not.toContain("Activity log:");
   });
 
   it("memory block absent by default", () => {

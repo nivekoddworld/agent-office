@@ -59,9 +59,16 @@ function buildMemoryBlock(ctx: PromptContext): string {
   if (!ctx.hasMemory) return "";
   return (
     "\n\n## Memory\n" +
-    "You have access to memory files. Before answering questions about past decisions, " +
-    "preferences, or established patterns, search memory first using memory_search. " +
-    "Office memory is shared across all agents; agent memory is private to you."
+    "Reading:\n" +
+    "Before answering questions about past decisions, preferences, or established patterns, " +
+    "search memory first using memory_search. Office memory is shared across all agents; " +
+    "agent memory is private to you.\n\n" +
+    "Writing:\n" +
+    "After completing a task, update your agent memory using write/edit tools. " +
+    "Use MEMORY.md for key decisions and memory/<topic>.md for detailed notes. Keep entries concise.\n\n" +
+    "Activity log:\n" +
+    "Append a brief summary to logs/YYYY-MM-DD.md with timestamp, what was done, and key files touched " +
+    "(for example, logs/2026-02-14.md). Create the file if it does not exist."
   );
 }
 
