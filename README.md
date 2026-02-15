@@ -588,6 +588,11 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `agent prompt set <agent> <text>`                     | Set custom prompt (`prompt_inline` only)                   |
 | `agent prompt append <agent> <text>`                  | Append to custom prompt (`prompt_inline` only)             |
 | `agent prompt clear <agent>`                          | Remove prompt config (both inline and file ref)            |
+| `agent permission show <agent>`                       | Show agent permissions (office_cron, tools)                |
+| `agent permission set <agent> office_cron <bool>`     | Set `office_cron` permission (true/false)                  |
+| `agent permission set <agent> tools allow\|deny <t>`  | Set tools allow/deny list (comma-separated)                |
+| `agent permission clear <agent> office_cron`          | Clear `office_cron` permission                             |
+| `agent permission clear <agent> tools`                | Clear tools permissions                                    |
 | `office reload [--force]`                             | Re-apply `office.yaml` (force kills changed agents)        |
 | `office validate`                                     | Dry-run: parse + validate YAML without spawning            |
 | `office path`                                         | Print path to `office.yaml`                                |

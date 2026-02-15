@@ -558,3 +558,70 @@ export async function removeSkillFromOfficeYaml(
     removeSkillFromOfficeYamlSync(officeId, agentName, source),
   );
 }
+
+// --- Permission mutations ---
+
+export async function setAgentPermissionOfficeCron(
+  officeId: string,
+  agentName: string,
+  enabled: boolean,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    doc.setIn(["agents", agentName, "permissions", "office_cron"], enabled);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function clearAgentPermissionOfficeCron(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    if (doc.getIn(["agents", agentName, "permissions", "office_cron"]) !== undefined) {
+      doc.deleteIn(["agents", agentName, "permissions", "office_cron"]);
+      cleanupEmptyMap(doc, ["agents", agentName, "permissions"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function setAgentPermissionTools(
+  officeId: string,
+  agentName: string,
+  mode: "allow" | "deny",
+  tools: string[],
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    const opposite = mode === "allow" ? "deny" : "allow";
+    if (doc.getIn(["agents", agentName, "permissions", "tools", opposite]) !== undefined) {
+      doc.deleteIn(["agents", agentName, "permissions", "tools", opposite]);
+    }
+    doc.setIn(["agents", agentName, "permissions", "tools", mode], tools);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function clearAgentPermissionTools(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    if (doc.getIn(["agents", agentName, "permissions", "tools"]) !== undefined) {
+      doc.deleteIn(["agents", agentName, "permissions", "tools"]);
+      cleanupEmptyMap(doc, ["agents", agentName, "permissions"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}

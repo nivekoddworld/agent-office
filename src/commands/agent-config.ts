@@ -10,6 +10,10 @@ import {
   appendAgentPrompt,
   clearAgentPrompt,
   getCronSummaries,
+  setAgentPermissionOfficeCron,
+  clearAgentPermissionOfficeCron,
+  setAgentPermissionTools,
+  clearAgentPermissionTools,
 } from "../config/office-yaml.js";
 import { officeDir } from "../constants.js";
 import { createRedactor } from "../security/redact.js";
@@ -115,6 +119,8 @@ export function agentConfigShowCommand(
   }
   if (entry.disclose_secrets !== undefined)
     display.disclose_secrets = entry.disclose_secrets;
+  if (entry.permissions && Object.keys(entry.permissions).length > 0)
+    display.permissions = entry.permissions;
 
   console.log(`\nAgent "${agentName}" config:`);
   console.log(JSON.stringify(display, null, 2));
@@ -215,4 +221,76 @@ export async function agentPromptClearCommand(
 ): Promise<void> {
   await clearAgentPrompt(officeId, agentName);
   console.log(`[agent] Cleared prompt for "${agentName}"`);
+}
+
+// --- Permission commands ---
+
+export function agentPermissionShowCommand(
+  officeId: string,
+  agentName: string,
+): void {
+  const yaml = loadOfficeYaml(officeId);
+  if (!yaml) {
+    console.error("[agent] Could not load office.yaml");
+    return;
+  }
+
+  const entry = yaml.agents[agentName];
+  if (!entry) {
+    console.error(`[agent] Agent "${agentName}" not found in office.yaml`);
+    return;
+  }
+
+  const perms = entry.permissions;
+  const display: Record<string, unknown> = {};
+  display.office_cron = perms?.office_cron ?? "not set (default: false)";
+  if (perms?.tools?.allow) display["tools.allow"] = perms.tools.allow;
+  if (perms?.tools?.deny) display["tools.deny"] = perms.tools.deny;
+  if (!perms?.tools) display.tools = "not set (all tools allowed)";
+
+  console.log(`\nAgent "${agentName}" permissions:`);
+  console.log(JSON.stringify(display, null, 2));
+}
+
+export async function agentPermissionSetOfficeCronCommand(
+  officeId: string,
+  agentName: string,
+  enabled: boolean,
+): Promise<void> {
+  await setAgentPermissionOfficeCron(officeId, agentName, enabled);
+  console.log(
+    `[agent] Set office_cron=${enabled} for "${agentName}". Saved. Run "office reload --force" to apply.`,
+  );
+}
+
+export async function agentPermissionClearOfficeCronCommand(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  await clearAgentPermissionOfficeCron(officeId, agentName);
+  console.log(
+    `[agent] Cleared office_cron for "${agentName}". Saved. Run "office reload --force" to apply.`,
+  );
+}
+
+export async function agentPermissionSetToolsCommand(
+  officeId: string,
+  agentName: string,
+  mode: "allow" | "deny",
+  tools: string[],
+): Promise<void> {
+  await setAgentPermissionTools(officeId, agentName, mode, tools);
+  console.log(
+    `[agent] Set tools.${mode}=[${tools.join(", ")}] for "${agentName}". Saved. Run "office reload --force" to apply.`,
+  );
+}
+
+export async function agentPermissionClearToolsCommand(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  await clearAgentPermissionTools(officeId, agentName);
+  console.log(
+    `[agent] Cleared tools permissions for "${agentName}". Saved. Run "office reload --force" to apply.`,
+  );
 }

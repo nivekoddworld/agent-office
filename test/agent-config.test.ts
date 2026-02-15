@@ -43,10 +43,15 @@ import {
   clearAgentPrompt,
   loadOfficeYaml,
   getCronSummaries,
+  setAgentPermissionOfficeCron,
+  clearAgentPermissionOfficeCron,
+  setAgentPermissionTools,
+  clearAgentPermissionTools,
 } from "../src/config/office-yaml.js";
 import {
   agentConfigShowCommand,
   agentPromptShowCommand,
+  agentPermissionShowCommand,
 } from "../src/commands/agent-config.js";
 
 function writeYaml(content: string): void {
@@ -597,5 +602,224 @@ describe("concurrency", () => {
     expect(raw).toContain("val-a");
     expect(raw).toContain("KEY_B");
     expect(raw).toContain("val-b");
+  });
+});
+
+// --- setAgentPermissionOfficeCron ---
+
+describe("setAgentPermissionOfficeCron", () => {
+  it("sets office_cron to true", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await setAgentPermissionOfficeCron(OFFICE_ID, "bot", true);
+    const raw = readYaml();
+    expect(raw).toContain("permissions:");
+    expect(raw).toContain("office_cron: true");
+  });
+
+  it("sets office_cron to false", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await setAgentPermissionOfficeCron(OFFICE_ID, "bot", false);
+    expect(readYaml()).toContain("office_cron: false");
+  });
+
+  it("overwrites existing value", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      office_cron: false\n",
+    );
+    await setAgentPermissionOfficeCron(OFFICE_ID, "bot", true);
+    expect(readYaml()).toContain("office_cron: true");
+  });
+
+  it("preserves existing tools permissions", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      tools:\n        allow:\n          - bash\n",
+    );
+    await setAgentPermissionOfficeCron(OFFICE_ID, "bot", true);
+    const raw = readYaml();
+    expect(raw).toContain("office_cron: true");
+    expect(raw).toContain("bash");
+  });
+
+  it("throws on missing agent", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(
+      setAgentPermissionOfficeCron(OFFICE_ID, "bot", true),
+    ).rejects.toThrow("not found in office.yaml");
+  });
+});
+
+// --- clearAgentPermissionOfficeCron ---
+
+describe("clearAgentPermissionOfficeCron", () => {
+  it("removes office_cron and preserves tools", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      office_cron: true\n      tools:\n        deny:\n          - browser\n",
+    );
+    await clearAgentPermissionOfficeCron(OFFICE_ID, "bot");
+    const raw = readYaml();
+    expect(raw).not.toContain("office_cron");
+    expect(raw).toContain("browser");
+  });
+
+  it("cleans up empty permissions object", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      office_cron: true\n",
+    );
+    await clearAgentPermissionOfficeCron(OFFICE_ID, "bot");
+    expect(readYaml()).not.toContain("permissions");
+  });
+
+  it("is idempotent", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await clearAgentPermissionOfficeCron(OFFICE_ID, "bot"); // no throw
+  });
+
+  it("throws on missing agent", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(
+      clearAgentPermissionOfficeCron(OFFICE_ID, "bot"),
+    ).rejects.toThrow("not found in office.yaml");
+  });
+});
+
+// --- setAgentPermissionTools ---
+
+describe("setAgentPermissionTools", () => {
+  it("sets tools.allow", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await setAgentPermissionTools(OFFICE_ID, "bot", "allow", ["bash", "browser"]);
+    const raw = readYaml();
+    expect(raw).toContain("allow:");
+    expect(raw).toContain("bash");
+    expect(raw).toContain("browser");
+  });
+
+  it("sets tools.deny", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await setAgentPermissionTools(OFFICE_ID, "bot", "deny", ["browser"]);
+    const raw = readYaml();
+    expect(raw).toContain("deny:");
+    expect(raw).toContain("browser");
+  });
+
+  it("removes opposite mode when setting", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      tools:\n        deny:\n          - browser\n",
+    );
+    await setAgentPermissionTools(OFFICE_ID, "bot", "allow", ["bash"]);
+    const raw = readYaml();
+    expect(raw).toContain("allow:");
+    expect(raw).not.toContain("deny:");
+  });
+
+  it("preserves office_cron", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      office_cron: true\n",
+    );
+    await setAgentPermissionTools(OFFICE_ID, "bot", "allow", ["bash"]);
+    const raw = readYaml();
+    expect(raw).toContain("office_cron: true");
+    expect(raw).toContain("allow:");
+  });
+
+  it("throws on missing agent", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(
+      setAgentPermissionTools(OFFICE_ID, "bot", "allow", ["bash"]),
+    ).rejects.toThrow("not found in office.yaml");
+  });
+});
+
+// --- clearAgentPermissionTools ---
+
+describe("clearAgentPermissionTools", () => {
+  it("removes tools and preserves office_cron", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      office_cron: true\n      tools:\n        allow:\n          - bash\n",
+    );
+    await clearAgentPermissionTools(OFFICE_ID, "bot");
+    const raw = readYaml();
+    expect(raw).not.toContain("tools:");
+    expect(raw).toContain("office_cron: true");
+  });
+
+  it("cleans up empty permissions object", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      tools:\n        deny:\n          - browser\n",
+    );
+    await clearAgentPermissionTools(OFFICE_ID, "bot");
+    expect(readYaml()).not.toContain("permissions");
+  });
+
+  it("is idempotent", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    await clearAgentPermissionTools(OFFICE_ID, "bot"); // no throw
+  });
+
+  it("throws on missing agent", async () => {
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    await expect(
+      clearAgentPermissionTools(OFFICE_ID, "bot"),
+    ).rejects.toThrow("not found in office.yaml");
+  });
+});
+
+// --- agentPermissionShowCommand ---
+
+describe("agentPermissionShowCommand", () => {
+  it("shows permissions when configured", () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      office_cron: true\n      tools:\n        allow:\n          - bash\n",
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentPermissionShowCommand(OFFICE_ID, "bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("office_cron");
+    expect(output).toContain("true");
+    expect(output).toContain("bash");
+    spy.mockRestore();
+  });
+
+  it("shows defaults when no permissions set", () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentPermissionShowCommand(OFFICE_ID, "bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("not set");
+    spy.mockRestore();
+  });
+
+  it("errors on missing agent", () => {
+    writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    agentPermissionShowCommand(OFFICE_ID, "bot");
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("not found"));
+    spy.mockRestore();
+  });
+});
+
+// --- agentConfigShowCommand + permissions ---
+
+describe("agentConfigShowCommand permissions", () => {
+  it("includes permissions in config output", () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    permissions:\n      office_cron: true\n      tools:\n        deny:\n          - browser\n",
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentConfigShowCommand(OFFICE_ID, "bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("permissions");
+    expect(output).toContain("office_cron");
+    expect(output).toContain("browser");
+    spy.mockRestore();
+  });
+
+  it("omits permissions when not configured", () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot:\n    model: openai:gpt-4\n");
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentConfigShowCommand(OFFICE_ID, "bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).not.toContain("permissions");
+    spy.mockRestore();
   });
 });

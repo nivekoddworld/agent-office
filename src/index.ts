@@ -32,6 +32,11 @@ import {
   agentPromptSetCommand,
   agentPromptAppendCommand,
   agentPromptClearCommand,
+  agentPermissionShowCommand,
+  agentPermissionSetOfficeCronCommand,
+  agentPermissionClearOfficeCronCommand,
+  agentPermissionSetToolsCommand,
+  agentPermissionClearToolsCommand,
 } from "./commands/agent-config.js";
 import {
   cronListCommand,
@@ -392,9 +397,52 @@ async function handleRepl(
         );
       } else if (sub === "prompt" && action === "clear" && agent) {
         await agentPromptClearCommand(officeId, agent);
+      } else if (sub === "permission" && action === "show" && agent) {
+        agentPermissionShowCommand(officeId, agent);
+      } else if (
+        sub === "permission" &&
+        action === "set" &&
+        agent &&
+        parts[4] === "office_cron" &&
+        parts[5]
+      ) {
+        const val = parts[5].toLowerCase();
+        if (val !== "true" && val !== "false") {
+          console.log("Usage: agent permission set <agent> office_cron <true|false>");
+        } else {
+          await agentPermissionSetOfficeCronCommand(officeId, agent, val === "true");
+        }
+      } else if (
+        sub === "permission" &&
+        action === "set" &&
+        agent &&
+        parts[4] === "tools" &&
+        (parts[5] === "allow" || parts[5] === "deny") &&
+        parts[6]
+      ) {
+        const tools = parts.slice(6).join(" ").split(",").map((s) => s.trim()).filter(Boolean);
+        if (tools.length === 0) {
+          console.log("Usage: agent permission set <agent> tools allow|deny <tool1,tool2,...>");
+        } else {
+          await agentPermissionSetToolsCommand(officeId, agent, parts[5], tools);
+        }
+      } else if (
+        sub === "permission" &&
+        action === "clear" &&
+        agent &&
+        parts[4] === "office_cron"
+      ) {
+        await agentPermissionClearOfficeCronCommand(officeId, agent);
+      } else if (
+        sub === "permission" &&
+        action === "clear" &&
+        agent &&
+        parts[4] === "tools"
+      ) {
+        await agentPermissionClearToolsCommand(officeId, agent);
       } else {
         console.log(
-          "Usage: agent env set|unset <agent> <KEY> [VALUE]\n       agent secret-ref set|unset <agent> <KEY> [ENV]\n       agent config show <agent>\n       agent prompt show|set|append|clear <agent> [text]",
+          "Usage: agent env set|unset <agent> <KEY> [VALUE]\n       agent secret-ref set|unset <agent> <KEY> [ENV]\n       agent config show <agent>\n       agent prompt show|set|append|clear <agent> [text]\n       agent permission show <agent>\n       agent permission set <agent> office_cron <true|false>\n       agent permission set <agent> tools allow|deny <tool1,tool2,...>\n       agent permission clear <agent> office_cron|tools",
         );
       }
       break;
