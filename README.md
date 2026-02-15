@@ -272,6 +272,22 @@ agents:
 - Default (no `tools` field): all tools available.
 - **Server-side enforcement:** in Docker sandbox mode, denied tools also return HTTP 403 on the corresponding Host API endpoint (e.g. `/api/cron-add` returns `403 Tool denied by policy`).
 
+### Permission Management
+
+Defaults: `office_cron` is **false**; tools are **all allowed** unless `allow` or `deny` is set. Setting both `allow` and `deny` is a validation error.
+
+View and edit permissions from the REPL without editing YAML manually:
+
+```bash
+agent permission show bot
+agent permission set bot office_cron true
+agent permission set bot tools deny cron_add,cron_remove
+agent permission clear bot office_cron
+agent permission clear bot tools
+```
+
+Changes are saved to `office.yaml`. Run `office reload --force` to apply.
+
 ### Auto-Sync
 
 REPL commands automatically keep `office.yaml` in sync:
@@ -855,7 +871,15 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 
 Every agent receives a **layered system prompt** composed from eight ordered layers:
 
-1. **Base prompt** (`src/agent/prompts/base-v1.md`) — collaboration rules, tool guidance, anti-loop rules, workflow, reporting, safety. Always included, never overridden.
+1. **Base prompt** (`src/agent/prompts/base-v1.md`) — always included, never overridden. Covers:
+   - Agent-to-agent collaboration (tools, mail protocol, reply-loop avoidance, workflow rules, reporting)
+   - Execution protocol (Plan → Act → Verify → Report)
+   - Workspace discipline and persistence discipline
+   - No invented details — do not fabricate external systems, links, IDs, or integrations; ask or state unknown
+   - Operating context awareness — treat the office as your environment; do not assume facts not in prompt context or tool output
+   - Quality bar (verify before claiming done, report assumptions)
+   - Safety constitution (no independent goals, no self-modification, no replication, no exfiltration, safety over completion, human oversight first)
+   - Instruction precedence (system rules > office config > custom instructions > file injections)
 2. **Office context** — office name and description (e.g. "You work at Acme Corp. We build AI-powered widgets"). Only present when an office has a display name.
 3. **Bootstrap files** — optional workspace files (`SOUL.md`, `CONTEXT.md`, etc.) injected with provenance headers. See [Bootstrap Files](#bootstrap-files).
 4. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
