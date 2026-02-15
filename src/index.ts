@@ -758,5 +758,5 @@ function printHelp(): void {
   route <chatId> <agent> | route list
   prompt report <agent>
   cost status | cost today [--agent <name>] | cost report --days <n> [--agent <name>]
-  help | exit`);
+  help | exit | quit`);
 }

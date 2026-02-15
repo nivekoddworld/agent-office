@@ -221,7 +221,7 @@ agents:
 
 Office-level `env` and `secrets` are inherited by all agents. Agent-level values override office-level.
 
-All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start.
+All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.
 
 | Field              | Type             | Default                                                | Description                                                          |
 | ------------------ | ---------------- | ------------------------------------------------------ | -------------------------------------------------------------------- |
@@ -655,7 +655,7 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `cost today [--agent <name>]`                         | Persistent token and cost totals for today                 |
 | `cost report --days <n> [--agent <name>]`             | Historical usage over last N days                          |
 | `help`                                                | Show available commands                                    |
-| `exit`                                                | Shutdown                                                   |
+| `exit` / `quit`                                       | Shutdown                                                   |
 
 ### Hire Options
 
@@ -1135,6 +1135,15 @@ I am a concise, friendly assistant.
 Periodic heartbeat checks (default: every 10s). If an agent's last heartbeat exceeds the stuck threshold (default: 120s), it aborts and re-initializes with a fresh Pi instance. Every agent event resets the heartbeat timer.
 
 For Docker-sandboxed agents, heartbeats are received via `POST /api/heartbeat` from the container (every 5s) and fed into the watchdog through the same monitoring path.
+
+Watchdog behavior is configurable via `WorkspaceConfig.watchdog` (all fields optional):
+
+| Parameter          | Default  | Description                                        |
+| ------------------ | -------- | -------------------------------------------------- |
+| `checkIntervalMs`  | `10000`  | How often the watchdog checks heartbeats           |
+| `stuckThresholdMs` | `120000` | Time without heartbeat before declaring agent stuck |
+| `maxRestarts`      | `5`      | Max restarts before marking agent as dead          |
+| `healthyResetMs`   | `600000` | Time healthy before resetting restart counter      |
 
 ### Resource Guards
 
