@@ -48,10 +48,12 @@ See [`examples/`](examples/) for more details — each has a README describing t
 - [Multi-Office Architecture](#multi-office-architecture)
   - [Creating an Office](#creating-an-office)
   - [Office Configuration](#office-configuration-officeyaml)
+  - [Permissions](#permissions)
   - [Auto-Sync](#auto-sync)
   - [Reload](#reload)
   - [Cron Jobs](#cron-jobs)
   - [Office-Level Cron](#office-level-cron)
+  - [Agent Cron Tools](#agent-cron-tools)
   - [Migration from agents.yaml](#migration-from-agentsyaml)
 - [Sandbox Modes](#sandbox-modes)
   - [In-Process Mode](#in-process-mode-default)
@@ -64,6 +66,9 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [send_mail](#send_mail)
   - [read_agent_file](#read_agent_file)
   - [authenticated_fetch](#authenticated_fetch)
+  - [cron_add](#cron_add)
+  - [cron_remove](#cron_remove)
+  - [cron_list](#cron_list)
   - [Tool Architecture](#tool-architecture)
   - [Prompt System](#prompt-system)
 - [Memory System](#memory-system)
@@ -108,9 +113,9 @@ graph TD
     BUS --> HA
 ```
 
-**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
+**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron / Agent cron tools -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -199,6 +204,8 @@ agents:
     secrets: # sensitive, ${VAR} refs only — delivered via authenticated_fetch
       GITHUB_TOKEN: ${MY_GH_TOKEN}
     disclose_secrets: true # show secret names in system prompt (default: false)
+    permissions:
+      office_cron: true # allow managing office-level cron jobs
 
   reviewer:
     model: openai:gpt-4.1
@@ -225,6 +232,17 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
 | `disclose_secrets` | boolean          | `false`                                                | Show secret names in system prompt                                   |
 | `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
+| `permissions`      | map              | `{}`                                                   | Agent permissions (e.g. `{ office_cron: true }`)                     |
+
+### Permissions
+
+The `permissions` field controls which privileged operations an agent may perform:
+
+| Permission     | Type    | Default | Description                                          |
+| -------------- | ------- | ------- | ---------------------------------------------------- |
+| `office_cron`  | boolean | `false` | Allow managing office-level cron jobs via `cron_add`/`cron_remove` |
+
+Permissions are validated at config parse time. Unknown keys or non-boolean values are rejected.
 
 ### Auto-Sync
 
@@ -340,6 +358,42 @@ ao> cron trigger office <job>                    # fire immediately
 ```
 
 Office jobs appear in `cron list` with an `[office]` scope tag. The same safety guards apply: busy agents are skipped, and the global 60/minute dispatch cap counts each target dispatch.
+
+#### Agent Cron Tools
+
+In addition to operator-managed cron (REPL/CLI), agents can self-manage cron jobs via three built-in tools: `cron_add`, `cron_remove`, and `cron_list`. `cron_trigger` remains operator-only.
+
+**Agent scope** (default) — agents manage their own jobs with no special permission. Max 10 jobs per agent.
+
+```
+agent calls cron_add:
+  name: "nightly-report"
+  schedule: "0 22 * * *"
+  message: "Generate the nightly summary report"
+
+-> Cron job "nightly-report" saved and activated (At 10:00 PM).
+```
+
+**Office scope** — requires `permissions: { office_cron: true }` in office.yaml. The `targets` field is required.
+
+```
+agent calls cron_add:
+  name: "standup"
+  schedule: "0 9 * * 1-5"
+  message: "Report your status"
+  scope: "office"
+  targets: ["pm", "coder"]
+
+-> Cron job "standup" saved and activated (At 09:00 AM, Monday through Friday).
+```
+
+**Visibility:** `cron_list` shows all office-level jobs plus only the calling agent's own agent-scope jobs. No cross-agent visibility.
+
+**Error handling:** Malformed or invalid `office.yaml` returns a tool error — no silent success. Validation errors (bad schedule, unknown targets), parse failures, and permission denials all produce explicit error messages.
+
+**Audit trail:** Every action (success, denial, or error) is logged to `<officeDir>/logs/cron-audit.jsonl` and printed to stdout with `[cron-audit]` prefix.
+
+**Security:** Agent-scope writes are isolated to the calling agent's YAML section (identity derived from auth token). All mutations run under `withOfficeLock` with race-free activation from the same parsed document.
 
 ### Migration from `agents.yaml`
 
@@ -476,6 +530,9 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | `POST` | `/api/authenticated-fetch`       | Host-proxied HTTP request with secret injection                |
 | `POST` | `/api/memory-search`             | Search memory files across scopes (auth required)              |
 | `POST` | `/api/memory-get`                | Read a specific memory file (auth required)                    |
+| `POST` | `/api/cron-add`                  | Add or update a cron job (auth required, identity from token)  |
+| `POST` | `/api/cron-remove`               | Remove a cron job (auth required, identity from token)         |
+| `POST` | `/api/cron-list`                 | List cron jobs visible to the calling agent (auth required)    |
 | `POST` | `/api/prompt-done`               | Notify host that a prompt completed                            |
 | `POST` | `/api/agent-event`               | Forward agent events to host (redacted)                        |
 | `POST` | `/api/heartbeat`                 | Update agent heartbeat timestamp                               |
@@ -550,7 +607,7 @@ Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via 
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`) and memory tools (`memory_search`, `memory_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), and cron tools (`cron_add`, `cron_remove`, `cron_list`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
 
 ### `list_agents`
 
@@ -681,6 +738,42 @@ agent calls authenticated_fetch:
   auth: { mode: "raw", headerName: "X-API-Key" }
 
 -> Header injected: X-API-Key: <resolved secret value>
+```
+
+### `cron_add`
+
+Add or update a cron job. Agent scope (default) manages the calling agent's own jobs. Office scope requires `office_cron` permission and a `targets` list.
+
+```
+agent calls cron_add:
+  name: "daily-check"
+  schedule: "0 9 * * *"
+  message: "Run daily health check"
+
+-> Cron job "daily-check" saved and activated (At 09:00 AM).
+```
+
+### `cron_remove`
+
+Remove a cron job by name. Scope defaults to agent.
+
+```
+agent calls cron_remove:
+  name: "daily-check"
+
+-> Cron job "daily-check" removed.
+```
+
+### `cron_list`
+
+List active cron jobs. Shows all office-level jobs plus only the calling agent's own agent-scope jobs.
+
+```
+agent calls cron_list:
+  scope: "all"
+
+-> [agent] daily-check  0 9 * * * (At 09:00 AM)  next: 2025-01-15T09:00:00.000Z
+   [office] standup     0 9 * * 1-5 (...)         next: 2025-01-13T09:00:00.000Z → pm,coder
 ```
 
 ### Tool Architecture
@@ -848,6 +941,8 @@ Each office gets an isolated directory, and each agent within it gets its own wo
       memory/               # office-level topic files
       cron/
         state.json          # cron job state
+      logs/
+        cron-audit.jsonl    # agent cron tool audit trail
       agents/
         designer/
           workspace/        # agent's cwd — all file tools scoped here
@@ -1090,6 +1185,10 @@ src/
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
       memory-search.ts        memory_search — host implementation
       memory-get.ts           memory_get — host implementation
+      cron-impl.ts            Shared cron tool logic (add/remove/list)
+      cron-add.ts             cron_add — host implementation
+      cron-remove.ts          cron_remove — host implementation
+      cron-list.ts            cron_list — host implementation
       proxy/
         index.ts              Barrel + HostFetch type
         send-mail.ts          send_mail — proxy implementation (HTTP)
@@ -1098,6 +1197,9 @@ src/
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
         memory-search.ts      memory_search — proxy implementation (HTTP)
         memory-get.ts         memory_get — proxy implementation (HTTP)
+        cron-add.ts           cron_add — proxy implementation (HTTP)
+        cron-remove.ts        cron_remove — proxy implementation (HTTP)
+        cron-list.ts          cron_list — proxy implementation (HTTP)
 
   sandbox/
     types.ts                  SandboxProvider interface, SandboxMode, SandboxStartOpts
@@ -1112,6 +1214,7 @@ src/
     cron-parser.ts            Thin wrapper over cron-parser (5-field only)
     cron-store.ts             State persistence (~/.agent-office/cron/state.json)
     cron-service.ts           Timer orchestrator (setTimeout per job, catch-up, dispatch cap)
+    cron-audit.ts             Audit logger (JSONL + stdout [cron-audit])
 
   scheduler/
     scheduler.ts              Tick-based priority scheduler
@@ -1163,6 +1266,8 @@ test/
   memory-search.test.ts       Memory search/get utility, path traversal, size guards
   memory-tools.test.ts        Memory tool execution, citation modes
   office-cron.test.ts         Office-level cron lifecycle, targets, broadcast, state keys
+  cron-tools.test.ts          Cron tool impl: validation, scopes, permissions, audit, limits
+  host-api-cron.test.ts       Host API cron endpoints: auth, isolation, parity
   cli-behavior.test.ts        CLI flag/option validation
 ```
 
@@ -1186,8 +1291,8 @@ test/
 ```bash
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
-pnpm check            # ESLint
-pnpm test             # Run test suite (vitest) — 438 tests
+pnpm lint:check       # ESLint
+pnpm test             # Run test suite (vitest) — ~490 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
