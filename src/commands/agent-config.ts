@@ -23,6 +23,7 @@ import {
   resolveCustomPrompt,
   resolveBootstrapDir,
 } from "../agent/prompts/prompt-loader.js";
+import { buildHierarchyMap, formatOrgChart } from "../config/hierarchy.js";
 
 export async function agentEnvSetCommand(
   officeId: string,
@@ -119,6 +120,7 @@ export function agentConfigShowCommand(
   }
   if (entry.disclose_secrets !== undefined)
     display.disclose_secrets = entry.disclose_secrets;
+  if (entry.reports_to) display.reports_to = entry.reports_to;
   if (entry.permissions && Object.keys(entry.permissions).length > 0)
     display.permissions = entry.permissions;
 
@@ -157,6 +159,7 @@ export function agentPromptShowCommand(
   const oDir = officeDir(officeId);
   const resolvedPrompt = resolveCustomPrompt(entry, oDir);
 
+  const hierarchyMap = buildHierarchyMap(yaml.agents);
   const composed = composeSystemPrompt({
     name: agentName,
     cwd: resolveCwd(officeId, agentName, entry.cwd),
@@ -170,6 +173,7 @@ export function agentPromptShowCommand(
     cronJobs: getCronSummaries(officeId, agentName),
     officeName: yaml.office.name,
     officeDescription: yaml.office.description,
+    hierarchy: hierarchyMap.get(agentName),
     bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, oDir, agentName),
     enableBootstrap: true,
   });
@@ -293,4 +297,39 @@ export async function agentPermissionClearToolsCommand(
   console.log(
     `[agent] Cleared tools permissions for "${agentName}". Saved. Run "office reload --force" to apply.`,
   );
+}
+
+// --- Hierarchy commands ---
+
+export function orgChartCommand(officeId: string): void {
+  const yaml = loadOfficeYaml(officeId);
+  if (!yaml) {
+    console.error("[org] Could not load office.yaml");
+    return;
+  }
+  console.log(formatOrgChart(yaml.agents));
+}
+
+export function agentHierarchyShowCommand(
+  officeId: string,
+  agentName: string,
+): void {
+  const yaml = loadOfficeYaml(officeId);
+  if (!yaml) {
+    console.error("[agent] Could not load office.yaml");
+    return;
+  }
+  if (!yaml.agents[agentName]) {
+    console.error(`[agent] Agent "${agentName}" not found in office.yaml`);
+    return;
+  }
+  const map = buildHierarchyMap(yaml.agents);
+  const h = map.get(agentName)!;
+  const display = {
+    manager: h.manager ?? "user (office operator)",
+    peers: h.peers.length > 0 ? h.peers : "none",
+    reports: h.reports.length > 0 ? h.reports : "none",
+  };
+  console.log(`\nAgent "${agentName}" hierarchy:`);
+  console.log(JSON.stringify(display, null, 2));
 }

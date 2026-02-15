@@ -4,7 +4,7 @@ Each folder contains an `office.yaml` and a README describing the setup. These a
 
 ## [basic-team](basic-team/)
 
-Three-agent team: product manager, coder, and reviewer. The PM breaks down tasks, the coder builds, and the reviewer provides feedback — all coordinated via `send_mail`. The reviewer uses `prompt_mode: minimal` to keep its prompt lean. The PM demonstrates `prompt_file` (loads prompt from `prompts/pm-prompt.md`).
+Three-agent team: product manager, coder, and reviewer. The PM breaks down tasks, the coder builds, and the reviewer provides feedback — all coordinated via `send_mail`. Coder and reviewer both `reports_to: pm`, creating a hierarchy where the PM manages the team. The reviewer uses `prompt_mode: minimal` to keep its prompt lean. The PM demonstrates `prompt_file` (loads prompt from `prompts/pm-prompt.md`).
 
 ```bash
 cp -r examples/basic-team/ ~/.agent-office/offices/basic-team/

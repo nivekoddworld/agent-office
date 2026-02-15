@@ -163,6 +163,33 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
       errors.push(...validateOfficeCronEntry(name, entry, agentNames));
     }
   }
+  // Hierarchy validation: unknown manager refs
+  for (const [name, entry] of Object.entries(config.agents)) {
+    if (entry.reports_to && !agentNames.includes(entry.reports_to)) {
+      errors.push(
+        `[hierarchy] Agent "${name}": reports_to references unknown agent "${entry.reports_to}"`,
+      );
+    }
+  }
+  // Hierarchy cycle detection with dedup
+  const reportedCycles = new Set<string>();
+  for (const name of agentNames) {
+    const visited = new Set<string>();
+    let current: string | undefined = name;
+    while (current && config.agents[current]?.reports_to) {
+      if (visited.has(current)) {
+        const cycleKey = [...visited].sort().join(",");
+        if (!reportedCycles.has(cycleKey)) {
+          reportedCycles.add(cycleKey);
+          errors.push(`[hierarchy] Hierarchy cycle detected involving agent "${name}"`);
+        }
+        break;
+      }
+      visited.add(current);
+      current = config.agents[current]?.reports_to;
+    }
+  }
+
   if (config.office.memory) {
     const c = config.office.memory.citations;
     if (c !== undefined && c !== "on" && c !== "off" && c !== "auto") {
@@ -253,6 +280,7 @@ export async function upsertAgentToOfficeYaml(
         "permissions",
         "prompt_mode",
         "on_demand_skills",
+        "reports_to",
       ]) {
         if (!(key in clean)) doc.deleteIn(["agents", name, key]);
       }

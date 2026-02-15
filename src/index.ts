@@ -37,6 +37,8 @@ import {
   agentPermissionClearOfficeCronCommand,
   agentPermissionSetToolsCommand,
   agentPermissionClearToolsCommand,
+  orgChartCommand,
+  agentHierarchyShowCommand,
 } from "./commands/agent-config.js";
 import {
   cronListCommand,
@@ -397,6 +399,8 @@ async function handleRepl(
         );
       } else if (sub === "prompt" && action === "clear" && agent) {
         await agentPromptClearCommand(officeId, agent);
+      } else if (sub === "hierarchy" && action === "show" && agent) {
+        agentHierarchyShowCommand(officeId, agent);
       } else if (sub === "permission" && action === "show" && agent) {
         agentPermissionShowCommand(officeId, agent);
       } else if (
@@ -442,7 +446,7 @@ async function handleRepl(
         await agentPermissionClearToolsCommand(officeId, agent);
       } else {
         console.log(
-          "Usage: agent env set|unset <agent> <KEY> [VALUE]\n       agent secret-ref set|unset <agent> <KEY> [ENV]\n       agent config show <agent>\n       agent prompt show|set|append|clear <agent> [text]\n       agent permission show <agent>\n       agent permission set <agent> office_cron <true|false>\n       agent permission set <agent> tools allow|deny <tool1,tool2,...>\n       agent permission clear <agent> office_cron|tools",
+          "Usage: agent env set|unset <agent> <KEY> [VALUE]\n       agent secret-ref set|unset <agent> <KEY> [ENV]\n       agent config show <agent>\n       agent prompt show|set|append|clear <agent> [text]\n       agent hierarchy show <agent>\n       agent permission show <agent>\n       agent permission set <agent> office_cron <true|false>\n       agent permission set <agent> tools allow|deny <tool1,tool2,...>\n       agent permission clear <agent> office_cron|tools",
         );
       }
       break;
@@ -460,6 +464,15 @@ async function handleRepl(
         console.log(
           "Usage: office reload [--force] | office validate | office path",
         );
+      }
+      break;
+    }
+    case "org": {
+      const sub = parts[1];
+      if (sub === "chart") {
+        orgChartCommand(officeId);
+      } else {
+        console.log("Usage: org chart");
       }
       break;
     }
@@ -734,6 +747,7 @@ function printHelp(): void {
   agent env set|unset <agent> <KEY> [VALUE]
   agent secret-ref set|unset <agent> <KEY> [ENV]
   agent config show <agent> | agent prompt show|set|append|clear <agent> [text]
+  agent hierarchy show <agent> | org chart
   skill add <agent> <owner/repo> | skill list <agent> | skill remove <agent> <name>
   office reload [--force] | office validate | office path
   cron list | cron status [agent] | cron trigger <agent> <job>

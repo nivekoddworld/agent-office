@@ -52,6 +52,8 @@ import {
   agentConfigShowCommand,
   agentPromptShowCommand,
   agentPermissionShowCommand,
+  orgChartCommand,
+  agentHierarchyShowCommand,
 } from "../src/commands/agent-config.js";
 
 function writeYaml(content: string): void {
@@ -820,6 +822,77 @@ describe("agentConfigShowCommand permissions", () => {
     agentConfigShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).not.toContain("permissions");
+    spy.mockRestore();
+  });
+
+  it("shows reports_to when configured", () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  coder:\n    reports_to: lead\n  lead: {}\n",
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentConfigShowCommand(OFFICE_ID, "coder");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("reports_to");
+    expect(output).toContain("lead");
+    spy.mockRestore();
+  });
+});
+
+// --- Hierarchy commands ---
+
+describe("orgChartCommand", () => {
+  it("renders tree with user at root", () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  lead: {}\n  coder:\n    reports_to: lead\n  reviewer:\n    reports_to: lead\n",
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    orgChartCommand(OFFICE_ID);
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("user");
+    expect(output).toContain("lead");
+    expect(output).toContain("coder");
+    expect(output).toContain("reviewer");
+    spy.mockRestore();
+  });
+
+  it("shows error when no office.yaml", () => {
+    removeYaml();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    orgChartCommand(OFFICE_ID);
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
+describe("agentHierarchyShowCommand", () => {
+  it("shows manager, peers, reports", () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  lead: {}\n  coder:\n    reports_to: lead\n  reviewer:\n    reports_to: lead\n",
+    );
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentHierarchyShowCommand(OFFICE_ID, "coder");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("lead");
+    expect(output).toContain("reviewer");
+    spy.mockRestore();
+  });
+
+  it("shows user as manager when no reports_to", () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+    agentHierarchyShowCommand(OFFICE_ID, "bot");
+    const output = spy.mock.calls.map((c) => c[0]).join("\n");
+    expect(output).toContain("user (office operator)");
+    spy.mockRestore();
+  });
+
+  it("errors for missing agent", () => {
+    writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    agentHierarchyShowCommand(OFFICE_ID, "ghost");
+    expect(spy).toHaveBeenCalled();
+    const msg = spy.mock.calls[0]?.[0] as string;
+    expect(msg).toContain("not found");
     spy.mockRestore();
   });
 });

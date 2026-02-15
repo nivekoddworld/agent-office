@@ -8,6 +8,7 @@ agents:
     priority: normal
     thinking: low
     description: "Backend developer — writes and debugs code"
+    reports_to: pm
     prompt_inline: |
       You are a backend developer. Write clean, tested code.
       Collaborate with reviewer for feedback before finalizing.
@@ -17,6 +18,7 @@ agents:
     priority: high
     thinking: medium
     description: "Code reviewer — reviews quality and correctness"
+    reports_to: pm
     prompt_mode: minimal  # only base + identity + custom (skips office/memory/skills)
     prompt_inline: |
       You are a code reviewer. Read agent files, review for bugs,

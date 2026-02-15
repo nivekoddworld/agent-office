@@ -18,6 +18,7 @@ import {
   resolveCustomPrompt,
   resolveBootstrapDir,
 } from "../agent/prompts/prompt-loader.js";
+import { buildHierarchyMap } from "../config/hierarchy.js";
 import {
   fetchSkills,
   isSkillInstalled,
@@ -45,6 +46,7 @@ interface NormalizedConfig {
   promptMode: string;
   onDemandSkills: boolean;
   bootstrapDir: string;
+  hierarchy: string;
 }
 
 function resolveCwd(baseDir: string, name: string, cwd?: string): string {
@@ -58,6 +60,7 @@ function normalizeEntry(
   baseDir: string,
   name: string,
   entry: AgentYamlEntry,
+  hierarchyMap?: Map<string, { manager: string | null; peers: string[]; reports: string[] }>,
 ): NormalizedConfig {
   return {
     model: entry.model ?? "anthropic:claude-sonnet-4-20250514",
@@ -75,6 +78,7 @@ function normalizeEntry(
     promptMode: entry.prompt_mode ?? "full",
     onDemandSkills: entry.on_demand_skills ?? true,
     bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, baseDir, name),
+    hierarchy: JSON.stringify(hierarchyMap?.get(name) ?? {}),
   };
 }
 
@@ -103,6 +107,7 @@ function normalizeRunning(
     onDemandSkills: cfg.onDemandSkills ?? true,
     bootstrapDir:
       cfg.bootstrapDir ?? join(baseDir, "agents", name, "bootstrap"),
+    hierarchy: JSON.stringify(cfg.hierarchy ?? {}),
   };
 }
 
@@ -122,7 +127,8 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.permissions === b.permissions &&
     a.promptMode === b.promptMode &&
     a.onDemandSkills === b.onDemandSkills &&
-    a.bootstrapDir === b.bootstrapDir
+    a.bootstrapDir === b.bootstrapDir &&
+    a.hierarchy === b.hierarchy
   );
 }
 
@@ -147,12 +153,16 @@ export async function applyOfficeYaml(
   const hasOfficeConfigErrors = configErrors.some(
     (e) => e.startsWith("office.") && !e.startsWith("office.cron."),
   );
-  if (hasOfficeConfigErrors) {
-    console.error("[office] Aborting — fix office config errors above");
+  const hasHierarchyErrors = configErrors.some((e) =>
+    e.startsWith("[hierarchy]"),
+  );
+  if (hasOfficeConfigErrors || hasHierarchyErrors) {
+    console.error("[office] Aborting — fix config errors above");
     return;
   }
 
   const baseDir = officeDir(officeId);
+  const hierarchyMap = buildHierarchyMap(yaml.agents);
   const entries = Object.entries(yaml.agents);
   let spawned = 0;
   let skipped = 0;
@@ -169,7 +179,7 @@ export async function applyOfficeYaml(
 
       const running = normalizeRunning(baseDir, name, workspace);
       if (running) {
-        const desired = normalizeEntry(baseDir, name, entry);
+        const desired = normalizeEntry(baseDir, name, entry, hierarchyMap);
         if (configsEqual(desired, running)) {
           skipped++;
           continue;
@@ -216,6 +226,7 @@ export async function applyOfficeYaml(
         bootstrapDir: entry.bootstrap_dir
           ? resolveBootstrapDir(entry.bootstrap_dir, baseDir, name)
           : undefined,
+        hierarchy: hierarchyMap.get(name),
       });
 
       spawned++;

@@ -24,6 +24,7 @@ export interface AgentYamlEntry {
   disclose_secrets?: boolean;
   prompt_mode?: "full" | "minimal";
   on_demand_skills?: boolean;
+  reports_to?: string;
   permissions?: {
     office_cron?: boolean;
     tools?: { allow?: string[]; deny?: string[] };
@@ -167,6 +168,20 @@ export function validateAgentEntry(
     typeof entry.on_demand_skills !== "boolean"
   ) {
     errors.push(`on_demand_skills must be a boolean`);
+  }
+
+  if (entry.reports_to !== undefined) {
+    if (typeof entry.reports_to !== "string") {
+      errors.push(`[hierarchy] reports_to must be a string`);
+    } else if (!entry.reports_to) {
+      errors.push(`[hierarchy] reports_to must be non-empty`);
+    } else if (!AGENT_NAME_RE.test(entry.reports_to)) {
+      errors.push(
+        `[hierarchy] Invalid reports_to "${entry.reports_to}" — must match [a-zA-Z0-9_-]+`,
+      );
+    } else if (entry.reports_to === name) {
+      errors.push(`[hierarchy] Agent "${name}" cannot report to itself`);
+    }
   }
 
   if (entry.env) {
@@ -452,5 +467,6 @@ export function buildYamlEntry(
   if (entry.prompt_mode && entry.prompt_mode !== "full")
     out.prompt_mode = entry.prompt_mode;
   if (entry.on_demand_skills === false) out.on_demand_skills = false;
+  if (entry.reports_to) out.reports_to = entry.reports_to;
   return out;
 }

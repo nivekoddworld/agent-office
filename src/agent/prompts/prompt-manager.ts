@@ -25,6 +25,7 @@ export interface PromptContext {
   officeDescription?: string;
   hasMemory?: boolean;
   skillsPrompt?: string;
+  hierarchy?: { manager: string | null; peers: string[]; reports: string[] };
   bootstrapDir?: string;
   enableBootstrap?: boolean;
   mode?: PromptMode;
@@ -94,6 +95,19 @@ function buildCustomBlock(customPrompt?: string): string {
   return `\n\n## Custom Instructions\n${customPrompt.trim()}`;
 }
 
+function buildHierarchyBlock(ctx: PromptContext): string {
+  if (!ctx.hierarchy) return "";
+  const mgr = ctx.hierarchy.manager ?? "the user (office operator)";
+  const peers = ctx.hierarchy.peers.length > 0 ? ctx.hierarchy.peers.join(", ") : "none";
+  const reports = ctx.hierarchy.reports.length > 0 ? ctx.hierarchy.reports.join(", ") : "none";
+  return (
+    `\n\n## Hierarchy\n` +
+    `You report to: ${mgr}\n` +
+    `Your peers: ${peers}\n` +
+    `Your direct reports: ${reports}`
+  );
+}
+
 function buildBootstrapBlock(ctx: PromptContext): string {
   if (!ctx.enableBootstrap || !ctx.bootstrapDir) return "";
   const files = loadBootstrapFiles(ctx.bootstrapDir);
@@ -117,6 +131,7 @@ export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
   const rawBlocks: BlockContent[] = [
     { name: "base", text: buildBasePrompt() },
     { name: "office", text: buildOfficeBlock(ctx) },
+    { name: "hierarchy", text: buildHierarchyBlock(ctx) },
     { name: "bootstrap", text: buildBootstrapBlock(ctx) },
     { name: "memory", text: buildMemoryBlock(ctx) },
     { name: "runtime", text: buildRuntimeBlock(ctx) },

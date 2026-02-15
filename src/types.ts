@@ -41,6 +41,7 @@ export interface AgentConfig {
   permissions?: AgentPermissions;
   promptMode?: "full" | "minimal";
   onDemandSkills?: boolean;
+  hierarchy?: { manager: string | null; peers: string[]; reports: string[] };
 }
 
 export interface AgentInfo {

@@ -420,6 +420,87 @@ describe("validateOfficeConfig", () => {
   });
 });
 
+// --- Hierarchy validation ---
+
+describe("hierarchy validation", () => {
+  it("accepts valid tree", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: {
+        lead: {},
+        coder: { reports_to: "lead" },
+        reviewer: { reports_to: "lead" },
+      },
+    });
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects unknown manager", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { reports_to: "ghost" } },
+    });
+    expect(errors.some((e) => e.includes("unknown agent"))).toBe(true);
+  });
+
+  it("rejects self-reference", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { reports_to: "bot" } },
+    });
+    expect(errors.some((e) => e.includes("cannot report to itself"))).toBe(
+      true,
+    );
+  });
+
+  it("rejects cycle (A→B→A)", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: {
+        alpha: { reports_to: "beta" },
+        beta: { reports_to: "alpha" },
+      },
+    });
+    expect(errors.some((e) => e.includes("cycle"))).toBe(true);
+  });
+
+  it("deduplicates cycle errors", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: {
+        a: { reports_to: "b" },
+        b: { reports_to: "a" },
+      },
+    });
+    const cycleErrors = errors.filter((e) => e.includes("cycle"));
+    expect(cycleErrors).toHaveLength(1);
+  });
+
+  it("accepts no reports_to (backward compatible)", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: {}, helper: {} },
+    });
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects empty reports_to", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { reports_to: "" } },
+    });
+    expect(errors.some((e) => e.includes("non-empty"))).toBe(true);
+  });
+
+  it("rejects reports_to with invalid name format", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { reports_to: "../bad" } },
+    });
+    expect(errors.some((e) => e.includes("must match"))).toBe(true);
+  });
+});
+
 // --- Prompt source validation ---
 
 describe("prompt source validation", () => {
@@ -762,5 +843,15 @@ describe("buildYamlEntry", () => {
     const out = buildYamlEntry({});
     expect(out.prompt_inline).toBeUndefined();
     expect(out.prompt_file).toBeUndefined();
+  });
+
+  it("persists reports_to", () => {
+    const out = buildYamlEntry({ reports_to: "lead" });
+    expect(out.reports_to).toBe("lead");
+  });
+
+  it("omits reports_to when unset", () => {
+    const out = buildYamlEntry({});
+    expect(out.reports_to).toBeUndefined();
   });
 });

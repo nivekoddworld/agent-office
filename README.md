@@ -49,6 +49,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Office Configuration](#office-configuration-officeyaml)
   - [Permissions](#permissions)
   - [Tool Policy](#tool-policy)
+  - [Hierarchy](#hierarchy)
   - [Auto-Sync](#auto-sync)
   - [Reload](#reload)
   - [Cron Jobs](#cron-jobs)
@@ -238,6 +239,7 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
 | `disclose_secrets` | boolean          | `false`                                                | Show secret names in system prompt                                   |
 | `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
+| `reports_to`       | string           | _(none — reports to user)_                             | Name of manager agent (see [Hierarchy](#hierarchy))                  |
 | `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
 | `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)     |
 | `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill` |
@@ -287,6 +289,28 @@ agent permission clear bot tools
 ```
 
 Changes are saved to `office.yaml`. Run `office reload --force` to apply.
+
+### Hierarchy
+
+The `reports_to` field defines a manager for each agent, creating an org tree. Agents without `reports_to` report directly to the user. The hierarchy is injected into the system prompt so each agent knows its manager, peers, and direct reports.
+
+```yaml
+agents:
+  lead:
+    description: "Team lead"
+  coder:
+    reports_to: lead
+  reviewer:
+    reports_to: lead
+```
+
+Validation rules:
+- Must reference a valid agent name (same `[a-zA-Z0-9_-]+` format)
+- Self-reference is rejected
+- Cycles are detected and rejected (e.g. A reports to B, B reports to A)
+- Unknown agent references are rejected
+
+Hierarchy changes trigger agent restarts (prompts are recomposed with updated context).
 
 ### Auto-Sync
 
@@ -609,6 +633,8 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `agent permission set <agent> tools allow\|deny <t>`  | Set tools allow/deny list (comma-separated)                |
 | `agent permission clear <agent> office_cron`          | Clear `office_cron` permission                             |
 | `agent permission clear <agent> tools`                | Clear tools permissions                                    |
+| `agent hierarchy show <agent>`                        | Show agent's manager, peers, and direct reports            |
+| `org chart`                                           | Display full org tree (user at root)                       |
 | `office reload [--force]`                             | Re-apply `office.yaml` (force kills changed agents)        |
 | `office validate`                                     | Dry-run: parse + validate YAML without spawning            |
 | `office path`                                         | Print path to `office.yaml`                                |
@@ -869,7 +895,7 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 
 ### Prompt System
 
-Every agent receives a **layered system prompt** composed from eight ordered layers:
+Every agent receives a **layered system prompt** composed from nine ordered layers:
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — always included, never overridden. Covers:
    - Agent-to-agent collaboration (tools, mail protocol, reply-loop avoidance, workflow rules, reporting)
@@ -881,16 +907,17 @@ Every agent receives a **layered system prompt** composed from eight ordered lay
    - Safety constitution (no independent goals, no self-modification, no replication, no exfiltration, safety over completion, human oversight first)
    - Instruction precedence (system rules > office config > custom instructions > file injections)
 2. **Office context** — office name and description (e.g. "You work at Acme Corp. We build AI-powered widgets"). Only present when an office has a display name.
-3. **Bootstrap files** — optional workspace files (`SOUL.md`, `CONTEXT.md`, etc.) injected with provenance headers. See [Bootstrap Files](#bootstrap-files).
-4. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
-5. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
-6. **Identity** — agent name, description, workspace path.
-7. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
-8. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
+3. **Hierarchy** — manager, peers, and direct reports derived from `reports_to` fields. Only present when hierarchy data exists. See [Hierarchy](#hierarchy).
+4. **Bootstrap files** — optional workspace files (`SOUL.md`, `CONTEXT.md`, etc.) injected with provenance headers. See [Bootstrap Files](#bootstrap-files).
+5. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
+6. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
+7. **Identity** — agent name, description, workspace path.
+8. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
+9. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
 
 **Prompt source:** use exactly one of `prompt_inline` (inline text) or `prompt_file` (path to `.md` file, resolved relative to the office directory). Specifying both is a validation error. The legacy `prompt` field is no longer supported — use `prompt_inline` or `prompt_file` instead.
 
-With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, bootstrap, memory, runtime, and skills are skipped).
+With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, hierarchy, bootstrap, memory, runtime, and skills are skipped).
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn. An `.effective-prompt.md` snapshot is written to the agent directory on every spawn/reload for debugging.
 

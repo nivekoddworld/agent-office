@@ -123,10 +123,11 @@ describe("composeSystemPrompt", () => {
     expect(a.hash).toBe(b.hash);
   });
 
-  it("layer order: base → office → memory → runtime → identity → custom → skills", () => {
+  it("layer order: base → office → hierarchy → memory → runtime → identity → custom → skills", () => {
     const { text } = composeSystemPrompt({
       ...BASE_CTX,
       officeName: "Acme Corp",
+      hierarchy: { manager: "boss", peers: [], reports: [] },
       hasMemory: true,
       envNames: ["VAR"],
       customPrompt: "My rules",
@@ -135,17 +136,57 @@ describe("composeSystemPrompt", () => {
     });
     const baseIdx = text.indexOf("Agent-to-Agent Collaboration");
     const officeIdx = text.indexOf("## Office");
+    const hierarchyIdx = text.indexOf("## Hierarchy");
     const memoryIdx = text.indexOf("## Memory");
     const runtimeIdx = text.indexOf("Runtime Context");
     const identityIdx = text.indexOf('You are agent "test-agent"');
     const customIdx = text.indexOf("Custom Instructions");
     const skillsIdx = text.indexOf("## Skills");
     expect(baseIdx).toBeLessThan(officeIdx);
-    expect(officeIdx).toBeLessThan(memoryIdx);
+    expect(officeIdx).toBeLessThan(hierarchyIdx);
+    expect(hierarchyIdx).toBeLessThan(memoryIdx);
     expect(memoryIdx).toBeLessThan(runtimeIdx);
     expect(runtimeIdx).toBeLessThan(identityIdx);
     expect(identityIdx).toBeLessThan(customIdx);
     expect(customIdx).toBeLessThan(skillsIdx);
+  });
+
+  it("hierarchy block present when hierarchy provided", () => {
+    const { text, blocks } = composeSystemPrompt({
+      ...BASE_CTX,
+      hierarchy: { manager: "lead", peers: ["reviewer"], reports: ["intern"] },
+    });
+    expect(text).toContain("## Hierarchy");
+    expect(text).toContain("You report to: lead");
+    expect(text).toContain("Your peers: reviewer");
+    expect(text).toContain("Your direct reports: intern");
+    expect(blocks.map((b) => b.name)).toContain("hierarchy");
+  });
+
+  it("hierarchy block shows user when no manager", () => {
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      hierarchy: { manager: null, peers: [], reports: ["coder"] },
+    });
+    expect(text).toContain("You report to: the user (office operator)");
+    expect(text).toContain("Your peers: none");
+    expect(text).toContain("Your direct reports: coder");
+  });
+
+  it("hierarchy block absent when not provided", () => {
+    const { text, blocks } = composeSystemPrompt(BASE_CTX);
+    expect(text).not.toContain("## Hierarchy");
+    expect(blocks.map((b) => b.name)).not.toContain("hierarchy");
+  });
+
+  it("hierarchy block absent in minimal mode", () => {
+    const { text, blocks } = composeSystemPrompt({
+      ...BASE_CTX,
+      mode: "minimal",
+      hierarchy: { manager: "lead", peers: [], reports: [] },
+    });
+    expect(text).not.toContain("## Hierarchy");
+    expect(blocks.map((b) => b.name)).not.toContain("hierarchy");
   });
 
   it("office block includes office name", () => {
@@ -267,11 +308,12 @@ describe("composeSystemPrompt", () => {
     expect(names).toContain("skills");
   });
 
-  it("minimal mode excludes office, bootstrap, memory, runtime, skills", () => {
+  it("minimal mode excludes office, hierarchy, bootstrap, memory, runtime, skills", () => {
     const { blocks, text } = composeSystemPrompt({
       ...BASE_CTX,
       mode: "minimal",
       officeName: "Acme",
+      hierarchy: { manager: "lead", peers: [], reports: [] },
       hasMemory: true,
       envNames: ["VAR"],
       customPrompt: "Rules",
@@ -279,11 +321,13 @@ describe("composeSystemPrompt", () => {
     });
     const names = blocks.map((b) => b.name);
     expect(names).not.toContain("office");
+    expect(names).not.toContain("hierarchy");
     expect(names).not.toContain("bootstrap");
     expect(names).not.toContain("memory");
     expect(names).not.toContain("runtime");
     expect(names).not.toContain("skills");
     expect(text).not.toContain("## Office");
+    expect(text).not.toContain("## Hierarchy");
     expect(text).not.toContain("## Memory");
     expect(text).not.toContain("Runtime Context");
   });
