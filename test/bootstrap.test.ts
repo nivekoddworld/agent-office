@@ -103,7 +103,7 @@ describe("bootstrap in prompt composition", () => {
       cwd: TEST_DIR,
       officeName: "Acme",
       hasMemory: true,
-      workspaceDir: TEST_DIR,
+      bootstrapDir: TEST_DIR,
       enableBootstrap: true,
     });
 
@@ -120,14 +120,14 @@ describe("bootstrap in prompt composition", () => {
     const { text, blocks } = composeSystemPrompt({
       name: "test",
       cwd: TEST_DIR,
-      workspaceDir: TEST_DIR,
+      bootstrapDir: TEST_DIR,
       enableBootstrap: false,
     });
     expect(text).not.toContain("[bootstrap:");
     expect(blocks.map((b) => b.name)).not.toContain("bootstrap");
   });
 
-  it("bootstrap absent when no workspaceDir", () => {
+  it("bootstrap absent when no bootstrapDir", () => {
     const { blocks } = composeSystemPrompt({
       name: "test",
       cwd: TEST_DIR,
@@ -142,7 +142,7 @@ describe("bootstrap in prompt composition", () => {
     const { blocks } = composeSystemPrompt({
       name: "test",
       cwd: TEST_DIR,
-      workspaceDir: TEST_DIR,
+      bootstrapDir: TEST_DIR,
       enableBootstrap: true,
     });
     const bootstrap = blocks.find((b) => b.name === "bootstrap");

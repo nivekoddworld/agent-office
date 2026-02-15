@@ -60,7 +60,7 @@ export async function hireCommand(
           priority: args.priority,
           thinking: args.thinking,
           description: args.desc,
-          prompt: args.prompt,
+          prompt_inline: args.prompt,
           cwd: args.cwd,
           api_key_ref: args["api-key-ref"],
           env: args.env,

@@ -13,7 +13,9 @@ export interface AgentYamlEntry {
   priority?: string | number;
   thinking?: string;
   description?: string;
-  prompt?: string;
+  prompt_inline?: string;
+  prompt_file?: string;
+  bootstrap_dir?: string;
   cwd?: string;
   skills?: string[];
   api_key_ref?: string;
@@ -126,6 +128,28 @@ export function validateAgentEntry(
         `Invalid model "${entry.model}" — must be "provider:model-id"`,
       );
     }
+  }
+
+  // Reject legacy "prompt" key
+  if ("prompt" in entry) {
+    errors.push(
+      `"prompt" is no longer supported. Use "prompt_inline" (inline text) or "prompt_file" (path to .md file).`,
+    );
+  }
+
+  if (entry.prompt_inline !== undefined && entry.prompt_file !== undefined) {
+    errors.push(
+      `Cannot specify both "prompt_inline" and "prompt_file" — use exactly one.`,
+    );
+  }
+  if (entry.prompt_inline !== undefined && typeof entry.prompt_inline !== "string") {
+    errors.push(`prompt_inline must be a string`);
+  }
+  if (entry.prompt_file !== undefined && typeof entry.prompt_file !== "string") {
+    errors.push(`prompt_file must be a string`);
+  }
+  if (entry.bootstrap_dir !== undefined && typeof entry.bootstrap_dir !== "string") {
+    errors.push(`bootstrap_dir must be a string`);
   }
 
   if (
@@ -412,7 +436,9 @@ export function buildYamlEntry(
   }
   if (entry.thinking && entry.thinking !== "low") out.thinking = entry.thinking;
   if (entry.description) out.description = entry.description;
-  if (entry.prompt) out.prompt = entry.prompt;
+  if (entry.prompt_inline) out.prompt_inline = entry.prompt_inline;
+  if (entry.prompt_file) out.prompt_file = entry.prompt_file;
+  if (entry.bootstrap_dir) out.bootstrap_dir = entry.bootstrap_dir;
   if (entry.cwd) out.cwd = entry.cwd;
   if (entry.skills && entry.skills.length > 0) out.skills = entry.skills;
   if (entry.api_key_ref) out.api_key_ref = entry.api_key_ref;

@@ -340,20 +340,43 @@ describe("agentConfigShowCommand", () => {
 // --- setAgentPrompt ---
 
 describe("setAgentPrompt", () => {
-  it("sets prompt field", async () => {
+  it("sets prompt_inline field", async () => {
     writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
     await setAgentPrompt(OFFICE_ID, "bot", "You are a copywriter.");
     expect(readYaml()).toContain("You are a copywriter.");
+    expect(readYaml()).toContain("prompt_inline");
   });
 
-  it("overwrites existing prompt", async () => {
+  it("overwrites existing prompt_inline", async () => {
     writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Old prompt\n",
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_inline: Old prompt\n",
     );
     await setAgentPrompt(OFFICE_ID, "bot", "New prompt");
     const raw = readYaml();
     expect(raw).toContain("New prompt");
     expect(raw).not.toContain("Old prompt");
+  });
+
+  it("switches from prompt_file to prompt_inline", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
+    );
+    await setAgentPrompt(OFFICE_ID, "bot", "Inline now");
+    const raw = readYaml();
+    expect(raw).toContain("prompt_inline");
+    expect(raw).toContain("Inline now");
+    expect(raw).not.toContain("prompt_file");
+  });
+
+  it("removes legacy prompt key on set", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Old legacy\n",
+    );
+    await setAgentPrompt(OFFICE_ID, "bot", "New inline");
+    const raw = readYaml();
+    expect(raw).toContain("prompt_inline");
+    expect(raw).toContain("New inline");
+    expect(raw).not.toMatch(/\bprompt:(?!_)/); // no bare "prompt:" key
   });
 
   it("throws on missing agent", async () => {
@@ -369,18 +392,20 @@ describe("setAgentPrompt", () => {
 describe("appendAgentPrompt", () => {
   it("appends with double newline separator", async () => {
     writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt: First line\n",
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_inline: First line\n",
     );
     await appendAgentPrompt(OFFICE_ID, "bot", "Second line");
     const yaml = loadOfficeYaml(OFFICE_ID)!;
-    expect(yaml.agents["bot"]!.prompt).toBe("First line\n\nSecond line");
+    expect(yaml.agents["bot"]!.prompt_inline).toBe(
+      "First line\n\nSecond line",
+    );
   });
 
-  it("sets prompt when none exists", async () => {
+  it("sets prompt_inline when none exists", async () => {
     writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
     await appendAgentPrompt(OFFICE_ID, "bot", "First line");
     const yaml = loadOfficeYaml(OFFICE_ID)!;
-    expect(yaml.agents["bot"]!.prompt).toBe("First line");
+    expect(yaml.agents["bot"]!.prompt_inline).toBe("First line");
   });
 
   it("repeated appends stay readable", async () => {
@@ -389,7 +414,31 @@ describe("appendAgentPrompt", () => {
     await appendAgentPrompt(OFFICE_ID, "bot", "Line 2");
     await appendAgentPrompt(OFFICE_ID, "bot", "Line 3");
     const yaml = loadOfficeYaml(OFFICE_ID)!;
-    expect(yaml.agents["bot"]!.prompt).toBe("Line 1\n\nLine 2\n\nLine 3");
+    expect(yaml.agents["bot"]!.prompt_inline).toBe(
+      "Line 1\n\nLine 2\n\nLine 3",
+    );
+  });
+
+  it("migrates legacy prompt key on append", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Legacy text\n",
+    );
+    await appendAgentPrompt(OFFICE_ID, "bot", "Extra line");
+    const raw = readYaml();
+    const yaml = loadOfficeYaml(OFFICE_ID)!;
+    expect(yaml.agents["bot"]!.prompt_inline).toBe(
+      "Legacy text\n\nExtra line",
+    );
+    expect(raw).not.toMatch(/\bprompt:(?!_)/); // legacy key removed
+  });
+
+  it("rejects when agent uses prompt_file", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
+    );
+    await expect(
+      appendAgentPrompt(OFFICE_ID, "bot", "extra"),
+    ).rejects.toThrow("uses prompt_file");
   });
 
   it("throws on missing agent", async () => {
@@ -403,13 +452,33 @@ describe("appendAgentPrompt", () => {
 // --- clearAgentPrompt ---
 
 describe("clearAgentPrompt", () => {
-  it("removes prompt field", async () => {
+  it("removes prompt_inline field", async () => {
     writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Some prompt\n    model: openai:gpt-4\n",
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_inline: Some prompt\n    model: openai:gpt-4\n",
     );
     await clearAgentPrompt(OFFICE_ID, "bot");
     const raw = readYaml();
-    expect(raw).not.toContain("prompt:");
+    expect(raw).not.toContain("prompt_inline");
+    expect(raw).toContain("model:");
+  });
+
+  it("removes prompt_file reference (file preserved on disk)", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n    model: openai:gpt-4\n",
+    );
+    await clearAgentPrompt(OFFICE_ID, "bot");
+    const raw = readYaml();
+    expect(raw).not.toContain("prompt_file");
+    expect(raw).toContain("model:");
+  });
+
+  it("removes legacy prompt key on clear", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Legacy\n    model: openai:gpt-4\n",
+    );
+    await clearAgentPrompt(OFFICE_ID, "bot");
+    const raw = readYaml();
+    expect(raw).not.toMatch(/\bprompt(?:_inline|_file)?:/);
     expect(raw).toContain("model:");
   });
 
@@ -446,7 +515,7 @@ describe("agentPromptShowCommand", () => {
 
   it("includes custom prompt in effective output", () => {
     writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt: Custom rules here\n",
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_inline: Custom rules here\n",
     );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     agentPromptShowCommand(OFFICE_ID, "bot");

@@ -11,8 +11,7 @@ Try one of these examples to get up and running quickly. Set env vars in the pro
 ```bash
 pnpm install
 cp .env.example .env
-mkdir -p ~/.agent-office/offices/basic-team
-cp examples/basic-team/office.yaml ~/.agent-office/offices/basic-team/office.yaml
+cp -r examples/basic-team/ ~/.agent-office/offices/basic-team/
 pnpm dev start --office basic-team --sandbox docker
 ```
 
@@ -197,7 +196,7 @@ agents:
     priority: normal # idle | low | normal | high | critical (or 0-4)
     thinking: low # off | minimal | low | medium | high | xhigh
     description: "Frontend designer — builds HTML/CSS"
-    prompt: |
+    prompt_inline: |
       You are a frontend designer specializing in responsive layouts.
       Focus on clean, semantic HTML and modern CSS.
     skills:
@@ -229,7 +228,9 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `priority`         | string \| number | `normal`                                               | Priority name or 0-4                                                 |
 | `thinking`         | string           | `low`                                                  | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`              |
 | `description`      | string           | `""`                                                   | Visible to other agents                                              |
-| `prompt`           | string           | _(none)_                                               | Custom instructions (appended to base prompt)                        |
+| `prompt_inline`    | string           | _(none)_                                               | Custom instructions (inline text, appended to base prompt)           |
+| `prompt_file`      | string           | _(none)_                                               | Path to `.md` file with custom instructions (relative to office dir) |
+| `bootstrap_dir`    | string           | `agents/<name>/bootstrap/`                             | Bootstrap file source directory (relative to office dir)             |
 | `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                    |
 | `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                        |
 | `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                  |
@@ -584,9 +585,9 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `agent secret-ref unset <agent> <KEY>`                | Remove secret ref from `office.yaml`                       |
 | `agent config show <agent>`                           | Show agent config (secrets redacted)                       |
 | `agent prompt show <agent>`                           | Show effective prompt (version/hash)                       |
-| `agent prompt set <agent> <text>`                     | Set custom prompt                                          |
-| `agent prompt append <agent> <text>`                  | Append to custom prompt                                    |
-| `agent prompt clear <agent>`                          | Remove custom prompt                                       |
+| `agent prompt set <agent> <text>`                     | Set custom prompt (`prompt_inline` only)                   |
+| `agent prompt append <agent> <text>`                  | Append to custom prompt (`prompt_inline` only)             |
+| `agent prompt clear <agent>`                          | Remove prompt config (both inline and file ref)            |
 | `office reload [--force]`                             | Re-apply `office.yaml` (force kills changed agents)        |
 | `office validate`                                     | Dry-run: parse + validate YAML without spawning            |
 | `office path`                                         | Print path to `office.yaml`                                |
@@ -855,14 +856,16 @@ Every agent receives a **layered system prompt** composed from eight ordered lay
 4. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
 5. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
 6. **Identity** — agent name, description, workspace path.
-7. **Custom instructions** — the `prompt` field from `office.yaml`, appended under a `## Custom Instructions` header.
+7. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
 8. **Skills** — full skill content (default) or summaries only (when `on_demand_skills: true`). See [Skills](#skills).
+
+**Prompt source:** use exactly one of `prompt_inline` (inline text) or `prompt_file` (path to `.md` file, resolved relative to the office directory). Specifying both is a validation error. The legacy `prompt` field is no longer supported — use `prompt_inline` or `prompt_file` instead.
 
 With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, bootstrap, memory, runtime, and skills are skipped).
 
-Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn.
+Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn. An `.effective-prompt.md` snapshot is written to the agent directory on every spawn/reload for debugging.
 
-The `prompt` field in `office.yaml` is **append-only** — it adds your custom instructions after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
+Custom instructions are **append-only** — they add your content after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
 
 > **Note:** `agent prompt show <agent>` displays the prompt text but excludes runtime-loaded skills. Use `prompt report <agent>` for the authoritative composed-block view with accurate character counts.
 
@@ -997,14 +1000,17 @@ Each office gets an isolated directory, and each agent within it gets its own wo
         usage-cost.jsonl    # per-agent token usage + cost records
       agents/
         designer/
-          workspace/        # agent's cwd — all file tools scoped here
-            MEMORY.md       # agent memory (private, writable)
-            memory/         # detailed topic files
-            logs/           # daily activity logs (YYYY-MM-DD.md)
-          skills/           # installed skill directories
-            .sources.json   # skill folder → GitHub source mapping
+          workspace/              # agent's cwd — all file tools scoped here
+            MEMORY.md             # agent memory (private, writable)
+            memory/               # detailed topic files
+            logs/                 # daily activity logs (YYYY-MM-DD.md)
+          bootstrap/              # bootstrap files (SOUL.md, CONTEXT.md, etc.)
+          skills/                 # installed skill directories
+            .sources.json         # skill folder → GitHub source mapping
+          .effective-prompt.md    # generated snapshot (do not edit)
         reviewer/
           workspace/
+          bootstrap/
           skills/
     defi-lab/
       office.yaml
@@ -1043,14 +1049,18 @@ A `.sources.json` file in each agent's skills directory maps installed skill fol
 
 ### Bootstrap Files
 
-Optional markdown files that you create manually in an agent's workspace directory. If present, they are loaded alphabetically and injected into the system prompt between the office and memory layers with provenance headers.
+Optional markdown files loaded from a per-agent source directory. If present, they are loaded alphabetically and injected into the system prompt between the office and memory layers with provenance headers.
+
+**Default source:** `<officeDir>/agents/<name>/bootstrap/`
+**Override:** set `bootstrap_dir` in the agent's YAML entry (resolved relative to the office directory).
 
 **Supported files:** `CONTEXT.md`, `HEARTBEAT.md`, `IDENTITY.md`, `SOUL.md`, `TOOLS.md`, `USER.md`
 
 ```bash
 # Create a personality file for an agent
+mkdir -p ~/.agent-office/offices/my-office/agents/bot/bootstrap
 echo "I am a concise, friendly assistant." > \
-  ~/.agent-office/offices/my-office/agents/bot/workspace/SOUL.md
+  ~/.agent-office/offices/my-office/agents/bot/bootstrap/SOUL.md
 ```
 
 The file appears in the prompt as:
@@ -1113,6 +1123,8 @@ Skills: 2 loaded (web-skills, code-review)
 ```
 
 Use this to verify bootstrap files are loaded, check prompt size after truncation, and confirm tool/skill counts.
+
+A full `.effective-prompt.md` snapshot is also generated per agent on every spawn/reload at `<officeDir>/agents/<name>/.effective-prompt.md`. Add `.effective-prompt.md` to `.gitignore` — it is generated, not source.
 
 ## Cost Tracking
 
@@ -1302,6 +1314,8 @@ src/
       base-v1.md              Versioned base prompt (collaboration, tools, safety)
       base-v1.ts              TS companion (reads .md, exports PROMPT_VERSION)
       prompt-manager.ts       Layered composition + deterministic hashing
+      prompt-loader.ts        XOR prompt resolution (inline vs file)
+      effective-prompt.ts     .effective-prompt.md snapshot writer
       bootstrap.ts            Bootstrap file loader (SOUL.md, CONTEXT.md, etc.)
       truncate.ts             Prompt truncation (head/tail split, per-block limits)
     skills/
@@ -1404,6 +1418,8 @@ test/
   cron-commands.test.ts       Cron CLI add/remove/enable/disable + validation
   prompt.test.ts              System prompt composition
   prompt-manager.test.ts      Prompt composition, layering, hashing, office block, determinism
+  prompt-loader.test.ts       Prompt source resolution (inline, file, path safety)
+  effective-prompt.test.ts    Effective prompt snapshot generation
   memory-search.test.ts       Memory search/get utility, path traversal, size guards
   memory-tools.test.ts        Memory tool execution, citation modes
   office-cron.test.ts         Office-level cron lifecycle, targets, broadcast, state keys
@@ -1440,7 +1456,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm lint:check       # ESLint
-pnpm test             # Run test suite (vitest) — ~579 tests
+pnpm test             # Run test suite (vitest) — ~600 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```

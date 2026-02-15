@@ -4,11 +4,10 @@ Each folder contains an `office.yaml` and a README describing the setup. These a
 
 ## [basic-team](basic-team/)
 
-Three-agent team: product manager, coder, and reviewer. The PM breaks down tasks, the coder builds, and the reviewer provides feedback — all coordinated via `send_mail`. The reviewer uses `prompt_mode: minimal` to keep its prompt lean.
+Three-agent team: product manager, coder, and reviewer. The PM breaks down tasks, the coder builds, and the reviewer provides feedback — all coordinated via `send_mail`. The reviewer uses `prompt_mode: minimal` to keep its prompt lean. The PM demonstrates `prompt_file` (loads prompt from `prompts/pm-prompt.md`).
 
 ```bash
-mkdir -p ~/.agent-office/offices/basic-team
-cp examples/basic-team/office.yaml ~/.agent-office/offices/basic-team/office.yaml
+cp -r examples/basic-team/ ~/.agent-office/offices/basic-team/
 pnpm dev start --office basic-team --sandbox docker
 ```
 

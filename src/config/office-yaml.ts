@@ -240,7 +240,9 @@ export async function upsertAgentToOfficeYaml(
         "priority",
         "thinking",
         "description",
-        "prompt",
+        "prompt_inline",
+        "prompt_file",
+        "bootstrap_dir",
         "cwd",
         "skills",
         "api_key_ref",
@@ -407,7 +409,9 @@ export async function setAgentPrompt(
     const { path, doc } = requireOfficeDoc(officeId);
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    doc.setIn(["agents", agentName, "prompt"], text);
+    doc.setIn(["agents", agentName, "prompt_inline"], text);
+    doc.deleteIn(["agents", agentName, "prompt_file"]);
+    doc.deleteIn(["agents", agentName, "prompt"]); // remove legacy key
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
@@ -421,15 +425,26 @@ export async function appendAgentPrompt(
     const { path, doc } = requireOfficeDoc(officeId);
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    const existing = doc.getIn(["agents", agentName, "prompt"]) as
-      | string
-      | undefined;
+    if (doc.getIn(["agents", agentName, "prompt_file"])) {
+      throw new Error(
+        `Agent "${agentName}" uses prompt_file. Edit the file directly.`,
+      );
+    }
+    // Read from prompt_inline, falling back to legacy prompt for migration
+    const existing =
+      (doc.getIn(["agents", agentName, "prompt_inline"]) as string | undefined) ??
+      (doc.getIn(["agents", agentName, "prompt"]) as string | undefined);
     const merged = existing ? `${existing}\n\n${text}` : text;
-    doc.setIn(["agents", agentName, "prompt"], merged);
+    doc.setIn(["agents", agentName, "prompt_inline"], merged);
+    doc.deleteIn(["agents", agentName, "prompt"]); // remove legacy key
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
 
+/**
+ * Clears all prompt configuration. If the agent uses `prompt_file`, the
+ * reference is removed but the file itself is preserved on disk.
+ */
 export async function clearAgentPrompt(
   officeId: string,
   agentName: string,
@@ -438,7 +453,9 @@ export async function clearAgentPrompt(
     const { path, doc } = requireOfficeDoc(officeId);
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    doc.deleteIn(["agents", agentName, "prompt"]);
+    doc.deleteIn(["agents", agentName, "prompt_inline"]);
+    doc.deleteIn(["agents", agentName, "prompt_file"]);
+    doc.deleteIn(["agents", agentName, "prompt"]); // remove legacy key
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }

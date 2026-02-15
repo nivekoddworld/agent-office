@@ -12,7 +12,7 @@ agents:
     description: "Idea scout — monitors the Ideaboard for new opportunities"
     skills:
       - openserv-labs/skills
-    prompt: |
+    prompt_inline: |
       You are an idea scout. Use the OpenServ Ideaboard API to discover
       promising ideas and bounties. Summarize findings and send them to
       the lead via send_mail so the team can act on them.
@@ -34,7 +34,7 @@ agents:
     description: "Team lead — coordinates the team and assigns work"
     skills:
       - openserv-labs/skills
-    prompt: |
+    prompt_inline: |
       You are the team lead. Review incoming ideas from scout, decide which
       are worth pursuing, and delegate work to agent-dev and launcher via
       send_mail. Track progress and report back to the user.
@@ -51,7 +51,7 @@ agents:
     on_demand_skills: true  # load skill summaries only; fetch full content via read_skill
     skills:
       - openserv-labs/skills
-    prompt: |
+    prompt_inline: |
       You are an OpenServ agent developer. Build agents using the OpenServ SDK,
       implement capabilities, handle tasks, and deploy to the platform.
       Report progress to lead via send_mail.
@@ -70,7 +70,7 @@ agents:
         deny: [cron_add]  # launcher should not create cron jobs
     skills:
       - openserv-labs/skills
-    prompt: |
+    prompt_inline: |
       You are a token launcher. Use the OpenServ Launch API to create and
       deploy ERC-20 tokens on Base with Aerodrome liquidity pools.
       Report results to lead via send_mail.

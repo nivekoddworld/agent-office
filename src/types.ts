@@ -29,6 +29,7 @@ export interface AgentConfig {
   systemPrompt?: string;
   thinkingLevel?: ThinkingLevel;
   cwd?: string;
+  bootstrapDir?: string;
   skillDirs?: string[];
   tools?: AgentTool<any>[];
   apiKey?: string;

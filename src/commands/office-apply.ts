@@ -15,6 +15,10 @@ import {
   validateAgentEntry,
 } from "../config/yaml-utils.js";
 import {
+  resolveCustomPrompt,
+  resolveBootstrapDir,
+} from "../agent/prompts/prompt-loader.js";
+import {
   fetchSkills,
   isSkillInstalled,
   skillsDir,
@@ -40,6 +44,7 @@ interface NormalizedConfig {
   permissions: string;
   promptMode: string;
   onDemandSkills: boolean;
+  bootstrapDir: string;
 }
 
 function resolveCwd(baseDir: string, name: string, cwd?: string): string {
@@ -59,7 +64,7 @@ function normalizeEntry(
     priority: resolvePriority(entry.priority),
     thinking: entry.thinking ?? "low",
     description: entry.description ?? "",
-    prompt: (entry.prompt ?? "").trimEnd(),
+    prompt: (resolveCustomPrompt(entry, baseDir) ?? "").trimEnd(),
     cwd: resolveCwd(baseDir, name, entry.cwd),
     skills: [...(entry.skills ?? [])].sort(),
     env: JSON.stringify(entry.env ?? {}),
@@ -69,6 +74,7 @@ function normalizeEntry(
     permissions: JSON.stringify(entry.permissions ?? {}),
     promptMode: entry.prompt_mode ?? "full",
     onDemandSkills: entry.on_demand_skills ?? false,
+    bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, baseDir, name),
   };
 }
 
@@ -95,6 +101,8 @@ function normalizeRunning(
     permissions: JSON.stringify(cfg.permissions ?? {}),
     promptMode: cfg.promptMode ?? "full",
     onDemandSkills: cfg.onDemandSkills ?? false,
+    bootstrapDir:
+      cfg.bootstrapDir ?? join(baseDir, "agents", name, "bootstrap"),
   };
 }
 
@@ -113,7 +121,8 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.discloseSecrets === b.discloseSecrets &&
     a.permissions === b.permissions &&
     a.promptMode === b.promptMode &&
-    a.onDemandSkills === b.onDemandSkills
+    a.onDemandSkills === b.onDemandSkills &&
+    a.bootstrapDir === b.bootstrapDir
   );
 }
 
@@ -195,7 +204,7 @@ export async function applyOfficeYaml(
         priority: resolvePriority(entry.priority),
         thinkingLevel: (entry.thinking as ThinkingLevel) ?? "low",
         cwd: resolveCwd(baseDir, name, entry.cwd),
-        systemPrompt: entry.prompt,
+        systemPrompt: resolveCustomPrompt(entry, baseDir),
         description: entry.description,
         apiKeyRef: entry.api_key_ref,
         env: entry.env,
@@ -204,6 +213,9 @@ export async function applyOfficeYaml(
         permissions: entry.permissions,
         promptMode: entry.prompt_mode,
         onDemandSkills: entry.on_demand_skills,
+        bootstrapDir: entry.bootstrap_dir
+          ? resolveBootstrapDir(entry.bootstrap_dir, baseDir, name)
+          : undefined,
       });
 
       spawned++;

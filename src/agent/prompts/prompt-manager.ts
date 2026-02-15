@@ -25,7 +25,7 @@ export interface PromptContext {
   officeDescription?: string;
   hasMemory?: boolean;
   skillsPrompt?: string;
-  workspaceDir?: string;
+  bootstrapDir?: string;
   enableBootstrap?: boolean;
   mode?: PromptMode;
   truncationConfig?: Partial<TruncationConfig>;
@@ -95,8 +95,8 @@ function buildCustomBlock(customPrompt?: string): string {
 }
 
 function buildBootstrapBlock(ctx: PromptContext): string {
-  if (!ctx.enableBootstrap || !ctx.workspaceDir) return "";
-  const files = loadBootstrapFiles(ctx.workspaceDir);
+  if (!ctx.enableBootstrap || !ctx.bootstrapDir) return "";
+  const files = loadBootstrapFiles(ctx.bootstrapDir);
   return formatBootstrapBlock(files);
 }
 

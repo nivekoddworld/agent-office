@@ -12,6 +12,7 @@ import {
   formatSkillsForPrompt,
 } from "@mariozechner/pi-coding-agent";
 import { streamSimple } from "@mariozechner/pi-ai";
+import { writeEffectivePrompt } from "./prompts/effective-prompt.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type {
   AgentConfig,
@@ -89,6 +90,7 @@ export class AgentHandle {
   private officeDescription?: string;
   private citationMode: CitationMode;
   private cronService?: CronService;
+  private _bootstrapDir: string;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
     this.config = config;
@@ -103,6 +105,9 @@ export class AgentHandle {
     this.officeDescription = deps.officeDescription;
     this.citationMode = deps.citationMode ?? "auto";
     this.cronService = deps.cronService;
+    this._bootstrapDir =
+      config.bootstrapDir ??
+      join(deps.baseDir, "agents", config.name, "bootstrap");
   }
 
   get name(): string {
@@ -183,11 +188,15 @@ export class AgentHandle {
         officeDescription: this.officeDescription,
         hasMemory,
         skillsPrompt: sandboxSkillsPrompt,
-        workspaceDir: this.cwd,
+        bootstrapDir: this._bootstrapDir,
         enableBootstrap: true,
         mode: this.config.promptMode ?? "full",
       });
       const systemPrompt = composed.text;
+      writeEffectivePrompt(this.agentDir, composed, {
+        mode: this.config.promptMode ?? "full",
+        version: composed.version,
+      });
 
       this.sandboxInfo = await this.provider.start(this.name, {
         token: this.sandboxToken,
@@ -317,11 +326,15 @@ export class AgentHandle {
       officeDescription: this.officeDescription,
       hasMemory: hasMemoryFiles,
       skillsPrompt: inProcSkillsPrompt,
-      workspaceDir: this.cwd,
+      bootstrapDir: this._bootstrapDir,
       enableBootstrap: true,
       mode: this.config.promptMode ?? "full",
     });
     const systemPrompt = composed.text;
+    writeEffectivePrompt(this.agentDir, composed, {
+      mode: this.config.promptMode ?? "full",
+      version: composed.version,
+    });
     console.log(
       `[agent:${this.name}] Prompt ${composed.version} (${composed.hash})`,
     );
@@ -465,7 +478,7 @@ export class AgentHandle {
       officeDescription: this.officeDescription,
       hasMemory: hasMemoryFiles,
       skillsPrompt,
-      workspaceDir: this.cwd,
+      bootstrapDir: this._bootstrapDir,
       enableBootstrap: true,
       mode: this.config.promptMode ?? "full",
     });

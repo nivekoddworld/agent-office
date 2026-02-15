@@ -11,9 +11,14 @@ import {
   clearAgentPrompt,
   getCronSummaries,
 } from "../config/office-yaml.js";
+import { officeDir } from "../constants.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { composeSystemPrompt } from "../agent/prompts/prompt-manager.js";
+import {
+  resolveCustomPrompt,
+  resolveBootstrapDir,
+} from "../agent/prompts/prompt-loader.js";
 
 export async function agentEnvSetCommand(
   officeId: string,
@@ -93,7 +98,8 @@ export function agentConfigShowCommand(
   if (entry.priority !== undefined) display.priority = entry.priority;
   if (entry.thinking) display.thinking = entry.thinking;
   if (entry.description) display.description = entry.description;
-  if (entry.prompt) display.prompt = entry.prompt;
+  if (entry.prompt_inline) display.prompt_inline = entry.prompt_inline;
+  if (entry.prompt_file) display.prompt_file = entry.prompt_file;
   if (entry.cwd) display.cwd = entry.cwd;
   if (entry.api_key_ref) display.api_key_ref = entry.api_key_ref;
   if (entry.skills?.length) display.skills = entry.skills;
@@ -142,11 +148,14 @@ export function agentPromptShowCommand(
   const mergedEnvKeys = Object.keys(merged.env);
   const mergedSecretKeys = Object.keys(merged.secrets);
 
+  const oDir = officeDir(officeId);
+  const resolvedPrompt = resolveCustomPrompt(entry, oDir);
+
   const composed = composeSystemPrompt({
     name: agentName,
     cwd: resolveCwd(officeId, agentName, entry.cwd),
     description: entry.description,
-    customPrompt: entry.prompt,
+    customPrompt: resolvedPrompt,
     envNames: mergedEnvKeys.length > 0 ? mergedEnvKeys : undefined,
     secretNames:
       entry.disclose_secrets && mergedSecretKeys.length > 0
@@ -155,10 +164,13 @@ export function agentPromptShowCommand(
     cronJobs: getCronSummaries(officeId, agentName),
     officeName: yaml.office.name,
     officeDescription: yaml.office.description,
+    bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, oDir, agentName),
+    enableBootstrap: true,
   });
 
+  const sourceNote = entry.prompt_file ? ` (source: ${entry.prompt_file})` : "";
   console.log(
-    `\nAgent "${agentName}" effective prompt (${composed.version}, hash ${composed.hash} — excludes skills; sandbox agents use cwd /workspace at runtime):`,
+    `\nAgent "${agentName}" effective prompt (${composed.version}, hash ${composed.hash}${sourceNote} — excludes skills; sandbox agents use cwd /workspace at runtime):`,
   );
   console.log("---");
   console.log(composed.text);
@@ -170,6 +182,13 @@ export async function agentPromptSetCommand(
   agentName: string,
   text: string,
 ): Promise<void> {
+  const yaml = loadOfficeYaml(officeId);
+  if (yaml?.agents[agentName]?.prompt_file) {
+    console.error(
+      `[agent] Agent "${agentName}" uses prompt_file — edit the file directly, or clear it first with "agent prompt clear".`,
+    );
+    return;
+  }
   await setAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Set prompt for "${agentName}"`);
 }
@@ -179,6 +198,13 @@ export async function agentPromptAppendCommand(
   agentName: string,
   text: string,
 ): Promise<void> {
+  const yaml = loadOfficeYaml(officeId);
+  if (yaml?.agents[agentName]?.prompt_file) {
+    console.error(
+      `[agent] Agent "${agentName}" uses prompt_file — edit the file directly.`,
+    );
+    return;
+  }
   await appendAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Appended to prompt for "${agentName}"`);
 }
