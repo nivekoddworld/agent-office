@@ -364,6 +364,20 @@ describe("buildBasePrompt", () => {
     expect(base).toContain("Human oversight first");
   });
 
+  it("contains no-invention rule", () => {
+    const base = buildBasePrompt();
+    expect(base).toContain("No Invented Details");
+    expect(base).toContain("Do not invent external systems");
+    expect(base).toContain("ask a clarifying question or state that it is unknown");
+  });
+
+  it("contains office-awareness rule", () => {
+    const base = buildBasePrompt();
+    expect(base).toContain("Operating Context Awareness");
+    expect(base).toContain("You operate as an agent inside an office");
+    expect(base).toContain("Do not assume office facts");
+  });
+
   it("contains instruction precedence hierarchy", () => {
     const base = buildBasePrompt();
     expect(base).toContain("Instruction Precedence");
