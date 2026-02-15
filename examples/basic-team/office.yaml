@@ -17,6 +17,7 @@ agents:
     priority: high
     thinking: medium
     description: "Code reviewer — reviews quality and correctness"
+    prompt_mode: minimal  # only base + identity + custom (skips office/memory/skills)
     prompt: |
       You are a code reviewer. Read agent files, review for bugs,
       style, and correctness, then send feedback via send_mail.

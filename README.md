@@ -49,6 +49,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Creating an Office](#creating-an-office)
   - [Office Configuration](#office-configuration-officeyaml)
   - [Permissions](#permissions)
+  - [Tool Policy](#tool-policy)
   - [Auto-Sync](#auto-sync)
   - [Reload](#reload)
   - [Cron Jobs](#cron-jobs)
@@ -69,6 +70,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [cron_add](#cron_add)
   - [cron_remove](#cron_remove)
   - [cron_list](#cron_list)
+  - [read_skill](#read_skill)
   - [Tool Architecture](#tool-architecture)
   - [Prompt System](#prompt-system)
 - [Memory System](#memory-system)
@@ -81,8 +83,11 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Priority Levels](#priority-levels)
   - [Workspace Sandboxing](#workspace-sandboxing)
   - [Skills](#skills)
+  - [Bootstrap Files](#bootstrap-files)
   - [Watchdog](#watchdog)
   - [Resource Guards](#resource-guards)
+- [Prompt Inspection](#prompt-inspection)
+- [Cost Tracking](#cost-tracking)
 - [End-to-End Examples](#end-to-end-examples)
 - [Project Structure](#project-structure)
 - [Dependencies](#dependencies)
@@ -232,7 +237,9 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
 | `disclose_secrets` | boolean          | `false`                                                | Show secret names in system prompt                                   |
 | `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
-| `permissions`      | map              | `{}`                                                   | Agent permissions (e.g. `{ office_cron: true }`)                     |
+| `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
+| `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)     |
+| `on_demand_skills` | boolean          | `false`                                                | Advertise skill summaries; load full content on demand via `read_skill` |
 
 ### Permissions
 
@@ -243,6 +250,26 @@ The `permissions` field controls which privileged operations an agent may perfor
 | `office_cron`  | boolean | `false` | Allow managing office-level cron jobs via `cron_add`/`cron_remove` |
 
 Permissions are validated at config parse time. Unknown keys or non-boolean values are rejected.
+
+### Tool Policy
+
+The `permissions.tools` field restricts which tools an agent may use:
+
+```yaml
+agents:
+  restricted-bot:
+    permissions:
+      tools:
+        deny: [cron_add, cron_remove]   # blacklist — all except these
+        # OR
+        # allow: [send_mail, list_agents]  # whitelist — only these
+```
+
+- **`deny`** — blacklist: agent has all tools except the listed ones.
+- **`allow`** — whitelist: agent has only the listed tools.
+- Cannot specify both `allow` and `deny` — validation error at parse time.
+- Default (no `tools` field): all tools available.
+- **Server-side enforcement:** in Docker sandbox mode, denied tools also return HTTP 403 on the corresponding Host API endpoint (e.g. `/api/cron-add` returns `403 Tool denied by policy`).
 
 ### Auto-Sync
 
@@ -575,6 +602,10 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `cron trigger office <job>`                           | Fire an office cron job immediately                        |
 | `route <chatId> <agent>`                              | Route a Telegram chat to an agent                          |
 | `route list`                                          | List all Telegram chat routes                              |
+| `prompt report <agent>`                               | Show prompt composition (block sizes, tool count, mode)    |
+| `cost status`                                         | Session token and cost totals (resets on restart)           |
+| `cost today [--agent <name>]`                         | Persistent token and cost totals for today                 |
+| `cost report --days <n> [--agent <name>]`             | Historical usage over last N days                          |
 | `help`                                                | Show available commands                                    |
 | `exit`                                                | Shutdown                                                   |
 
@@ -776,6 +807,20 @@ agent calls cron_list:
    [office] standup     0 9 * * 1-5 (...)         next: 2025-01-13T09:00:00.000Z → pm,coder
 ```
 
+### read_skill
+
+Load full skill content on demand (requires `on_demand_skills: true`).
+
+When on-demand mode is active, the agent's system prompt contains only skill summaries (name + description). The agent calls `read_skill` to fetch the full markdown content when needed.
+
+```
+agent calls read_skill:
+  name: "web-skills"
+
+-> Returns full SKILL.md content for the skill
+-> Errors with list of available skill names if not found
+```
+
 ### Tool Architecture
 
 ```
@@ -802,18 +847,24 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 
 ### Prompt System
 
-Every agent receives a **layered system prompt** composed from six ordered layers:
+Every agent receives a **layered system prompt** composed from eight ordered layers:
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — collaboration rules, tool guidance, anti-loop rules, workflow, reporting, safety. Always included, never overridden.
 2. **Office context** — office name and description (e.g. "You work at Acme Corp. We build AI-powered widgets"). Only present when an office has a display name.
-3. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
-4. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
-5. **Identity** — agent name, description, workspace path.
-6. **Custom instructions** — the `prompt` field from `office.yaml`, appended under a `## Custom Instructions` header.
+3. **Bootstrap files** — optional workspace files (`SOUL.md`, `CONTEXT.md`, etc.) injected with provenance headers. See [Bootstrap Files](#bootstrap-files).
+4. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
+5. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
+6. **Identity** — agent name, description, workspace path.
+7. **Custom instructions** — the `prompt` field from `office.yaml`, appended under a `## Custom Instructions` header.
+8. **Skills** — full skill content (default) or summaries only (when `on_demand_skills: true`). See [Skills](#skills).
+
+With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, bootstrap, memory, runtime, and skills are skipped).
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn.
 
 The `prompt` field in `office.yaml` is **append-only** — it adds your custom instructions after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
+
+> **Note:** `agent prompt show <agent>` displays the prompt text but excludes runtime-loaded skills. Use `prompt report <agent>` for the authoritative composed-block view with accurate character counts.
 
 ## Memory System
 
@@ -943,6 +994,7 @@ Each office gets an isolated directory, and each agent within it gets its own wo
         state.json          # cron job state
       logs/
         cron-audit.jsonl    # agent cron tool audit trail
+        usage-cost.jsonl    # per-agent token usage + cost records
       agents/
         designer/
           workspace/        # agent's cwd — all file tools scoped here
@@ -987,6 +1039,31 @@ ao> skill remove designer web-tools
 
 A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `office.yaml` entries when the last skill from a source is removed.
 
+**On-demand loading:** By default, full skill content is injected into the system prompt (eager mode). Set `on_demand_skills: true` to include only skill summaries (name + description) in the prompt and let the agent call [`read_skill`](#read_skill) to fetch full content when needed. This reduces prompt size for agents with many or large skills.
+
+### Bootstrap Files
+
+Optional markdown files that you create manually in an agent's workspace directory. If present, they are loaded alphabetically and injected into the system prompt between the office and memory layers with provenance headers.
+
+**Supported files:** `CONTEXT.md`, `HEARTBEAT.md`, `IDENTITY.md`, `SOUL.md`, `TOOLS.md`, `USER.md`
+
+```bash
+# Create a personality file for an agent
+echo "I am a concise, friendly assistant." > \
+  ~/.agent-office/offices/my-office/agents/bot/workspace/SOUL.md
+```
+
+The file appears in the prompt as:
+
+```
+## [bootstrap: SOUL.md]
+I am a concise, friendly assistant.
+```
+
+- Missing files are silently skipped — no configuration needed.
+- Per-file size cap: 128 KiB. Total cap across all files: 256 KiB (byte-accurate, UTF-8 safe).
+- Use `prompt report <agent>` to verify bootstrap content is loaded.
+
 ### Watchdog
 
 Periodic heartbeat checks (default: every 10s). If an agent's last heartbeat exceeds the stuck threshold (default: 120s), it aborts and re-initializes with a fresh Pi instance. Every agent event resets the heartbeat timer.
@@ -1007,6 +1084,58 @@ workspace.semaphore.create("api-rate-limit", 3);
 const release = await workspace.semaphore.acquire("api-rate-limit");
 release();
 ```
+
+## Prompt Inspection
+
+Inspect the composed system prompt for any running agent:
+
+```
+ao> prompt report bot
+
+=== Prompt Report: bot ===
+
+Mode: full
+Version: v1
+
+Base prompt           2,847 chars
+Office block            156 chars
+Bootstrap files         892 chars
+Memory block            643 chars
+Runtime block           312 chars
+Identity block           89 chars
+Custom prompt         1,204 chars
+Skills                3,421 chars
+──────────────────────────────────
+Total                 9,564 chars
+
+Tools: 15 registered
+Skills: 2 loaded (web-skills, code-review)
+```
+
+Use this to verify bootstrap files are loaded, check prompt size after truncation, and confirm tool/skill counts.
+
+## Cost Tracking
+
+Agent-office tracks per-agent token usage and cost from model responses.
+
+```
+ao> cost status
+=== Cost Status (session) ===
+Total tokens: 12,450   Cost: $0.0832
+  bot:    8,200 tokens  $0.0614
+  helper: 4,250 tokens  $0.0218
+
+ao> cost today
+ao> cost today --agent bot
+ao> cost report --days 7
+ao> cost report --days 30 --agent bot
+```
+
+- **`cost status`** — in-memory session totals. Resets on gateway restart.
+- **`cost today`** — persistent totals for the current day.
+- **`cost report --days <n>`** — historical totals over the last N calendar days.
+- All commands accept `--agent <name>` to filter to a single agent.
+- Usage records are stored at `~/.agent-office/offices/<id>/logs/usage-cost.jsonl` (append-only JSONL).
 
 ## End-to-End Examples
 
@@ -1173,6 +1302,10 @@ src/
       base-v1.md              Versioned base prompt (collaboration, tools, safety)
       base-v1.ts              TS companion (reads .md, exports PROMPT_VERSION)
       prompt-manager.ts       Layered composition + deterministic hashing
+      bootstrap.ts            Bootstrap file loader (SOUL.md, CONTEXT.md, etc.)
+      truncate.ts             Prompt truncation (head/tail split, per-block limits)
+    skills/
+      on-demand.ts            Skill summary extraction for on-demand mode
     entrypoints/
       sandbox-entry.ts        Standalone process for Docker containers
     tools/
@@ -1185,6 +1318,8 @@ src/
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
       memory-search.ts        memory_search — host implementation
       memory-get.ts           memory_get — host implementation
+      policy.ts               Tool policy (allow/deny filtering)
+      read-skill.ts           read_skill — host implementation
       cron-impl.ts            Shared cron tool logic (add/remove/list)
       cron-add.ts             cron_add — host implementation
       cron-remove.ts          cron_remove — host implementation
@@ -1200,6 +1335,7 @@ src/
         cron-add.ts           cron_add — proxy implementation (HTTP)
         cron-remove.ts        cron_remove — proxy implementation (HTTP)
         cron-list.ts          cron_list — proxy implementation (HTTP)
+        read-skill.ts         read_skill — proxy implementation (HTTP)
 
   sandbox/
     types.ts                  SandboxProvider interface, SandboxMode, SandboxStartOpts
@@ -1239,6 +1375,11 @@ src/
     agent-config.ts           Per-agent env/secret-ref/prompt commands + config show
     cron.ts                   Cron CLI handlers (add/remove/enable/disable/list/status/trigger)
     migrate.ts                Two-step legacy migration (copy + finalize)
+    prompt-report.ts          Prompt report command (block sizes, tool count)
+    cost.ts                   Cost status/today/report commands
+
+  metrics/
+    usage-tracker.ts          Usage/cost JSONL tracker (record, read, summarize)
 
 test/
   office-yaml.test.ts        Office config: officeId validation, load, validate, merge, mutations, lock
@@ -1268,6 +1409,13 @@ test/
   office-cron.test.ts         Office-level cron lifecycle, targets, broadcast, state keys
   cron-tools.test.ts          Cron tool impl: validation, scopes, permissions, audit, limits
   host-api-cron.test.ts       Host API cron endpoints: auth, isolation, parity
+  bootstrap.test.ts           Bootstrap file loading, truncation, prompt injection
+  truncate.test.ts            Prompt truncation (head/tail split, per-block limits)
+  tool-policy.test.ts         Tool policy allow/deny filtering + server-side enforcement
+  on-demand-skills.test.ts    Skill summaries, read_skill tool, proxy
+  prompt-report.test.ts       Prompt report command output
+  usage-tracker.test.ts       Usage JSONL recording, reading, filtering
+  cost-commands.test.ts       Cost status/today/report formatting
   cli-behavior.test.ts        CLI flag/option validation
 ```
 
@@ -1292,11 +1440,17 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm lint:check       # ESLint
-pnpm test             # Run test suite (vitest) — ~490 tests
+pnpm test             # Run test suite (vitest) — ~579 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
 
 Tests live in `test/` (one file per module, `<feature>.test.ts` naming).
+
+Host API tests (`test/host-api.test.ts`, `test/host-api-cron.test.ts`) require port binding and are skipped by default. Run them when available:
+
+```bash
+HOST_API_TESTS=1 pnpm exec vitest run test/host-api.test.ts test/host-api-cron.test.ts
+```
 
 Requires Node 22+ and Docker (for sandbox mode).
