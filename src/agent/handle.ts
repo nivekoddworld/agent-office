@@ -160,7 +160,7 @@ export class AgentHandle {
       });
 
       let sandboxSkillsPrompt: string | undefined;
-      if (this.config.onDemandSkills && sandboxSkills.length > 0) {
+      if (this.config.onDemandSkills !== false && sandboxSkills.length > 0) {
         const summaries = extractSkillSummaries(sandboxSkills);
         sandboxSkillsPrompt = formatSkillSummariesForPrompt(summaries);
         // Store loaded skills for the host API endpoint
@@ -209,7 +209,7 @@ export class AgentHandle {
           ...(this.config.permissions?.tools
             ? { PERMISSIONS: JSON.stringify(this.config.permissions) }
             : {}),
-          ...(this.config.onDemandSkills ? { ON_DEMAND_SKILLS: "1" } : {}),
+          ...(this.config.onDemandSkills !== false ? { ON_DEMAND_SKILLS: "1" } : {}),
         },
       });
       // Register event listener so sandbox events flow to workspace/Telegram
@@ -227,7 +227,7 @@ export class AgentHandle {
       const hasSecrets =
         this.config.secrets &&
         Object.keys(this.config.secrets).some((k) => k !== "MODEL_API_KEY");
-      let est = 15 + (hasSecrets ? 1 : 0) + (this.config.onDemandSkills ? 1 : 0);
+      let est = 15 + (hasSecrets ? 1 : 0) + (this.config.onDemandSkills !== false ? 1 : 0);
       const policy = this.config.permissions?.tools;
       if (policy?.allow) est = Math.min(est, policy.allow.length);
       else if (policy?.deny) est = Math.max(0, est - policy.deny.length);
@@ -290,7 +290,7 @@ export class AgentHandle {
       ...(this.config.tools ?? []),
     ];
 
-    if (this.config.onDemandSkills && skills.length > 0) {
+    if (this.config.onDemandSkills !== false && skills.length > 0) {
       const summaries = extractSkillSummaries(skills);
       inProcSkillsPrompt = formatSkillSummariesForPrompt(summaries);
       const skillsMap = new Map<string, string>();
@@ -451,7 +451,7 @@ export class AgentHandle {
     });
 
     let skillsPrompt: string | undefined;
-    if (this.config.onDemandSkills && skills.length > 0) {
+    if (this.config.onDemandSkills !== false && skills.length > 0) {
       const summaries = extractSkillSummaries(skills);
       skillsPrompt = formatSkillSummariesForPrompt(summaries);
     } else if (skills.length > 0) {

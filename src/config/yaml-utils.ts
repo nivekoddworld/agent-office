@@ -451,6 +451,6 @@ export function buildYamlEntry(
     out.permissions = entry.permissions;
   if (entry.prompt_mode && entry.prompt_mode !== "full")
     out.prompt_mode = entry.prompt_mode;
-  if (entry.on_demand_skills) out.on_demand_skills = entry.on_demand_skills;
+  if (entry.on_demand_skills === false) out.on_demand_skills = false;
   return out;
 }

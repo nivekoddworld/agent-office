@@ -73,7 +73,7 @@ function normalizeEntry(
     discloseSecrets: entry.disclose_secrets ?? false,
     permissions: JSON.stringify(entry.permissions ?? {}),
     promptMode: entry.prompt_mode ?? "full",
-    onDemandSkills: entry.on_demand_skills ?? false,
+    onDemandSkills: entry.on_demand_skills ?? true,
     bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, baseDir, name),
   };
 }
@@ -100,7 +100,7 @@ function normalizeRunning(
     discloseSecrets: cfg.discloseSecrets ?? false,
     permissions: JSON.stringify(cfg.permissions ?? {}),
     promptMode: cfg.promptMode ?? "full",
-    onDemandSkills: cfg.onDemandSkills ?? false,
+    onDemandSkills: cfg.onDemandSkills ?? true,
     bootstrapDir:
       cfg.bootstrapDir ?? join(baseDir, "agents", name, "bootstrap"),
   };

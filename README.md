@@ -240,7 +240,7 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
 | `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
 | `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)     |
-| `on_demand_skills` | boolean          | `false`                                                | Advertise skill summaries; load full content on demand via `read_skill` |
+| `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill` |
 
 ### Permissions
 
@@ -831,7 +831,7 @@ agent calls cron_list:
 
 ### read_skill
 
-Load full skill content on demand (requires `on_demand_skills: true`).
+Load full skill content on demand (enabled by default; set `on_demand_skills: false` for eager mode).
 
 When on-demand mode is active, the agent's system prompt contains only skill summaries (name + description). The agent calls `read_skill` to fetch the full markdown content when needed.
 
@@ -886,7 +886,7 @@ Every agent receives a **layered system prompt** composed from eight ordered lay
 5. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
 6. **Identity** — agent name, description, workspace path.
 7. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
-8. **Skills** — full skill content (default) or summaries only (when `on_demand_skills: true`). See [Skills](#skills).
+8. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
 
 **Prompt source:** use exactly one of `prompt_inline` (inline text) or `prompt_file` (path to `.md` file, resolved relative to the office directory). Specifying both is a validation error. The legacy `prompt` field is no longer supported — use `prompt_inline` or `prompt_file` instead.
 
@@ -1074,7 +1074,7 @@ ao> skill remove designer web-tools
 
 A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `office.yaml` entries when the last skill from a source is removed.
 
-**On-demand loading:** By default, full skill content is injected into the system prompt (eager mode). Set `on_demand_skills: true` to include only skill summaries (name + description) in the prompt and let the agent call [`read_skill`](#read_skill) to fetch full content when needed. This reduces prompt size for agents with many or large skills.
+**On-demand loading (default):** Skill summaries (name + description) are included in the prompt and agents call [`read_skill`](#read_skill) to fetch full content when needed. This reduces prompt size for agents with many or large skills. Set `on_demand_skills: false` to inject full skill content into the system prompt (eager mode).
 
 ### Bootstrap Files
 

@@ -147,6 +147,54 @@ describe("AgentHandle sandbox skills", () => {
     expect(typeof opts.systemPrompt).toBe("string");
   });
 
+  it("unset onDemandSkills defaults to on-demand mode (ON_DEMAND_SKILLS=1)", async () => {
+    const config = makeConfig(); // onDemandSkills not set
+    const deps: AgentHandleDeps = {
+      bus,
+      listAgentsFn: () => [],
+      provider,
+      hostApi: {
+        getHeartbeat: vi.fn(),
+        onAgentEvent: vi.fn(),
+        offAgentEvent: vi.fn(),
+      } as any,
+      sandboxToken: "tok-1",
+      baseDir: AGENT_OFFICE_DIR,
+      officeId: "test",
+      officeName: "Test",
+    };
+
+    const handle = new AgentHandle(config, deps);
+    await handle.init();
+
+    const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
+    expect(opts.env).toHaveProperty("ON_DEMAND_SKILLS", "1");
+  });
+
+  it("explicit onDemandSkills=false omits ON_DEMAND_SKILLS env", async () => {
+    const config = makeConfig({ onDemandSkills: false });
+    const deps: AgentHandleDeps = {
+      bus,
+      listAgentsFn: () => [],
+      provider,
+      hostApi: {
+        getHeartbeat: vi.fn(),
+        onAgentEvent: vi.fn(),
+        offAgentEvent: vi.fn(),
+      } as any,
+      sandboxToken: "tok-1",
+      baseDir: AGENT_OFFICE_DIR,
+      officeId: "test",
+      officeName: "Test",
+    };
+
+    const handle = new AgentHandle(config, deps);
+    await handle.init();
+
+    const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
+    expect(opts.env).not.toHaveProperty("ON_DEMAND_SKILLS");
+  });
+
   it("does not pass skillsPaths for in-process agents", async () => {
     const { loadSkills } = await import("@mariozechner/pi-coding-agent");
     (loadSkills as any).mockReturnValue({ skills: [], diagnostics: [] });

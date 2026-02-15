@@ -48,7 +48,6 @@ agents:
     priority: normal
     thinking: medium
     description: "Agent developer — builds and deploys OpenServ agents"
-    on_demand_skills: true  # load skill summaries only; fetch full content via read_skill
     skills:
       - openserv-labs/skills
     prompt_inline: |

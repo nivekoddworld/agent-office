@@ -16,7 +16,6 @@ pnpm dev start --office basic-team --sandbox docker
 Four-agent OpenServ workspace: an idea scout (with cron), a team lead, an agent developer, and a token launcher. The scout fetches ideas from the Ideaboard every 4 hours, the lead delegates work to agent-dev and launcher. `WALLET_PRIVATE_KEY` is shared at the office level.
 
 Demonstrates additional features:
-- **On-demand skills** — `agent-dev` uses `on_demand_skills: true` to load skill summaries only, fetching full content via `read_skill` when needed.
 - **Tool policy** — `launcher` has `cron_add` denied via `permissions.tools.deny`.
 
 ```bash

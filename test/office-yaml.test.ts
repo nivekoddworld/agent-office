@@ -731,13 +731,18 @@ describe("buildYamlEntry", () => {
     expect(out.prompt_mode).toBeUndefined();
   });
 
-  it("persists on_demand_skills when true", () => {
-    const out = buildYamlEntry({ on_demand_skills: true });
-    expect(out.on_demand_skills).toBe(true);
+  it("persists on_demand_skills when false (explicit opt-out)", () => {
+    const out = buildYamlEntry({ on_demand_skills: false });
+    expect(out.on_demand_skills).toBe(false);
   });
 
-  it("omits on_demand_skills when false", () => {
-    const out = buildYamlEntry({ on_demand_skills: false });
+  it("omits on_demand_skills when true (default)", () => {
+    const out = buildYamlEntry({ on_demand_skills: true });
+    expect(out.on_demand_skills).toBeUndefined();
+  });
+
+  it("omits on_demand_skills when unset", () => {
+    const out = buildYamlEntry({});
     expect(out.on_demand_skills).toBeUndefined();
   });
 
