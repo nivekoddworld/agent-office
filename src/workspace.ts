@@ -18,6 +18,8 @@ import type {
 } from "./types.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
+import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
+import { accumulateSession } from "./commands/cost.js";
 import { CronService } from "./cron/cron-service.js";
 import { CronStore } from "./cron/cron-store.js";
 
@@ -180,6 +182,52 @@ export class Workspace {
       ) {
         console.log(`[event] ${config.name}: ${e.type}`);
       }
+
+      // Track usage on assistant message_end
+      if (e.type === "message_end") {
+        const msg = e.message as unknown as Record<string, unknown>;
+        if (msg.role === "assistant" && msg.usage) {
+          try {
+            const usage = msg.usage as {
+              input: number;
+              output: number;
+              cacheRead: number;
+              cacheWrite: number;
+              totalTokens: number;
+              cost: {
+                input: number;
+                output: number;
+                cacheRead: number;
+                cacheWrite: number;
+                total: number;
+              };
+            };
+            const record: UsageRecord = {
+              ts: new Date().toISOString(),
+              officeId: this.office.id,
+              agent: config.name,
+              provider: (msg.provider as string) ?? "",
+              model: (msg.model as string) ?? "",
+              stopReason: msg.stopReason as string | undefined,
+              inputTokens: usage.input ?? 0,
+              outputTokens: usage.output ?? 0,
+              cacheReadTokens: usage.cacheRead ?? 0,
+              cacheWriteTokens: usage.cacheWrite ?? 0,
+              totalTokens: usage.totalTokens ?? 0,
+              inputCost: usage.cost?.input ?? 0,
+              outputCost: usage.cost?.output ?? 0,
+              cacheReadCost: usage.cost?.cacheRead ?? 0,
+              cacheWriteCost: usage.cost?.cacheWrite ?? 0,
+              totalCost: usage.cost?.total ?? 0,
+            };
+            recordUsage(this.office.dir, record);
+            accumulateSession(config.name, record.totalTokens, record.totalCost);
+          } catch {
+            // Best-effort: never fail agent flow
+          }
+        }
+      }
+
       for (const fn of this.listeners) fn(config.name, e);
     });
 

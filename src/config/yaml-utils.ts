@@ -20,7 +20,12 @@ export interface AgentYamlEntry {
   env?: Record<string, string>;
   secrets?: Record<string, string>;
   disclose_secrets?: boolean;
-  permissions?: { office_cron?: boolean };
+  prompt_mode?: "full" | "minimal";
+  on_demand_skills?: boolean;
+  permissions?: {
+    office_cron?: boolean;
+    tools?: { allow?: string[]; deny?: string[] };
+  };
   cron?: Record<
     string,
     {
@@ -64,6 +69,8 @@ export const RESERVED_KEYS = new Set([
   "MODEL_NAME",
   "SYSTEM_PROMPT",
   "SKILL_PATHS",
+  "PERMISSIONS",
+  "ON_DEMAND_SKILLS",
 ]);
 
 // --- Validation ---
@@ -119,6 +126,23 @@ export function validateAgentEntry(
         `Invalid model "${entry.model}" — must be "provider:model-id"`,
       );
     }
+  }
+
+  if (
+    entry.prompt_mode !== undefined &&
+    entry.prompt_mode !== "full" &&
+    entry.prompt_mode !== "minimal"
+  ) {
+    errors.push(
+      `Invalid prompt_mode "${entry.prompt_mode}" — must be "full" or "minimal"`,
+    );
+  }
+
+  if (
+    entry.on_demand_skills !== undefined &&
+    typeof entry.on_demand_skills !== "boolean"
+  ) {
+    errors.push(`on_demand_skills must be a boolean`);
   }
 
   if (entry.env) {
@@ -183,16 +207,47 @@ export function validateAgentEntry(
     if (typeof entry.permissions !== "object" || entry.permissions === null) {
       errors.push(`permissions must be an object`);
     } else {
-      const known = new Set(["office_cron"]);
+      const known = new Set(["office_cron", "tools"]);
       for (const key of Object.keys(entry.permissions)) {
         if (!known.has(key))
-          errors.push(`Unknown permission "${key}" — known: office_cron`);
+          errors.push(
+            `Unknown permission "${key}" — known: office_cron, tools`,
+          );
       }
       if (
         entry.permissions.office_cron !== undefined &&
         typeof entry.permissions.office_cron !== "boolean"
       )
         errors.push(`permissions.office_cron must be a boolean`);
+      if (entry.permissions.tools !== undefined) {
+        const t = entry.permissions.tools;
+        if (typeof t !== "object" || t === null) {
+          errors.push(`permissions.tools must be an object`);
+        } else {
+          if (t.allow && t.deny)
+            errors.push(
+              `permissions.tools: cannot specify both allow and deny`,
+            );
+          if (t.allow && !Array.isArray(t.allow))
+            errors.push(`permissions.tools.allow must be an array`);
+          else if (
+            t.allow &&
+            t.allow.some((v: unknown) => typeof v !== "string")
+          )
+            errors.push(
+              `permissions.tools.allow must contain only strings`,
+            );
+          if (t.deny && !Array.isArray(t.deny))
+            errors.push(`permissions.tools.deny must be an array`);
+          else if (
+            t.deny &&
+            t.deny.some((v: unknown) => typeof v !== "string")
+          )
+            errors.push(
+              `permissions.tools.deny must contain only strings`,
+            );
+        }
+      }
     }
   }
 
@@ -368,5 +423,8 @@ export function buildYamlEntry(
   if (entry.cron && Object.keys(entry.cron).length > 0) out.cron = entry.cron;
   if (entry.permissions && Object.keys(entry.permissions).length > 0)
     out.permissions = entry.permissions;
+  if (entry.prompt_mode && entry.prompt_mode !== "full")
+    out.prompt_mode = entry.prompt_mode;
+  if (entry.on_demand_skills) out.on_demand_skills = entry.on_demand_skills;
   return out;
 }

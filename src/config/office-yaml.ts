@@ -242,7 +242,15 @@ export async function upsertAgentToOfficeYaml(
         "description",
         "prompt",
         "cwd",
+        "skills",
         "api_key_ref",
+        "env",
+        "secrets",
+        "disclose_secrets",
+        "cron",
+        "permissions",
+        "prompt_mode",
+        "on_demand_skills",
       ]) {
         if (!(key in clean)) doc.deleteIn(["agents", name, key]);
       }

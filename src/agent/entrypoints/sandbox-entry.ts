@@ -13,8 +13,6 @@ import {
   createGrepTool,
   createFindTool,
   createLsTool,
-  loadSkills,
-  formatSkillsForPrompt,
 } from "@mariozechner/pi-coding-agent";
 import { getModel, streamSimple } from "@mariozechner/pi-ai";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
@@ -28,11 +26,14 @@ import {
   createCronAddProxy,
   createCronRemoveProxy,
   createCronListProxy,
+  createReadSkillProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
 
 import { createRedactor } from "../../security/redact.js";
+import { applyToolPolicy } from "../tools/policy.js";
+import type { AgentPermissions } from "../../types.js";
 
 const AGENT_NAME = process.env["AGENT_NAME"]!;
 const AUTH_TOKEN = process.env["AUTH_TOKEN"]!;
@@ -116,7 +117,7 @@ const model = parseModelSpec(MODEL_NAME);
 
 const hasToolSecrets = Object.keys(secrets).some((k) => k !== "MODEL_API_KEY");
 
-const tools: AgentTool<any>[] = [
+const allTools: AgentTool<any>[] = [
   ...createCodingTools(WORKSPACE),
   createGrepTool(WORKSPACE),
   createFindTool(WORKSPACE),
@@ -130,30 +131,34 @@ const tools: AgentTool<any>[] = [
   createCronAddProxy(hostFetch),
   createCronRemoveProxy(hostFetch),
   createCronListProxy(hostFetch),
+  ...(process.env["ON_DEMAND_SKILLS"] === "1"
+    ? [createReadSkillProxy(hostFetch)]
+    : []),
 ];
 
-// Load skills from read-only mounts
-const SKILL_PATHS: string[] = JSON.parse(process.env["SKILL_PATHS"] ?? "[]");
-const { skills } = loadSkills({
-  cwd: WORKSPACE,
-  skillPaths: SKILL_PATHS,
-  includeDefaults: true,
-});
-const skillsPrompt =
-  skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
-if (skills.length > 0)
-  console.log(
-    `[agent-entry] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`,
-  );
+const sandboxPermissions: AgentPermissions | undefined = process.env[
+  "PERMISSIONS"
+]
+  ? (JSON.parse(process.env["PERMISSIONS"]) as AgentPermissions)
+  : undefined;
+const { allowed: tools, denied } = applyToolPolicy(
+  allTools,
+  sandboxPermissions,
+);
+if (denied.length > 0)
+  console.log(`[agent-entry] Denied tools: ${denied.join(", ")}`);
 
-const finalPrompt = SYSTEM_PROMPT + skillsPrompt;
+// Report actual tool count to host for prompt report accuracy
+hostFetch("/api/tool-count", { count: tools.length }).catch(() => {});
+
+// Skills are composed host-side and included in SYSTEM_PROMPT
 console.log(
-  `[agent-entry] Prompt ${PROMPT_VERSION} (${hashPrompt(finalPrompt)})`,
+  `[agent-entry] Prompt ${PROMPT_VERSION} (${hashPrompt(SYSTEM_PROMPT)})`,
 );
 
 const agent = new Agent({
   initialState: {
-    systemPrompt: finalPrompt,
+    systemPrompt: SYSTEM_PROMPT,
     model,
     thinkingLevel: "low",
     tools,

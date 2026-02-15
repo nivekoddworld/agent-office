@@ -4,6 +4,9 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { Priority, type AgentInfo } from "../src/types.js";
 
+/** Skip unless HOST_API_TESTS=1 (port binding may be restricted). */
+const skipHostApi = process.env["HOST_API_TESTS"] !== "1";
+
 const TEST_DIR = join(tmpdir(), "host-api-cron-test");
 const OFFICE_ID = "test-office";
 const OFFICE_DIR = join(TEST_DIR, "offices", OFFICE_ID);
@@ -115,7 +118,7 @@ agents:
     description: helper agent
 `;
 
-describe("HostApi cron endpoints", () => {
+describe.skipIf(skipHostApi)("HostApi cron endpoints", () => {
   let api: HostApi;
   let port: number;
   const token = "cron-test-token";
@@ -304,5 +307,34 @@ describe("HostApi cron endpoints", () => {
   it("returns 400 for malformed JSON on cron-list", async () => {
     const res = await postRaw(port, "/api/cron-list", "{{", token);
     expect(res.status).toBe(400);
+  });
+
+  // --- Tool policy enforcement ---
+
+  it("denied cron endpoint returns 403", async () => {
+    const api2 = new HostApi(makeBus(), makeListFn(), OFFICE_DIR);
+    const port2 = nextPort();
+    api2.setCronDeps({ officeId: OFFICE_ID, officeDir: OFFICE_DIR, cron });
+    api2.registerAgent(
+      "bot",
+      "deny-tok",
+      { MODEL_API_KEY: "sk-test" },
+      "auto",
+      { tools: { deny: ["cron_add"] } },
+    );
+    await api2.start(port2);
+    try {
+      const res = await postJson(
+        port2,
+        "/api/cron-add",
+        { name: "j", schedule: "0 9 * * *", message: "hi" },
+        "deny-tok",
+      );
+      expect(res.status).toBe(403);
+      const data = (await res.json()) as { error: string };
+      expect(data.error).toBe("Tool denied by policy");
+    } finally {
+      await api2.stop();
+    }
   });
 });

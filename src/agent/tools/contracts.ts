@@ -168,6 +168,16 @@ export const CRON_REMOVE = {
   }),
 };
 
+export const READ_SKILL = {
+  name: "read_skill" as const,
+  label: "Read Skill",
+  description:
+    "Load the full content of a skill by name. Use this to retrieve skill instructions before executing a task.",
+  parameters: Type.Object({
+    name: Type.String({ description: "Skill name" }),
+  }),
+};
+
 export const CRON_LIST = {
   name: "cron_list" as const,
   label: "Cron List",

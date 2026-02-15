@@ -45,7 +45,7 @@ import {
   cronAddOfficeCommand,
   cronRemoveOfficeCommand,
 } from "./commands/cron.js";
-import { AGENT_OFFICE_DIR, validateOfficeId } from "./constants.js";
+import { AGENT_OFFICE_DIR, validateOfficeId, officeDir } from "./constants.js";
 import {
   loadOfficeYaml,
   buildOfficeContext,
@@ -54,6 +54,12 @@ import {
   createOffice,
 } from "./config/office-yaml.js";
 import { migrateCommand } from "./commands/migrate.js";
+import { promptReportCommand } from "./commands/prompt-report.js";
+import {
+  costStatusCommand,
+  costTodayCommand,
+  costReportCommand,
+} from "./commands/cost.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[error]", err instanceof Error ? err.message : err);
@@ -539,6 +545,42 @@ async function handleRepl(
       );
       break;
     }
+    case "prompt": {
+      const sub = parts[1];
+      const agent = parts[2];
+      if (sub === "report" && agent) {
+        promptReportCommand(workspace, agent);
+      } else {
+        console.log("Usage: prompt report <agent>");
+      }
+      break;
+    }
+    case "cost": {
+      const sub = parts[1];
+      if (sub === "status") {
+        costStatusCommand();
+      } else if (sub === "today") {
+        const agentFlag = parts.indexOf("--agent");
+        const agent = agentFlag !== -1 ? parts[agentFlag + 1] : undefined;
+        costTodayCommand(officeDir(officeId), agent);
+      } else if (sub === "report") {
+        const daysFlag = parts.indexOf("--days");
+        const days =
+          daysFlag !== -1 ? parseInt(parts[daysFlag + 1] ?? "7", 10) : 7;
+        if (!Number.isFinite(days) || days <= 0) {
+          console.log("Error: --days must be a positive number");
+          break;
+        }
+        const agentFlag = parts.indexOf("--agent");
+        const agent = agentFlag !== -1 ? parts[agentFlag + 1] : undefined;
+        costReportCommand(officeDir(officeId), days, agent);
+      } else {
+        console.log(
+          "Usage: cost status | cost today [--agent <name>] | cost report --days <n> [--agent <name>]",
+        );
+      }
+      break;
+    }
     case "help":
       printHelp();
       break;
@@ -652,5 +694,7 @@ function printHelp(): void {
   cron trigger office <job> | cron add office <job> "<sched>" <msg> --targets a,b
   cron remove office <job>
   route <chatId> <agent> | route list
+  prompt report <agent>
+  cost status | cost today [--agent <name>] | cost report --days <n> [--agent <name>]
   help | exit`);
 }

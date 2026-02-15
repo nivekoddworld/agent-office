@@ -60,7 +60,6 @@ describe("DockerProvider", () => {
       systemPrompt: "You are test",
       modelName: "anthropic:test",
       workspacePath: "/tmp/test-workspace",
-      skillsPaths: ["/tmp/test-skills"],
     });
 
     expect(info.agentName).toBe("test-agent");
@@ -91,7 +90,6 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: ws,
-      skillsPaths: ["/tmp/skills"],
     });
 
     const runCall = (execFile as any).mock.calls.find(
@@ -102,7 +100,7 @@ describe("DockerProvider", () => {
     expect(args.some((a: string) => a.includes(`${ws}:/workspace`))).toBe(true);
   });
 
-  it("mounts skills directories read-only", async () => {
+  it("does not mount skill directories (host-resolved)", async () => {
     const { execFile } = await import("node:child_process");
     await provider.start("skill-agent", {
       token: "tok-sk",
@@ -110,19 +108,14 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/default-skills", "/tmp/custom-skills"],
     });
 
     const runCall = (execFile as any).mock.calls.find(
       (c: any[]) => c[1][0] === "run",
     );
     const args: string[] = runCall[1];
-    expect(
-      args.some((a: string) => a === "/tmp/default-skills:/skills:ro"),
-    ).toBe(true);
-    expect(
-      args.some((a: string) => a === "/tmp/custom-skills:/skills-1:ro"),
-    ).toBe(true);
+    expect(args.some((a: string) => a.includes("/skills"))).toBe(false);
+    expect(args.some((a: string) => a.includes("SKILL_PATHS"))).toBe(false);
   });
 
   it("cleans up stale containers before starting", async () => {
@@ -133,7 +126,6 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/skills"],
     });
 
     // docker rm -f should have been called before docker run
@@ -151,7 +143,6 @@ describe("DockerProvider", () => {
       modelName: "t",
       apiKey: "k",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/sk"],
     };
     const first = await provider.start("restart-agent", opts);
 
@@ -176,8 +167,7 @@ describe("DockerProvider", () => {
         systemPrompt: "test",
         modelName: "test",
         workspacePath: "/tmp/ws",
-        skillsPaths: ["/tmp/skills"],
-      }),
+        }),
     ).rejects.toThrow("failed health check");
 
     // Should have called docker rm -f for cleanup
@@ -196,7 +186,6 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/skills"],
     });
 
     await provider.stop(info.id);
@@ -210,7 +199,6 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/skills"],
     });
 
     const alive = await provider.isAlive(info.id);
@@ -229,7 +217,6 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/skills"],
     });
 
     await provider.prompt(info.id, "pid-1", "hello");
@@ -255,7 +242,6 @@ describe("DockerProvider", () => {
         systemPrompt: "t",
         modelName: "t",
         workspacePath: "/tmp/a1",
-        skillsPaths: ["/tmp/s1"],
       }),
       provider.start("a2", {
         token: "t2",
@@ -263,7 +249,6 @@ describe("DockerProvider", () => {
         systemPrompt: "t",
         modelName: "t",
         workspacePath: "/tmp/a2",
-        skillsPaths: ["/tmp/s2"],
       }),
     ]);
 
@@ -306,7 +291,6 @@ describe("DockerProvider", () => {
         systemPrompt: "t",
         modelName: "t",
         workspacePath: "/tmp/ra",
-        skillsPaths: ["/tmp/sa"],
       }),
     ).rejects.toThrow("build failed");
 
@@ -317,7 +301,6 @@ describe("DockerProvider", () => {
       systemPrompt: "t",
       modelName: "t",
       workspacePath: "/tmp/rb",
-      skillsPaths: ["/tmp/sb"],
     });
     expect(info.agentName).toBe("retry-b");
     expect(buildCount).toBe(2);
@@ -332,7 +315,6 @@ describe("DockerProvider", () => {
       systemPrompt: "t",
       modelName: "t",
       workspacePath: "/tmp/alice/workspace",
-      skillsPaths: ["/tmp/alice/skills"],
     });
     await provider.start("bob", {
       token: "t-b",
@@ -340,7 +322,6 @@ describe("DockerProvider", () => {
       systemPrompt: "t",
       modelName: "t",
       workspacePath: "/tmp/bob/workspace",
-      skillsPaths: ["/tmp/bob/skills"],
     });
 
     const runCalls = (execFile as any).mock.calls.filter(
@@ -353,23 +334,17 @@ describe("DockerProvider", () => {
       runCalls[1][1],
     ];
 
-    // Alice's container only mounts alice's paths
+    // Alice's container only mounts alice's workspace
     expect(
       aliceArgs.some((a: string) =>
         a.includes("/tmp/alice/workspace:/workspace"),
       ),
     ).toBe(true);
-    expect(
-      aliceArgs.some((a: string) => a.includes("/tmp/alice/skills:/skills:ro")),
-    ).toBe(true);
     expect(aliceArgs.some((a: string) => a.includes("/tmp/bob/"))).toBe(false);
 
-    // Bob's container only mounts bob's paths
+    // Bob's container only mounts bob's workspace
     expect(
       bobArgs.some((a: string) => a.includes("/tmp/bob/workspace:/workspace")),
-    ).toBe(true);
-    expect(
-      bobArgs.some((a: string) => a.includes("/tmp/bob/skills:/skills:ro")),
     ).toBe(true);
     expect(bobArgs.some((a: string) => a.includes("/tmp/alice/"))).toBe(false);
   });
@@ -382,7 +357,6 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/skills"],
       env: { LOG_LEVEL: "debug", WORKSPACE_NAME: "env-agent" },
     });
 
@@ -407,7 +381,6 @@ describe("DockerProvider", () => {
       systemPrompt: "test",
       modelName: "test",
       workspacePath: "/tmp/ws",
-      skillsPaths: ["/tmp/skills"],
     });
 
     const runCall = (execFile as any).mock.calls.find(
@@ -431,7 +404,6 @@ describe("DockerProvider", () => {
       systemPrompt: "t",
       modelName: "t",
       workspacePath: "/tmp/a",
-      skillsPaths: ["/tmp/sa"],
     });
     const info2 = await provider.start("port-b", {
       token: "t2",
@@ -439,7 +411,6 @@ describe("DockerProvider", () => {
       systemPrompt: "t",
       modelName: "t",
       workspacePath: "/tmp/b",
-      skillsPaths: ["/tmp/sb"],
     });
 
     expect(info1.url).not.toBe(info2.url);

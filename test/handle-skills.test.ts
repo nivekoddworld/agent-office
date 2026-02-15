@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { join, resolve } from "node:path";
-import { homedir } from "node:os";
 import { AgentHandle, type AgentHandleDeps } from "../src/agent/handle.js";
 import type { AgentConfig } from "../src/types.js";
 import { Priority } from "../src/types.js";
@@ -99,7 +97,7 @@ describe("AgentHandle sandbox skills", () => {
     bus = makeBus();
   });
 
-  it("passes skillsPaths to sandbox provider", async () => {
+  it("does not pass skillsPaths to sandbox provider (host-resolved)", async () => {
     const config = makeConfig();
     const deps: AgentHandleDeps = {
       bus,
@@ -121,15 +119,11 @@ describe("AgentHandle sandbox skills", () => {
 
     expect(provider.start).toHaveBeenCalledOnce();
     const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
-    expect(opts.skillsPaths).toEqual([
-      join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills"),
-    ]);
+    expect(opts).not.toHaveProperty("skillsPaths");
   });
 
-  it("includes custom skillDirs in sandbox skillsPaths", async () => {
-    const config = makeConfig({
-      skillDirs: ["/extra/skills-a", "./relative-skills", "~/my-skills"],
-    });
+  it("sandbox opts include systemPrompt with skills composed host-side", async () => {
+    const config = makeConfig();
     const deps: AgentHandleDeps = {
       bus,
       listAgentsFn: () => [],
@@ -148,14 +142,9 @@ describe("AgentHandle sandbox skills", () => {
     const handle = new AgentHandle(config, deps);
     await handle.init();
 
-    const cwd = join(AGENT_OFFICE_DIR, "agents", "test-agent", "workspace");
     const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
-    expect(opts.skillsPaths).toEqual([
-      join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills"),
-      "/extra/skills-a", // absolute stays absolute
-      resolve(cwd, "./relative-skills"), // relative resolved against cwd
-      join(homedir(), "my-skills"), // tilde expanded
-    ]);
+    expect(opts.systemPrompt).toBeDefined();
+    expect(typeof opts.systemPrompt).toBe("string");
   });
 
   it("does not pass skillsPaths for in-process agents", async () => {

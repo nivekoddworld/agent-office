@@ -1,7 +1,17 @@
 import { createHash } from "node:crypto";
 import { buildBasePrompt, PROMPT_VERSION } from "./base-v1.js";
+import {
+  truncateBlocks,
+  type BlockContent,
+  type BlockMeta,
+  type TruncationConfig,
+} from "./truncate.js";
+import { loadBootstrapFiles, formatBootstrapBlock } from "./bootstrap.js";
 
 export { PROMPT_VERSION };
+export type { BlockMeta };
+
+export type PromptMode = "full" | "minimal";
 
 export interface PromptContext {
   name: string;
@@ -14,12 +24,18 @@ export interface PromptContext {
   officeName?: string;
   officeDescription?: string;
   hasMemory?: boolean;
+  skillsPrompt?: string;
+  workspaceDir?: string;
+  enableBootstrap?: boolean;
+  mode?: PromptMode;
+  truncationConfig?: Partial<TruncationConfig>;
 }
 
 export interface ComposedPrompt {
   text: string;
   version: string;
   hash: string;
+  blocks: BlockMeta[];
 }
 
 function buildOfficeBlock(ctx: PromptContext): string {
@@ -60,9 +76,10 @@ function buildMemoryBlock(ctx: PromptContext): string {
   return (
     "\n\n## Memory\n" +
     "Reading:\n" +
-    "Before answering questions about past decisions, preferences, or established patterns, " +
-    "search memory first using memory_search. Office memory is shared across all agents; " +
-    "agent memory is private to you.\n\n" +
+    "CRITICAL: Before answering questions about prior work, decisions, or patterns, " +
+    "you MUST run memory_search first. Do not rely on information that was not explicitly " +
+    "retrieved via memory tools. If you do not find relevant memory, say so.\n" +
+    "Office memory is shared across all agents; agent memory is private to you.\n\n" +
     "Writing:\n" +
     "After completing a task, update your agent memory using write/edit tools. " +
     "Use MEMORY.md for key decisions and memory/<topic>.md for detailed notes. Keep entries concise.\n\n" +
@@ -77,18 +94,45 @@ function buildCustomBlock(customPrompt?: string): string {
   return `\n\n## Custom Instructions\n${customPrompt.trim()}`;
 }
 
+function buildBootstrapBlock(ctx: PromptContext): string {
+  if (!ctx.enableBootstrap || !ctx.workspaceDir) return "";
+  const files = loadBootstrapFiles(ctx.workspaceDir);
+  return formatBootstrapBlock(files);
+}
+
+function buildSkillsBlock(skillsPrompt?: string): string {
+  if (!skillsPrompt?.trim()) return "";
+  return "\n\n" + skillsPrompt.trim();
+}
+
 export function hashPrompt(text: string): string {
   return createHash("sha256").update(text).digest("hex").slice(0, 12);
 }
 
-export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
-  const text =
-    buildBasePrompt() +
-    buildOfficeBlock(ctx) +
-    buildMemoryBlock(ctx) +
-    buildRuntimeBlock(ctx) +
-    buildIdentityBlock(ctx) +
-    buildCustomBlock(ctx.customPrompt);
+/** Blocks included in minimal mode (safety always in base). */
+const MINIMAL_BLOCKS = new Set(["base", "identity", "custom"]);
 
-  return { text, version: PROMPT_VERSION, hash: hashPrompt(text) };
+export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
+  const mode = ctx.mode ?? "full";
+  const rawBlocks: BlockContent[] = [
+    { name: "base", text: buildBasePrompt() },
+    { name: "office", text: buildOfficeBlock(ctx) },
+    { name: "bootstrap", text: buildBootstrapBlock(ctx) },
+    { name: "memory", text: buildMemoryBlock(ctx) },
+    { name: "runtime", text: buildRuntimeBlock(ctx) },
+    { name: "identity", text: buildIdentityBlock(ctx) },
+    { name: "custom", text: buildCustomBlock(ctx.customPrompt) },
+    { name: "skills", text: buildSkillsBlock(ctx.skillsPrompt) },
+  ].filter((b) => {
+    if (b.text.length === 0) return false;
+    if (mode === "minimal" && !MINIMAL_BLOCKS.has(b.name)) return false;
+    return true;
+  });
+
+  const { blocks: truncated, meta } = truncateBlocks(
+    rawBlocks,
+    ctx.truncationConfig,
+  );
+  const text = truncated.map((b) => b.text).join("");
+  return { text, version: PROMPT_VERSION, hash: hashPrompt(text), blocks: meta };
 }

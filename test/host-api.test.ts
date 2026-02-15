@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HostApi } from "../src/sandbox/host-api.js";
 import { Priority, type AgentInfo } from "../src/types.js";
 
+/** Skip unless HOST_API_TESTS=1 (port binding may be restricted). */
+const skipHostApi = process.env["HOST_API_TESTS"] !== "1";
+
 function makeBus() {
   return {
     send: vi.fn(),
@@ -53,7 +56,7 @@ async function getJson(port: number, path: string, token: string) {
   });
 }
 
-describe("HostApi", () => {
+describe.skipIf(skipHostApi)("HostApi", () => {
   let api: HostApi;
   let bus: ReturnType<typeof makeBus>;
   let port: number;

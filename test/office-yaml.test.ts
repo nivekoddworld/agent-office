@@ -75,6 +75,7 @@ import {
   removeSkillFromOfficeYaml,
 } from "../src/config/office-yaml.js";
 import { withOfficeLock } from "../src/config/lock.js";
+import { buildYamlEntry } from "../src/config/yaml-utils.js";
 
 function writeOfficeYaml(id: string, content: string): void {
   const dir = officeDir(id);
@@ -393,6 +394,30 @@ describe("validateOfficeConfig", () => {
     });
     expect(errors.some((e) => e.includes("must be a boolean"))).toBe(true);
   });
+
+  it("rejects non-string elements in permissions.tools.allow", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: {
+        bot: { permissions: { tools: { allow: ["bash", 42] } } as any },
+      },
+    });
+    expect(
+      errors.some((e) => e.includes("must contain only strings")),
+    ).toBe(true);
+  });
+
+  it("rejects non-string elements in permissions.tools.deny", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: {
+        bot: { permissions: { tools: { deny: [true] } } as any },
+      },
+    });
+    expect(
+      errors.some((e) => e.includes("must contain only strings")),
+    ).toBe(true);
+  });
 });
 
 // --- Build OfficeContext ---
@@ -641,5 +666,29 @@ describe("withOfficeLock", () => {
     await Promise.all([opA, opB]);
     // b should finish first since it has no delay
     expect(results[0]).toBe("b");
+  });
+});
+
+// --- buildYamlEntry ---
+
+describe("buildYamlEntry", () => {
+  it("persists prompt_mode when non-default", () => {
+    const out = buildYamlEntry({ prompt_mode: "minimal" });
+    expect(out.prompt_mode).toBe("minimal");
+  });
+
+  it("omits prompt_mode when full (default)", () => {
+    const out = buildYamlEntry({ prompt_mode: "full" });
+    expect(out.prompt_mode).toBeUndefined();
+  });
+
+  it("persists on_demand_skills when true", () => {
+    const out = buildYamlEntry({ on_demand_skills: true });
+    expect(out.on_demand_skills).toBe(true);
+  });
+
+  it("omits on_demand_skills when false", () => {
+    const out = buildYamlEntry({ on_demand_skills: false });
+    expect(out.on_demand_skills).toBeUndefined();
   });
 });

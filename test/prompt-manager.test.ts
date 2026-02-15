@@ -123,7 +123,7 @@ describe("composeSystemPrompt", () => {
     expect(a.hash).toBe(b.hash);
   });
 
-  it("layer order: base → office → memory → runtime → identity → custom", () => {
+  it("layer order: base → office → memory → runtime → identity → custom → skills", () => {
     const { text } = composeSystemPrompt({
       ...BASE_CTX,
       officeName: "Acme Corp",
@@ -131,6 +131,7 @@ describe("composeSystemPrompt", () => {
       envNames: ["VAR"],
       customPrompt: "My rules",
       description: "helper",
+      skillsPrompt: "## Skills\nAvailable skills list",
     });
     const baseIdx = text.indexOf("Agent-to-Agent Collaboration");
     const officeIdx = text.indexOf("## Office");
@@ -138,11 +139,13 @@ describe("composeSystemPrompt", () => {
     const runtimeIdx = text.indexOf("Runtime Context");
     const identityIdx = text.indexOf('You are agent "test-agent"');
     const customIdx = text.indexOf("Custom Instructions");
+    const skillsIdx = text.indexOf("## Skills");
     expect(baseIdx).toBeLessThan(officeIdx);
     expect(officeIdx).toBeLessThan(memoryIdx);
     expect(memoryIdx).toBeLessThan(runtimeIdx);
     expect(runtimeIdx).toBeLessThan(identityIdx);
     expect(identityIdx).toBeLessThan(customIdx);
+    expect(customIdx).toBeLessThan(skillsIdx);
   });
 
   it("office block includes office name", () => {
@@ -175,6 +178,15 @@ describe("composeSystemPrompt", () => {
     expect(text).toContain("memory_search");
   });
 
+  it("memory block includes mandatory recall language", () => {
+    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
+    expect(text).toContain("MUST run memory_search");
+    expect(text).toContain(
+      "Do not rely on information that was not explicitly retrieved",
+    );
+    expect(text).toContain("If you do not find relevant memory, say so");
+  });
+
   it("memory block includes writing instructions", () => {
     const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
     expect(text).toContain("Writing:");
@@ -201,10 +213,109 @@ describe("composeSystemPrompt", () => {
     expect(text).not.toContain("## Memory");
   });
 
+  it("returns block metadata", () => {
+    const { blocks } = composeSystemPrompt({
+      ...BASE_CTX,
+      officeName: "Acme Corp",
+      customPrompt: "Custom rules",
+    });
+    const names = blocks.map((b) => b.name);
+    expect(names).toContain("base");
+    expect(names).toContain("office");
+    expect(names).toContain("identity");
+    expect(names).toContain("custom");
+    for (const b of blocks) expect(b.chars).toBeGreaterThan(0);
+  });
+
+  it("includes skills block when skillsPrompt provided", () => {
+    const { text, blocks } = composeSystemPrompt({
+      ...BASE_CTX,
+      skillsPrompt: "## Skills\nSkill content here",
+    });
+    expect(text).toContain("Skill content here");
+    expect(blocks.map((b) => b.name)).toContain("skills");
+  });
+
+  it("omits skills block when no skillsPrompt", () => {
+    const { blocks } = composeSystemPrompt(BASE_CTX);
+    expect(blocks.map((b) => b.name)).not.toContain("skills");
+  });
+
   it("version matches PROMPT_VERSION", () => {
     const { version } = composeSystemPrompt(BASE_CTX);
     expect(version).toBe(PROMPT_VERSION);
     expect(version).toBe("v1");
+  });
+
+  it("full mode includes all blocks", () => {
+    const { blocks } = composeSystemPrompt({
+      ...BASE_CTX,
+      mode: "full",
+      officeName: "Acme",
+      hasMemory: true,
+      envNames: ["VAR"],
+      customPrompt: "Rules",
+      skillsPrompt: "## Skills\nList",
+    });
+    const names = blocks.map((b) => b.name);
+    expect(names).toContain("base");
+    expect(names).toContain("office");
+    expect(names).toContain("memory");
+    expect(names).toContain("runtime");
+    expect(names).toContain("identity");
+    expect(names).toContain("custom");
+    expect(names).toContain("skills");
+  });
+
+  it("minimal mode excludes office, bootstrap, memory, runtime, skills", () => {
+    const { blocks, text } = composeSystemPrompt({
+      ...BASE_CTX,
+      mode: "minimal",
+      officeName: "Acme",
+      hasMemory: true,
+      envNames: ["VAR"],
+      customPrompt: "Rules",
+      skillsPrompt: "## Skills\nList",
+    });
+    const names = blocks.map((b) => b.name);
+    expect(names).not.toContain("office");
+    expect(names).not.toContain("bootstrap");
+    expect(names).not.toContain("memory");
+    expect(names).not.toContain("runtime");
+    expect(names).not.toContain("skills");
+    expect(text).not.toContain("## Office");
+    expect(text).not.toContain("## Memory");
+    expect(text).not.toContain("Runtime Context");
+  });
+
+  it("minimal mode retains base (with safety), identity, custom", () => {
+    const { blocks, text } = composeSystemPrompt({
+      ...BASE_CTX,
+      mode: "minimal",
+      customPrompt: "My custom rules",
+    });
+    const names = blocks.map((b) => b.name);
+    expect(names).toContain("base");
+    expect(names).toContain("identity");
+    expect(names).toContain("custom");
+    expect(text).toContain("Safety Constitution");
+    expect(text).toContain('You are agent "test-agent"');
+    expect(text).toContain("My custom rules");
+  });
+
+  it("default mode is full when unspecified", () => {
+    const withFull = composeSystemPrompt({
+      ...BASE_CTX,
+      mode: "full",
+      officeName: "Acme",
+    });
+    const withDefault = composeSystemPrompt({
+      ...BASE_CTX,
+      officeName: "Acme",
+    });
+    expect(withFull.blocks.map((b) => b.name)).toEqual(
+      withDefault.blocks.map((b) => b.name),
+    );
   });
 });
 
@@ -233,5 +344,43 @@ describe("buildBasePrompt", () => {
     const base = buildBasePrompt();
     expect(base).not.toContain("Your workspace is");
     expect(base).not.toContain('You are agent "');
+  });
+
+  it("contains persistence discipline", () => {
+    const base = buildBasePrompt();
+    expect(base).toContain("Persistence Discipline");
+    expect(base).toContain("Mental notes do not survive sessions");
+    expect(base).toContain("MEMORY.md");
+  });
+
+  it("contains safety constitution", () => {
+    const base = buildBasePrompt();
+    expect(base).toContain("Safety Constitution");
+    expect(base).toContain("No independent goals");
+    expect(base).toContain("No self-modification");
+    expect(base).toContain("No replication");
+    expect(base).toContain("No exfiltration");
+    expect(base).toContain("Safety over completion");
+    expect(base).toContain("Human oversight first");
+  });
+
+  it("contains instruction precedence hierarchy", () => {
+    const base = buildBasePrompt();
+    expect(base).toContain("Instruction Precedence");
+    expect(base).toContain("System rules");
+    expect(base).toContain("Office configuration");
+    expect(base).toContain("Custom instructions");
+    expect(base).toContain("File injections");
+  });
+
+  it("safety appears before any user/custom content position", () => {
+    const { text } = composeSystemPrompt({
+      ...BASE_CTX,
+      customPrompt: "My custom rules",
+    });
+    const safetyIdx = text.indexOf("Safety Constitution");
+    const customIdx = text.indexOf("Custom Instructions");
+    expect(safetyIdx).toBeGreaterThan(-1);
+    expect(safetyIdx).toBeLessThan(customIdx);
   });
 });

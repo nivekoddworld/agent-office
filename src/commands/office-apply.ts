@@ -38,6 +38,8 @@ interface NormalizedConfig {
   apiKeyRef: string;
   discloseSecrets: boolean;
   permissions: string;
+  promptMode: string;
+  onDemandSkills: boolean;
 }
 
 function resolveCwd(baseDir: string, name: string, cwd?: string): string {
@@ -65,6 +67,8 @@ function normalizeEntry(
     apiKeyRef: entry.api_key_ref ?? "",
     discloseSecrets: entry.disclose_secrets ?? false,
     permissions: JSON.stringify(entry.permissions ?? {}),
+    promptMode: entry.prompt_mode ?? "full",
+    onDemandSkills: entry.on_demand_skills ?? false,
   };
 }
 
@@ -89,6 +93,8 @@ function normalizeRunning(
     apiKeyRef: cfg.apiKeyRef ?? "",
     discloseSecrets: cfg.discloseSecrets ?? false,
     permissions: JSON.stringify(cfg.permissions ?? {}),
+    promptMode: cfg.promptMode ?? "full",
+    onDemandSkills: cfg.onDemandSkills ?? false,
   };
 }
 
@@ -105,7 +111,9 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.secrets === b.secrets &&
     a.apiKeyRef === b.apiKeyRef &&
     a.discloseSecrets === b.discloseSecrets &&
-    a.permissions === b.permissions
+    a.permissions === b.permissions &&
+    a.promptMode === b.promptMode &&
+    a.onDemandSkills === b.onDemandSkills
   );
 }
 
@@ -194,6 +202,8 @@ export async function applyOfficeYaml(
         secrets: entry.secrets,
         discloseSecrets: entry.disclose_secrets,
         permissions: entry.permissions,
+        promptMode: entry.prompt_mode,
+        onDemandSkills: entry.on_demand_skills,
       });
 
       spawned++;

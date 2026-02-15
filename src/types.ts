@@ -18,6 +18,7 @@ export type AgentStatus = "idle" | "running" | "dead";
 
 export interface AgentPermissions {
   office_cron?: boolean;
+  tools?: { allow?: string[]; deny?: string[] };
 }
 
 export interface AgentConfig {
@@ -37,6 +38,8 @@ export interface AgentConfig {
   discloseSecrets?: boolean;
   sandbox?: SandboxMode;
   permissions?: AgentPermissions;
+  promptMode?: "full" | "minimal";
+  onDemandSkills?: boolean;
 }
 
 export interface AgentInfo {

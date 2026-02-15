@@ -13,3 +13,4 @@ export { createMemoryGetProxy } from "./memory-get.js";
 export { createCronAddProxy } from "./cron-add.js";
 export { createCronRemoveProxy } from "./cron-remove.js";
 export { createCronListProxy } from "./cron-list.js";
+export { createReadSkillProxy } from "./read-skill.js";

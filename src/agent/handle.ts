@@ -1,6 +1,5 @@
 import { mkdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   Agent,
@@ -22,7 +21,8 @@ import type {
 } from "../types.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
-import { composeSystemPrompt, hashPrompt } from "./prompts/prompt-manager.js";
+import { composeSystemPrompt } from "./prompts/prompt-manager.js";
+import type { BlockMeta } from "./prompts/truncate.js";
 import { collectMemoryFiles } from "./memory/search.js";
 import {
   createListAgentsTool,
@@ -34,12 +34,26 @@ import {
   createCronAddTool,
   createCronRemoveTool,
   createCronListTool,
+  createReadSkillTool,
 } from "./tools/index.js";
+import {
+  extractSkillSummaries,
+  formatSkillSummariesForPrompt,
+} from "./skills/on-demand.js";
 import type { CronService } from "../cron/cron-service.js";
 import type { CronToolDeps } from "./tools/cron-impl.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { getCronSummaries } from "../config/office-yaml.js";
+import { applyToolPolicy } from "./tools/policy.js";
+
+export interface PromptReport {
+  mode: string;
+  version: string;
+  blocks: BlockMeta[];
+  toolCount: number;
+  skills: string[];
+}
 
 export interface AgentHandleDeps {
   bus: MessageBus;
@@ -66,6 +80,7 @@ export class AgentHandle {
   private sandboxInfo: SandboxInfo | null = null;
   private _status: AgentStatus = "idle";
   private _turns = 0;
+  private _toolCount = 0;
   private _lastHeartbeat = Date.now();
   private listeners: Array<(e: AgentEvent) => void> = [];
   private baseDir: string;
@@ -129,10 +144,31 @@ export class AgentHandle {
       // Sandboxed: start container, agent runs inside it
       const model = this.config.model;
 
-      // Build system prompt via prompt manager (sandbox path — skills appended in sandbox-entry)
+      // Build system prompt via prompt manager (skills loaded host-side)
       const hasMemory =
         collectMemoryFiles(join(this.baseDir, "agents", this.name, "workspace"))
           .length > 0 || collectMemoryFiles(this.baseDir).length > 0;
+      const { skills: sandboxSkills } = loadSkills({
+        cwd: this.cwd,
+        agentDir: this.agentDir,
+        skillPaths: this.config.skillDirs,
+      });
+
+      let sandboxSkillsPrompt: string | undefined;
+      if (this.config.onDemandSkills && sandboxSkills.length > 0) {
+        const summaries = extractSkillSummaries(sandboxSkills);
+        sandboxSkillsPrompt = formatSkillSummariesForPrompt(summaries);
+        // Store loaded skills for the host API endpoint
+        const skillsMap = new Map<string, string>();
+        for (const s of sandboxSkills) skillsMap.set(s.name, s.source);
+        this.hostApi?.setAgentSkills(this.name, skillsMap);
+      } else {
+        sandboxSkillsPrompt =
+          sandboxSkills.length > 0
+            ? formatSkillsForPrompt(sandboxSkills)
+            : undefined;
+      }
+
       const composed = composeSystemPrompt({
         name: this.name,
         cwd: "/workspace",
@@ -146,6 +182,10 @@ export class AgentHandle {
         officeName: this.officeName,
         officeDescription: this.officeDescription,
         hasMemory,
+        skillsPrompt: sandboxSkillsPrompt,
+        workspaceDir: this.cwd,
+        enableBootstrap: true,
+        mode: this.config.promptMode ?? "full",
       });
       const systemPrompt = composed.text;
 
@@ -155,16 +195,13 @@ export class AgentHandle {
         systemPrompt,
         modelName: `${model.provider}:${model.id}`,
         workspacePath: this.cwd,
-        skillsPaths: [
-          join(this.agentDir, "skills"),
-          ...(this.config.skillDirs ?? []).map((d) =>
-            resolve(
-              this.cwd,
-              d.startsWith("~/") ? join(homedir(), d.slice(2)) : d,
-            ),
-          ),
-        ],
-        env: this.config.env,
+        env: {
+          ...this.config.env,
+          ...(this.config.permissions?.tools
+            ? { PERMISSIONS: JSON.stringify(this.config.permissions) }
+            : {}),
+          ...(this.config.onDemandSkills ? { ON_DEMAND_SKILLS: "1" } : {}),
+        },
       });
       // Register event listener so sandbox events flow to workspace/Telegram
       if (this.hostApi) {
@@ -175,6 +212,18 @@ export class AgentHandle {
           for (const fn of this.listeners) fn(e);
         });
       }
+      // Pre-policy estimate used as fallback until sandbox reports actual count
+      // Base: codingTools(4) + grep + find + ls + sendMail + listAgents +
+      //   readAgentFile + memorySearch + memoryGet + cronAdd + cronRemove + cronList = 15
+      const hasSecrets =
+        this.config.secrets &&
+        Object.keys(this.config.secrets).some((k) => k !== "MODEL_API_KEY");
+      let est = 15 + (hasSecrets ? 1 : 0) + (this.config.onDemandSkills ? 1 : 0);
+      const policy = this.config.permissions?.tools;
+      if (policy?.allow) est = Math.min(est, policy.allow.length);
+      else if (policy?.deny) est = Math.max(0, est - policy.deny.length);
+      this._toolCount = est;
+
       console.log(
         `[agent:${this.name}] Started in sandbox (${this.sandboxInfo.url})`,
       );
@@ -207,7 +256,18 @@ export class AgentHandle {
       Object.assign(resolvedSecrets, resolved);
     }
 
-    const tools: AgentTool<any>[] = [
+    const { skills } = loadSkills({
+      cwd: this.cwd,
+      agentDir: this.agentDir,
+      skillPaths: this.config.skillDirs,
+    });
+    if (skills.length > 0)
+      console.log(
+        `[agent:${this.name}] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`,
+      );
+
+    let inProcSkillsPrompt: string | undefined;
+    const allTools: AgentTool<any>[] = [
       ...createCodingTools(this.cwd),
       createMailboxTool(this.name, this.bus),
       createListAgentsTool(this.name, this.listAgentsFn, this.baseDir),
@@ -221,17 +281,25 @@ export class AgentHandle {
       ...(this.config.tools ?? []),
     ];
 
-    const { skills } = loadSkills({
-      cwd: this.cwd,
-      agentDir: this.agentDir,
-      skillPaths: this.config.skillDirs,
-    });
-    if (skills.length > 0)
-      console.log(
-        `[agent:${this.name}] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`,
-      );
-    const skillsPrompt =
-      skills.length > 0 ? "\n\n" + formatSkillsForPrompt(skills) : "";
+    if (this.config.onDemandSkills && skills.length > 0) {
+      const summaries = extractSkillSummaries(skills);
+      inProcSkillsPrompt = formatSkillSummariesForPrompt(summaries);
+      const skillsMap = new Map<string, string>();
+      for (const s of skills) skillsMap.set(s.name, s.source);
+      allTools.push(createReadSkillTool(skillsMap));
+    } else {
+      inProcSkillsPrompt =
+        skills.length > 0 ? formatSkillsForPrompt(skills) : undefined;
+    }
+
+    const { allowed: tools, denied, warnings } = applyToolPolicy(
+      allTools,
+      this.config.permissions,
+    );
+    if (denied.length > 0)
+      console.log(`[agent:${this.name}] Denied tools: ${denied.join(", ")}`);
+    for (const w of warnings) console.warn(`[agent:${this.name}] ${w}`);
+    this._toolCount = tools.length;
     const hasMemoryFiles =
       collectMemoryFiles(this.cwd).length > 0 ||
       collectMemoryFiles(this.baseDir).length > 0;
@@ -248,11 +316,14 @@ export class AgentHandle {
       officeName: this.officeName,
       officeDescription: this.officeDescription,
       hasMemory: hasMemoryFiles,
+      skillsPrompt: inProcSkillsPrompt,
+      workspaceDir: this.cwd,
+      enableBootstrap: true,
+      mode: this.config.promptMode ?? "full",
     });
-    const systemPrompt = composed.text + skillsPrompt;
-    const finalHash = hashPrompt(systemPrompt);
+    const systemPrompt = composed.text;
     console.log(
-      `[agent:${this.name}] Prompt ${composed.version} (${finalHash})`,
+      `[agent:${this.name}] Prompt ${composed.version} (${composed.hash})`,
     );
 
     this.agent = new Agent({
@@ -356,6 +427,61 @@ export class AgentHandle {
       queueDepth: this.bus.peek(this.name),
       turns: this._turns,
       lastHeartbeat: this.lastHeartbeat,
+    };
+  }
+
+  getPromptReport(): PromptReport {
+    const { skills } = loadSkills({
+      cwd: this.cwd,
+      agentDir: this.agentDir,
+      skillPaths: this.config.skillDirs,
+    });
+
+    let skillsPrompt: string | undefined;
+    if (this.config.onDemandSkills && skills.length > 0) {
+      const summaries = extractSkillSummaries(skills);
+      skillsPrompt = formatSkillSummariesForPrompt(summaries);
+    } else if (skills.length > 0) {
+      skillsPrompt = formatSkillsForPrompt(skills);
+    }
+
+    const hasMemoryFiles =
+      collectMemoryFiles(this.cwd).length > 0 ||
+      collectMemoryFiles(this.baseDir).length > 0;
+
+    const composed = composeSystemPrompt({
+      name: this.name,
+      cwd: this.provider ? "/workspace" : this.cwd,
+      description: this.config.description,
+      customPrompt: this.config.systemPrompt,
+      envNames: Object.keys(this.config.env ?? {}),
+      secretNames: this.config.discloseSecrets
+        ? Object.keys(this.config.secrets ?? {})
+        : undefined,
+      cronJobs: this.officeId
+        ? getCronSummaries(this.officeId, this.name)
+        : [],
+      officeName: this.officeName,
+      officeDescription: this.officeDescription,
+      hasMemory: hasMemoryFiles,
+      skillsPrompt,
+      workspaceDir: this.cwd,
+      enableBootstrap: true,
+      mode: this.config.promptMode ?? "full",
+    });
+
+    // For sandbox agents, read actual tool count reported by sandbox entry
+    const toolCount =
+      this.provider && this.hostApi
+        ? (this.hostApi.getAgentToolCount(this.name) ?? this._toolCount)
+        : this._toolCount;
+
+    return {
+      mode: this.config.promptMode ?? "full",
+      version: composed.version,
+      blocks: composed.blocks,
+      toolCount,
+      skills: skills.map((s) => s.name),
     };
   }
 

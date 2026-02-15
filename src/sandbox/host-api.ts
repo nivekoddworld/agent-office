@@ -15,6 +15,7 @@ import {
   cronRemoveImpl,
   cronListImpl,
 } from "../agent/tools/cron-impl.js";
+import { isToolDenied } from "../agent/tools/policy.js";
 import { createRedactor, redactText } from "../security/redact.js";
 import {
   validateFetchParams,
@@ -54,6 +55,8 @@ export class HostApi {
   private citationModes = new Map<string, CitationMode>(); // agentName -> mode
   private eventListeners = new Map<string, (event: unknown) => void>();
   private agentPermissions = new Map<string, AgentPermissions>();
+  private agentSkills = new Map<string, Map<string, string>>(); // agentName -> skillName -> content
+  private agentToolCounts = new Map<string, number>(); // agentName -> tool count
   private cronDeps: {
     officeId: string;
     officeDir: string;
@@ -99,7 +102,22 @@ export class HostApi {
     if (name) {
       this.citationModes.delete(name);
       this.agentPermissions.delete(name);
+      this.agentSkills.delete(name);
+      this.agentToolCounts.delete(name);
     }
+  }
+
+  /** Store loaded skills for an agent (idempotent upsert). */
+  setAgentSkills(agentName: string, skills: Map<string, string>): void {
+    this.agentSkills.set(agentName, skills);
+  }
+
+  setAgentToolCount(agentName: string, count: number): void {
+    this.agentToolCounts.set(agentName, count);
+  }
+
+  getAgentToolCount(agentName: string): number | undefined {
+    return this.agentToolCounts.get(agentName);
   }
 
   getHeartbeat(name: string): number | undefined {
@@ -221,11 +239,19 @@ export class HostApi {
       } else if (req.method === "POST" && path === "/api/memory-get") {
         await this.handleMemoryGet(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/cron-add") {
-        await this.handleCronAdd(req, res, agentName);
+        if (this.checkToolPolicy(path, agentName, res))
+          await this.handleCronAdd(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/cron-remove") {
-        await this.handleCronRemove(req, res, agentName);
+        if (this.checkToolPolicy(path, agentName, res))
+          await this.handleCronRemove(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/cron-list") {
-        await this.handleCronList(req, res, agentName);
+        if (this.checkToolPolicy(path, agentName, res))
+          await this.handleCronList(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/read-skill") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await this.handleReadSkill(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/tool-count") {
+        await this.handleToolCount(req, res, agentName);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
         this.heartbeats.set(agentName, Date.now());
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -424,6 +450,25 @@ export class HostApi {
     res.end(JSON.stringify({ ok: true }));
   }
 
+  private async handleToolCount(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
+    const { count } = JSON.parse(body) as { count: number };
+    if (typeof count === "number" && count >= 0) {
+      this.agentToolCounts.set(agentName, count);
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+  }
+
   private async handleAuthenticatedFetch(
     req: IncomingMessage,
     res: ServerResponse,
@@ -596,6 +641,30 @@ export class HostApi {
     res.end(JSON.stringify({ result: header + result.content }));
   }
 
+  /** Map endpoint path → tool name for server-side tool policy enforcement. */
+  private static readonly ENDPOINT_TOOL_MAP: Record<string, string> = {
+    "/api/cron-add": "cron_add",
+    "/api/cron-remove": "cron_remove",
+    "/api/cron-list": "cron_list",
+    "/api/read-skill": "read_skill",
+  };
+
+  private checkToolPolicy(
+    path: string,
+    agentName: string,
+    res: ServerResponse,
+  ): boolean {
+    const toolName = HostApi.ENDPOINT_TOOL_MAP[path];
+    if (!toolName) return true;
+    const perms = this.agentPermissions.get(agentName);
+    if (isToolDenied(toolName, perms)) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Tool denied by policy" }));
+      return false;
+    }
+    return true;
+  }
+
   private buildCronDeps(agentName: string) {
     if (!this.cronDeps) return null;
     return {
@@ -695,6 +764,46 @@ export class HostApi {
     const result = cronListImpl(deps, params as any);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ result }));
+  }
+
+  private async handleReadSkill(
+    req: IncomingMessage,
+    res: ServerResponse,
+    agentName: string,
+  ): Promise<void> {
+    const body = await readBody(req, MAX_BODY);
+    if (!body) {
+      res.writeHead(413);
+      res.end();
+      return;
+    }
+    let params: { name?: string };
+    try {
+      params = JSON.parse(body);
+    } catch {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Invalid JSON" }));
+      return;
+    }
+    if (!params.name) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Missing required field: name" }));
+      return;
+    }
+    const skills = this.agentSkills.get(agentName);
+    const content = skills?.get(params.name);
+    if (!content) {
+      const available = skills ? [...skills.keys()].sort().join(", ") : "none";
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          result: `Skill "${params.name}" not found. Available: ${available}`,
+        }),
+      );
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ result: content }));
   }
 
   private sweepDedup(): void {
