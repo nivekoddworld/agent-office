@@ -28,14 +28,14 @@ export async function skillAddCommand(
   agentName: string,
   source: string,
   workspace?: Workspace,
-): Promise<void> {
+): Promise<boolean> {
   validateAgentName(agentName);
   console.log(`[skill] Fetching from "${source}"...`);
   const skills = await fetchSkills(source);
 
   if (skills.length === 0) {
     console.log(`[skill] No SKILL.md files found in "${source}".`);
-    return;
+    return false;
   }
 
   const officeId = workspace?.office?.id;
@@ -89,6 +89,7 @@ export async function skillAddCommand(
       );
     }
   }
+  return true;
 }
 
 export function skillListCommand(

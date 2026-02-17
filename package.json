@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "ui:build": "pnpm -C ui build",
+    "ui:lint": "pnpm -C ui lint",
+    "ui:check": "pnpm -C ui check"
   },
   "dependencies": {
     "@mariozechner/pi-agent-core": "0.52.7",

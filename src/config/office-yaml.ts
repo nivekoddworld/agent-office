@@ -309,6 +309,47 @@ export async function removeAgentFromOfficeYaml(
   });
 }
 
+export async function setAgentManager(
+  officeId: string,
+  agentName: string,
+  manager: string | null,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const path = officeYamlPath(officeId);
+    if (!existsSync(path)) return;
+
+    const raw = readFileSync(path, "utf-8");
+    const doc = parseDocument(raw);
+
+    if (!doc.getIn(["agents", agentName])) {
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    }
+
+    // Cycle check: walk up from the proposed manager
+    if (manager) {
+      if (!doc.getIn(["agents", manager])) {
+        throw new Error(`Manager "${manager}" not found in office.yaml`);
+      }
+      const visited = new Set<string>([agentName]);
+      let current: string | undefined = manager;
+      while (current) {
+        if (visited.has(current)) {
+          throw new Error(`Setting manager would create a cycle: ${agentName} → ${manager}`);
+        }
+        visited.add(current);
+        current = (doc.getIn(["agents", current, "reports_to"]) as string) ?? undefined;
+      }
+    }
+
+    if (manager) {
+      doc.setIn(["agents", agentName, "reports_to"], manager);
+    } else {
+      doc.deleteIn(["agents", agentName, "reports_to"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
 // --- Per-agent env/secret/prompt mutations ---
 
 function requireOfficeDoc(officeId: string): {

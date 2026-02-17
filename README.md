@@ -88,6 +88,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Resource Guards](#resource-guards)
 - [Prompt Inspection](#prompt-inspection)
 - [Cost Tracking](#cost-tracking)
+- [Web UI](#web-ui)
 - [End-to-End Examples](#end-to-end-examples)
 - [Project Structure](#project-structure)
 - [Dependencies](#dependencies)
@@ -1213,6 +1214,46 @@ ao> cost report --days 30 --agent bot
 - **`cost report --days <n>`** — historical totals over the last N calendar days.
 - All commands accept `--agent <name>` to filter to a single agent.
 - Usage records are stored at `~/.agent-office/offices/<id>/logs/usage-cost.jsonl` (append-only JSONL).
+
+## Web UI
+
+Launch a browser-based dashboard with broad REPL command coverage:
+
+```
+ao> ui
+[ui] Dashboard: http://127.0.0.1:3847/#token=<bootstrap>
+```
+
+The UI opens automatically in your default browser with a one-time bootstrap token for auth.
+
+### Features
+
+- **Org chart** — interactive hierarchy with drag-to-reparent, hire/fire from the chart
+- **Live feed** — real-time SSE event stream with agent messages, tool calls, and status changes
+- **Mailbox** — conversation threads grouped by sender/receiver
+- **Agent detail panel** — config, permissions, env vars, skills, prompt report, quick actions
+- **Cron dashboard** — view, add, trigger, enable/disable, and remove cron jobs
+- **Cost dashboard** — per-agent token usage and cost breakdown (1/7/30 day views)
+- **Route table** — chat-to-agent routing
+- **Command palette** — `Cmd+K` / `Ctrl+K` spotlight with search over all REPL commands
+
+### Configuration
+
+| Env var   | Default | Description          |
+|-----------|---------|----------------------|
+| `UI_PORT` | `3847`  | Dashboard HTTP port  |
+
+The server binds to `127.0.0.1` only (never exposed to the network). Auth uses HttpOnly session cookies with CSRF protection.
+
+### Development
+
+```bash
+pnpm ui:build     # Type-check + Vite production build
+pnpm ui:lint      # ESLint + single-component-per-file check
+pnpm ui:check     # TypeScript type check only
+```
+
+The frontend lives in `ui/` (Vite + React 19 + Mantine 7). During dev, `pnpm -C ui dev` starts the Vite dev server with API proxy to the backend.
 
 ## End-to-End Examples
 

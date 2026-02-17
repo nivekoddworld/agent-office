@@ -50,4 +50,9 @@ export class LocalTransport {
   peek(name: string): number {
     return this.mailboxes.get(name)?.length ?? 0;
   }
+
+  /** Non-destructive read of pending messages. */
+  peekMessages(name: string): MailboxMessage[] {
+    return [...(this.mailboxes.get(name) ?? [])];
+  }
 }

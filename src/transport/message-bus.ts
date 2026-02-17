@@ -62,4 +62,9 @@ export class MessageBus {
   peek(name: string): number {
     return this.transport.peek(name);
   }
+
+  /** Non-destructive read of pending messages. */
+  peekMessages(name: string): MailboxMessage[] {
+    return this.transport.peekMessages(name);
+  }
 }

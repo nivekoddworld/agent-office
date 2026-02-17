@@ -14,6 +14,7 @@ import {
   clearAgentPermissionOfficeCron,
   setAgentPermissionTools,
   clearAgentPermissionTools,
+  setAgentManager,
 } from "../config/office-yaml.js";
 import { officeDir } from "../constants.js";
 import { createRedactor } from "../security/redact.js";
@@ -308,6 +309,19 @@ export function orgChartCommand(officeId: string): void {
     return;
   }
   console.log(formatOrgChart(yaml.agents));
+}
+
+export async function agentSetManagerCommand(
+  officeId: string,
+  agentName: string,
+  manager: string | null,
+): Promise<void> {
+  await setAgentManager(officeId, agentName, manager);
+  if (manager) {
+    console.log(`[agent] Set "${agentName}" to report to "${manager}"`);
+  } else {
+    console.log(`[agent] Cleared manager for "${agentName}" (reports to user)`);
+  }
 }
 
 export function agentHierarchyShowCommand(

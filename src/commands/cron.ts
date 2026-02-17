@@ -82,30 +82,30 @@ export async function cronAddCommand(
   message: string,
   opts?: { timezone?: string; catchUp?: string },
   workspace?: Workspace,
-): Promise<void> {
+): Promise<boolean> {
   if (!JOB_NAME_RE.test(jobName)) {
     console.error(
       `[cron] Invalid job name "${jobName}" — must match [a-zA-Z0-9_-]+`,
     );
-    return;
+    return false;
   }
   if (!isValidCron(schedule)) {
     console.error(`[cron] Invalid schedule: "${schedule}"`);
-    return;
+    return false;
   }
   if (!message || !message.trim()) {
     console.error(`[cron] Message is required`);
-    return;
+    return false;
   }
   if (opts?.timezone && !isValidTimezone(opts.timezone)) {
     console.error(`[cron] Invalid timezone: "${opts.timezone}"`);
-    return;
+    return false;
   }
   if (opts?.catchUp && !VALID_CATCH_UP.includes(opts.catchUp)) {
     console.error(
       `[cron] Invalid catch_up: "${opts.catchUp}" — must be "skip" or "once"`,
     );
-    return;
+    return false;
   }
 
   let written = false;
@@ -129,7 +129,7 @@ export async function cronAddCommand(
     written = true;
   });
 
-  if (!written) return;
+  if (!written) return false;
 
   if (workspace) {
     if (workspace.agents.has(agentName)) {
@@ -148,6 +148,7 @@ export async function cronAddCommand(
   } else {
     console.log(`[cron] Saved. Run "office reload" to activate.`);
   }
+  return written;
 }
 
 export async function cronRemoveCommand(
@@ -155,7 +156,7 @@ export async function cronRemoveCommand(
   agentName: string,
   jobName: string,
   workspace?: Workspace,
-): Promise<void> {
+): Promise<boolean> {
   let removed = false;
   await withOfficeLock(officeId, async () => {
     const path = officeYamlPath(officeId);
@@ -181,7 +182,7 @@ export async function cronRemoveCommand(
     removed = true;
   });
 
-  if (!removed) return;
+  if (!removed) return false;
 
   if (workspace && workspace.agents.has(agentName)) {
     const yaml = loadOfficeYaml(officeId);
@@ -195,6 +196,7 @@ export async function cronRemoveCommand(
   } else {
     console.log(`[cron] Removed from office.yaml.`);
   }
+  return removed;
 }
 
 export async function cronEnableCommand(
@@ -202,9 +204,10 @@ export async function cronEnableCommand(
   agentName: string,
   jobName: string,
   workspace?: Workspace,
-): Promise<void> {
+): Promise<boolean> {
   const ok = await setCronEnabled(officeId, agentName, jobName, true);
   if (ok) await reloadCronIfRunning(officeId, agentName, workspace);
+  return ok;
 }
 
 export async function cronDisableCommand(
@@ -212,9 +215,10 @@ export async function cronDisableCommand(
   agentName: string,
   jobName: string,
   workspace?: Workspace,
-): Promise<void> {
+): Promise<boolean> {
   const ok = await setCronEnabled(officeId, agentName, jobName, false);
   if (ok) await reloadCronIfRunning(officeId, agentName, workspace);
+  return ok;
 }
 
 async function setCronEnabled(
@@ -282,32 +286,32 @@ export async function cronAddOfficeCommand(
   targets: string[],
   opts?: { timezone?: string; catchUp?: string },
   workspace?: Workspace,
-): Promise<void> {
+): Promise<boolean> {
   if (!JOB_NAME_RE.test(jobName)) {
     console.error(
       `[cron] Invalid job name "${jobName}" — must match [a-zA-Z0-9_-]+`,
     );
-    return;
+    return false;
   }
   if (!isValidCron(schedule)) {
     console.error(`[cron] Invalid schedule: "${schedule}"`);
-    return;
+    return false;
   }
   if (!message || !message.trim()) {
     console.error(`[cron] Message is required`);
-    return;
+    return false;
   }
   if (!targets || targets.length === 0) {
     console.error(`[cron] At least one target is required`);
-    return;
+    return false;
   }
   if (opts?.timezone && !isValidTimezone(opts.timezone)) {
     console.error(`[cron] Invalid timezone: "${opts.timezone}"`);
-    return;
+    return false;
   }
   if (opts?.catchUp && !VALID_CATCH_UP.includes(opts.catchUp)) {
     console.error(`[cron] Invalid catch_up: "${opts.catchUp}"`);
-    return;
+    return false;
   }
 
   // Validate targets against roster
@@ -320,7 +324,7 @@ export async function cronAddOfficeCommand(
         console.error(
           `[cron] Unknown target agent "${t}" — not in office roster`,
         );
-        return;
+        return false;
       }
     }
   }
@@ -341,7 +345,7 @@ export async function cronAddOfficeCommand(
     written = true;
   });
 
-  if (!written) return;
+  if (!written) return false;
 
   if (workspace) {
     const yaml = loadOfficeYaml(officeId);
@@ -353,13 +357,14 @@ export async function cronAddOfficeCommand(
   } else {
     console.log(`[cron] Saved. Run "office reload" to activate.`);
   }
+  return written;
 }
 
 export async function cronRemoveOfficeCommand(
   officeId: string,
   jobName: string,
   workspace?: Workspace,
-): Promise<void> {
+): Promise<boolean> {
   let removed = false;
   await withOfficeLock(officeId, async () => {
     const path = officeYamlPath(officeId);
@@ -382,7 +387,7 @@ export async function cronRemoveOfficeCommand(
     removed = true;
   });
 
-  if (!removed) return;
+  if (!removed) return false;
 
   if (workspace) {
     const yaml = loadOfficeYaml(officeId);
@@ -395,4 +400,5 @@ export async function cronRemoveOfficeCommand(
   } else {
     console.log(`[cron] Removed from office.yaml.`);
   }
+  return removed;
 }
