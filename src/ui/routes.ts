@@ -108,14 +108,11 @@ export function getBootstrapState(
   const yaml = loadOfficeYaml(officeId);
   const agentDefs = yaml?.agents ?? {};
   const hierarchy = buildHierarchyMap(agentDefs);
-  const routeMap = workspace.router.list();
-
   return {
     agents: workspace.list(),
     scheduler: workspace.scheduler.state(),
     hierarchy: Object.fromEntries(hierarchy),
     cronJobs: workspace.cron.listJobs(),
-    routes: Object.fromEntries(routeMap),
     officeId,
     officeName: workspace.office.name,
   };
@@ -173,8 +170,3 @@ export function getCostSummary(
   };
 }
 
-export function getRoutes(
-  workspace: Workspace,
-): Record<string, string> {
-  return Object.fromEntries(workspace.router.list());
-}

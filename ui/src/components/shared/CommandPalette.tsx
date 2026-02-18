@@ -17,7 +17,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   agent: "blue",
   office: "violet",
   cron: "teal",
-  routing: "orange",
   cost: "yellow",
   ui: "cyan",
   general: "gray",
@@ -33,7 +32,6 @@ const NAV_ACTIONS: Record<string, ViewId> = {
   "cost status": "cost",
   "cost today": "cost",
   "cost report": "cost",
-  "route list": "routes",
 };
 
 export function CommandPalette({ opened, onClose, onNavigate }: CommandPaletteProps) {

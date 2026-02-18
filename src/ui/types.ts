@@ -9,7 +9,6 @@ export interface BootstrapState {
   scheduler: SchedulerState;
   hierarchy: Record<string, AgentHierarchy>;
   cronJobs: CronJobEntry[];
-  routes: Record<string, string>;
   officeId: string;
   officeName: string;
 }
@@ -75,7 +74,6 @@ export type CommandCategory =
   | "agent"
   | "office"
   | "cron"
-  | "routing"
   | "cost"
   | "ui"
   | "general";

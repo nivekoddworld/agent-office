@@ -1,12 +1,12 @@
 import { Tabs, Box, Stack, Group, Text, NavLink, UnstyledButton, Divider } from "@mantine/core";
-import { IconSitemap, IconClock, IconCoin, IconRoute } from "@tabler/icons-react";
+import { IconSitemap, IconClock, IconCoin } from "@tabler/icons-react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { OrgChart } from "../org-chart/OrgChart.js";
 import { StatusBadge } from "../shared/StatusBadge.js";
 import { PriorityBadge } from "../shared/PriorityBadge.js";
 import type { AgentInfo, AgentHierarchy } from "../../api/types.js";
 
-export type ViewId = "org-chart" | "cron" | "cost" | "routes";
+export type ViewId = "org-chart" | "cron" | "cost";
 
 interface LeftPanelProps {
   agents: AgentInfo[];
@@ -21,7 +21,6 @@ const NAV_ITEMS: { id: ViewId; label: string; icon: typeof IconSitemap }[] = [
   { id: "org-chart", label: "Org Chart", icon: IconSitemap },
   { id: "cron", label: "Cron Jobs", icon: IconClock },
   { id: "cost", label: "Cost", icon: IconCoin },
-  { id: "routes", label: "Routes", icon: IconRoute },
 ];
 
 export function LeftPanel({

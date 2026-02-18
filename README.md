@@ -649,8 +649,6 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `cron add office <job> "<sched>" <msg> --targets a,b` | Add an office-level cron job (applies immediately)         |
 | `cron remove office <job>`                            | Remove an office-level cron job (applies immediately)      |
 | `cron trigger office <job>`                           | Fire an office cron job immediately                        |
-| `route <chatId> <agent>`                              | Route a Telegram chat to an agent                          |
-| `route list`                                          | List all Telegram chat routes                              |
 | `prompt report <agent>`                               | Show prompt composition (block sizes, tool count, mode)    |
 | `cost status`                                         | Session token and cost totals (resets on restart)           |
 | `cost today [--agent <name>]`                         | Persistent token and cost totals for today                 |
@@ -1006,9 +1004,9 @@ pnpm dev start   # Telegram connects automatically
 | `/agents`            | List all running agents                   |
 | `/help`              | Show available commands                   |
 | `@agentname message` | Send directly to a specific agent         |
-| _(plain text)_       | Send to the default agent or routed agent |
+| _(plain text)_       | Guidance reply: use `@agent <message>`    |
 
-Each agent's events route to the chat that triggered it, so multiple chats can interact with different agents concurrently.
+Each agent's events are delivered to the last chat that messaged it (last-write-wins per agent). Different agents can serve different chats concurrently.
 
 ## Concepts
 
@@ -1234,7 +1232,6 @@ The UI opens automatically in your default browser with a one-time bootstrap tok
 - **Agent detail panel** — config, permissions, env vars, skills, prompt report, quick actions
 - **Cron dashboard** — view, add, trigger, enable/disable, and remove cron jobs
 - **Cost dashboard** — per-agent token usage and cost breakdown (1/7/30 day views)
-- **Route table** — chat-to-agent routing
 - **Command palette** — `Cmd+K` / `Ctrl+K` spotlight with search over all REPL commands
 
 ### Configuration
@@ -1396,7 +1393,6 @@ src/
   workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox)
   types.ts                    Shared types (Priority, AgentConfig, OfficeYaml, OfficeContext, etc.)
   constants.ts                Shared constants, office path helpers, officeId validation
-  routing.ts                  Telegram chat -> agent routing
 
   config/
     office-yaml.ts            Office loader, validator, mutations, env/secret merge
@@ -1490,7 +1486,6 @@ src/
     send.ts                   Message queueing
     fire.ts                   Agent teardown with YAML auto-sync
     status.ts                 Scheduler/watchdog overview
-    route.ts                  Telegram chat routing
     skill.ts                  Skill install/remove with YAML + source map sync
     agent-config.ts           Per-agent env/secret-ref/prompt commands + config show
     cron.ts                   Cron CLI handlers (add/remove/enable/disable/list/status/trigger)

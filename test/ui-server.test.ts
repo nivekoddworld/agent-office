@@ -40,7 +40,6 @@ function createMockWorkspace() {
     },
     bus: { peekMessages: vi.fn(() => []) },
     cron: { listJobs: vi.fn(() => []) },
-    router: { list: vi.fn(() => new Map()) },
     office: { id: "test-office", name: "Test Office", dir: "/tmp/test" },
     getAgent: vi.fn(() => undefined),
     onAgentEvent: vi.fn(() => vi.fn()),

@@ -227,19 +227,6 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
     args: "<job>",
   },
 
-  // --- Routing ---
-  {
-    name: "route",
-    description: "Set chat-to-agent route",
-    category: "routing",
-    args: "<chatId> <agent>",
-  },
-  {
-    name: "route list",
-    description: "List all routes",
-    category: "routing",
-  },
-
   // --- Prompt ---
   {
     name: "prompt report",
@@ -304,7 +291,7 @@ export function formatHelpText(): string {
     list.push(c);
     groups.set(c.category, list);
   }
-  const order = ["agent", "office", "cron", "routing", "cost", "ui", "general"];
+  const order = ["agent", "office", "cron", "cost", "ui", "general"];
   const lines: string[] = ["Commands:"];
   for (const cat of order) {
     const entries = groups.get(cat);

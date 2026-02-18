@@ -13,7 +13,6 @@ import {
   getCostSummary,
   getHierarchy,
   getManifest,
-  getRoutes,
 } from "./routes.js";
 import { dispatchCommand, type DispatchResult } from "./command-parser.js";
 import { isMutation } from "./command-intent.js";
@@ -240,11 +239,6 @@ export async function startUiServer(
       const days = parseInt(url.searchParams.get("days") ?? "7", 10);
       const agent = url.searchParams.get("agent") ?? undefined;
       return json(res, 200, getCostSummary(officeId, days, agent));
-    }
-
-    // --- GET /api/routes ---
-    if (path === "/api/routes" && method === "GET") {
-      return json(res, 200, getRoutes(workspace));
     }
 
     // --- GET /api/manifest ---

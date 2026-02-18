@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { AgentHandle } from "./agent/handle.js";
 import { MessageBus } from "./transport/message-bus.js";
-import { Router } from "./routing.js";
 import { Scheduler } from "./scheduler/scheduler.js";
 import { Watchdog } from "./scheduler/watchdog.js";
 import { HostApi } from "./sandbox/host-api.js";
@@ -34,9 +33,7 @@ export class Workspace {
   readonly scheduler: Scheduler;
   readonly watchdog: Watchdog;
   readonly cron: CronService;
-  readonly router = new Router();
   readonly office: OfficeContext;
-  defaultAgent: string | undefined;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
   private hostApi: HostApi | null = null;
   private sandboxProvider: SandboxProvider | null = null;
@@ -45,7 +42,6 @@ export class Workspace {
 
   constructor(config: WorkspaceConfig) {
     this.office = config.office;
-    this.defaultAgent = config.defaultAgent;
     this.sandboxMode = config.sandbox?.mode ?? "none";
     this.hostApiPort = config.sandbox?.hostPort ?? DEFAULT_HOST_PORT;
     this.scheduler = new Scheduler(
@@ -170,9 +166,6 @@ export class Workspace {
     this.agents.set(config.name, handle);
     this.bus.register(config.name);
 
-    // Set first spawned agent as default if none set
-    if (!this.defaultAgent) this.defaultAgent = config.name;
-
     // Forward agent events to workspace listeners (telegram, etc.)
     handle.onEvent((e) => {
       if (
@@ -241,7 +234,6 @@ export class Workspace {
     await handle.destroy();
     this.bus.unregister(name);
     this.agents.delete(name);
-    if (this.defaultAgent === name) this.defaultAgent = undefined;
   }
 
   send(

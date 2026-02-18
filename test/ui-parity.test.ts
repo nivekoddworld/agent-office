@@ -26,10 +26,6 @@ vi.mock("../src/commands/roster.js", () => ({
 vi.mock("../src/commands/status.js", () => ({
   statusCommand: vi.fn(),
 }));
-vi.mock("../src/commands/route.js", () => ({
-  routeCommand: vi.fn(),
-  routeListCommand: vi.fn(),
-}));
 vi.mock("../src/commands/skill.js", () => ({
   skillAddCommand: vi.fn(),
   skillListCommand: vi.fn(),
@@ -94,7 +90,6 @@ const NAV_COMMANDS = new Set([
   "org chart", "roster", "status",
   "cron list", "cron status",
   "cost status", "cost today", "cost report",
-  "route list",
 ]);
 
 describe("UI parity — structural", () => {
@@ -103,7 +98,7 @@ describe("UI parity — structural", () => {
   });
 
   it("manifest categories are all valid", () => {
-    const valid = new Set(["agent", "office", "cron", "routing", "cost", "ui", "general"]);
+    const valid = new Set(["agent", "office", "cron", "cost", "ui", "general"]);
     for (const entry of COMMAND_MANIFEST) {
       expect(valid.has(entry.category)).toBe(true);
     }
@@ -298,9 +293,8 @@ describe("UI parity — noop dispatch", () => {
     expect(await dispatchCommand(mockWorkspace, officeId, "agent-set-manager alice")).toBe("noop");
   });
 
-  it("route with missing args returns noop", async () => {
-    expect(await dispatchCommand(mockWorkspace, officeId, "route")).toBe("noop");
-    expect(await dispatchCommand(mockWorkspace, officeId, "route 123")).toBe("noop");
+  it("route command returns unknown (removed)", async () => {
+    expect(await dispatchCommand(mockWorkspace, officeId, "route foo bar")).toBe("unknown");
   });
 
   it("skill with invalid sub returns noop", async () => {
@@ -329,7 +323,6 @@ describe("isMutation", () => {
   it("classifies read-only commands as non-mutations", () => {
     expect(isMutation("roster")).toBe(false);
     expect(isMutation("status")).toBe(false);
-    expect(isMutation("route list")).toBe(false);
     expect(isMutation("cron list")).toBe(false);
     expect(isMutation("cron status")).toBe(false);
     expect(isMutation("cost status")).toBe(false);
@@ -340,14 +333,12 @@ describe("isMutation", () => {
     expect(isMutation("fire bob")).toBe(true);
     expect(isMutation("send alice hello")).toBe(true);
     expect(isMutation("office reload --force")).toBe(true);
-    expect(isMutation("route 123 alice")).toBe(true);
     expect(isMutation("cron add bob daily \"0 9 * * *\" hello")).toBe(true);
     expect(isMutation("agent-set-manager alice bob")).toBe(true);
     expect(isMutation("skill add alice owner/repo")).toBe(true);
   });
 
   it("handles multi-space input correctly", () => {
-    expect(isMutation("route   list")).toBe(false);
     expect(isMutation("cron   list")).toBe(false);
     expect(isMutation("cron   status")).toBe(false);
     expect(isMutation("fire   bob")).toBe(true);
@@ -355,10 +346,9 @@ describe("isMutation", () => {
     expect(isMutation("  office   reload  ")).toBe(true);
   });
 
-  it("route list boundary: chatId starting with 'list' is a mutation", () => {
+  it("route is no longer recognized as a mutation", () => {
+    expect(isMutation("route 123 alice")).toBe(false);
     expect(isMutation("route list")).toBe(false);
-    expect(isMutation("route list123 bob")).toBe(true);
-    expect(isMutation("route listfoo alice")).toBe(true);
   });
 });
 

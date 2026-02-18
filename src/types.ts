@@ -126,6 +126,5 @@ export interface WorkspaceConfig {
   office: OfficeContext;
   tickIntervalMs?: number;
   watchdog?: Partial<WatchdogConfig>;
-  defaultAgent?: string;
   sandbox?: { mode: SandboxMode; hostPort?: number };
 }

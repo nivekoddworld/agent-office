@@ -6,7 +6,6 @@ import { CenterPanel } from "./CenterPanel.js";
 import { RightPanel } from "./RightPanel.js";
 import { CronDashboard } from "../cron/CronDashboard.js";
 import { CostDashboard } from "../cost/CostDashboard.js";
-import { RouteDashboard } from "../routing/RouteDashboard.js";
 import { CommandPalette } from "../shared/CommandPalette.js";
 import { useKeyboardShortcut } from "../../hooks/use-keyboard-shortcut.js";
 import type { BootstrapState } from "../../api/types.js";
@@ -59,7 +58,6 @@ export function AppLayout({ state }: AppLayoutProps) {
         {view === "org-chart" && <CenterPanel agentNames={agentNames} />}
         {view === "cron" && <CronDashboard cronJobs={state.cronJobs} agentNames={agentNames} />}
         {view === "cost" && <CostDashboard />}
-        {view === "routes" && <RouteDashboard routes={state.routes} />}
       </AppShell.Main>
 
       <AppShell.Aside>

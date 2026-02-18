@@ -2,8 +2,13 @@ import { Bot } from "grammy";
 import type { Workspace } from "../workspace.js";
 
 /**
- * Telegram bridge — routes incoming messages to agents via grammY.
+ * Telegram bridge — mention-only message delivery via grammY.
  * Streams agent events back to the originating chat.
+ *
+ * Chat tracking is per-agent (last-write-wins): if two chats message the same
+ * agent close together, the second overwrites the first and events may switch
+ * chats mid-run. True per-request correlation would require request-scoped IDs
+ * through the agent pipeline and is out of scope here.
  */
 export function createTelegramBridge(
   workspace: Workspace,
@@ -11,8 +16,8 @@ export function createTelegramBridge(
   allowedUsers?: string[],
 ): Bot {
   const bot = new Bot(token);
-  // Chat ID for the active Telegram session (all agent events route here)
-  let activeChatId: number | null = null;
+  // Maps agent name → last chat that messaged it (last-write-wins per agent)
+  const agentChat = new Map<string, number>();
 
   const isAllowed = (username?: string): boolean =>
     !allowedUsers ||
@@ -20,8 +25,8 @@ export function createTelegramBridge(
     (!!username && allowedUsers.includes(username));
 
   workspace.onAgentEvent((agentName, event) => {
-    if (!activeChatId) return;
-    const chatId = activeChatId;
+    const chatId = agentChat.get(agentName);
+    if (!chatId) return;
 
     const send = (text: string) => {
       const chunks = splitMessage(text, 4000);
@@ -61,8 +66,7 @@ export function createTelegramBridge(
     await ctx.reply(
       "agent-office workspace bot\n\n" +
         "/agents — list running agents\n" +
-        "@agentname message — send to a specific agent\n" +
-        "Or just type a message to send to the default agent.",
+        "@agentname message — send to a specific agent",
     );
   });
 
@@ -91,26 +95,18 @@ export function createTelegramBridge(
       );
       return;
     }
-    activeChatId = ctx.chat.id;
+    agentChat.set(name, ctx.chat.id);
     workspace.send(name, message);
     await ctx.reply(`Queued for ${name}.`);
   });
 
   bot.on("message:text", async (ctx) => {
     if (!isAllowed(ctx.from?.username)) return;
-    const chatId = ctx.chat.id;
-    const name = workspace.router.get(String(chatId)) ?? workspace.defaultAgent;
-    if (!name) {
-      await ctx.reply("No agent configured for this chat.");
-      return;
-    }
-    if (!workspace.getAgent(name)) {
-      await ctx.reply(`Agent "${name}" not found.`);
-      return;
-    }
-    activeChatId = chatId;
-    workspace.send(name, ctx.message.text);
-    await ctx.reply(`Queued for ${name}.`);
+    if (/^@\S/.test(ctx.message.text)) return; // already handled by hears()
+    if (ctx.message.text.startsWith("/")) return; // already handled by command()
+    await ctx.reply(
+      "Use @agent <message> to send to an agent. Type /agents to list available agents.",
+    );
   });
 
   return bot;

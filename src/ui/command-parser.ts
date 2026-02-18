@@ -4,7 +4,6 @@ import { rosterCommand } from "../commands/roster.js";
 import { sendCommand } from "../commands/send.js";
 import { fireCommand } from "../commands/fire.js";
 import { statusCommand } from "../commands/status.js";
-import { routeCommand, routeListCommand } from "../commands/route.js";
 import {
   skillAddCommand,
   skillListCommand,
@@ -203,20 +202,6 @@ export async function dispatchCommand(
     case "status":
       statusCommand(workspace);
       return "handled";
-    case "route": {
-      if (parts[1] === "list") {
-        routeListCommand(workspace);
-        return "handled";
-      }
-      const chatId = parts[1];
-      const agentName = parts[2];
-      if (!chatId || !agentName) {
-        console.log("Usage: route <chatId> <agent> | route list");
-        return "noop";
-      }
-      routeCommand(workspace, chatId, agentName);
-      return "handled";
-    }
     case "skill": {
       const sub = parts[1];
       const agent = parts[2];
