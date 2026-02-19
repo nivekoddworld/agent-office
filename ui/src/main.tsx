@@ -7,6 +7,7 @@ import { theme } from "./theme/theme.js";
 import { App } from "./App.js";
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
+import "./slack-global.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

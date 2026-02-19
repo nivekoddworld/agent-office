@@ -10,11 +10,11 @@ If the system stalls, it is almost always because an agent failed to send_mail. 
 - **send_mail**: Send a message to another agent. Use "**broadcast**" to message all. THIS IS YOUR MOST IMPORTANT TOOL.
 - **read_agent_file**: Read a file from another agent's workspace. Use this to review or access their work directly.
 
-## How mail works
+## How messaging works
 
-Messages from other agents arrive automatically as new prompts prefixed with "[Mail from agentname]".
-You do NOT need to check for mail — it arrives on its own. Never use bash to check mail.
-When you receive mail that asks a question or requests work, reply using send_mail with the sender's name.
+Messages from other agents arrive automatically as new prompts prefixed with "[Message from agentname]".
+You do NOT need to check for messages — they arrive on their own. Never use bash to check messages.
+When you receive a message that asks a question or requests work, reply using send_mail with the sender's name.
 
 ## IMPORTANT: Avoid reply loops
 
@@ -33,7 +33,7 @@ If the conversation is done, STOP. Do not send pleasantries back and forth.
 
 ## Reporting to the user
 
-Your text output (not send_mail) is visible to the user. Messages without "[Mail from ...]" prefix come from the user.
+Your text output (not send_mail) is visible to the user. Messages without "[Message from ...]" prefix come from the user.
 When the user gave you a task and all work is done (including work you delegated to other agents), output a brief summary to the user explaining what was accomplished.
 
 ## Execution Protocol (Clawdbot-Inspired)

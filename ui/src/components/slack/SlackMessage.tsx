@@ -1,0 +1,240 @@
+import { useState } from "react";
+import { Box, Text, Group, UnstyledButton, ActionIcon, Tooltip } from "@mantine/core";
+import { IconMessage, IconCopy, IconArrowForwardUp, IconRobot, IconUser } from "@tabler/icons-react";
+import { slack } from "../../theme/slack-theme.js";
+import { MarkdownContent } from "./MarkdownContent.js";
+
+export interface MessageUsage {
+  totalTokens: number;
+  totalCost: number;
+}
+
+export interface SlackMessageData {
+  id: string;
+  sender: string;
+  text: string;
+  timestamp: number;
+  isBot: boolean;
+  eventType?: string;
+  usage?: MessageUsage;
+}
+
+interface SlackMessageProps {
+  message: SlackMessageData;
+  onClickAvatar?: (agentName: string) => void;
+  onReply?: (message: SlackMessageData) => void;
+  onResend?: (message: SlackMessageData) => void;
+  compact?: boolean;
+}
+
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function AgentAvatar({
+  name,
+  isBot,
+  onClick,
+}: {
+  name: string;
+  isBot: boolean;
+  onClick?: () => void;
+}) {
+  const hash = name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const hue = hash % 360;
+
+  return (
+    <UnstyledButton
+      onClick={onClick}
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 8,
+        backgroundColor: `hsl(${hue}, 45%, 35%)`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      {isBot ? (
+        <IconRobot size={18} color="#fff" />
+      ) : (
+        <IconUser size={18} color="#fff" />
+      )}
+    </UnstyledButton>
+  );
+}
+
+function HoverActions({
+  onReply,
+  onCopy,
+  onResend,
+}: {
+  onReply?: () => void;
+  onCopy?: () => void;
+  onResend?: () => void;
+}) {
+  return (
+    <Group
+      gap={2}
+      style={{
+        position: "absolute",
+        top: -12,
+        right: 8,
+        backgroundColor: slack.hoverActionsBg,
+        border: `1px solid ${slack.borderColor}`,
+        borderRadius: 6,
+        padding: 2,
+      }}
+    >
+      {onCopy && (
+        <Tooltip label="Copy" position="top" withArrow>
+          <ActionIcon size="sm" variant="subtle" color="gray" onClick={onCopy}>
+            <IconCopy size={16} color={slack.textSecondary} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {onReply && (
+        <Tooltip label="Reply in thread" position="top" withArrow>
+          <ActionIcon size="sm" variant="subtle" color="gray" onClick={onReply}>
+            <IconMessage size={16} color={slack.textSecondary} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {onResend && (
+        <Tooltip label="Re-send" position="top" withArrow>
+          <ActionIcon size="sm" variant="subtle" color="gray" onClick={onResend}>
+            <IconArrowForwardUp size={16} color={slack.textSecondary} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+    </Group>
+  );
+}
+
+export function SlackMessage({
+  message,
+  onClickAvatar,
+  onReply,
+  onResend,
+  compact,
+}: SlackMessageProps) {
+  const [hovered, setHovered] = useState(false);
+  const isOperator = !message.isBot;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.text).catch(() => {});
+  };
+
+  return (
+    <Box
+      px="md"
+      py={4}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: "relative",
+        backgroundColor: hovered ? slack.messageHoverBg : "transparent",
+      }}
+    >
+      {hovered && (
+        <HoverActions
+          onCopy={handleCopy}
+          onReply={onReply ? () => onReply(message) : undefined}
+          onResend={onResend && isOperator ? () => onResend(message) : undefined}
+        />
+      )}
+
+      <Group gap="sm" align="flex-start" wrap="nowrap">
+        {!compact && (
+          <AgentAvatar
+            name={message.sender}
+            isBot={message.isBot}
+            onClick={
+              message.isBot && onClickAvatar
+                ? () => onClickAvatar(message.sender)
+                : undefined
+            }
+          />
+        )}
+
+        <Box style={{ flex: 1, minWidth: 0 }}>
+          {!compact && (
+            <Group gap={8} mb={2}>
+              <Text
+                size="sm"
+                fw={700}
+                style={{
+                  color: "#fff",
+                  cursor: message.isBot ? "pointer" : "default",
+                }}
+                onClick={
+                  message.isBot && onClickAvatar
+                    ? () => onClickAvatar(message.sender)
+                    : undefined
+                }
+              >
+                {message.sender}
+              </Text>
+              {isOperator && (
+                <Text
+                  size="xs"
+                  fw={600}
+                  px={4}
+                  style={{
+                    backgroundColor: slack.accentPurple,
+                    color: "#fff",
+                    borderRadius: 3,
+                    fontSize: 10,
+                  }}
+                >
+                  OP
+                </Text>
+              )}
+              <Text size="xs" style={{ color: slack.textMuted }}>
+                {formatTime(message.timestamp)}
+              </Text>
+            </Group>
+          )}
+
+          {compact && (
+            <Text component="span" size="xs" mr={6} style={{ color: slack.textMuted }}>
+              {formatTime(message.timestamp)}
+            </Text>
+          )}
+          {message.isBot ? (
+            <MarkdownContent content={message.text} />
+          ) : (
+            <Text size="sm" style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}>
+              {message.text}
+            </Text>
+          )}
+          {message.usage && (
+            <Tooltip
+              label={`${message.usage.totalTokens.toLocaleString()} tokens / $${message.usage.totalCost.toFixed(4)}`}
+              withArrow
+              position="bottom-start"
+            >
+              <Text
+                component="span"
+                size="xs"
+                style={{
+                  color: slack.textMuted,
+                  cursor: "default",
+                  fontSize: 10,
+                }}
+              >
+                {message.usage.totalTokens.toLocaleString()} tok
+              </Text>
+            </Tooltip>
+          )}
+        </Box>
+      </Group>
+    </Box>
+  );
+}
+

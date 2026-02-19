@@ -1,3 +1,5 @@
+import { readdir, stat, readFile } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
 import type { Workspace } from "../workspace.js";
 import type { AgentHandle } from "../agent/handle.js";
 import type { BootstrapState, AgentDetail, CommandResponse } from "./types.js";
@@ -168,5 +170,73 @@ export function getCostSummary(
     byAgent: Object.fromEntries(byAgent),
     recordCount: records.length,
   };
+}
+
+// --- Agent file listing ---
+
+export interface FileEntry {
+  path: string;
+  name: string;
+  isDirectory: boolean;
+  size: number;
+  modifiedAt: number;
+}
+
+const MAX_FILES = 500;
+const MAX_FILE_READ = 512 * 1024; // 512 KB
+
+async function walkDir(root: string, dir: string, out: FileEntry[]): Promise<void> {
+  if (out.length >= MAX_FILES) return;
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (out.length >= MAX_FILES) return;
+    const full = join(dir, entry.name);
+    const rel = relative(root, full).split(sep).join("/");
+    if (entry.name.startsWith(".") && entry.name !== ".effective-prompt.md") continue;
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      out.push({ path: rel, name: entry.name, isDirectory: true, size: 0, modifiedAt: 0 });
+      await walkDir(root, full, out);
+    } else {
+      try {
+        const s = await stat(full);
+        out.push({ path: rel, name: entry.name, isDirectory: false, size: s.size, modifiedAt: s.mtimeMs });
+      } catch {
+        out.push({ path: rel, name: entry.name, isDirectory: false, size: 0, modifiedAt: 0 });
+      }
+    }
+  }
+}
+
+export async function getAgentFiles(handle: AgentHandle): Promise<{ files: FileEntry[]; truncated: boolean }> {
+  const files: FileEntry[] = [];
+  await walkDir(handle.cwd, handle.cwd, files);
+  return { files, truncated: files.length >= MAX_FILES };
+}
+
+export async function getAgentFileContent(
+  handle: AgentHandle,
+  filePath: string,
+): Promise<{ content: string; size: number } | { error: string }> {
+  if (filePath.includes("..") || filePath.startsWith("/")) {
+    return { error: "invalid_path" };
+  }
+  const abs = join(handle.cwd, filePath);
+  const resolved = relative(handle.cwd, abs);
+  if (resolved.startsWith("..")) return { error: "path_traversal" };
+  try {
+    const s = await stat(abs);
+    if (!s.isFile()) return { error: "not_a_file" };
+    if (s.size > MAX_FILE_READ) return { error: `file_too_large (${s.size} bytes, max ${MAX_FILE_READ})` };
+    const content = await readFile(abs, "utf-8");
+    return { content, size: s.size };
+  } catch {
+    return { error: "file_not_found" };
+  }
 }
 

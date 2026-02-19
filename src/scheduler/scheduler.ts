@@ -110,5 +110,5 @@ export class Scheduler {
 function formatMailPayload(msg: MailboxMessage): string {
   if (msg.from === "__user__") return msg.payload;
   if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
-  return `[Mail from ${msg.from}]\n${msg.payload}`;
+  return `[Message from ${msg.from}]\n${msg.payload}`;
 }

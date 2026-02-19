@@ -1,4 +1,5 @@
 import type { Workspace } from "../workspace.js";
+import { Priority } from "../types.js";
 import { hireCommand, type HireArgs } from "../commands/hire.js";
 import { rosterCommand } from "../commands/roster.js";
 import { sendCommand } from "../commands/send.js";
@@ -165,15 +166,25 @@ export async function dispatchCommand(
     case "send": {
       const name = parts[1];
       if (!name) {
-        console.log("Usage: send <agent> <message>");
+        console.log("Usage: send <agent> [--priority low|normal|high|critical] <message>");
         return "noop";
       }
-      const msg = parts.slice(2).join(" ");
+      let priority: Priority | undefined;
+      let msgParts = parts.slice(2);
+      if (msgParts[0] === "--priority" && msgParts[1]) {
+        const pMap: Record<string, Priority> = {
+          idle: Priority.IDLE, low: Priority.LOW, normal: Priority.NORMAL,
+          high: Priority.HIGH, critical: Priority.CRITICAL,
+        };
+        priority = pMap[msgParts[1].toLowerCase()];
+        msgParts = msgParts.slice(2);
+      }
+      const msg = msgParts.join(" ");
       if (!msg) {
-        console.log("Usage: send <agent> <message>");
+        console.log("Usage: send <agent> [--priority low|normal|high|critical] <message>");
         return "noop";
       }
-      sendCommand(workspace, name, msg);
+      sendCommand(workspace, name, msg, priority);
       return "handled";
     }
     case "fire": {
@@ -202,6 +213,20 @@ export async function dispatchCommand(
     case "status":
       statusCommand(workspace);
       return "handled";
+    case "scheduler": {
+      const sub = parts[1];
+      if (sub === "start") {
+        workspace.scheduler.start();
+        console.log("[scheduler] Started");
+      } else if (sub === "stop") {
+        workspace.scheduler.stop();
+        console.log("[scheduler] Stopped");
+      } else {
+        console.log("Usage: scheduler start | scheduler stop");
+        return "noop";
+      }
+      return "handled";
+    }
     case "skill": {
       const sub = parts[1];
       const agent = parts[2];

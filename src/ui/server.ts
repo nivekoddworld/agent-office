@@ -9,6 +9,8 @@ import { EventBuffer } from "./event-buffer.js";
 import {
   executeCommand,
   getAgentDetail,
+  getAgentFileContent,
+  getAgentFiles,
   getBootstrapState,
   getCostSummary,
   getHierarchy,
@@ -218,6 +220,29 @@ export async function startUiServer(
       const name = mailboxMatch[1]!;
       const messages = workspace.bus.peekMessages(name);
       return json(res, 200, { agent: name, pending: messages.length, messages });
+    }
+
+    // --- GET /api/agents/:name/files ---
+    const filesMatch = path.match(/^\/api\/agents\/([^/]+)\/files$/);
+    if (filesMatch && method === "GET") {
+      const name = filesMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+      const result = await getAgentFiles(handle);
+      return json(res, 200, result);
+    }
+
+    // --- GET /api/agents/:name/files/content?path=... ---
+    const fileContentMatch = path.match(/^\/api\/agents\/([^/]+)\/files\/content$/);
+    if (fileContentMatch && method === "GET") {
+      const name = fileContentMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+      const filePath = url.searchParams.get("path");
+      if (!filePath) return json(res, 400, { error: "missing_path" });
+      const result = await getAgentFileContent(handle, filePath);
+      if ("error" in result) return json(res, 400, result);
+      return json(res, 200, result);
     }
 
     // --- GET /api/agents/:name ---
