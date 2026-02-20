@@ -38,6 +38,13 @@ TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
 ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
 ```
 
+**Feature team** — task-driven development with Kanban board:
+
+```bash
+cp -r examples/feature-team/ ~/.agent-office/offices/feature-team/
+pnpm dev start --office feature-team
+```
+
 See [`examples/`](examples/) for more details — each has a README describing the setup.
 
 ## Table of Contents
@@ -55,6 +62,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Cron Jobs](#cron-jobs)
   - [Office-Level Cron](#office-level-cron)
   - [Agent Cron Tools](#agent-cron-tools)
+  - [Task Management](#task-management)
   - [Migration from agents.yaml](#migration-from-agentsyaml)
 - [Sandbox Modes](#sandbox-modes)
   - [In-Process Mode](#in-process-mode-default)
@@ -71,6 +79,10 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [cron_remove](#cron_remove)
   - [cron_list](#cron_list)
   - [read_skill](#read_skill)
+  - [task_create](#task_create)
+  - [task_update](#task_update)
+  - [task_list](#task_list)
+  - [task_get](#task_get)
   - [Tool Architecture](#tool-architecture)
   - [Prompt System](#prompt-system)
 - [Memory System](#memory-system)
@@ -106,6 +118,7 @@ graph TD
     WS --> BUS[MessageBus\ninboxes]
     WS --> WD[Watchdog\nheartbeat]
     WS --> CRON[CronService\nscheduled jobs]
+    WS --> TS[TaskService\nKanban board]
 
     WS -->|in-process| A[Agent A\nPi · tools · skills]
     WS -->|in-process| B[Agent B\nPi · tools · skills]
@@ -119,9 +132,9 @@ graph TD
     BUS --> HA
 ```
 
-**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron / Agent cron tools -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
+**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron / Agent cron tools / Task notifications -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -244,6 +257,8 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
 | `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)     |
 | `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill` |
+
+**Task tools** (`task_create`, `task_update`, `task_list`, `task_get`) are available to all in-process agents by default. Restrict access via `permissions.tools.deny`. See [Task Management](#task-management).
 
 ### Permissions
 
@@ -464,6 +479,91 @@ agent calls cron_add:
 
 **Security:** Agent-scope writes are isolated to the calling agent's YAML section (identity derived from auth token). All mutations run under `withOfficeLock` with race-free activation from the same parsed document.
 
+### Task Management
+
+Agents can create, assign, and track tasks through a shared Kanban-style task system. The `TaskService` manages task state, enforces status transitions, resolves dependency chains, and dispatches notifications via the message bus.
+
+Task tools (`task_create`, `task_update`, `task_list`, `task_get`) are registered as default tools for all in-process agents. Restrict access per agent via `permissions.tools.deny`. Task proxy endpoints for Docker sandbox mode are not yet wired.
+
+#### Task Lifecycle
+
+Tasks follow a Kanban status flow with enforced transitions:
+
+```
+backlog → todo → in_progress → review → done
+                                  ↓
+                              cancelled
+```
+
+| Status        | Allowed transitions                     |
+| ------------- | --------------------------------------- |
+| `backlog`     | `todo`, `cancelled`                     |
+| `todo`        | `in_progress`, `cancelled`              |
+| `in_progress` | `review`, `done`, `cancelled`           |
+| `review`      | `in_progress`, `done`, `cancelled`      |
+| `done`        | _(terminal)_                            |
+| `cancelled`   | `backlog`                               |
+
+**Dependency behavior:** Tasks created with `dependsOn` start in `backlog` regardless of the requested status. When all dependencies reach `done`, the `TaskService` auto-transitions the blocked task to `todo` and sends a `[Task Ready]` notification to the assignee.
+
+**Notifications:** New task assignments dispatch `[New Task]` messages. Dependency resolution dispatches `[Task Ready]` messages. Both are sent from `__task__` via the message bus.
+
+**Audit trail:** All task mutations are logged to `<officeDir>/logs/task-audit.jsonl`.
+
+**Persistence:** Task state is stored at `<officeDir>/tasks/tasks.json`.
+
+#### Task Agent Tools
+
+Agents interact with tasks via four built-in tools:
+
+```
+agent calls task_create:
+  title: "Implement login page"
+  description: "Build login form with email/password fields and validation"
+  assignee: "coder"
+  dependsOn: []
+
+-> Created task T-a1b2c3 (status: todo)
+-> [New Task] notification sent to coder
+```
+
+```
+agent calls task_update:
+  id: "T-a1b2c3"
+  status: "done"
+  result: "Implemented login with email/password auth"
+
+-> Task T-a1b2c3 updated to done
+-> Dependent tasks auto-transition to todo
+```
+
+```
+agent calls task_list:
+  assignee: "coder"
+  status: "in_progress"
+
+-> Returns filtered list of tasks
+```
+
+```
+agent calls task_get:
+  id: "T-a1b2c3"
+
+-> Returns full task details (title, description, status, assignee, dependencies, timestamps)
+```
+
+#### Task CLI Commands
+
+```bash
+ao> task list [--assignee <agent>] [--status <status>]   # List/filter tasks
+ao> task board                                            # Kanban board view
+ao> task get <id>                                         # Show task details
+```
+
+#### Kanban Board
+
+The Web UI includes a Kanban board accessible from the sidebar "Tasks" item. Columns: backlog, todo, in_progress, review, done. Filter by agent using the segmented control. Click a task card to view full details.
+
 ### Migration from `agents.yaml`
 
 If you have a legacy `~/.agent-office/agents.yaml`, migrate to the multi-office format:
@@ -535,6 +635,7 @@ Host Process                        Docker Container (per agent)
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
    - Proxy tools that forward `send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get` to the Host API over HTTP
+   - **Note:** Task tool proxy files exist but are not yet wired in `sandbox-entry.ts` / Host API. Task tools are currently in-process only.
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
 6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
@@ -649,6 +750,9 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `cron add office <job> "<sched>" <msg> --targets a,b` | Add an office-level cron job (applies immediately)         |
 | `cron remove office <job>`                            | Remove an office-level cron job (applies immediately)      |
 | `cron trigger office <job>`                           | Fire an office cron job immediately                        |
+| `task list [--assignee X] [--status S]`               | List tasks with optional filters                           |
+| `task board`                                          | Show Kanban board view                                     |
+| `task get <id>`                                       | Show task details                                          |
 | `prompt report <agent>`                               | Show prompt composition (block sizes, tool count, mode)    |
 | `cost status`                                         | Session token and cost totals (resets on restart)           |
 | `cost today [--agent <name>]`                         | Persistent token and cost totals for today                 |
@@ -685,7 +789,7 @@ Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via 
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), and cron tools (`cron_add`, `cron_remove`, `cron_list`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
 
 ### `list_agents`
 
@@ -868,6 +972,57 @@ agent calls read_skill:
 -> Errors with list of available skill names if not found
 ```
 
+### `task_create`
+
+Create a task with title, description, and assignee. Optional `dependsOn` array specifies task IDs that must complete first.
+
+```
+agent calls task_create:
+  title: "Implement login page"
+  description: "Build login form with email/password and validation"
+  assignee: "coder"
+  dependsOn: ["T-abc123"]
+
+-> Created T-def456 (status: backlog — waiting on T-abc123)
+```
+
+Tasks with unmet dependencies start as `backlog`. Tasks with no dependencies start as `todo`.
+
+### `task_update`
+
+Update task status, reassign, or record a result. Status transitions are validated (see [Task Lifecycle](#task-lifecycle)).
+
+```
+agent calls task_update:
+  id: "T-def456"
+  status: "done"
+  result: "Implemented login with validation"
+
+-> Task updated. Dependent tasks auto-transition to todo.
+```
+
+### `task_list`
+
+List tasks with optional filters by assignee, status, or creator.
+
+```
+agent calls task_list:
+  assignee: "coder"
+
+-> Returns all tasks assigned to coder
+```
+
+### `task_get`
+
+Get full task details by ID.
+
+```
+agent calls task_get:
+  id: "T-def456"
+
+-> Returns: title, description, status, assignee, dependsOn, timestamps, result
+```
+
 ### Tool Architecture
 
 ```
@@ -880,6 +1035,11 @@ src/agent/tools/
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
   memory-search.ts          memory_search — host implementation
   memory-get.ts             memory_get — host implementation
+  task-create.ts            task_create — host implementation
+  task-update.ts            task_update — host implementation
+  task-list.ts              task_list — host implementation
+  task-get.ts               task_get — host implementation
+  task-impl.ts              Shared task tool logic
   proxy/
     send-message.ts         Sandbox implementation (HTTP POST /api/send-message)
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
@@ -887,6 +1047,10 @@ src/agent/tools/
     authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
     memory-search.ts        memory_search — proxy implementation (HTTP)
     memory-get.ts           memory_get — proxy implementation (HTTP)
+    task-create.ts          task_create — proxy (HTTP, not yet wired)
+    task-update.ts          task_update — proxy (HTTP, not yet wired)
+    task-list.ts            task_list — proxy (HTTP, not yet wired)
+    task-get.ts             task_get — proxy (HTTP, not yet wired)
     index.ts                Barrel export + HostFetch type
 ```
 
@@ -1050,8 +1214,11 @@ Each office gets an isolated directory, and each agent within it gets its own wo
       memory/               # office-level topic files
       cron/
         state.json          # cron job state
+      tasks/
+        tasks.json          # task store
       logs/
         cron-audit.jsonl    # agent cron tool audit trail
+        task-audit.jsonl    # task mutation audit trail
         usage-cost.jsonl    # per-agent token usage + cost records
       agents/
         designer/
@@ -1226,13 +1393,14 @@ The UI opens automatically in your default browser with a one-time bootstrap tok
 
 ### Features
 
-- **Org chart** — interactive hierarchy with drag-to-reparent, hire/fire from the chart
-- **Live feed** — real-time SSE event stream with agent messages, tool calls, and status changes
-- **Messages** — conversation threads grouped by sender/receiver
-- **Agent detail panel** — config, permissions, env vars, skills, prompt report, quick actions
-- **Cron dashboard** — view, add, trigger, enable/disable, and remove cron jobs
-- **Cost dashboard** — per-agent token usage and cost breakdown (1/7/30 day views)
-- **Command palette** — `Cmd+K` / `Ctrl+K` spotlight with search over all REPL commands
+- **Slack-style layout** — sidebar with channels (#general, #cron), direct messages per agent, and a Tasks Kanban view
+- **Kanban board** — task board with columns (backlog → todo → in_progress → review → done) and per-agent filter
+- **Agent DMs** — conversation threads per agent with message input, tool call display, and thread drawer
+- **Cron channel** — dedicated #cron channel view for cron job events
+- **Org chart** — interactive hierarchy modal
+- **Cost dashboard** — per-agent token usage and cost breakdown
+- **Office settings** — office configuration modal
+- **Real-time updates** — SSE event stream with unread badges and queue depth indicators
 
 ### Configuration
 
@@ -1385,6 +1553,26 @@ TELEGRAM_BOT_TOKEN=xxx pnpm dev start --office my-team --sandbox docker
 # Status visible via /agents command in Telegram
 ```
 
+### Example 5: Task-Driven Development
+
+Three agents collaborate with Kanban-style task management:
+
+```
+ao> send task-manager "Build a login page with email/password auth"
+```
+
+What happens:
+
+1. **task-manager** creates two tasks with dependencies:
+   - `T-xxx`: "Implement login page" → assigned to **coder** (status: `todo`)
+   - `T-yyy`: "Review login page" → assigned to **reviewer**, `dependsOn: [T-xxx]` (status: `backlog`)
+2. **coder** receives `[New Task]` notification, implements the feature, marks task `done`
+3. **TaskService** detects dependency resolved → moves review task to `todo`
+4. **reviewer** receives `[Task Ready]` notification, reviews code, marks task `done`
+5. Track progress: `task board` (CLI) or Tasks view in Web UI
+
+See [`examples/feature-team/`](examples/feature-team/) for the full `office.yaml`.
+
 ## Project Structure
 
 ```
@@ -1434,6 +1622,11 @@ src/
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
       memory-search.ts        memory_search — host implementation
       memory-get.ts           memory_get — host implementation
+      task-create.ts          task_create — host implementation
+      task-update.ts          task_update — host implementation
+      task-list.ts            task_list — host implementation
+      task-get.ts             task_get — host implementation
+      task-impl.ts            Shared task tool logic
       policy.ts               Tool policy (allow/deny filtering)
       read-skill.ts           read_skill — host implementation
       cron-impl.ts            Shared cron tool logic (add/remove/list)
@@ -1448,6 +1641,10 @@ src/
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
         memory-search.ts      memory_search — proxy implementation (HTTP)
         memory-get.ts         memory_get — proxy implementation (HTTP)
+        task-create.ts        task_create — proxy (HTTP, not yet wired)
+        task-update.ts        task_update — proxy (HTTP, not yet wired)
+        task-list.ts          task_list — proxy (HTTP, not yet wired)
+        task-get.ts           task_get — proxy (HTTP, not yet wired)
         cron-add.ts           cron_add — proxy implementation (HTTP)
         cron-remove.ts        cron_remove — proxy implementation (HTTP)
         cron-list.ts          cron_list — proxy implementation (HTTP)
@@ -1460,6 +1657,12 @@ src/
     Dockerfile                Container image definition (node:22-slim, non-root)
     package.json              Sandbox-specific npm dependencies
     index.ts                  Barrel export
+
+  tasks/
+    types.ts                  Task, TaskStatus, STATUS_TRANSITIONS, TaskFilter
+    task-store.ts             Persistence (~/.agent-office/offices/<id>/tasks/tasks.json)
+    task-service.ts           Task orchestrator (create, update, dependency resolution, notifications)
+    task-audit.ts             Audit logger (logs/task-audit.jsonl)
 
   cron/
     types.ts                  CronJobConfig, CronJobState, CronJobEntry
@@ -1489,6 +1692,7 @@ src/
     skill.ts                  Skill install/remove with YAML + source map sync
     agent-config.ts           Per-agent env/secret-ref/prompt commands + config show
     cron.ts                   Cron CLI handlers (add/remove/enable/disable/list/status/trigger)
+    task.ts                   Task CLI handlers (list/board/get)
     migrate.ts                Two-step legacy migration (copy + finalize)
     prompt-report.ts          Prompt report command (block sizes, tool count)
     cost.ts                   Cost status/today/report commands
@@ -1526,6 +1730,9 @@ test/
   office-cron.test.ts         Office-level cron lifecycle, targets, broadcast, state keys
   cron-tools.test.ts          Cron tool impl: validation, scopes, permissions, audit, limits
   host-api-cron.test.ts       Host API cron endpoints: auth, isolation, parity
+  task-service.test.ts        Task creation, status transitions, dependencies, notifications
+  task-store.test.ts          Task persistence, filtering
+  task-tools.test.ts          Task tool behavior + audit
   bootstrap.test.ts           Bootstrap file loading, truncation, prompt injection
   truncate.test.ts            Prompt truncation (head/tail split, per-block limits)
   tool-policy.test.ts         Tool policy allow/deny filtering + server-side enforcement
@@ -1557,7 +1764,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm lint:check       # ESLint
-pnpm test             # Run test suite (vitest) — ~600 tests
+pnpm test             # Run test suite (vitest) — ~700 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
