@@ -215,10 +215,10 @@ export async function startUiServer(
       return json(res, 200, getHierarchy(officeId));
     }
 
-    // --- GET /api/agents/:name/mailbox ---
-    const mailboxMatch = path.match(/^\/api\/agents\/([^/]+)\/mailbox$/);
-    if (mailboxMatch && method === "GET") {
-      const name = mailboxMatch[1]!;
+    // --- GET /api/agents/:name/inbox ---
+    const inboxMatch = path.match(/^\/api\/agents\/([^/]+)\/inbox$/);
+    if (inboxMatch && method === "GET") {
+      const name = inboxMatch[1]!;
       const messages = workspace.bus.peekMessages(name);
       return json(res, 200, { agent: name, pending: messages.length, messages });
     }

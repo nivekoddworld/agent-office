@@ -55,9 +55,9 @@ export interface AgentInfo {
   lastHeartbeat: number;
 }
 
-// --- Mailbox ---
+// --- Inbox ---
 
-export interface MailboxMessage {
+export interface InboxMessage {
   id: string;
   from: string;
   to: string;

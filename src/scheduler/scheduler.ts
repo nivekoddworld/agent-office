@@ -1,10 +1,10 @@
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
-import type { MailboxMessage, SchedulerState } from "../types.js";
+import type { InboxMessage, SchedulerState } from "../types.js";
 
 /**
  * Tick-based priority scheduler (inspired by FreeRTOS).
- * Each tick: sorts agents by priority, drains mailboxes, dispatches work.
+ * Each tick: sorts agents by priority, drains inboxes, dispatches work.
  * Non-blocking — agents run concurrently via async I/O.
  */
 export class Scheduler {
@@ -86,7 +86,7 @@ export class Scheduler {
         this.bus.requeue(handle.name, messages[i]!);
       }
 
-      const payload = formatMailPayload(msg);
+      const payload = formatMessagePayload(msg);
       const dispatch =
         msg.type === "steer" ? handle.steer(payload) : handle.prompt(payload);
 
@@ -107,7 +107,7 @@ export class Scheduler {
 }
 
 /** Prefix inter-agent messages with sender info so the recipient knows who to reply to. */
-function formatMailPayload(msg: MailboxMessage): string {
+function formatMessagePayload(msg: InboxMessage): string {
   if (msg.from === "__user__") return msg.payload;
   if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
   return `[Message from ${msg.from}]\n${msg.payload}`;

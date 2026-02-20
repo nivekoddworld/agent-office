@@ -70,7 +70,7 @@ export interface AgentDetail extends AgentInfo {
   hierarchy: AgentHierarchy | null;
 }
 
-export interface MailboxMessage {
+export interface InboxMessage {
   id: string;
   from: string;
   to: string;
@@ -80,10 +80,10 @@ export interface MailboxMessage {
   timestamp: number;
 }
 
-export interface MailboxResponse {
+export interface InboxResponse {
   agent: string;
   pending: number;
-  messages: MailboxMessage[];
+  messages: InboxMessage[];
 }
 
 export interface CostSummary {

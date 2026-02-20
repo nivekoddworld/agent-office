@@ -18,7 +18,7 @@ import {
   IconBolt,
   IconRobot,
   IconSend,
-  IconMailbox,
+  IconInbox,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { slack } from "../../theme/slack-theme.js";
@@ -34,7 +34,7 @@ import { SkillsManager } from "../agent-detail/SkillsManager.js";
 import { PromptViewer } from "../agent-detail/PromptViewer.js";
 import { QuickActions } from "../agent-detail/QuickActions.js";
 
-interface MailboxEntry {
+interface InboxEntry {
   from: string;
   payload: string;
   priority: number;
@@ -43,10 +43,10 @@ interface MailboxEntry {
 
 function QueuePreview({ agentName }: { agentName: string }) {
   const { data } = useQuery({
-    queryKey: ["mailbox", agentName],
+    queryKey: ["inbox", agentName],
     queryFn: () =>
-      apiFetch<{ pending: number; messages: MailboxEntry[] }>(
-        `/api/agents/${encodeURIComponent(agentName)}/mailbox`,
+      apiFetch<{ pending: number; messages: InboxEntry[] }>(
+        `/api/agents/${encodeURIComponent(agentName)}/inbox`,
       ),
     refetchInterval: 5000,
   });
@@ -230,7 +230,7 @@ export function AgentProfileDrawer({
             }}
           >
             <Accordion.Item value="queue">
-              <Accordion.Control icon={<IconMailbox size={16} />}>
+              <Accordion.Control icon={<IconInbox size={16} />}>
                 Message Queue
               </Accordion.Control>
               <Accordion.Panel>

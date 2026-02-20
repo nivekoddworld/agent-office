@@ -1,19 +1,19 @@
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import type { MessageBus } from "../../transport/message-bus.js";
 import { Priority } from "../../types.js";
-import { SEND_MAIL } from "./contracts.js";
+import { SEND_MESSAGE } from "./contracts.js";
 
 const textResult = (text: string) => ({
   content: [{ type: "text" as const, text }],
   details: {},
 });
 
-export function createMailboxTool(
+export function createSendMessageTool(
   agentName: string,
   bus: MessageBus,
 ): AgentTool<any> {
   return {
-    ...SEND_MAIL,
+    ...SEND_MESSAGE,
     execute: async (_id, params: { to: string; message: string }) => {
       try {
         bus.send({

@@ -2,11 +2,11 @@ import { Type } from "@sinclair/typebox";
 
 /** Shared tool metadata — single source of truth for name/label/description/parameters. */
 
-export const SEND_MAIL = {
-  name: "send_mail" as const,
-  label: "Send Mail",
+export const SEND_MESSAGE = {
+  name: "send_message" as const,
+  label: "Send Message",
   description:
-    "Send a message to another agent's mailbox. Use '__broadcast__' to send to all agents.",
+    "Send a message to another agent's inbox. Use '__broadcast__' to send to all agents.",
   parameters: Type.Object({
     to: Type.String({
       description: "Target agent name (or '__broadcast__' for all)",

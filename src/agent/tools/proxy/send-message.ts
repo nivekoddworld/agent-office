@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
-import { SEND_MAIL } from "../contracts.js";
+import { SEND_MESSAGE } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
 const textResult = (text: string) => ({
@@ -8,11 +8,11 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createSendMailProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createSendMessageProxy(hostFetch: HostFetch): AgentTool<any> {
   return {
-    ...SEND_MAIL,
+    ...SEND_MESSAGE,
     execute: async (_id, params: { to: string; message: string }) => {
-      const res = await hostFetch("/api/send-mail", {
+      const res = await hostFetch("/api/send-message", {
         to: params.to,
         payload: params.message,
         messageId: randomUUID(),
@@ -25,7 +25,7 @@ export function createSendMailProxy(hostFetch: HostFetch): AgentTool<any> {
         } catch {
           /* use statusText */
         }
-        return textResult(`Error sending mail: ${msg}`);
+        return textResult(`Error sending message: ${msg}`);
       }
       return textResult(`Message sent to ${params.to}`);
     },

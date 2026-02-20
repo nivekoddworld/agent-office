@@ -1,6 +1,6 @@
 # agent-office
 
-Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, mailbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
+Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, inbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
 
 ## Get Started
 
@@ -64,7 +64,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [CLI Flags](#cli-flags)
 - [Agent Collaboration](#agent-collaboration)
   - [list_agents](#list_agents)
-  - [send_mail](#send_mail)
+  - [send_message](#send_message)
   - [read_agent_file](#read_agent_file)
   - [authenticated_fetch](#authenticated_fetch)
   - [cron_add](#cron_add)
@@ -103,7 +103,7 @@ graph TD
     TG[Telegram / grammY] --> WS
 
     WS --> SCH[Scheduler\ntick loop]
-    WS --> BUS[MessageBus\nmailboxes]
+    WS --> BUS[MessageBus\ninboxes]
     WS --> WD[Watchdog\nheartbeat]
     WS --> CRON[CronService\nscheduled jobs]
 
@@ -119,9 +119,9 @@ graph TD
     BUS --> HA
 ```
 
-**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron / Agent cron tools -> Workspace -> Scheduler tick -> drain mailbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
+**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron / Agent cron tools -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -266,7 +266,7 @@ agents:
       tools:
         deny: [cron_add, cron_remove]   # blacklist — all except these
         # OR
-        # allow: [send_mail, list_agents]  # whitelist — only these
+        # allow: [send_message, list_agents]  # whitelist — only these
 ```
 
 - **`deny`** — blacklist: agent has all tools except the listed ones.
@@ -534,7 +534,7 @@ Host Process                        Docker Container (per agent)
    - Volume mount: host workspace directory -> `/workspace` in container
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
-   - Proxy tools that forward `send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get` to the Host API over HTTP
+   - Proxy tools that forward `send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get` to the Host API over HTTP
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
 6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
@@ -554,7 +554,7 @@ Host Process                        Docker Container (per agent)
 | Authentication          | Unique per-agent Bearer token on all endpoints (except `/health`)                                     |
 | Message integrity       | Server derives sender identity from token, never trusts body                                          |
 | Idempotency             | `messageId`-based deduplication with 5-minute TTL                                                     |
-| Request limits          | 64 KB send-mail body, 1 MB general body, 1 MB file response                                           |
+| Request limits          | 64 KB send-message body, 1 MB general body, 1 MB file response                                           |
 | Prompt timeout          | 5-minute timeout on prompt completion                                                                 |
 
 #### Docker Sandbox Example
@@ -576,7 +576,7 @@ ao> send designer "Create a responsive landing page with hero section"
 
 ao> send reviewer "Review designer's index.html and send feedback"
 # → reviewer uses read_agent_file (proxied via Host API) to read designer's files
-# → reviewer uses send_mail (proxied via Host API) to send feedback to designer
+# → reviewer uses send_message (proxied via Host API) to send feedback to designer
 ```
 
 Verify files created by sandboxed agents persist on the host:
@@ -593,7 +593,7 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | Method | Path                             | Purpose                                                        |
 | ------ | -------------------------------- | -------------------------------------------------------------- |
 | `GET`  | `/api/secrets`                   | Fetch secrets (model API key + tool secrets) at container boot |
-| `POST` | `/api/send-mail`                 | Forward message to another agent's mailbox                     |
+| `POST` | `/api/send-message`              | Forward message to another agent's inbox                       |
 | `GET`  | `/api/agents`                    | List all agents (name, status, description)                    |
 | `GET`  | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace                       |
 | `POST` | `/api/authenticated-fetch`       | Host-proxied HTTP request with secret injection                |
@@ -685,23 +685,23 @@ Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via 
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_mail`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), and cron tools (`cron_add`, `cron_remove`, `cron_list`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), and cron tools (`cron_add`, `cron_remove`, `cron_list`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
 
 ### `list_agents`
 
 Discover all agents in the workspace with their name, status, and description. Agents are instructed to call this first when given a task to find collaborators.
 
-### `send_mail`
+### `send_message`
 
-Send a message to another agent's mailbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Mail from sender]`. Use `__broadcast__` to message all agents.
+Send a message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]`. Use `__broadcast__` to message all agents.
 
 ```
-copywriter calls send_mail:
+copywriter calls send_message:
   to: "designer"
   message: "Here's the landing page copy: ..."
 
--> Message lands in designer's mailbox
--> Next tick delivers it as: [Mail from copywriter]\nHere's the landing page copy: ...
+-> Message lands in designer's inbox
+-> Next tick delivers it as: [Message from copywriter]\nHere's the landing page copy: ...
 -> Designer starts working
 ```
 
@@ -874,14 +874,14 @@ agent calls read_skill:
 src/agent/tools/
   contracts.ts              Single source of truth (name, label, description, parameters)
   fetch-helpers.ts          Shared SSRF protection, URL validation, auth header builder
-  send-mail.ts              Host implementation (direct bus.send)
+  send-message.ts           Host implementation (direct bus.send)
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
   memory-search.ts          memory_search — host implementation
   memory-get.ts             memory_get — host implementation
   proxy/
-    send-mail.ts            Sandbox implementation (HTTP POST /api/send-mail)
+    send-message.ts         Sandbox implementation (HTTP POST /api/send-message)
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
     read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
     authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
@@ -897,7 +897,7 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 Every agent receives a **layered system prompt** composed from nine ordered layers:
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — always included, never overridden. Covers:
-   - Agent-to-agent collaboration (tools, mail protocol, reply-loop avoidance, workflow rules, reporting)
+   - Agent-to-agent collaboration (tools, messaging protocol, reply-loop avoidance, workflow rules, reporting)
    - Execution protocol (Plan → Act → Verify → Report)
    - Workspace discipline and persistence discipline
    - No invented details — do not fabricate external systems, links, IDs, or integrations; ask or state unknown
@@ -1016,7 +1016,7 @@ The scheduler runs a `setInterval` tick loop (default 2s). Each tick:
 
 1. Sorts agents by priority (CRITICAL=4 first, IDLE=0 last)
 2. Skips agents currently running (`status === "running"`)
-3. Drains each agent's mailbox, delivers the highest-priority message
+3. Drains each agent's inbox, delivers the highest-priority message
 4. Dispatches non-blocking — all agents run concurrently via async I/O
 5. Re-queues remaining messages for the next tick
 
@@ -1228,7 +1228,7 @@ The UI opens automatically in your default browser with a one-time bootstrap tok
 
 - **Org chart** — interactive hierarchy with drag-to-reparent, hire/fire from the chart
 - **Live feed** — real-time SSE event stream with agent messages, tool calls, and status changes
-- **Mailbox** — conversation threads grouped by sender/receiver
+- **Messages** — conversation threads grouped by sender/receiver
 - **Agent detail panel** — config, permissions, env vars, skills, prompt report, quick actions
 - **Cron dashboard** — view, add, trigger, enable/disable, and remove cron jobs
 - **Cost dashboard** — per-agent token usage and cost breakdown (1/7/30 day views)
@@ -1273,10 +1273,10 @@ Include hero, 3 features, CTA. Send to designer when done.
 
 What happens:
 
-1. **copywriter** writes copy, uses `list_agents` to discover designer, sends via `send_mail`
-2. **designer** receives mail, builds `index.html` with the copy
+1. **copywriter** writes copy, uses `list_agents` to discover designer, sends via `send_message`
+2. **designer** receives the message, builds `index.html` with the copy
 3. You send: `@reviewer Review designer's work and send feedback`
-4. **reviewer** calls `list_agents`, uses `read_agent_file` to read designer's HTML, sends feedback via `send_mail`
+4. **reviewer** calls `list_agents`, uses `read_agent_file` to read designer's HTML, sends feedback via `send_message`
 5. **designer** applies fixes, **copywriter** reports completion to the user
 
 All coordination is autonomous after the initial prompt.
@@ -1311,7 +1311,7 @@ What happens behind the scenes:
 5. **tester** calls `list_agents` (proxy -> Host API -> returns agent list)
 6. **tester** calls `read_agent_file` (proxy -> Host API -> reads backend's files from host disk)
 7. **tester** writes test files in its own `/workspace`
-8. **tester** sends feedback to **backend** via `send_mail` (proxy -> Host API -> message bus)
+8. **tester** sends feedback to **backend** via `send_message` (proxy -> Host API -> message bus)
 
 Each agent is fully isolated — a misbehaving agent cannot crash the host, read secrets, or access another agent's filesystem directly.
 
@@ -1428,7 +1428,7 @@ src/
       contracts.ts            Shared tool metadata (name, label, description, parameters)
       fetch-helpers.ts        Shared SSRF, URL validation, auth header builder
       index.ts                Barrel re-export for host-side tools
-      send-mail.ts            send_mail — host implementation (bus.send)
+      send-message.ts         send_message — host implementation (bus.send)
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
@@ -1442,7 +1442,7 @@ src/
       cron-list.ts            cron_list — host implementation
       proxy/
         index.ts              Barrel + HostFetch type
-        send-mail.ts          send_mail — proxy implementation (HTTP)
+        send-message.ts       send_message — proxy implementation (HTTP)
         list-agents.ts        list_agents — proxy implementation (HTTP)
         read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
@@ -1473,7 +1473,7 @@ src/
     watchdog.ts               Heartbeat monitor + stuck detection
 
   transport/
-    local.ts                  In-process priority mailbox queues
+    local.ts                  In-process priority inbox queues
     message-bus.ts            Bus wrapper over transport
 
   bridges/
@@ -1510,7 +1510,7 @@ test/
   tools.test.ts               Host-side tool behavior
   scheduler.test.ts           Tick loop, priority ordering
   watchdog.test.ts            Heartbeat, stuck detection, restart
-  message-bus.test.ts         Mailbox routing, rate limiting
+  message-bus.test.ts         Inbox routing, rate limiting
   local-transport.test.ts     Priority queue ordering
   handle-skills.test.ts       Skill paths for in-process + sandbox agents
   cron-parser.test.ts         Cron expression parsing, timezone, describeCron

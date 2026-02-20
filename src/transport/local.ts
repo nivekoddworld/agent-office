@@ -1,58 +1,58 @@
 import { randomUUID } from "node:crypto";
-import type { MailboxMessage, Priority } from "../types.js";
+import type { InboxMessage, Priority } from "../types.js";
 
-/** In-process mailbox transport — priority-sorted per-agent queues. */
+/** In-process inbox transport — priority-sorted per-agent queues. */
 export class LocalTransport {
-  private mailboxes = new Map<string, MailboxMessage[]>();
+  private inboxes = new Map<string, InboxMessage[]>();
 
   register(name: string): void {
-    if (!this.mailboxes.has(name)) this.mailboxes.set(name, []);
+    if (!this.inboxes.has(name)) this.inboxes.set(name, []);
   }
 
   unregister(name: string): void {
-    this.mailboxes.delete(name);
+    this.inboxes.delete(name);
   }
 
   send(
-    msg: Omit<MailboxMessage, "id" | "timestamp"> & { priority: Priority },
+    msg: Omit<InboxMessage, "id" | "timestamp"> & { priority: Priority },
   ): void {
-    const full: MailboxMessage = {
+    const full: InboxMessage = {
       ...msg,
       id: randomUUID(),
       timestamp: Date.now(),
     };
 
     if (msg.to === "__broadcast__") {
-      for (const [name, queue] of this.mailboxes) {
+      for (const [name, queue] of this.inboxes) {
         if (name !== msg.from) queue.push({ ...full, to: name });
       }
       return;
     }
 
-    const queue = this.mailboxes.get(msg.to);
-    if (!queue) throw new Error(`No mailbox for agent "${msg.to}"`);
+    const queue = this.inboxes.get(msg.to);
+    if (!queue) throw new Error(`No inbox for agent "${msg.to}"`);
     queue.push(full);
   }
 
   /** Push a full message back into the queue (preserves original id/timestamp). */
-  push(name: string, msg: MailboxMessage): void {
-    const queue = this.mailboxes.get(name);
-    if (!queue) throw new Error(`No mailbox for agent "${name}"`);
+  push(name: string, msg: InboxMessage): void {
+    const queue = this.inboxes.get(name);
+    if (!queue) throw new Error(`No inbox for agent "${name}"`);
     queue.push(msg);
   }
 
-  drain(name: string): MailboxMessage[] {
-    const queue = this.mailboxes.get(name);
+  drain(name: string): InboxMessage[] {
+    const queue = this.inboxes.get(name);
     if (!queue) return [];
     return queue.splice(0).sort((a, b) => b.priority - a.priority);
   }
 
   peek(name: string): number {
-    return this.mailboxes.get(name)?.length ?? 0;
+    return this.inboxes.get(name)?.length ?? 0;
   }
 
   /** Non-destructive read of pending messages. */
-  peekMessages(name: string): MailboxMessage[] {
-    return [...(this.mailboxes.get(name) ?? [])];
+  peekMessages(name: string): InboxMessage[] {
+    return [...(this.inboxes.get(name) ?? [])];
   }
 }

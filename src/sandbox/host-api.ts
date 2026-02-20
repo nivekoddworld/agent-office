@@ -222,8 +222,8 @@ export class HostApi {
     try {
       if (req.method === "GET" && path === "/api/secrets") {
         this.handleSecrets(req, res);
-      } else if (req.method === "POST" && path === "/api/send-mail") {
-        await this.handleSendMail(req, res, agentName);
+      } else if (req.method === "POST" && path === "/api/send-message") {
+        await this.handleSendMessage(req, res, agentName);
       } else if (req.method === "GET" && path === "/api/agents") {
         this.handleAgents(res);
       } else if (req.method === "GET" && path === "/api/agent-file") {
@@ -275,7 +275,7 @@ export class HostApi {
     res.end(JSON.stringify(secrets));
   }
 
-  private async handleSendMail(
+  private async handleSendMessage(
     req: IncomingMessage,
     res: ServerResponse,
     agentName: string,
@@ -298,12 +298,12 @@ export class HostApi {
       return;
     }
 
-    // Reject system senders that are trigger sources, not mailbox recipients
+    // Reject system senders that are trigger sources, not inbox recipients
     if (to === "__cron__" || to === "__user__") {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(
         JSON.stringify({
-          error: `"${to}" is a system address and cannot receive mail`,
+          error: `"${to}" is a system address and cannot receive messages`,
         }),
       );
       return;

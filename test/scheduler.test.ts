@@ -100,7 +100,7 @@ describe("Scheduler", () => {
     expect(bus.peek("busy")).toBe(1);
   });
 
-  it("formats inter-agent mail with sender prefix", () => {
+  it("formats inter-agent message with sender prefix", () => {
     const agents = new Map<string, any>();
     const bus = new MessageBus();
 

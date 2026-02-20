@@ -28,7 +28,7 @@ import { collectMemoryFiles } from "./memory/search.js";
 import {
   createListAgentsTool,
   createReadAgentFileTool,
-  createMailboxTool,
+  createSendMessageTool,
   createAuthenticatedFetchTool,
   createMemorySearchTool,
   createMemoryGetTool,
@@ -223,7 +223,7 @@ export class AgentHandle {
         });
       }
       // Pre-policy estimate used as fallback until sandbox reports actual count
-      // Base: codingTools(4) + grep + find + ls + sendMail + listAgents +
+      // Base: codingTools(4) + grep + find + ls + sendMessage + listAgents +
       //   readAgentFile + memorySearch + memoryGet + cronAdd + cronRemove + cronList = 15
       const hasSecrets =
         this.config.secrets &&
@@ -279,7 +279,7 @@ export class AgentHandle {
     let inProcSkillsPrompt: string | undefined;
     const allTools: AgentTool<any>[] = [
       ...createCodingTools(this.cwd),
-      createMailboxTool(this.name, this.bus),
+      createSendMessageTool(this.name, this.bus),
       createListAgentsTool(this.name, this.listAgentsFn, this.baseDir),
       createReadAgentFileTool(this.baseDir),
       ...(Object.keys(resolvedSecrets).length > 0

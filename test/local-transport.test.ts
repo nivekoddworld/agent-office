@@ -3,7 +3,7 @@ import { LocalTransport } from "../src/transport/local.js";
 import { Priority } from "../src/types.js";
 
 describe("LocalTransport", () => {
-  it("registers and unregisters mailboxes", () => {
+  it("registers and unregisters inboxes", () => {
     const t = new LocalTransport();
     t.register("a");
     expect(t.peek("a")).toBe(0);
@@ -97,7 +97,7 @@ describe("LocalTransport", () => {
         payload: "hi",
         priority: Priority.NORMAL,
       }),
-    ).toThrow('No mailbox for agent "ghost"');
+    ).toThrow('No inbox for agent "ghost"');
   });
 
   it("push() preserves original id and timestamp", () => {
@@ -133,7 +133,7 @@ describe("LocalTransport", () => {
         payload: "hi",
         priority: Priority.NORMAL,
       }),
-    ).toThrow('No mailbox for agent "ghost"');
+    ).toThrow('No inbox for agent "ghost"');
   });
 
   it("returns empty array for unregistered drain", () => {

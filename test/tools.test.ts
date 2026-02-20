@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   createListAgentsTool,
   createReadAgentFileTool,
-  createMailboxTool,
+  createSendMessageTool,
 } from "../src/agent/tools/index.js";
 import { Priority, type AgentInfo } from "../src/types.js";
 
@@ -74,10 +74,10 @@ describe("createReadAgentFileTool", () => {
   });
 });
 
-describe("createMailboxTool", () => {
+describe("createSendMessageTool", () => {
   it("sends via bus and returns confirmation", async () => {
     const bus = { send: vi.fn() } as any;
-    const tool = createMailboxTool("sender", bus);
+    const tool = createSendMessageTool("sender", bus);
 
     const result = await tool.execute("id-1", {
       to: "designer",

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  SEND_MAIL,
+  SEND_MESSAGE,
   LIST_AGENTS,
   READ_AGENT_FILE,
   AUTHENTICATED_FETCH,
@@ -10,7 +10,7 @@ import {
   CRON_REMOVE,
   CRON_LIST,
 } from "../src/agent/tools/contracts.js";
-import { createMailboxTool } from "../src/agent/tools/send-mail.js";
+import { createSendMessageTool } from "../src/agent/tools/send-message.js";
 import { createListAgentsTool } from "../src/agent/tools/list-agents.js";
 import { createReadAgentFileTool } from "../src/agent/tools/read-agent-file.js";
 import { createAuthenticatedFetchTool } from "../src/agent/tools/authenticated-fetch.js";
@@ -19,7 +19,7 @@ import { createMemoryGetTool } from "../src/agent/tools/memory-get.js";
 import { createCronAddTool } from "../src/agent/tools/cron-add.js";
 import { createCronRemoveTool } from "../src/agent/tools/cron-remove.js";
 import { createCronListTool } from "../src/agent/tools/cron-list.js";
-import { createSendMailProxy } from "../src/agent/tools/proxy/send-mail.js";
+import { createSendMessageProxy } from "../src/agent/tools/proxy/send-message.js";
 import { createListAgentsProxy } from "../src/agent/tools/proxy/list-agents.js";
 import { createReadAgentFileProxy } from "../src/agent/tools/proxy/read-agent-file.js";
 import { createAuthenticatedFetchProxy } from "../src/agent/tools/proxy/authenticated-fetch.js";
@@ -47,7 +47,7 @@ const fakeList = (): AgentInfo[] => [
 
 describe("Tool contracts — host and proxy tools share metadata", () => {
   const hostTools = [
-    { contract: SEND_MAIL, tool: createMailboxTool("self", fakeBus) },
+    { contract: SEND_MESSAGE, tool: createSendMessageTool("self", fakeBus) },
     {
       contract: LIST_AGENTS,
       tool: createListAgentsTool("self", fakeList, "/test/base"),
@@ -98,7 +98,7 @@ describe("Tool contracts — host and proxy tools share metadata", () => {
   ];
 
   const proxyTools = [
-    { contract: SEND_MAIL, tool: createSendMailProxy(noopFetch) },
+    { contract: SEND_MESSAGE, tool: createSendMessageProxy(noopFetch) },
     { contract: LIST_AGENTS, tool: createListAgentsProxy("self", noopFetch) },
     { contract: READ_AGENT_FILE, tool: createReadAgentFileProxy(noopFetch) },
     {

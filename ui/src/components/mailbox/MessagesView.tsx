@@ -4,7 +4,7 @@ import { IconInbox } from "@tabler/icons-react";
 import { useEventStore, type FeedEvent } from "../../store/event-store.js";
 import { ConversationThread, type ChatMessage } from "./ConversationThread.js";
 
-interface MailboxViewProps {
+interface MessagesViewProps {
   agentNames: string[];
 }
 
@@ -49,13 +49,12 @@ function buildConversations(events: FeedEvent[]): Map<string, ChatMessage[]> {
   return convos;
 }
 
-export function MailboxView({ agentNames }: MailboxViewProps) {
+export function MessagesView({ agentNames }: MessagesViewProps) {
   const { events } = useEventStore();
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
 
   const conversations = useMemo(() => buildConversations(events), [events]);
 
-  // Build list with message counts
   const agentList = useMemo(() => {
     return agentNames.map((name) => {
       const msgs = conversations.get(name) ?? [];

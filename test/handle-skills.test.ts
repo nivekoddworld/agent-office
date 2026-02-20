@@ -35,7 +35,7 @@ vi.mock("../src/agent/prompt.js", () => ({
 
 // Mock tools
 vi.mock("../src/agent/tools/index.js", () => ({
-  createMailboxTool: () => ({ name: "send_mail", execute: vi.fn() }),
+  createSendMessageTool: () => ({ name: "send_message", execute: vi.fn() }),
   createListAgentsTool: () => ({ name: "list_agents", execute: vi.fn() }),
   createReadAgentFileTool: () => ({
     name: "read_agent_file",

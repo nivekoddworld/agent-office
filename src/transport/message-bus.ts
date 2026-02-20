@@ -1,5 +1,5 @@
 import { LocalTransport } from "./local.js";
-import type { MailboxMessage, Priority } from "../types.js";
+import type { InboxMessage, Priority } from "../types.js";
 
 /**
  * Message bus — thin wrapper over transport with convenience helpers.
@@ -31,7 +31,7 @@ export class MessageBus {
     payload: string;
     priority: Priority;
   }): void {
-    // Rate-limit inter-agent mail (skip user messages)
+    // Rate-limit inter-agent messages (skip user messages)
     if (opts.from !== "__user__" && opts.from !== "__cron__") {
       const now = Date.now();
       let entry = this.sendCounts.get(opts.from);
@@ -50,12 +50,12 @@ export class MessageBus {
     this.transport.send(opts);
   }
 
-  drain(name: string): MailboxMessage[] {
+  drain(name: string): InboxMessage[] {
     return this.transport.drain(name);
   }
 
   /** Re-queue messages that couldn't be delivered this tick (preserves original identity). */
-  requeue(name: string, msg: MailboxMessage): void {
+  requeue(name: string, msg: InboxMessage): void {
     this.transport.push(name, msg);
   }
 
@@ -64,7 +64,7 @@ export class MessageBus {
   }
 
   /** Non-destructive read of pending messages. */
-  peekMessages(name: string): MailboxMessage[] {
+  peekMessages(name: string): InboxMessage[] {
     return this.transport.peekMessages(name);
   }
 }
