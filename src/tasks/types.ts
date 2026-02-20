@@ -1,3 +1,5 @@
+import type { Priority } from "../types.js";
+
 export type TaskStatus =
   | "backlog"
   | "todo"
@@ -30,6 +32,7 @@ export interface Task {
   title: string;
   description: string;
   status: TaskStatus;
+  priority: Priority;
   assignee: string;
   createdBy: string;
   parentId?: string;
@@ -45,4 +48,5 @@ export interface TaskFilter {
   assignee?: string;
   status?: TaskStatus;
   createdBy?: string;
+  priority?: Priority;
 }

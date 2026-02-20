@@ -216,6 +216,14 @@ export const TASK_CREATE = {
     parentId: Type.Optional(
       Type.String({ description: "Parent task ID for sub-task grouping" }),
     ),
+    priority: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["idle", "low", "normal", "high", "critical"],
+        description:
+          "Task priority (affects notification urgency). Default: normal",
+      }),
+    ),
   }),
 };
 
@@ -223,7 +231,7 @@ export const TASK_UPDATE = {
   name: "task_update" as const,
   label: "Task Update",
   description:
-    "Update a task's status, result, or assignee. Status transitions: backlog→todo, todo→in_progress, in_progress→review/done, review→in_progress/done. Completing a task auto-unblocks dependent tasks.",
+    "Update a task's status, result, assignee, or priority. Status transitions: backlog→todo, todo→in_progress, in_progress→review/done, review→in_progress/done. Completing a task auto-unblocks dependent tasks.",
   parameters: Type.Object({
     id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
     status: Type.Optional(
@@ -248,6 +256,13 @@ export const TASK_UPDATE = {
     assignee: Type.Optional(
       Type.String({ description: "Reassign to another agent" }),
     ),
+    priority: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["idle", "low", "normal", "high", "critical"],
+        description: "Change task priority",
+      }),
+    ),
   }),
 };
 
@@ -255,7 +270,7 @@ export const TASK_LIST = {
   name: "task_list" as const,
   label: "Task List",
   description:
-    "List tasks with optional filters. Returns a summary of each matching task.",
+    "List tasks with optional filters. Returns tasks sorted by priority (highest first).",
   parameters: Type.Object({
     assignee: Type.Optional(
       Type.String({ description: "Filter by assignee agent name" }),
@@ -272,6 +287,13 @@ export const TASK_LIST = {
           "cancelled",
         ],
         description: "Filter by status",
+      }),
+    ),
+    priority: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["idle", "low", "normal", "high", "critical"],
+        description: "Filter by priority",
       }),
     ),
   }),

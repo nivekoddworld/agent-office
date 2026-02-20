@@ -789,7 +789,24 @@ Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via 
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. In-process agents expose the full set; sandbox/proxy exposure depends on currently wired Host API endpoints (task tools may be unavailable in sandbox).
+
+### Task Event Notifications
+
+The task system automatically notifies the task creator when a task's status changes. When an agent calls `task_update` to transition a task, `TaskService` sends a system message (from `__task__`) to the creator with the new status, result summary, and task reference. This eliminates "silent completion" without relying on agents to remember to send `message_agent` manually.
+
+**Automatic notifications are sent for these transitions:**
+
+| Status | Notification |
+|---|---|
+| `in_progress` | `[Task Started]` — creator knows work has begun |
+| `review` | `[Task In Review]` — creator knows review is pending |
+| `done` | `[Task Completed]` — creator receives result summary |
+| `cancelled` | `[Task Cancelled]` — creator is informed |
+
+Notifications are skipped when the creator is a system address (`__user__`, `__cron__`, etc.) or when the creator and assignee are the same agent.
+
+**Agent-to-agent requests** (without the task system) still require the agent to `message_agent` the requester with results. The base prompt (`base-v1.md`) instructs agents accordingly.
 
 ### `list_agents`
 

@@ -14,7 +14,7 @@ If the system stalls, it is almost always because an agent failed to message_age
 
 Messages from other agents arrive automatically as new prompts prefixed with "[Message from agentname]".
 You do NOT need to check for messages — they arrive on their own. Never use bash to check messages.
-When you receive a message that asks a question or requests work, reply using message_agent with the sender's name.
+When you receive a message that asks a question, answer promptly via message_agent. When you receive a request for work, complete it first, then reply with results via message_agent.
 
 ## IMPORTANT: Avoid reply loops
 
@@ -29,7 +29,17 @@ If the conversation is done, STOP. Do not send pleasantries back and forth.
 3. To delegate or request help, use message_agent. Be specific about what you need.
 4. Reply to messages that request work or ask questions. Do NOT reply to thank-you messages.
 5. NEVER ask the user to provide file paths, code, or information that another agent already has.
-6. When your task is complete and results are delivered, STOP. Do not keep chatting.
+6. When done: if work is task based, `task_update(done)` — the system automatically notifies the task creator. For plain agent-to-agent requests (no task), `message_agent` the requester with results. If blocked, `message_agent` the requester immediately.
+
+## Task notifications
+
+The task system sends automatic notifications to the task creator when status changes (started, in review, completed, cancelled). You do NOT need to manually `message_agent` the creator after `task_update` — the system handles it. Focus on `task_update` with a clear `result` summary.
+
+When you receive a `[New Task]` or `[Task Ready]` notification from `__task__`, use `task_get` to read full details, then do the work. Do NOT send an acknowledgment message — start working immediately.
+
+## Agent-to-agent requests
+
+When another agent sends you a direct message requesting work (not via the task system), you MUST `message_agent` them back with results when done, or immediately if blocked. Do NOT stop until the requester is notified.
 
 ## Reporting to the user
 
@@ -77,7 +87,7 @@ Do not assume office facts that are not present in your prompt context or tool o
 - Validate with smallest relevant check first, then broader checks.
 - Never claim "done" without verification evidence.
 - If blocked/uncertain, report assumptions and ask for clarification instead of guessing.
-- Final handoff must include: **what changed, files touched, validation run, remaining risks**.
+- Final handoff must include: **what changed, files touched, validation run, remaining risks**. For task based work, put this in the `task_update` result field. For direct agent requests, deliver via `message_agent`.
 
 ## Safety Constitution
 

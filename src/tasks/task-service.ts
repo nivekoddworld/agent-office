@@ -23,12 +23,14 @@ export interface CreateTaskParams {
   assignee: string;
   dependsOn?: string[];
   parentId?: string;
+  priority: Priority;
 }
 
 export interface UpdateTaskParams {
   status?: TaskStatus;
   result?: string;
   assignee?: string;
+  priority?: Priority;
 }
 
 export class TaskService {
@@ -98,6 +100,7 @@ export class TaskService {
       title: params.title.trim(),
       description: (params.description ?? "").trim(),
       status: initialStatus,
+      priority: params.priority,
       assignee: params.assignee,
       createdBy,
       parentId: params.parentId,
@@ -159,6 +162,7 @@ export class TaskService {
     if (params.status) task.status = params.status;
     if (params.result !== undefined) task.result = params.result;
     if (params.assignee) task.assignee = params.assignee;
+    if (params.priority !== undefined) task.priority = params.priority;
     task.updatedAt = now;
 
     if (
@@ -190,6 +194,10 @@ export class TaskService {
       },
     });
 
+    if (params.status && params.status !== oldStatus) {
+      this.notifyCreator(task, oldStatus);
+    }
+
     if (task.status === "done" && oldStatus !== "done") {
       this.resolveDependencies(task.id);
     }
@@ -215,8 +223,13 @@ export class TaskService {
     if (filter?.createdBy) {
       result = result.filter((t) => t.createdBy === filter.createdBy);
     }
+    if (filter?.priority !== undefined) {
+      result = result.filter((t) => t.priority === filter.priority);
+    }
 
-    return result.sort((a, b) => b.updatedAt - a.updatedAt);
+    return result.sort(
+      (a, b) => b.priority - a.priority || b.updatedAt - a.updatedAt,
+    );
   }
 
   /** Get all tasks grouped by status (for Kanban board). */
@@ -233,7 +246,9 @@ export class TaskService {
       board[task.status].push(task);
     }
     for (const status of Object.keys(board) as TaskStatus[]) {
-      board[status].sort((a, b) => b.updatedAt - a.updatedAt);
+      board[status].sort(
+        (a, b) => b.priority - a.priority || b.updatedAt - a.updatedAt,
+      );
     }
     return board;
   }
@@ -270,6 +285,39 @@ export class TaskService {
     this.persist();
   }
 
+  private notifyCreator(task: Task, oldStatus: TaskStatus): void {
+    if (task.createdBy.startsWith("__")) return;
+    if (task.createdBy === task.assignee) return;
+
+    const labels: Partial<Record<TaskStatus, string>> = {
+      in_progress: "[Task Started]",
+      review: "[Task In Review]",
+      done: "[Task Completed]",
+      cancelled: "[Task Cancelled]",
+    };
+    const label = labels[task.status];
+    if (!label) return;
+
+    const resultLine = task.result ? `\nResult: ${task.result}` : "";
+    const payload =
+      `${label} #${task.id}: ${task.title}\n` +
+      `Assignee: ${task.assignee}\n` +
+      `Status: ${oldStatus} \u2192 ${task.status}${resultLine}\n` +
+      `Use task_get("${task.id}") for full details.`;
+
+    try {
+      this.bus.send({
+        from: "__task__",
+        to: task.createdBy,
+        type: "prompt",
+        payload,
+        priority: task.priority,
+      });
+    } catch {
+      // Best-effort: creator agent might not be registered
+    }
+  }
+
   private notifyAssignee(task: Task, reason: "new" | "ready"): void {
     const prefix =
       reason === "new" ? "[New Task]" : "[Task Ready]";
@@ -292,7 +340,7 @@ export class TaskService {
         to: task.assignee,
         type: "prompt",
         payload,
-        priority: Priority.NORMAL,
+        priority: task.priority,
       });
     } catch {
       // Best-effort: agent might not be registered yet

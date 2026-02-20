@@ -37,4 +37,11 @@ describe("buildDefaultPrompt", () => {
     const prompt = buildDefaultPrompt("designer", "/tmp/ws");
     expect(prompt).toContain("Reporting to the user");
   });
+
+  it("includes task and agent-to-agent notification rules", () => {
+    const prompt = buildDefaultPrompt("designer", "/tmp/ws");
+    expect(prompt).toContain("Task notifications");
+    expect(prompt).toContain("system automatically notifies the task creator");
+    expect(prompt).toContain("Agent-to-agent requests");
+  });
 });

@@ -1,6 +1,7 @@
 import { Box, Text, Group, Tooltip } from "@mantine/core";
 import { IconArrowRight, IconLink } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
+import { PriorityBadge } from "../shared/PriorityBadge.js";
 import type { Task } from "../../api/types.js";
 
 interface TaskCardProps {
@@ -27,9 +28,12 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         e.currentTarget.style.backgroundColor = slack.messageBg;
       }}
     >
-      <Text size="xs" c="dimmed" ff="monospace" mb={4}>
-        {task.id}
-      </Text>
+      <Group gap={6} mb={4}>
+        <Text size="xs" c="dimmed" ff="monospace">
+          {task.id}
+        </Text>
+        {task.priority !== 2 && <PriorityBadge priority={task.priority} />}
+      </Group>
       <Text size="sm" fw={600} style={{ color: slack.textPrimary }} lineClamp={2}>
         {task.title}
       </Text>

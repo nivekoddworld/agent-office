@@ -16,6 +16,14 @@ describe("composeSystemPrompt", () => {
     expect(text).toContain("Avoid reply loops");
   });
 
+  it("includes task and agent-to-agent notification rules", () => {
+    const { text } = composeSystemPrompt(BASE_CTX);
+    expect(text).toContain("Task notifications");
+    expect(text).toContain("system automatically notifies the task creator");
+    expect(text).toContain("__task__");
+    expect(text).toContain("Agent-to-agent requests");
+  });
+
   it("includes base prompt even with custom prompt", () => {
     const { text } = composeSystemPrompt({
       ...BASE_CTX,
@@ -420,6 +428,14 @@ describe("buildBasePrompt", () => {
     expect(base).toContain("Operating Context Awareness");
     expect(base).toContain("You operate as an agent inside an office");
     expect(base).toContain("Do not assume office facts");
+  });
+
+  it("contains task notification and agent-to-agent rules", () => {
+    const base = buildBasePrompt();
+    expect(base).toContain("Task notifications");
+    expect(base).toContain("system automatically notifies the task creator");
+    expect(base).toContain("Do NOT send an acknowledgment message");
+    expect(base).toContain("Agent-to-agent requests");
   });
 
   it("contains instruction precedence hierarchy", () => {

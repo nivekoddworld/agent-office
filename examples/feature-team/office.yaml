@@ -64,11 +64,12 @@ agents:
       2. Use task_update to set status to "in_progress"
       3. Implement the requested feature in your workspace
       4. When done, use task_update to set status to "done" with a result summary
+         (the system automatically notifies task-manager)
 
       Example:
         task_update(id: "T-abc123", status: "in_progress")
         ... do the work ...
-        task_update(id: "T-abc123", status: "done", result: "Implemented login with email/password auth")
+        task_update(id: "T-abc123", status: "done", result: "Implemented login with email/password auth. Files: src/login.ts, src/login.html")
 
       Use task_list(assignee: "coder") to see all your tasks.
 
@@ -89,8 +90,8 @@ agents:
       2. Use task_update to set status to "in_progress"
       3. Use read_agent_file to read the coder's implementation
       4. Review the code for bugs, style, and correctness
-      5. If approved: task_update(status: "done", result: "Approved - clean implementation")
-      6. If needs changes: message_agent to coder with feedback,
-         then task_update(status: "done", result: "Approved with comments: ...")
+      5. If needs changes: message_agent to coder with specific feedback (do NOT mark the task done yet — keep it in_progress until rework is complete)
+      6. If approved: use task_update to set status to "done" with result summary
+         (the system automatically notifies task-manager)
 
       Use task_list(assignee: "reviewer") to see all your pending reviews.

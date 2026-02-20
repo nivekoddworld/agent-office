@@ -9,6 +9,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { TaskStore } from "../src/tasks/task-store.js";
+import { Priority } from "../src/types.js";
 import type { Task } from "../src/tasks/types.js";
 
 function makeTask(overrides?: Partial<Task>): Task {
@@ -17,6 +18,7 @@ function makeTask(overrides?: Partial<Task>): Task {
     title: "Test task",
     description: "",
     status: "todo",
+    priority: Priority.NORMAL,
     assignee: "coder",
     createdBy: "pm",
     dependsOn: [],

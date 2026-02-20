@@ -8,6 +8,7 @@ import {
   Box,
 } from "@mantine/core";
 import { slack } from "../../theme/slack-theme.js";
+import { PriorityBadge } from "../shared/PriorityBadge.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
@@ -50,13 +51,16 @@ export function TaskDetailModal({ task, opened, onClose }: TaskDetailModalProps)
       }}
     >
       <Stack gap="md">
-        <Badge
-          size="lg"
-          variant="filled"
-          style={{ backgroundColor: STATUS_COLORS[task.status], alignSelf: "flex-start" }}
-        >
-          {task.status.replace("_", " ")}
-        </Badge>
+        <Group gap={8}>
+          <Badge
+            size="lg"
+            variant="filled"
+            style={{ backgroundColor: STATUS_COLORS[task.status] }}
+          >
+            {task.status.replace("_", " ")}
+          </Badge>
+          <PriorityBadge priority={task.priority} />
+        </Group>
 
         <Divider color={slack.borderColor} />
 

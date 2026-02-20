@@ -1,9 +1,37 @@
 import type { TaskService } from "../../tasks/task-service.js";
 import type { Task, TaskStatus } from "../../tasks/types.js";
+import { Priority } from "../../types.js";
 
 export interface TaskToolDeps {
   agentName: string;
   taskService: TaskService | null;
+}
+
+const PRIORITY_MAP: Record<string, Priority> = {
+  idle: Priority.IDLE,
+  low: Priority.LOW,
+  normal: Priority.NORMAL,
+  high: Priority.HIGH,
+  critical: Priority.CRITICAL,
+};
+
+const PRIORITY_LABELS: Record<number, string> = {
+  [Priority.IDLE]: "idle",
+  [Priority.LOW]: "low",
+  [Priority.NORMAL]: "normal",
+  [Priority.HIGH]: "high",
+  [Priority.CRITICAL]: "critical",
+};
+
+function parsePriority(value?: string): Priority | undefined {
+  if (!value) return undefined;
+  const p = PRIORITY_MAP[value.toLowerCase()];
+  if (p === undefined) return undefined;
+  return p;
+}
+
+function priorityLabel(p: Priority): string {
+  return PRIORITY_LABELS[p] ?? "normal";
 }
 
 // --- task_create ---
@@ -14,6 +42,7 @@ interface TaskCreateParams {
   assignee: string;
   dependsOn?: string[];
   parentId?: string;
+  priority?: string;
 }
 
 export function taskCreateImpl(
@@ -22,12 +51,18 @@ export function taskCreateImpl(
 ): string {
   if (!deps.taskService) return "Error: task service not initialized";
 
+  const priority = parsePriority(params.priority) ?? Priority.NORMAL;
+  if (params.priority && !(params.priority.toLowerCase() in PRIORITY_MAP)) {
+    return `Error: invalid priority "${params.priority}". Use: idle, low, normal, high, critical`;
+  }
+
   const result = deps.taskService.create(deps.agentName, {
     title: params.title,
     description: params.description,
     assignee: params.assignee,
     dependsOn: params.dependsOn,
     parentId: params.parentId,
+    priority,
   });
 
   if (typeof result === "string") return result;
@@ -36,7 +71,8 @@ export function taskCreateImpl(
     result.dependsOn.length > 0
       ? ` (blocked by: ${result.dependsOn.join(", ")})`
       : "";
-  return `Task created: #${result.id} "${result.title}" → ${result.assignee} [${result.status}]${depInfo}`;
+  const pLabel = priorityLabel(result.priority);
+  return `Task created: #${result.id} "${result.title}" → ${result.assignee} [${result.status}] [${pLabel}]${depInfo}`;
 }
 
 // --- task_update ---
@@ -46,6 +82,7 @@ interface TaskUpdateParams {
   status?: string;
   result?: string;
   assignee?: string;
+  priority?: string;
 }
 
 export function taskUpdateImpl(
@@ -55,18 +92,24 @@ export function taskUpdateImpl(
   if (!deps.taskService) return "Error: task service not initialized";
 
   if (!params.id) return "Error: task id is required";
-  if (!params.status && !params.result && !params.assignee) {
-    return "Error: at least one field (status, result, assignee) must be provided";
+  if (!params.status && !params.result && !params.assignee && !params.priority) {
+    return "Error: at least one field (status, result, assignee, priority) must be provided";
+  }
+
+  const priority = parsePriority(params.priority);
+  if (params.priority && priority === undefined) {
+    return `Error: invalid priority "${params.priority}". Use: idle, low, normal, high, critical`;
   }
 
   const result = deps.taskService.update(deps.agentName, params.id, {
     status: params.status as TaskStatus | undefined,
     result: params.result,
     assignee: params.assignee,
+    priority,
   });
 
   if (typeof result === "string") return result;
-  return `Task #${result.id} updated: [${result.status}]${result.result ? ` — ${result.result}` : ""}`;
+  return `Task #${result.id} updated: [${result.status}] [${priorityLabel(result.priority)}]${result.result ? ` — ${result.result}` : ""}`;
 }
 
 // --- task_list ---
@@ -74,6 +117,7 @@ export function taskUpdateImpl(
 interface TaskListParams {
   assignee?: string;
   status?: string;
+  priority?: string;
 }
 
 export function taskListImpl(
@@ -82,17 +126,21 @@ export function taskListImpl(
 ): string {
   if (!deps.taskService) return "Error: task service not initialized";
 
+  const priority = parsePriority(params.priority);
+
   const tasks = deps.taskService.list({
     assignee: params.assignee,
     status: params.status as TaskStatus | undefined,
+    priority,
   });
 
   if (tasks.length === 0) return "No tasks found.";
 
   return tasks
     .map((t: Task) => {
-      const deps = t.dependsOn.length > 0 ? ` deps:[${t.dependsOn.join(",")}]` : "";
-      return `#${t.id} [${t.status}] → ${t.assignee}: ${t.title}${deps}`;
+      const taskDeps = t.dependsOn.length > 0 ? ` deps:[${t.dependsOn.join(",")}]` : "";
+      const pTag = t.priority !== Priority.NORMAL ? ` [${priorityLabel(t.priority)}]` : "";
+      return `#${t.id} [${t.status}]${pTag} → ${t.assignee}: ${t.title}${taskDeps}`;
     })
     .join("\n");
 }
@@ -117,6 +165,7 @@ export function taskGetImpl(
     `# Task #${task.id}`,
     `Title: ${task.title}`,
     `Status: ${task.status}`,
+    `Priority: ${priorityLabel(task.priority)}`,
     `Assignee: ${task.assignee}`,
     `Created by: ${task.createdBy}`,
     `Created: ${new Date(task.createdAt).toISOString()}`,

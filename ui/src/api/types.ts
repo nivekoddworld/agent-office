@@ -51,6 +51,7 @@ export interface Task {
   title: string;
   description: string;
   status: TaskStatus;
+  priority: number;
   assignee: string;
   createdBy: string;
   parentId?: string;
