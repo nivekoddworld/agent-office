@@ -78,7 +78,8 @@ function createThreadStore() {
     const threadId = state.activeThreadByAgent[agentName];
     if (!threadId) return;
 
-    const { [agentName]: _, ...rest } = state.activeThreadByAgent;
+    const { [agentName]: _removed, ...rest } = state.activeThreadByAgent;
+    void _removed;
     state = {
       activeThreadByAgent: rest,
       threads: state.threads.map((t) =>

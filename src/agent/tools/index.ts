@@ -8,3 +8,7 @@ export { createCronAddTool } from "./cron-add.js";
 export { createCronRemoveTool } from "./cron-remove.js";
 export { createCronListTool } from "./cron-list.js";
 export { createReadSkillTool } from "./read-skill.js";
+export { createTaskCreateTool } from "./task-create.js";
+export { createTaskUpdateTool } from "./task-update.js";
+export { createTaskListTool } from "./task-list.js";
+export { createTaskGetTool } from "./task-get.js";

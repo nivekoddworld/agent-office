@@ -11,6 +11,7 @@ import {
   ScrollArea,
 } from "@mantine/core";
 import { IconAt, IconSend2 } from "@tabler/icons-react";
+import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
 import { apiFetch } from "../../api/client.js";
 
@@ -37,7 +38,13 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
     apiFetch("/api/send", {
       method: "POST",
       body: JSON.stringify({ agent: selectedTarget, message: content }),
-    }).catch(() => {});
+    }).catch((err) => {
+      notifications.show({
+        title: "Message failed",
+        message: err instanceof Error ? err.message : "Failed to send message",
+        color: "red",
+      });
+    });
     onMessageSent?.(selectedTarget, content);
     setText("");
   }, [text, selectedTarget, onMessageSent]);

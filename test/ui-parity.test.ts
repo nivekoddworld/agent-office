@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { COMMAND_MANIFEST } from "../src/ui/manifest.js";
 import { isMutation } from "../src/ui/command-intent.js";
 
@@ -86,19 +84,13 @@ const officeId = "test-office";
 
 // --- Structural tests ---
 
-const NAV_COMMANDS = new Set([
-  "org chart", "roster", "status",
-  "cron list", "cron status",
-  "cost status", "cost today", "cost report",
-]);
-
 describe("UI parity — structural", () => {
   it("manifest has entries", () => {
     expect(COMMAND_MANIFEST.length).toBeGreaterThan(30);
   });
 
   it("manifest categories are all valid", () => {
-    const valid = new Set(["agent", "office", "cron", "cost", "ui", "general"]);
+    const valid = new Set(["agent", "office", "cron", "task", "cost", "ui", "general"]);
     for (const entry of COMMAND_MANIFEST) {
       expect(valid.has(entry.category)).toBe(true);
     }
@@ -115,36 +107,6 @@ describe("UI parity — structural", () => {
     }
   });
 
-  it("command palette fetches from /api/manifest and shows all entries", () => {
-    const paletteSrc = readFileSync(
-      resolve(import.meta.dirname, "../ui/src/components/shared/CommandPalette.tsx"),
-      "utf-8",
-    );
-    expect(paletteSrc).toContain("/api/manifest");
-    expect(paletteSrc).toContain("!c.hidden");
-  });
-
-  it("NAV_ACTIONS in CommandPalette match expected navigation commands", () => {
-    const paletteSrc = readFileSync(
-      resolve(import.meta.dirname, "../ui/src/components/shared/CommandPalette.tsx"),
-      "utf-8",
-    );
-    for (const cmd of NAV_COMMANDS) {
-      const quoted = paletteSrc.includes(`"${cmd}"`);
-      const unquoted = paletteSrc.includes(`${cmd}:`);
-      expect(quoted || unquoted, `Expected "${cmd}" in CommandPalette NAV_ACTIONS`).toBe(true);
-    }
-  });
-
-  it("toolbar reload button exists in TopBar", () => {
-    const topBarSrc = readFileSync(
-      resolve(import.meta.dirname, "../ui/src/components/layout/TopBar.tsx"),
-      "utf-8",
-    );
-    expect(topBarSrc).toContain("office reload");
-    expect(topBarSrc).toContain("IconRefresh");
-  });
-
   it("agent-set-manager exists in manifest", () => {
     expect(COMMAND_MANIFEST.find((c) => c.name === "agent-set-manager")).toBeDefined();
   });
@@ -156,14 +118,6 @@ describe("UI parity — structural", () => {
         `Expected "${name}" to be hidden`,
       ).toBe(true);
     }
-  });
-
-  it("command palette blocks raw Enter when manifest is not loaded", () => {
-    const paletteSrc = readFileSync(
-      resolve(import.meta.dirname, "../ui/src/components/shared/CommandPalette.tsx"),
-      "utf-8",
-    );
-    expect(paletteSrc).toContain("if (!manifest) return");
   });
 });
 

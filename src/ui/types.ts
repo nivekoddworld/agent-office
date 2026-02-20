@@ -1,5 +1,6 @@
 import type { AgentInfo, SchedulerState } from "../types.js";
 import type { CronJobEntry } from "../cron/types.js";
+import type { Task } from "../tasks/types.js";
 import type { AgentHierarchy } from "../config/hierarchy.js";
 
 // --- Bootstrap / State ---
@@ -9,6 +10,7 @@ export interface BootstrapState {
   scheduler: SchedulerState;
   hierarchy: Record<string, AgentHierarchy>;
   cronJobs: CronJobEntry[];
+  tasks: Task[];
   officeId: string;
   officeName: string;
 }
@@ -74,6 +76,7 @@ export type CommandCategory =
   | "agent"
   | "office"
   | "cron"
+  | "task"
   | "cost"
   | "ui"
   | "general";

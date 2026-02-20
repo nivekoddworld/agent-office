@@ -116,6 +116,7 @@ export function getBootstrapState(
     scheduler: workspace.scheduler.state(),
     hierarchy: Object.fromEntries(hierarchy),
     cronJobs: workspace.cron.listJobs(),
+    tasks: workspace.tasks.list(),
     officeId,
     officeName: workspace.office.name,
   };

@@ -90,6 +90,13 @@ export function ChannelView({
 
   const channelKey = channel.kind === "dm" ? `dm:${channel.agentName}` : `ch:${channel.name}`;
 
+  useEffect(() => {
+    setDmTab("messages");
+    setStickToBottom(true);
+    setUnseenCount(0);
+    lastCountRef.current = 0;
+  }, [channelKey]);
+
   const messages = useMemo(
     () => eventToMessages(events, channel),
     // eslint-disable-next-line react-hooks/exhaustive-deps

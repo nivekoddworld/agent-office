@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { parseDocument, isSeq, stringify } from "yaml";
+import { parseDocument, stringify } from "yaml";
 import {
   officeDir,
   officeYamlPath,
@@ -16,10 +16,6 @@ import {
   validateAgentEntry,
   validateOfficeCronEntry,
   atomicWriteYaml,
-  buildYamlEntry,
-  ENV_REF_RE,
-  ENV_KEY_RE,
-  RESERVED_KEYS,
 } from "./yaml-utils.js";
 import type { OfficeCronYamlEntry } from "../types.js";
 import { describeCron } from "../cron/cron-parser.js";
@@ -134,6 +130,13 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       )
     : {};
 
+  if (office.task_manager !== undefined) {
+    console.error(
+      `[office] "office.task_manager" is no longer supported — task tools are available to all in-process agents by default. Define a task-manager as a regular agent instead. Remove the task_manager section from office.yaml.`,
+    );
+    return null;
+  }
+
   return {
     office: {
       name: office.name as string,
@@ -164,8 +167,9 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
     }
   }
   // Hierarchy validation: unknown manager refs
+  const knownNames = agentNames;
   for (const [name, entry] of Object.entries(config.agents)) {
-    if (entry.reports_to && !agentNames.includes(entry.reports_to)) {
+    if (entry.reports_to && !knownNames.includes(entry.reports_to)) {
       errors.push(
         `[hierarchy] Agent "${name}": reports_to references unknown agent "${entry.reports_to}"`,
       );
@@ -198,6 +202,7 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
       );
     }
   }
+
   return errors;
 }
 
@@ -233,64 +238,6 @@ export function mergeEnvAndSecrets(
 }
 
 // --- Mutations ---
-
-export async function upsertAgentToOfficeYaml(
-  officeId: string,
-  name: string,
-  entry: AgentYamlEntry,
-  rawSecrets?: Record<string, string>,
-): Promise<void> {
-  if (rawSecrets) {
-    for (const [key, value] of Object.entries(rawSecrets)) {
-      if (!ENV_REF_RE.test(value))
-        throw new Error(
-          `Resolved secret value passed to YAML writer for key "${key}"`,
-        );
-    }
-  }
-
-  return withOfficeLock(officeId, async () => {
-    const path = officeYamlPath(officeId);
-    if (!existsSync(path)) return;
-
-    const raw = readFileSync(path, "utf-8");
-    const doc = parseDocument(raw);
-    const clean = buildYamlEntry(entry, rawSecrets);
-
-    const existing = doc.getIn(["agents", name]);
-    if (existing && typeof existing === "object") {
-      for (const [key, value] of Object.entries(clean)) {
-        doc.setIn(["agents", name, key], value);
-      }
-      for (const key of [
-        "model",
-        "priority",
-        "thinking",
-        "description",
-        "prompt_inline",
-        "prompt_file",
-        "bootstrap_dir",
-        "cwd",
-        "skills",
-        "api_key_ref",
-        "env",
-        "secrets",
-        "disclose_secrets",
-        "cron",
-        "permissions",
-        "prompt_mode",
-        "on_demand_skills",
-        "reports_to",
-      ]) {
-        if (!(key in clean)) doc.deleteIn(["agents", name, key]);
-      }
-    } else {
-      doc.setIn(["agents", name], clean);
-    }
-
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
 
 export async function removeAgentFromOfficeYaml(
   officeId: string,
@@ -350,184 +297,18 @@ export async function setAgentManager(
   });
 }
 
-// --- Per-agent env/secret/prompt mutations ---
+// --- Re-export per-agent mutations from dedicated module ---
 
-function requireOfficeDoc(officeId: string): {
-  path: string;
-  doc: ReturnType<typeof parseDocument>;
-} {
-  const path = officeYamlPath(officeId);
-  if (!existsSync(path))
-    throw new Error(`office.yaml not found for "${officeId}"`);
-  return { path, doc: parseDocument(readFileSync(path, "utf-8")) };
-}
-
-function validateEnvKey(key: string, section: string): void {
-  if (!ENV_KEY_RE.test(key))
-    throw new Error(
-      `Invalid ${section} key "${key}" — must match [A-Z_][A-Z0-9_]*`,
-    );
-  if (RESERVED_KEYS.has(key))
-    throw new Error(`Reserved key "${key}" — used internally`);
-}
-
-function getMapKeys(
-  doc: ReturnType<typeof parseDocument>,
-  path: string[],
-): Set<string> {
-  const node = doc.getIn(path);
-  if (!node || typeof node !== "object") return new Set();
-  const js = (node as any).toJSON?.() ?? node;
-  return new Set(Object.keys(js));
-}
-
-function cleanupEmptyMap(
-  doc: ReturnType<typeof parseDocument>,
-  path: string[],
-): void {
-  const node = doc.getIn(path);
-  if (!node || typeof node !== "object") return;
-  const js = (node as any).toJSON?.() ?? node;
-  if (Object.keys(js).length === 0) doc.deleteIn(path);
-}
-
-export async function setAgentEnv(
-  officeId: string,
-  agentName: string,
-  key: string,
-  value: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    validateEnvKey(key, "env");
-    if (getMapKeys(doc, ["agents", agentName, "secrets"]).has(key)) {
-      throw new Error(
-        `Key "${key}" already exists in secrets — unset it first`,
-      );
-    }
-    doc.setIn(["agents", agentName, "env", key], value);
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function unsetAgentEnv(
-  officeId: string,
-  agentName: string,
-  key: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (!doc.getIn(["agents", agentName, "env", key]))
-      throw new Error(`Env key "${key}" not found for agent "${agentName}"`);
-    doc.deleteIn(["agents", agentName, "env", key]);
-    cleanupEmptyMap(doc, ["agents", agentName, "env"]);
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function setAgentSecretRef(
-  officeId: string,
-  agentName: string,
-  key: string,
-  hostEnvName: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    validateEnvKey(key, "secrets");
-    if (!ENV_KEY_RE.test(hostEnvName))
-      throw new Error(
-        `Invalid host env name "${hostEnvName}" — must match [A-Z_][A-Z0-9_]*`,
-      );
-    if (getMapKeys(doc, ["agents", agentName, "env"]).has(key)) {
-      throw new Error(`Key "${key}" already exists in env — unset it first`);
-    }
-    doc.setIn(["agents", agentName, "secrets", key], `\${${hostEnvName}}`);
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function unsetAgentSecretRef(
-  officeId: string,
-  agentName: string,
-  key: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (!doc.getIn(["agents", agentName, "secrets", key]))
-      throw new Error(`Secret key "${key}" not found for agent "${agentName}"`);
-    doc.deleteIn(["agents", agentName, "secrets", key]);
-    cleanupEmptyMap(doc, ["agents", agentName, "secrets"]);
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function setAgentPrompt(
-  officeId: string,
-  agentName: string,
-  text: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    doc.setIn(["agents", agentName, "prompt_inline"], text);
-    doc.deleteIn(["agents", agentName, "prompt_file"]);
-    doc.deleteIn(["agents", agentName, "prompt"]); // remove legacy key
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function appendAgentPrompt(
-  officeId: string,
-  agentName: string,
-  text: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (doc.getIn(["agents", agentName, "prompt_file"])) {
-      throw new Error(
-        `Agent "${agentName}" uses prompt_file. Edit the file directly.`,
-      );
-    }
-    // Read from prompt_inline, falling back to legacy prompt for migration
-    const existing =
-      (doc.getIn(["agents", agentName, "prompt_inline"]) as string | undefined) ??
-      (doc.getIn(["agents", agentName, "prompt"]) as string | undefined);
-    const merged = existing ? `${existing}\n\n${text}` : text;
-    doc.setIn(["agents", agentName, "prompt_inline"], merged);
-    doc.deleteIn(["agents", agentName, "prompt"]); // remove legacy key
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-/**
- * Clears all prompt configuration. If the agent uses `prompt_file`, the
- * reference is removed but the file itself is preserved on disk.
- */
-export async function clearAgentPrompt(
-  officeId: string,
-  agentName: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    doc.deleteIn(["agents", agentName, "prompt_inline"]);
-    doc.deleteIn(["agents", agentName, "prompt_file"]);
-    doc.deleteIn(["agents", agentName, "prompt"]); // remove legacy key
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
+export {
+  upsertAgentToOfficeYaml,
+  setAgentEnv,
+  unsetAgentEnv,
+  setAgentSecretRef,
+  unsetAgentSecretRef,
+  setAgentPrompt,
+  appendAgentPrompt,
+  clearAgentPrompt,
+} from "./office-yaml-mutations.js";
 
 export function resolveCwd(
   officeId: string,
@@ -538,43 +319,6 @@ export function resolveCwd(
   if (cwd.startsWith("~/")) return join(homedir(), cwd.slice(2));
   if (cwd.startsWith("/")) return cwd;
   return resolve(officeDir(officeId), cwd);
-}
-
-// --- Skill mutations ---
-
-/** Lock-free internal version — caller must already hold withOfficeLock. */
-export function addSkillToOfficeYamlSync(
-  officeId: string,
-  agentName: string,
-  source: string,
-): void {
-  const path = officeYamlPath(officeId);
-  if (!existsSync(path)) return;
-
-  const raw = readFileSync(path, "utf-8");
-  const doc = parseDocument(raw);
-
-  if (!doc.getIn(["agents", agentName])) return;
-  const skillsNode = doc.getIn(["agents", agentName, "skills"]);
-  if (!skillsNode) {
-    doc.setIn(["agents", agentName, "skills"], [source]);
-  } else if (isSeq(skillsNode)) {
-    const items = skillsNode.items.map((n) => (n as any).value ?? String(n));
-    if (items.includes(source)) return;
-    skillsNode.add(source);
-  }
-
-  atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-}
-
-export async function addSkillToOfficeYaml(
-  officeId: string,
-  agentName: string,
-  source: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () =>
-    addSkillToOfficeYamlSync(officeId, agentName, source),
-  );
 }
 
 // --- Cron summaries for prompt composition ---
@@ -595,102 +339,15 @@ export function getCronSummaries(
   return summaries;
 }
 
-/** Lock-free internal version — caller must already hold withOfficeLock. */
-export function removeSkillFromOfficeYamlSync(
-  officeId: string,
-  agentName: string,
-  source: string,
-): void {
-  const path = officeYamlPath(officeId);
-  if (!existsSync(path)) return;
+// --- Re-export skill & permission mutations from dedicated module ---
 
-  const raw = readFileSync(path, "utf-8");
-  const doc = parseDocument(raw);
-
-  const skillsNode = doc.getIn(["agents", agentName, "skills"]);
-  if (!isSeq(skillsNode)) return;
-
-  const items = skillsNode.items.map((n) => (n as any).value ?? String(n));
-  const idx = items.indexOf(source);
-  if (idx === -1) return;
-
-  skillsNode.items.splice(idx, 1);
-  atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-}
-
-export async function removeSkillFromOfficeYaml(
-  officeId: string,
-  agentName: string,
-  source: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () =>
-    removeSkillFromOfficeYamlSync(officeId, agentName, source),
-  );
-}
-
-// --- Permission mutations ---
-
-export async function setAgentPermissionOfficeCron(
-  officeId: string,
-  agentName: string,
-  enabled: boolean,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    doc.setIn(["agents", agentName, "permissions", "office_cron"], enabled);
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function clearAgentPermissionOfficeCron(
-  officeId: string,
-  agentName: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (doc.getIn(["agents", agentName, "permissions", "office_cron"]) !== undefined) {
-      doc.deleteIn(["agents", agentName, "permissions", "office_cron"]);
-      cleanupEmptyMap(doc, ["agents", agentName, "permissions"]);
-    }
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function setAgentPermissionTools(
-  officeId: string,
-  agentName: string,
-  mode: "allow" | "deny",
-  tools: string[],
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    const opposite = mode === "allow" ? "deny" : "allow";
-    if (doc.getIn(["agents", agentName, "permissions", "tools", opposite]) !== undefined) {
-      doc.deleteIn(["agents", agentName, "permissions", "tools", opposite]);
-    }
-    doc.setIn(["agents", agentName, "permissions", "tools", mode], tools);
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function clearAgentPermissionTools(
-  officeId: string,
-  agentName: string,
-): Promise<void> {
-  return withOfficeLock(officeId, async () => {
-    const { path, doc } = requireOfficeDoc(officeId);
-    if (!doc.getIn(["agents", agentName]))
-      throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (doc.getIn(["agents", agentName, "permissions", "tools"]) !== undefined) {
-      doc.deleteIn(["agents", agentName, "permissions", "tools"]);
-      cleanupEmptyMap(doc, ["agents", agentName, "permissions"]);
-    }
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
+export {
+  addSkillToOfficeYamlSync,
+  addSkillToOfficeYaml,
+  removeSkillFromOfficeYamlSync,
+  removeSkillFromOfficeYaml,
+  setAgentPermissionOfficeCron,
+  clearAgentPermissionOfficeCron,
+  setAgentPermissionTools,
+  clearAgentPermissionTools,
+} from "./office-yaml-mutations.js";

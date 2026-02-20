@@ -6,6 +6,7 @@ import {
   IconSettings,
   IconPlayerPlay,
   IconPlayerPause,
+  IconLayoutKanban,
 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { SidebarSection } from "./SidebarSection.js";
@@ -146,6 +147,16 @@ export function SlackSidebar({
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
         <Box py={6}>
+          {/* Tasks — top-level item above channels */}
+          <Box px="xs" mb={4}>
+            <SidebarItem
+              icon={<IconLayoutKanban size={15} color={slack.accentBlue} />}
+              label="Tasks"
+              active={isActive(activeChannel, { kind: "channel", name: "tasks" })}
+              onClick={() => onSelectChannel({ kind: "channel", name: "tasks" })}
+            />
+          </Box>
+
           {/* Channels */}
           <SidebarSection label="Channels">
             <SidebarItem

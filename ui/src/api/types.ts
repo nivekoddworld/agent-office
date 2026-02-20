@@ -38,11 +38,36 @@ export interface CronJobEntry {
   targets?: string[];
 }
 
+export type TaskStatus =
+  | "backlog"
+  | "todo"
+  | "in_progress"
+  | "review"
+  | "done"
+  | "cancelled";
+
+export interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: TaskStatus;
+  assignee: string;
+  createdBy: string;
+  parentId?: string;
+  dependsOn: string[];
+  createdAt: number;
+  updatedAt: number;
+  startedAt?: number;
+  completedAt?: number;
+  result?: string;
+}
+
 export interface BootstrapState {
   agents: AgentInfo[];
   scheduler: SchedulerState;
   hierarchy: Record<string, AgentHierarchy>;
   cronJobs: CronJobEntry[];
+  tasks: Task[];
   officeId: string;
   officeName: string;
 }
@@ -115,6 +140,7 @@ export type CommandCategory =
   | "agent"
   | "office"
   | "cron"
+  | "task"
   | "cost"
   | "ui"
   | "general";

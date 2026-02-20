@@ -1,4 +1,4 @@
-import type { CommandEntry } from "./types.js";
+import type { CommandEntry, CommandCategory } from "./types.js";
 
 /**
  * Single source of truth for all REPL commands.
@@ -227,6 +227,25 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
     args: "<job>",
   },
 
+  // --- Tasks ---
+  {
+    name: "task list",
+    description: "List tasks with optional filters",
+    category: "task" as CommandCategory,
+    args: "[--assignee <agent>] [--status <status>]",
+  },
+  {
+    name: "task board",
+    description: "Show Kanban board view of all tasks",
+    category: "task" as CommandCategory,
+  },
+  {
+    name: "task get",
+    description: "Show task details",
+    category: "task" as CommandCategory,
+    args: "<id>",
+  },
+
   // --- Prompt ---
   {
     name: "prompt report",
@@ -291,7 +310,7 @@ export function formatHelpText(): string {
     list.push(c);
     groups.set(c.category, list);
   }
-  const order = ["agent", "office", "cron", "cost", "ui", "general"];
+  const order = ["agent", "office", "cron", "task", "cost", "ui", "general"];
   const lines: string[] = ["Commands:"];
   for (const cat of order) {
     const entries = groups.get(cat);

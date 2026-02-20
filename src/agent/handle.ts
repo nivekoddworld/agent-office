@@ -2,17 +2,13 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
-  Agent,
   type AgentEvent,
-  type AgentTool,
+  type Agent,
 } from "@mariozechner/pi-agent-core";
 import {
-  createCodingTools,
   loadSkills,
   formatSkillsForPrompt,
 } from "@mariozechner/pi-coding-agent";
-import { streamSimple } from "@mariozechner/pi-ai";
-import { writeEffectivePrompt } from "./prompts/effective-prompt.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type {
   AgentConfig,
@@ -26,27 +22,17 @@ import { composeSystemPrompt } from "./prompts/prompt-manager.js";
 import type { BlockMeta } from "./prompts/truncate.js";
 import { collectMemoryFiles } from "./memory/search.js";
 import {
-  createListAgentsTool,
-  createReadAgentFileTool,
-  createSendMessageTool,
-  createAuthenticatedFetchTool,
-  createMemorySearchTool,
-  createMemoryGetTool,
-  createCronAddTool,
-  createCronRemoveTool,
-  createCronListTool,
-  createReadSkillTool,
-} from "./tools/index.js";
-import {
   extractSkillSummaries,
   formatSkillSummariesForPrompt,
 } from "./skills/on-demand.js";
 import type { CronService } from "../cron/cron-service.js";
-import type { CronToolDeps } from "./tools/cron-impl.js";
-import { createRedactor } from "../security/redact.js";
-import { resolveEnvRefs } from "../config/env-substitution.js";
+import type { TaskService } from "../tasks/task-service.js";
 import { getCronSummaries } from "../config/office-yaml.js";
-import { applyToolPolicy } from "./tools/policy.js";
+import {
+  initSandboxAgent,
+  initInProcessAgent,
+  type InitContext,
+} from "./handle-init.js";
 
 export interface PromptReport {
   mode: string;
@@ -68,6 +54,7 @@ export interface AgentHandleDeps {
   officeDescription?: string;
   citationMode?: CitationMode;
   cronService?: CronService;
+  taskService?: TaskService;
 }
 
 export class AgentHandle {
@@ -90,6 +77,7 @@ export class AgentHandle {
   private officeDescription?: string;
   private citationMode: CitationMode;
   private cronService?: CronService;
+  private taskService?: TaskService;
   private _bootstrapDir: string;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
@@ -105,6 +93,7 @@ export class AgentHandle {
     this.officeDescription = deps.officeDescription;
     this.citationMode = deps.citationMode ?? "auto";
     this.cronService = deps.cronService;
+    this.taskService = deps.taskService;
     this._bootstrapDir =
       config.bootstrapDir ??
       join(deps.baseDir, "agents", config.name, "bootstrap");
@@ -120,7 +109,6 @@ export class AgentHandle {
     return this._turns;
   }
   get lastHeartbeat(): number {
-    // For sandboxed agents, prefer the heartbeat timestamp from HostApi
     if (this.hostApi) {
       return this.hostApi.getHeartbeat(this.name) ?? this._lastHeartbeat;
     }
@@ -141,79 +129,36 @@ export class AgentHandle {
     return join(this.baseDir, "agents", this.config.name);
   }
 
+  private get initContext(): InitContext {
+    return {
+      name: this.name,
+      cwd: this.cwd,
+      agentDir: this.agentDir,
+      baseDir: this.baseDir,
+      officeId: this.officeId,
+      officeName: this.officeName,
+      officeDescription: this.officeDescription,
+      config: this.config,
+      bootstrapDir: this._bootstrapDir,
+      citationMode: this.citationMode,
+    };
+  }
+
   async init(): Promise<void> {
     await mkdir(this.cwd, { recursive: true });
     await mkdir(join(this.agentDir, "skills"), { recursive: true });
 
     if (this.provider && this.sandboxToken) {
-      // Sandboxed: start container, agent runs inside it
-      const model = this.config.model;
+      const result = await initSandboxAgent(
+        this.initContext,
+        this.provider,
+        this.hostApi!,
+        this.sandboxToken,
+      );
+      this.sandboxInfo = result.sandboxInfo;
+      this._toolCount = result.toolCount;
+      if (result.skillsMap) this.hostApi?.setAgentSkills(this.name, result.skillsMap);
 
-      // Build system prompt via prompt manager (skills loaded host-side)
-      const hasMemory =
-        collectMemoryFiles(join(this.baseDir, "agents", this.name, "workspace"))
-          .length > 0 || collectMemoryFiles(this.baseDir).length > 0;
-      const { skills: sandboxSkills } = loadSkills({
-        cwd: this.cwd,
-        agentDir: this.agentDir,
-        skillPaths: this.config.skillDirs,
-      });
-
-      let sandboxSkillsPrompt: string | undefined;
-      if (this.config.onDemandSkills !== false && sandboxSkills.length > 0) {
-        const summaries = extractSkillSummaries(sandboxSkills);
-        sandboxSkillsPrompt = formatSkillSummariesForPrompt(summaries);
-        // Store loaded skills for the host API endpoint
-        const skillsMap = new Map<string, string>();
-        for (const s of sandboxSkills) skillsMap.set(s.name, s.source);
-        this.hostApi?.setAgentSkills(this.name, skillsMap);
-      } else {
-        sandboxSkillsPrompt =
-          sandboxSkills.length > 0
-            ? formatSkillsForPrompt(sandboxSkills)
-            : undefined;
-      }
-
-      const composed = composeSystemPrompt({
-        name: this.name,
-        cwd: "/workspace",
-        description: this.config.description,
-        customPrompt: this.config.systemPrompt,
-        envNames: Object.keys(this.config.env ?? {}),
-        secretNames: this.config.discloseSecrets
-          ? Object.keys(this.config.secrets ?? {})
-          : undefined,
-        cronJobs: getCronSummaries(this.officeId, this.name),
-        officeName: this.officeName,
-        officeDescription: this.officeDescription,
-        hasMemory,
-        skillsPrompt: sandboxSkillsPrompt,
-        hierarchy: this.config.hierarchy,
-        bootstrapDir: this._bootstrapDir,
-        enableBootstrap: true,
-        mode: this.config.promptMode ?? "full",
-      });
-      const systemPrompt = composed.text;
-      writeEffectivePrompt(this.agentDir, composed, {
-        mode: this.config.promptMode ?? "full",
-        version: composed.version,
-      });
-
-      this.sandboxInfo = await this.provider.start(this.name, {
-        token: this.sandboxToken,
-        hostUrl: "",
-        systemPrompt,
-        modelName: `${model.provider}:${model.id}`,
-        workspacePath: this.cwd,
-        env: {
-          ...this.config.env,
-          ...(this.config.permissions?.tools
-            ? { PERMISSIONS: JSON.stringify(this.config.permissions) }
-            : {}),
-          ...(this.config.onDemandSkills !== false ? { ON_DEMAND_SKILLS: "1" } : {}),
-        },
-      });
-      // Register event listener so sandbox events flow to workspace/Telegram
       if (this.hostApi) {
         this.hostApi.onAgentEvent(this.name, (event) => {
           this._lastHeartbeat = Date.now();
@@ -222,163 +167,28 @@ export class AgentHandle {
           for (const fn of this.listeners) fn(e);
         });
       }
-      // Pre-policy estimate used as fallback until sandbox reports actual count
-      // Base: codingTools(4) + grep + find + ls + sendMessage + listAgents +
-      //   readAgentFile + memorySearch + memoryGet + cronAdd + cronRemove + cronList = 15
-      const hasSecrets =
-        this.config.secrets &&
-        Object.keys(this.config.secrets).some((k) => k !== "MODEL_API_KEY");
-      let est = 15 + (hasSecrets ? 1 : 0) + (this.config.onDemandSkills !== false ? 1 : 0);
-      const policy = this.config.permissions?.tools;
-      if (policy?.allow) est = Math.min(est, policy.allow.length);
-      else if (policy?.deny) est = Math.max(0, est - policy.deny.length);
-      this._toolCount = est;
-
       console.log(
         `[agent:${this.name}] Started in sandbox (${this.sandboxInfo.url})`,
       );
       return;
     }
 
-    // In-process: create agent directly
-
-    // Resolve model API key: apiKeyRef > apiKey > auto (undefined lets Pi resolve)
-    let resolvedApiKey: string | undefined;
-    if (this.config.apiKeyRef) {
-      resolvedApiKey = process.env[this.config.apiKeyRef];
-      if (!resolvedApiKey) {
-        throw new Error(
-          `Agent "${this.name}": model key not found. env var "${this.config.apiKeyRef}" is not set (from api_key_ref).`,
-        );
-      }
-    } else if (this.config.apiKey) {
-      resolvedApiKey = this.config.apiKey;
-    }
-
-    // Resolve user-defined secrets (fail fast on missing refs)
-    const resolvedSecrets: Record<string, string> = {};
-    if (this.config.secrets) {
-      const resolved = resolveEnvRefs(
-        this.config.secrets,
-        process.env,
-        `agents.${this.name}.secrets`,
-      );
-      Object.assign(resolvedSecrets, resolved);
-    }
-
-    const { skills } = loadSkills({
-      cwd: this.cwd,
-      agentDir: this.agentDir,
-      skillPaths: this.config.skillDirs,
-    });
-    if (skills.length > 0)
-      console.log(
-        `[agent:${this.name}] Loaded ${skills.length} skill(s): ${skills.map((s) => s.name).join(", ")}`,
-      );
-
-    let inProcSkillsPrompt: string | undefined;
-    const allTools: AgentTool<any>[] = [
-      ...createCodingTools(this.cwd),
-      createSendMessageTool(this.name, this.bus),
-      createListAgentsTool(this.name, this.listAgentsFn, this.baseDir),
-      createReadAgentFileTool(this.baseDir),
-      ...(Object.keys(resolvedSecrets).length > 0
-        ? [createAuthenticatedFetchTool(resolvedSecrets)]
-        : []),
-      createMemorySearchTool(this.name, this.baseDir, this.citationMode),
-      createMemoryGetTool(this.name, this.baseDir, this.citationMode),
-      ...this.buildCronTools(),
-      ...(this.config.tools ?? []),
-    ];
-
-    if (this.config.onDemandSkills !== false && skills.length > 0) {
-      const summaries = extractSkillSummaries(skills);
-      inProcSkillsPrompt = formatSkillSummariesForPrompt(summaries);
-      const skillsMap = new Map<string, string>();
-      for (const s of skills) skillsMap.set(s.name, s.source);
-      allTools.push(createReadSkillTool(skillsMap));
-    } else {
-      inProcSkillsPrompt =
-        skills.length > 0 ? formatSkillsForPrompt(skills) : undefined;
-    }
-
-    const { allowed: tools, denied, warnings } = applyToolPolicy(
-      allTools,
-      this.config.permissions,
+    const result = await initInProcessAgent(
+      this.initContext,
+      this.bus,
+      this.listAgentsFn,
+      this.cronService,
+      this.taskService,
     );
-    if (denied.length > 0)
-      console.log(`[agent:${this.name}] Denied tools: ${denied.join(", ")}`);
-    for (const w of warnings) console.warn(`[agent:${this.name}] ${w}`);
-    this._toolCount = tools.length;
-    const hasMemoryFiles =
-      collectMemoryFiles(this.cwd).length > 0 ||
-      collectMemoryFiles(this.baseDir).length > 0;
-    const composed = composeSystemPrompt({
-      name: this.name,
-      cwd: this.cwd,
-      description: this.config.description,
-      customPrompt: this.config.systemPrompt,
-      envNames: Object.keys(this.config.env ?? {}),
-      secretNames: this.config.discloseSecrets
-        ? Object.keys(this.config.secrets ?? {})
-        : undefined,
-      cronJobs: this.officeId ? getCronSummaries(this.officeId, this.name) : [],
-      officeName: this.officeName,
-      officeDescription: this.officeDescription,
-      hasMemory: hasMemoryFiles,
-      skillsPrompt: inProcSkillsPrompt,
-      hierarchy: this.config.hierarchy,
-      bootstrapDir: this._bootstrapDir,
-      enableBootstrap: true,
-      mode: this.config.promptMode ?? "full",
-    });
-    const systemPrompt = composed.text;
-    writeEffectivePrompt(this.agentDir, composed, {
-      mode: this.config.promptMode ?? "full",
-      version: composed.version,
-    });
-    console.log(
-      `[agent:${this.name}] Prompt ${composed.version} (${composed.hash})`,
-    );
-
-    this.agent = new Agent({
-      initialState: {
-        systemPrompt,
-        model: this.config.model,
-        thinkingLevel: this.config.thinkingLevel ?? "low",
-        tools,
-      },
-      streamFn: streamSimple,
-      getApiKey: resolvedApiKey ? () => resolvedApiKey : undefined,
-    });
-
-    // Build redactor for in-process event forwarding (defense in depth)
-    const secretValues: Record<string, string> = {};
-    if (resolvedApiKey) secretValues.MODEL_API_KEY = resolvedApiKey;
-    Object.assign(secretValues, resolvedSecrets);
-    const redact = createRedactor(secretValues);
+    this.agent = result.agent;
+    this._toolCount = result.toolCount;
 
     this.agent.subscribe((e) => {
       this._lastHeartbeat = Date.now();
       if (e.type === "turn_end") this._turns++;
-      const safe = redact.deep(e) as AgentEvent;
+      const safe = result.redact.deep(e) as AgentEvent;
       for (const fn of this.listeners) fn(safe);
     });
-  }
-
-  private buildCronTools(): AgentTool<any>[] {
-    const deps: CronToolDeps = {
-      agentName: this.name,
-      officeId: this.officeId,
-      officeDir: this.baseDir,
-      permissions: this.config.permissions ?? {},
-      cron: this.cronService ?? null,
-    };
-    return [
-      createCronAddTool(deps),
-      createCronRemoveTool(deps),
-      createCronListTool(deps),
-    ];
   }
 
   setStatus(s: AgentStatus): void {
@@ -389,7 +199,6 @@ export class AgentHandle {
   async prompt(text: string): Promise<void> {
     if (this.provider && this.sandboxInfo && this.hostApi) {
       const promptId = randomUUID();
-      // Register waiter BEFORE sending prompt to avoid race with fast prompt-done
       const done = this.hostApi.waitForPromptDone(this.name, promptId);
       try {
         await this.provider.prompt(this.sandboxInfo.id, promptId, text);
@@ -486,7 +295,6 @@ export class AgentHandle {
       mode: this.config.promptMode ?? "full",
     });
 
-    // For sandbox agents, read actual tool count reported by sandbox entry
     const toolCount =
       this.provider && this.hostApi
         ? (this.hostApi.getAgentToolCount(this.name) ?? this._toolCount)

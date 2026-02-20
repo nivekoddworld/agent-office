@@ -25,6 +25,8 @@ const MUTATION_PREFIXES = [
   "skill remove",
   "scheduler start",
   "scheduler stop",
+  "task create",
+  "task update",
 ];
 
 export function isMutation(cmd: string): boolean {

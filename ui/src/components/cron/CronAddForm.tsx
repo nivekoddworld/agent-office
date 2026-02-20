@@ -20,9 +20,10 @@ export function CronAddForm({ opened, onClose, agentNames }: CronAddFormProps) {
     if (!jobName.trim() || !schedule.trim() || !message.trim()) return;
     if (scope === "agent" && !agent) return;
 
+    const escapedMsg = message.replace(/"/g, '\\"');
     const cmd = scope === "office"
-      ? `cron add office ${jobName} "${schedule}" ${message} --targets ${agentNames.join(",")}`
-      : `cron add ${agent} ${jobName} "${schedule}" ${message} --apply`;
+      ? `cron add office ${jobName} "${schedule}" "${escapedMsg}" --targets ${agentNames.join(",")}`
+      : `cron add ${agent} ${jobName} "${schedule}" "${escapedMsg}" --apply`;
 
     command.mutate({ command: cmd }, {
       onSuccess: () => {

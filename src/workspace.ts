@@ -21,6 +21,8 @@ import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
 import { CronService } from "./cron/cron-service.js";
 import { CronStore } from "./cron/cron-store.js";
+import { TaskService } from "./tasks/task-service.js";
+import { TaskStore } from "./tasks/task-store.js";
 
 const DEFAULT_HOST_PORT = 13000;
 
@@ -33,6 +35,7 @@ export class Workspace {
   readonly scheduler: Scheduler;
   readonly watchdog: Watchdog;
   readonly cron: CronService;
+  readonly tasks: TaskService;
   readonly office: OfficeContext;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
   private hostApi: HostApi | null = null;
@@ -59,6 +62,12 @@ export class Workspace {
       this.agents,
       new CronStore(join(this.office.dir, "cron")),
     );
+    this.tasks = new TaskService(
+      new TaskStore(join(this.office.dir, "tasks")),
+      this.bus,
+      this.office.dir,
+      (name) => this.agents.has(name),
+    );
 
     if (this.sandboxMode === "docker") {
       this.hostApi = new HostApi(this.bus, () => this.list(), this.office.dir);
@@ -78,9 +87,11 @@ export class Workspace {
     this.scheduler.start();
     this.watchdog.start();
     this.cron.start();
+    this.tasks.start();
   }
 
   async stop(): Promise<void> {
+    this.tasks.stop();
     this.cron.stop();
     this.scheduler.stop();
     this.watchdog.stop();
@@ -152,6 +163,7 @@ export class Workspace {
       officeDescription: this.office.description,
       citationMode: this.office.citationMode,
       cronService: this.cron,
+      taskService: this.tasks,
     });
     try {
       await handle.init();

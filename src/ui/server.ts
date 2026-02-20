@@ -255,6 +255,55 @@ export async function startUiServer(
       return json(res, 200, getAgentDetail(handle));
     }
 
+    // --- GET /api/tasks ---
+    if (path === "/api/tasks" && method === "GET") {
+      const assignee = url.searchParams.get("assignee") ?? undefined;
+      const status = url.searchParams.get("status") ?? undefined;
+      return json(res, 200, workspace.tasks.list({ assignee, status: status as any }));
+    }
+
+    // --- GET /api/tasks/board ---
+    if (path === "/api/tasks/board" && method === "GET") {
+      return json(res, 200, workspace.tasks.board());
+    }
+
+    // --- GET /api/tasks/:id ---
+    const taskGetMatch = path.match(/^\/api\/tasks\/([^/]+)$/);
+    if (taskGetMatch && method === "GET" && taskGetMatch[1] !== "board") {
+      const task = workspace.tasks.get(taskGetMatch[1]!);
+      if (!task) return json(res, 404, { error: "task_not_found" });
+      return json(res, 200, task);
+    }
+
+    // --- POST /api/tasks ---
+    if (path === "/api/tasks" && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const body = await readBody(req);
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
+      const result = workspace.tasks.create("__user__", parsed as any);
+      if (typeof result === "string") return json(res, 400, { ok: false, error: result });
+      broadcast("state_changed", getBootstrapState(workspace, officeId));
+      return json(res, 201, result);
+    }
+
+    // --- PATCH /api/tasks/:id ---
+    const taskPatchMatch = path.match(/^\/api\/tasks\/([^/]+)$/);
+    if (taskPatchMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const body = await readBody(req);
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
+      const result = workspace.tasks.update("__user__", taskPatchMatch[1]!, parsed as any);
+      if (typeof result === "string") return json(res, 400, { ok: false, error: result });
+      broadcast("state_changed", getBootstrapState(workspace, officeId));
+      return json(res, 200, result);
+    }
+
     // --- GET /api/cron ---
     if (path === "/api/cron" && method === "GET") {
       return json(res, 200, workspace.cron.listJobs());

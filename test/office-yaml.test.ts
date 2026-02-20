@@ -325,6 +325,28 @@ office:
     expect(result).not.toBeNull();
     expect(Object.keys(result!.agents)).toHaveLength(0);
   });
+
+  it("rejects legacy task_manager with migration error", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    writeOfficeYaml(
+      "tm-office",
+      `
+office:
+  name: TM Office
+  task_manager:
+    enabled: true
+agents:
+  worker:
+    model: openai:gpt-4o
+`,
+    );
+    const result = loadOfficeYaml("tm-office");
+    expect(result).toBeNull();
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("office.task_manager"),
+    );
+    spy.mockRestore();
+  });
 });
 
 // --- Validation ---
@@ -430,6 +452,17 @@ describe("hierarchy validation", () => {
         lead: {},
         coder: { reports_to: "lead" },
         reviewer: { reports_to: "lead" },
+      },
+    });
+    expect(errors).toEqual([]);
+  });
+
+  it("accepts task-manager as a normal agent hierarchy target", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: {
+        "task-manager": { model: "openai:gpt-4o" },
+        worker: { reports_to: "task-manager" },
       },
     });
     expect(errors).toEqual([]);

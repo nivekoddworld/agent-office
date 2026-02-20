@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Stack, Button, Group, TextInput } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { IconSend, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { useCommand } from "../../api/use-command.js";
+import { apiFetch } from "../../api/client.js";
+import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import type { AgentDetail } from "../../api/types.js";
 
 interface QuickActionsProps {
@@ -10,12 +13,20 @@ interface QuickActionsProps {
 
 export function QuickActions({ agent }: QuickActionsProps) {
   const [message, setMessage] = useState("");
+  const [confirmFire, setConfirmFire] = useState(false);
   const command = useCommand();
 
   const sendMessage = () => {
     if (!message.trim()) return;
-    command.mutate({
-      command: `send ${agent.name} ${message}`,
+    apiFetch("/api/send", {
+      method: "POST",
+      body: JSON.stringify({ agent: agent.name, message: message.trim() }),
+    }).catch((err) => {
+      notifications.show({
+        title: "Send failed",
+        message: err instanceof Error ? err.message : "Failed to send message",
+        color: "red",
+      });
     });
     setMessage("");
   };
@@ -24,10 +35,9 @@ export function QuickActions({ agent }: QuickActionsProps) {
     command.mutate({ command: `office reload --force` });
   };
 
-  const fire = () => {
-    if (confirm(`Fire agent "${agent.name}"? This cannot be undone.`)) {
-      command.mutate({ command: `fire ${agent.name}` });
-    }
+  const onConfirmFire = () => {
+    command.mutate({ command: `fire ${agent.name}` });
+    setConfirmFire(false);
   };
 
   return (
@@ -67,12 +77,22 @@ export function QuickActions({ agent }: QuickActionsProps) {
           size="xs"
           variant="light"
           color="red"
-          onClick={fire}
+          onClick={() => setConfirmFire(true)}
           leftSection={<IconTrash size={14} />}
         >
           Fire
         </Button>
       </Group>
+
+      <ConfirmDialog
+        opened={confirmFire}
+        title="Fire Agent"
+        message={`Fire agent "${agent.name}"? This cannot be undone.`}
+        confirmLabel="Fire"
+        onConfirm={onConfirmFire}
+        onCancel={() => setConfirmFire(false)}
+        loading={command.isPending}
+      />
     </Stack>
   );
 }

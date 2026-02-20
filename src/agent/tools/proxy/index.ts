@@ -14,3 +14,7 @@ export { createCronAddProxy } from "./cron-add.js";
 export { createCronRemoveProxy } from "./cron-remove.js";
 export { createCronListProxy } from "./cron-list.js";
 export { createReadSkillProxy } from "./read-skill.js";
+export { createTaskCreateProxy } from "./task-create.js";
+export { createTaskUpdateProxy } from "./task-update.js";
+export { createTaskListProxy } from "./task-list.js";
+export { createTaskGetProxy } from "./task-get.js";

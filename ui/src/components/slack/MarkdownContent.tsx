@@ -8,7 +8,7 @@ interface MarkdownContentProps {
   content: string;
 }
 
-const MD_PATTERN = /[#*`\[\]|>~]{2,}|```|^\s*[-*+] |^\s*\d+\. |^\s*>/m;
+const MD_PATTERN = /[#*`[\]|>~]{2,}|```|^\s*[-*+] |^\s*\d+\. |^\s*>/m;
 
 export function MarkdownContent({ content }: MarkdownContentProps) {
   if (!MD_PATTERN.test(content)) {

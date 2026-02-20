@@ -10,10 +10,11 @@ import {
   Badge,
 } from "@mantine/core";
 import { IconX, IconHash, IconSend2 } from "@tabler/icons-react";
+import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
 import { SlackMessage, type SlackMessageData } from "./SlackMessage.js";
 import { apiFetch } from "../../api/client.js";
-import { threadStore, useThreadStore, type Thread } from "../../store/thread-store.js";
+import { threadStore, useThreadStore } from "../../store/thread-store.js";
 
 interface ThreadDrawerProps {
   opened: boolean;
@@ -53,7 +54,13 @@ export function ThreadDrawer({
     apiFetch("/api/send", {
       method: "POST",
       body: JSON.stringify({ agent: thread.agentName, message: content }),
-    }).catch(() => {});
+    }).catch((err) => {
+      notifications.show({
+        title: "Message failed",
+        message: err instanceof Error ? err.message : "Failed to send message",
+        color: "red",
+      });
+    });
 
     const userReply: SlackMessageData = {
       id: `user-reply-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

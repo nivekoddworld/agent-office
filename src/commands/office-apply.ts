@@ -162,6 +162,7 @@ export async function applyOfficeYaml(
   }
 
   const baseDir = officeDir(officeId);
+
   const hierarchyMap = buildHierarchyMap(yaml.agents);
   const entries = Object.entries(yaml.agents);
   let spawned = 0;

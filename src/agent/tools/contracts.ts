@@ -193,3 +193,96 @@ export const CRON_LIST = {
     ),
   }),
 };
+
+// --- Task tools ---
+
+export const TASK_CREATE = {
+  name: "task_create" as const,
+  label: "Task Create",
+  description:
+    "Create a new task and assign it to an agent. If dependsOn IDs are set and those tasks are not yet done, the new task starts in 'backlog' and the assignee is notified only when all dependencies complete.",
+  parameters: Type.Object({
+    title: Type.String({ description: "Short task title" }),
+    description: Type.Optional(
+      Type.String({ description: "Detailed task description" }),
+    ),
+    assignee: Type.String({ description: "Agent name to assign the task to" }),
+    dependsOn: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Task IDs that must be completed before this task becomes actionable",
+      }),
+    ),
+    parentId: Type.Optional(
+      Type.String({ description: "Parent task ID for sub-task grouping" }),
+    ),
+  }),
+};
+
+export const TASK_UPDATE = {
+  name: "task_update" as const,
+  label: "Task Update",
+  description:
+    "Update a task's status, result, or assignee. Status transitions: backlog→todo, todo→in_progress, in_progress→review/done, review→in_progress/done. Completing a task auto-unblocks dependent tasks.",
+  parameters: Type.Object({
+    id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
+    status: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: [
+          "backlog",
+          "todo",
+          "in_progress",
+          "review",
+          "done",
+          "cancelled",
+        ],
+        description: "New status",
+      }),
+    ),
+    result: Type.Optional(
+      Type.String({
+        description: "Summary or notes when completing a task",
+      }),
+    ),
+    assignee: Type.Optional(
+      Type.String({ description: "Reassign to another agent" }),
+    ),
+  }),
+};
+
+export const TASK_LIST = {
+  name: "task_list" as const,
+  label: "Task List",
+  description:
+    "List tasks with optional filters. Returns a summary of each matching task.",
+  parameters: Type.Object({
+    assignee: Type.Optional(
+      Type.String({ description: "Filter by assignee agent name" }),
+    ),
+    status: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: [
+          "backlog",
+          "todo",
+          "in_progress",
+          "review",
+          "done",
+          "cancelled",
+        ],
+        description: "Filter by status",
+      }),
+    ),
+  }),
+};
+
+export const TASK_GET = {
+  name: "task_get" as const,
+  label: "Task Get",
+  description:
+    "Get full details of a single task by ID, including description, dependencies, and result.",
+  parameters: Type.Object({
+    id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
+  }),
+};
