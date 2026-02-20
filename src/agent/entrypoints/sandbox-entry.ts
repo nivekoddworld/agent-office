@@ -17,7 +17,7 @@ import {
 import { getModel, streamSimple } from "@mariozechner/pi-ai";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 import {
-  createSendMessageProxy,
+  createMessageAgentProxy,
   createListAgentsProxy,
   createReadAgentFileProxy,
   createAuthenticatedFetchProxy,
@@ -122,7 +122,7 @@ const allTools: AgentTool<any>[] = [
   createGrepTool(WORKSPACE),
   createFindTool(WORKSPACE),
   createLsTool(WORKSPACE),
-  createSendMessageProxy(hostFetch),
+  createMessageAgentProxy(hostFetch),
   createListAgentsProxy(AGENT_NAME, hostFetch),
   createReadAgentFileProxy(hostFetch),
   ...(hasToolSecrets ? [createAuthenticatedFetchProxy(hostFetch)] : []),

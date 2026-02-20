@@ -22,7 +22,7 @@ import { collectMemoryFiles } from "./memory/search.js";
 import {
   createListAgentsTool,
   createReadAgentFileTool,
-  createSendMessageTool,
+  createMessageAgentTool,
   createAuthenticatedFetchTool,
   createMemorySearchTool,
   createMemoryGetTool,
@@ -208,7 +208,7 @@ export async function initInProcessAgent(
   let inProcSkillsPrompt: string | undefined;
   const allTools: AgentTool<any>[] = [
     ...createCodingTools(ctx.cwd),
-    createSendMessageTool(ctx.name, bus),
+    createMessageAgentTool(ctx.name, bus),
     createListAgentsTool(ctx.name, listAgentsFn, ctx.baseDir),
     createReadAgentFileTool(ctx.baseDir),
     ...(Object.keys(resolvedSecrets).length > 0

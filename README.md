@@ -72,7 +72,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [CLI Flags](#cli-flags)
 - [Agent Collaboration](#agent-collaboration)
   - [list_agents](#list_agents)
-  - [send_message](#send_message)
+  - [message_agent](#message_agent)
   - [read_agent_file](#read_agent_file)
   - [authenticated_fetch](#authenticated_fetch)
   - [cron_add](#cron_add)
@@ -134,7 +134,7 @@ graph TD
 
 **Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron / Agent cron tools / Task notifications -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -281,7 +281,7 @@ agents:
       tools:
         deny: [cron_add, cron_remove]   # blacklist — all except these
         # OR
-        # allow: [send_message, list_agents]  # whitelist — only these
+        # allow: [message_agent, list_agents]  # whitelist — only these
 ```
 
 - **`deny`** — blacklist: agent has all tools except the listed ones.
@@ -634,7 +634,7 @@ Host Process                        Docker Container (per agent)
    - Volume mount: host workspace directory -> `/workspace` in container
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
-   - Proxy tools that forward `send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get` to the Host API over HTTP
+   - Proxy tools that forward `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get` to the Host API over HTTP
    - **Note:** Task tool proxy files exist but are not yet wired in `sandbox-entry.ts` / Host API. Task tools are currently in-process only.
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
@@ -655,7 +655,7 @@ Host Process                        Docker Container (per agent)
 | Authentication          | Unique per-agent Bearer token on all endpoints (except `/health`)                                     |
 | Message integrity       | Server derives sender identity from token, never trusts body                                          |
 | Idempotency             | `messageId`-based deduplication with 5-minute TTL                                                     |
-| Request limits          | 64 KB send-message body, 1 MB general body, 1 MB file response                                           |
+| Request limits          | 64 KB message-agent body, 1 MB general body, 1 MB file response                                          |
 | Prompt timeout          | 5-minute timeout on prompt completion                                                                 |
 
 #### Docker Sandbox Example
@@ -677,7 +677,7 @@ ao> send designer "Create a responsive landing page with hero section"
 
 ao> send reviewer "Review designer's index.html and send feedback"
 # → reviewer uses read_agent_file (proxied via Host API) to read designer's files
-# → reviewer uses send_message (proxied via Host API) to send feedback to designer
+# → reviewer uses message_agent (proxied via Host API) to send feedback to designer
 ```
 
 Verify files created by sandboxed agents persist on the host:
@@ -694,7 +694,7 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | Method | Path                             | Purpose                                                        |
 | ------ | -------------------------------- | -------------------------------------------------------------- |
 | `GET`  | `/api/secrets`                   | Fetch secrets (model API key + tool secrets) at container boot |
-| `POST` | `/api/send-message`              | Forward message to another agent's inbox                       |
+| `POST` | `/api/message-agent`              | Forward message to another agent's inbox                       |
 | `GET`  | `/api/agents`                    | List all agents (name, status, description)                    |
 | `GET`  | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace                       |
 | `POST` | `/api/authenticated-fetch`       | Host-proxied HTTP request with secret injection                |
@@ -789,18 +789,18 @@ Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via 
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`send_message`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts` and shared by both in-process and proxy (sandbox) implementations.
 
 ### `list_agents`
 
 Discover all agents in the workspace with their name, status, and description. Agents are instructed to call this first when given a task to find collaborators.
 
-### `send_message`
+### `message_agent`
 
 Send a message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]`. Use `__broadcast__` to message all agents.
 
 ```
-copywriter calls send_message:
+copywriter calls message_agent:
   to: "designer"
   message: "Here's the landing page copy: ..."
 
@@ -1029,7 +1029,7 @@ agent calls task_get:
 src/agent/tools/
   contracts.ts              Single source of truth (name, label, description, parameters)
   fetch-helpers.ts          Shared SSRF protection, URL validation, auth header builder
-  send-message.ts           Host implementation (direct bus.send)
+  message-agent.ts           Host implementation (direct bus.send)
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
@@ -1041,7 +1041,7 @@ src/agent/tools/
   task-get.ts               task_get — host implementation
   task-impl.ts              Shared task tool logic
   proxy/
-    send-message.ts         Sandbox implementation (HTTP POST /api/send-message)
+    message-agent.ts         Sandbox implementation (HTTP POST /api/message-agent)
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
     read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
     authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
@@ -1441,10 +1441,10 @@ Include hero, 3 features, CTA. Send to designer when done.
 
 What happens:
 
-1. **copywriter** writes copy, uses `list_agents` to discover designer, sends via `send_message`
+1. **copywriter** writes copy, uses `list_agents` to discover designer, sends via `message_agent`
 2. **designer** receives the message, builds `index.html` with the copy
 3. You send: `@reviewer Review designer's work and send feedback`
-4. **reviewer** calls `list_agents`, uses `read_agent_file` to read designer's HTML, sends feedback via `send_message`
+4. **reviewer** calls `list_agents`, uses `read_agent_file` to read designer's HTML, sends feedback via `message_agent`
 5. **designer** applies fixes, **copywriter** reports completion to the user
 
 All coordination is autonomous after the initial prompt.
@@ -1479,7 +1479,7 @@ What happens behind the scenes:
 5. **tester** calls `list_agents` (proxy -> Host API -> returns agent list)
 6. **tester** calls `read_agent_file` (proxy -> Host API -> reads backend's files from host disk)
 7. **tester** writes test files in its own `/workspace`
-8. **tester** sends feedback to **backend** via `send_message` (proxy -> Host API -> message bus)
+8. **tester** sends feedback to **backend** via `message_agent` (proxy -> Host API -> message bus)
 
 Each agent is fully isolated — a misbehaving agent cannot crash the host, read secrets, or access another agent's filesystem directly.
 
@@ -1616,7 +1616,7 @@ src/
       contracts.ts            Shared tool metadata (name, label, description, parameters)
       fetch-helpers.ts        Shared SSRF, URL validation, auth header builder
       index.ts                Barrel re-export for host-side tools
-      send-message.ts         send_message — host implementation (bus.send)
+      message-agent.ts         message_agent — host implementation (bus.send)
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
@@ -1635,7 +1635,7 @@ src/
       cron-list.ts            cron_list — host implementation
       proxy/
         index.ts              Barrel + HostFetch type
-        send-message.ts       send_message — proxy implementation (HTTP)
+        message-agent.ts       message_agent — proxy implementation (HTTP)
         list-agents.ts        list_agents — proxy implementation (HTTP)
         read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)

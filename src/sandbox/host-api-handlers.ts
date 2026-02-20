@@ -48,7 +48,7 @@ export function handleAgents(
   res.end(JSON.stringify(listFn()));
 }
 
-export async function handleSendMessage(
+export async function handleMessageAgent(
   req: IncomingMessage,
   res: ServerResponse,
   agentName: string,

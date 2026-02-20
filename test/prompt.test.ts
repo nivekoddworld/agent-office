@@ -23,7 +23,7 @@ describe("buildDefaultPrompt", () => {
   it("includes collaboration rules", () => {
     const prompt = buildDefaultPrompt("designer", "/tmp/ws");
     expect(prompt).toContain("list_agents");
-    expect(prompt).toContain("send_message");
+    expect(prompt).toContain("message_agent");
     expect(prompt).toContain("read_agent_file");
   });
 

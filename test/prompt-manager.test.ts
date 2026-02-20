@@ -12,7 +12,7 @@ describe("composeSystemPrompt", () => {
   it("always includes the base prompt", () => {
     const { text } = composeSystemPrompt(BASE_CTX);
     expect(text).toContain("Agent-to-Agent Collaboration");
-    expect(text).toContain("send_message");
+    expect(text).toContain("message_agent");
     expect(text).toContain("Avoid reply loops");
   });
 

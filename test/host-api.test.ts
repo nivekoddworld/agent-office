@@ -97,12 +97,12 @@ describe.skipIf(skipHostApi)("HostApi", () => {
     expect(data[0].name).toBe("agent-a");
   });
 
-  // --- /api/send-message ---
+  // --- /api/message-agent ---
 
   it("sends message via bus", async () => {
     const res = await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       {
         to: "agent-b",
         payload: "hello",
@@ -124,13 +124,13 @@ describe.skipIf(skipHostApi)("HostApi", () => {
   it("deduplicates by messageId", async () => {
     await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       { to: "b", payload: "hi", messageId: "dup-1" },
       token,
     );
     const res = await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       { to: "b", payload: "hi", messageId: "dup-1" },
       token,
     );
@@ -140,10 +140,10 @@ describe.skipIf(skipHostApi)("HostApi", () => {
     expect(bus.send).toHaveBeenCalledTimes(1);
   });
 
-  it("rejects missing fields in send-message", async () => {
+  it("rejects missing fields in message-agent", async () => {
     const res = await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       { to: "b", payload: "hello" },
       token,
     );
@@ -153,7 +153,7 @@ describe.skipIf(skipHostApi)("HostApi", () => {
   it("rejects reserved recipients (__cron__) with 400", async () => {
     const res = await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       { to: "__cron__", payload: "hi", messageId: "r1" },
       token,
     );
@@ -166,7 +166,7 @@ describe.skipIf(skipHostApi)("HostApi", () => {
   it("rejects reserved recipients (__user__) with 400", async () => {
     const res = await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       { to: "__user__", payload: "hi", messageId: "r2" },
       token,
     );
@@ -178,7 +178,7 @@ describe.skipIf(skipHostApi)("HostApi", () => {
   it("allows __broadcast__ as a valid send target", async () => {
     const res = await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       { to: "__broadcast__", payload: "hi", messageId: "r3" },
       token,
     );
@@ -194,7 +194,7 @@ describe.skipIf(skipHostApi)("HostApi", () => {
     });
     const res = await postJson(
       port,
-      "/api/send-message",
+      "/api/message-agent",
       { to: "ghost", payload: "hi", messageId: "u1" },
       token,
     );
@@ -208,11 +208,11 @@ describe.skipIf(skipHostApi)("HostApi", () => {
       throw new Error("No inbox");
     });
     const msg = { to: "ghost", payload: "hi", messageId: "retry-1" };
-    const r1 = await postJson(port, "/api/send-message", msg, token);
+    const r1 = await postJson(port, "/api/message-agent", msg, token);
     expect(r1.status).toBe(404);
     // Fix the inbox and retry with same messageId — should not be deduplicated
     bus.send.mockImplementation(() => {});
-    const r2 = await postJson(port, "/api/send-message", msg, token);
+    const r2 = await postJson(port, "/api/message-agent", msg, token);
     expect(r2.status).toBe(200);
     const data = (await r2.json()) as { deduplicated?: boolean };
     expect(data.deduplicated).toBeUndefined();

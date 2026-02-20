@@ -90,7 +90,7 @@ agents:
       3. Use read_agent_file to read the coder's implementation
       4. Review the code for bugs, style, and correctness
       5. If approved: task_update(status: "done", result: "Approved - clean implementation")
-      6. If needs changes: send_message to coder with feedback,
+      6. If needs changes: message_agent to coder with feedback,
          then task_update(status: "done", result: "Approved with comments: ...")
 
       Use task_list(assignee: "reviewer") to see all your pending reviews.

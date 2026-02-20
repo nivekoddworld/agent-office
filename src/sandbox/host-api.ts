@@ -13,7 +13,7 @@ import type { CitationMode } from "../types.js";
 import {
   handleSecrets,
   handleAgents,
-  handleSendMessage,
+  handleMessageAgent,
   handleAgentFile,
   handlePromptDone,
   handleAgentEvent,
@@ -219,8 +219,8 @@ export class HostApi {
     try {
       if (req.method === "GET" && path === "/api/secrets") {
         handleSecrets(res, this.agentSecrets.get(token) ?? {});
-      } else if (req.method === "POST" && path === "/api/send-message") {
-        await handleSendMessage(req, res, agentName, this.bus, this.seenMessages);
+      } else if (req.method === "POST" && path === "/api/message-agent") {
+        await handleMessageAgent(req, res, agentName, this.bus, this.seenMessages);
       } else if (req.method === "GET" && path === "/api/agents") {
         handleAgents(res, this.listFn);
       } else if (req.method === "GET" && path === "/api/agent-file") {
