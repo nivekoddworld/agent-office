@@ -23,6 +23,8 @@ const MUTATION_PREFIXES = [
   "agent-set-manager",
   "skill add",
   "skill remove",
+  "scheduler start",
+  "scheduler stop",
 ];
 
 export function isMutation(cmd: string): boolean {

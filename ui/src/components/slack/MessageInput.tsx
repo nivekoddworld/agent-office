@@ -12,7 +12,7 @@ import {
 } from "@mantine/core";
 import { IconAt, IconSend2 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
-import { useCommand } from "../../api/use-command.js";
+import { apiFetch } from "../../api/client.js";
 
 interface MessageInputProps {
   agentNames: string[];
@@ -25,8 +25,7 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
   const [text, setText] = useState("");
   const [showMention, setShowMention] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(targetAgent);
-  const editorRef = useRef<HTMLDivElement>(null);
-  const command = useCommand();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setSelectedTarget(targetAgent);
@@ -35,11 +34,13 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
   const send = useCallback(() => {
     const content = text.trim();
     if (!content || !selectedTarget) return;
-    command.mutate({ command: `send ${selectedTarget} ${content}` });
+    apiFetch("/api/send", {
+      method: "POST",
+      body: JSON.stringify({ agent: selectedTarget, message: content }),
+    }).catch(() => {});
     onMessageSent?.(selectedTarget, content);
     setText("");
-    if (editorRef.current) editorRef.current.textContent = "";
-  }, [text, selectedTarget, command, onMessageSent]);
+  }, [text, selectedTarget, onMessageSent]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -53,12 +54,9 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
 
   const insertMention = (name: string) => {
     setText((prev) => prev + `@${name} `);
-    if (editorRef.current) {
-      editorRef.current.textContent = (editorRef.current.textContent ?? "") + `@${name} `;
-    }
     setSelectedTarget(name);
     setShowMention(false);
-    editorRef.current?.focus();
+    textareaRef.current?.focus();
   };
 
   const isDm = targetAgent != null;
@@ -79,25 +77,27 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
         overflow: "hidden",
       }}
     >
-      <Box
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={(e) => setText(e.currentTarget.textContent ?? "")}
+      <textarea
+        ref={textareaRef}
+        value={text}
+        onChange={(e) => setText(e.currentTarget.value)}
         onKeyDown={handleKeyDown}
-        px="sm"
-        py="xs"
+        placeholder={placeholder}
+        rows={1}
         style={{
+          width: "100%",
           minHeight: 40,
           maxHeight: 120,
-          overflowY: "auto",
+          padding: "8px 12px",
           color: slack.textPrimary,
-          fontSize: 14,
+          backgroundColor: "transparent",
+          border: "none",
           outline: "none",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
+          fontSize: 14,
+          fontFamily: "inherit",
+          resize: "none",
+          overflowY: "auto",
         }}
-        data-placeholder={placeholder}
       />
 
       <Group gap={4} px="xs" pb="xs" justify="space-between">

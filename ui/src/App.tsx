@@ -8,14 +8,7 @@ import { threadStore } from "./store/thread-store.js";
 import { agentActivityStore } from "./store/agent-activity-store.js";
 import { unreadStore } from "./store/unread-store.js";
 import { AppLayout } from "./components/layout/AppLayout.js";
-
-function extractText(content: unknown): string {
-  if (!Array.isArray(content)) return "";
-  return (content as { type: string; text?: string }[])
-    .filter((c) => c.type === "text" && c.text)
-    .map((c) => c.text!)
-    .join("");
-}
+import { extractText } from "./components/slack/channel-helpers.js";
 
 type AuthState = "checking" | "authenticated" | "failed";
 

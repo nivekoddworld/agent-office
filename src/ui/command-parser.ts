@@ -177,6 +177,10 @@ export async function dispatchCommand(
           high: Priority.HIGH, critical: Priority.CRITICAL,
         };
         priority = pMap[msgParts[1].toLowerCase()];
+        if (priority === undefined) {
+          console.log(`Unknown priority "${msgParts[1]}". Use: idle, low, normal, high, critical`);
+          return "noop";
+        }
         msgParts = msgParts.slice(2);
       }
       const msg = msgParts.join(" ");

@@ -2,12 +2,20 @@ import type { FeedEvent } from "../../store/event-store.js";
 import type { SlackMessageData } from "./SlackMessage.js";
 import type { ChannelId } from "./SlackSidebar.js";
 
-function extractText(content: unknown): string {
+export function extractText(content: unknown): string {
   if (!Array.isArray(content)) return "";
   return (content as { type: string; text?: string }[])
     .filter((c) => c.type === "text" && c.text)
     .map((c) => c.text!)
     .join("");
+}
+
+export function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+export function agentHue(name: string): number {
+  return name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
 }
 
 export function isSameDay(a: number, b: number): boolean {

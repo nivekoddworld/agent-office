@@ -96,14 +96,15 @@ export function CommandPalette({ opened, onClose, onNavigate }: CommandPalettePr
         const entry = filtered[selectedIdx];
         if (entry) execute(entry);
 
-        // If query looks like a full command (has args), send it raw — block hidden commands
+        // If query looks like a full command (has args), send it raw — only allow known commands
         if (!entry && query.trim()) {
           const raw = query.trim();
           if (!manifest) return;
-          const isHidden = manifest.some(
-            (c) => c.hidden && (raw === c.name || raw.startsWith(c.name + " ")),
+          const firstWord = raw.split(" ")[0]!;
+          const isKnown = manifest.some(
+            (c) => !c.hidden && (c.name === firstWord || c.name.startsWith(firstWord + " ")),
           );
-          if (!isHidden) {
+          if (isKnown) {
             command.mutate({ command: raw });
             onClose();
           }

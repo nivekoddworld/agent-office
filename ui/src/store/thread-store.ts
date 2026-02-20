@@ -1,5 +1,7 @@
-import { useSyncExternalStore } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { SlackMessageData } from "../components/slack/SlackMessage.js";
+
+const MAX_THREADS = 200;
 
 export interface Thread {
   id: string;
@@ -33,7 +35,7 @@ function createThreadStore() {
 
   /** User sends a message -- creates a new thread. */
   const createThread = (agentName: string, userMessage: SlackMessageData): string => {
-    const id = `thread-${Date.now()}-${agentName}`;
+    const id = `thread-${Date.now()}-${agentName}-${Math.random().toString(36).slice(2, 8)}`;
     const thread: Thread = {
       id,
       agentName,
@@ -42,8 +44,15 @@ function createThreadStore() {
       status: "open",
       createdAt: Date.now(),
     };
+    let threads = [...state.threads, thread];
+    if (threads.length > MAX_THREADS) {
+      const completed = threads.filter((t) => t.status === "completed");
+      const evictCount = threads.length - MAX_THREADS;
+      const toRemove = new Set(completed.slice(0, evictCount).map((t) => t.id));
+      threads = threads.filter((t) => !toRemove.has(t.id));
+    }
     state = {
-      threads: [...state.threads, thread],
+      threads,
       activeThreadByAgent: { ...state.activeThreadByAgent, [agentName]: id },
     };
     notify();
@@ -122,5 +131,5 @@ export const threadStore = createThreadStore();
 
 export function useThreadStore() {
   const state = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
-  return { ...state, ...threadStore };
+  return useMemo(() => ({ ...state, ...threadStore }), [state]);
 }

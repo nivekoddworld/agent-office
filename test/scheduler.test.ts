@@ -122,7 +122,7 @@ describe("Scheduler", () => {
     sched.stop();
 
     expect(target.prompt).toHaveBeenCalledWith(
-      "[Mail from copywriter]\nhere's the copy",
+      "[Message from copywriter]\nhere's the copy",
     );
   });
 

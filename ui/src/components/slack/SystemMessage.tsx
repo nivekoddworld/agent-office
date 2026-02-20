@@ -1,12 +1,6 @@
 import { Group, Text } from "@mantine/core";
 import { slack } from "../../theme/slack-theme.js";
-
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatTime } from "./channel-helpers.js";
 
 export function SystemMessage({ text, timestamp }: { text: string; timestamp: number }) {
   return (

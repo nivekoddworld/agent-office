@@ -1,6 +1,7 @@
-import { readdir, stat, readFile } from "node:fs/promises";
+import { readdir, stat, readFile, realpath } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import type { Workspace } from "../workspace.js";
+import type { Priority } from "../types.js";
 import type { AgentHandle } from "../agent/handle.js";
 import type { BootstrapState, AgentDetail, CommandResponse } from "./types.js";
 import { buildHierarchyMap } from "../config/hierarchy.js";
@@ -230,13 +231,31 @@ export async function getAgentFileContent(
   const resolved = relative(handle.cwd, abs);
   if (resolved.startsWith("..")) return { error: "path_traversal" };
   try {
-    const s = await stat(abs);
+    const real = await realpath(abs);
+    if (!real.startsWith(handle.cwd)) return { error: "path_traversal" };
+    const s = await stat(real);
     if (!s.isFile()) return { error: "not_a_file" };
     if (s.size > MAX_FILE_READ) return { error: `file_too_large (${s.size} bytes, max ${MAX_FILE_READ})` };
-    const content = await readFile(abs, "utf-8");
+    const content = await readFile(real, "utf-8");
     return { content, size: s.size };
   } catch {
     return { error: "file_not_found" };
+  }
+}
+
+// --- Direct send (bypasses command string parsing) ---
+
+export function executeSend(
+  workspace: Workspace,
+  agent: string,
+  message: string,
+  priority?: Priority,
+): { ok: boolean; error?: string } {
+  try {
+    workspace.send(agent, message, "prompt", priority);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
 

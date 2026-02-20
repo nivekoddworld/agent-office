@@ -22,6 +22,7 @@ import {
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { slack } from "../../theme/slack-theme.js";
+import { agentHue } from "./channel-helpers.js";
 import { apiFetch } from "../../api/client.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { UserPresence } from "./UserPresence.js";
@@ -160,7 +161,7 @@ export function AgentProfileDrawer({
                   width: 72,
                   height: 72,
                   borderRadius: 12,
-                  backgroundColor: `hsl(${agent.name.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % 360}, 45%, 35%)`,
+                  backgroundColor: `hsl(${agentHue(agent.name)}, 45%, 35%)`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",

@@ -5,6 +5,7 @@ export type AgentActivity =
   | { kind: "thinking"; since: number }
   | { kind: "tool"; toolName: string; since: number };
 
+const IDLE: AgentActivity = { kind: "idle" };
 type ActivityMap = Record<string, AgentActivity>;
 
 function createAgentActivityStore() {
@@ -24,7 +25,7 @@ function createAgentActivityStore() {
 
   const setActivity = (agent: string, activity: AgentActivity) => {
     if (state[agent]?.kind === activity.kind) {
-      if (activity.kind === "idle") return;
+      if (activity.kind === "idle" || activity.kind === "thinking") return;
       if (activity.kind === "tool" && state[agent]?.kind === "tool" &&
         (state[agent] as { toolName: string }).toolName === activity.toolName) return;
     }
@@ -56,7 +57,7 @@ function createAgentActivityStore() {
   };
 
   const getActivity = (agent: string): AgentActivity => {
-    return state[agent] ?? { kind: "idle" };
+    return state[agent] ?? IDLE;
   };
 
   return { subscribe, getSnapshot, handleEvent, getActivity };
@@ -74,5 +75,5 @@ export function useAgentActivity() {
 
 export function useAgentActivityFor(agent: string): AgentActivity {
   const state = useAgentActivity();
-  return state[agent] ?? { kind: "idle" };
+  return state[agent] ?? IDLE;
 }

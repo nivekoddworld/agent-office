@@ -12,7 +12,9 @@ export function SlackHeader({ onOpenPalette, onOpenSettings }: SlackHeaderProps)
   const command = useCommand();
   const isMac =
     typeof navigator !== "undefined" &&
-    navigator.platform.toUpperCase().includes("MAC");
+    /mac/i.test(
+      (navigator as any).userAgentData?.platform ?? navigator.platform ?? "",
+    );
 
   return (
     <Group

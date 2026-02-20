@@ -88,9 +88,12 @@ export function ChannelView({
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [dmTab, setDmTab] = useState<DmTab>("messages");
 
+  const channelKey = channel.kind === "dm" ? `dm:${channel.agentName}` : `ch:${channel.name}`;
+
   const messages = useMemo(
     () => eventToMessages(events, channel),
-    [events, channel],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [events, channelKey],
   );
 
   const agentThreads = useMemo(() => {
@@ -98,7 +101,8 @@ export function ChannelView({
       return threads.filter((t) => t.agentName === channel.agentName);
     }
     return threads;
-  }, [threads, channel]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threads, channelKey]);
 
   const displayItems = useMemo((): DisplayItem[] => {
     const items: DisplayItem[] = [];

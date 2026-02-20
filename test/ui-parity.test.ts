@@ -175,7 +175,7 @@ describe("UI parity — dispatch", () => {
   it("dispatches send command to sendCommand handler", async () => {
     const result = await dispatchCommand(mockWorkspace, officeId, "send alice hello world");
     expect(result).toBe("handled");
-    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "alice", "hello world");
+    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "alice", "hello world", undefined);
   });
 
   it("dispatches fire command to fireCommand handler", async () => {
@@ -255,13 +255,13 @@ describe("UI parity — dispatch", () => {
   it("send with short agent name 'e' parses correctly", async () => {
     const result = await dispatchCommand(mockWorkspace, officeId, "send e hello world");
     expect(result).toBe("handled");
-    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "e", "hello world");
+    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "e", "hello world", undefined);
   });
 
   it("send with agent name 'end' parses correctly", async () => {
     const result = await dispatchCommand(mockWorkspace, officeId, "send end test msg");
     expect(result).toBe("handled");
-    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "end", "test msg");
+    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "end", "test msg", undefined);
   });
 
   it("hire with no args throws usage error", async () => {

@@ -56,8 +56,11 @@ interface TreeNode {
 function buildTree(files: FileEntry[]): TreeNode[] {
   const root: TreeNode[] = [];
   const dirs = new Map<string, TreeNode>();
+  const sorted = [...files].sort(
+    (a, b) => a.path.split("/").length - b.path.split("/").length,
+  );
 
-  for (const f of files) {
+  for (const f of sorted) {
     const parts = f.path.split("/");
     const node: TreeNode = {
       name: f.name,

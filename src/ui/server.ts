@@ -8,6 +8,7 @@ import type { Workspace } from "../workspace.js";
 import { EventBuffer } from "./event-buffer.js";
 import {
   executeCommand,
+  executeSend,
   getAgentDetail,
   getAgentFileContent,
   getAgentFiles,
@@ -269,6 +270,20 @@ export async function startUiServer(
     // --- GET /api/manifest ---
     if (path === "/api/manifest" && method === "GET") {
       return json(res, 200, getManifest());
+    }
+
+    // --- POST /api/send ---
+    if (path === "/api/send" && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const body = await readBody(req);
+      let parsed: { agent?: string; message?: string; priority?: number };
+      try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
+      if (!parsed.agent || !parsed.message) return json(res, 400, { error: "missing_agent_or_message" });
+      const result = executeSend(workspace, parsed.agent, parsed.message, parsed.priority);
+      if (result.ok) broadcast("state_changed", getBootstrapState(workspace, officeId));
+      return json(res, result.ok ? 200 : 400, result);
     }
 
     // --- POST /api/commands/:command ---

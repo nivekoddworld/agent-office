@@ -12,7 +12,7 @@ import {
 import { IconX, IconHash, IconSend2 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { SlackMessage, type SlackMessageData } from "./SlackMessage.js";
-import { useCommand } from "../../api/use-command.js";
+import { apiFetch } from "../../api/client.js";
 import { threadStore, useThreadStore, type Thread } from "../../store/thread-store.js";
 
 interface ThreadDrawerProps {
@@ -31,9 +31,7 @@ export function ThreadDrawer({
   onClickAvatar,
 }: ThreadDrawerProps) {
   const [reply, setReply] = useState("");
-  const editorRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const command = useCommand();
   const { threads } = useThreadStore();
 
   const thread = threadId ? threads.find((t) => t.id === threadId) : undefined;
@@ -52,7 +50,10 @@ export function ThreadDrawer({
     const content = reply.trim();
     if (!content || !thread) return;
 
-    command.mutate({ command: `send ${thread.agentName} ${content}` });
+    apiFetch("/api/send", {
+      method: "POST",
+      body: JSON.stringify({ agent: thread.agentName, message: content }),
+    }).catch(() => {});
 
     const userReply: SlackMessageData = {
       id: `user-reply-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -64,7 +65,6 @@ export function ThreadDrawer({
     threadStore.replyInThread(thread.id, userReply);
 
     setReply("");
-    if (editorRef.current) editorRef.current.textContent = "";
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -178,25 +178,26 @@ export function ThreadDrawer({
               overflow: "hidden",
             }}
           >
-            <Box
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              onInput={(e) => setReply(e.currentTarget.textContent ?? "")}
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.currentTarget.value)}
               onKeyDown={handleKeyDown}
-              px="sm"
-              py="xs"
+              placeholder={`Reply to ${thread.agentName}...`}
+              rows={1}
               style={{
+                width: "100%",
                 minHeight: 36,
                 maxHeight: 100,
-                overflowY: "auto",
+                padding: "8px 12px",
                 color: slack.textPrimary,
-                fontSize: 14,
+                backgroundColor: "transparent",
+                border: "none",
                 outline: "none",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
+                fontSize: 14,
+                fontFamily: "inherit",
+                resize: "none",
+                overflowY: "auto",
               }}
-              data-placeholder={`Reply to ${thread.agentName}...`}
             />
             <Group gap={4} px="xs" pb="xs" justify="flex-end">
               <ActionIcon

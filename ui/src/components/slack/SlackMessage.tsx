@@ -3,6 +3,7 @@ import { Box, Text, Group, UnstyledButton, ActionIcon, Tooltip } from "@mantine/
 import { IconMessage, IconCopy, IconArrowForwardUp, IconRobot, IconUser } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { MarkdownContent } from "./MarkdownContent.js";
+import { formatTime, agentHue } from "./channel-helpers.js";
 
 export interface MessageUsage {
   totalTokens: number;
@@ -27,13 +28,6 @@ interface SlackMessageProps {
   compact?: boolean;
 }
 
-function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 function AgentAvatar({
   name,
   isBot,
@@ -43,8 +37,7 @@ function AgentAvatar({
   isBot: boolean;
   onClick?: () => void;
 }) {
-  const hash = name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const hue = hash % 360;
+  const hue = agentHue(name);
 
   return (
     <UnstyledButton
