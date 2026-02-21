@@ -123,7 +123,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
     command.mutate({ command: `agent prompt set ${agentName} "${escaped}"` }, {
       onSuccess: (data) => {
         if (data.ok) {
-          notifications.show({ title: "Prompt saved", message: "Run 'Reload' to apply changes", color: "blue" });
+          notifications.show({ title: "Config updated", message: "Prompt saved to config. Click 'Apply to Runtime' to update running agents.", color: "blue" });
         } else {
           notifications.show({ title: "Failed", message: data.error ?? data.output.join("\n"), color: "red" });
         }
@@ -138,7 +138,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
     command.mutate({ command: `agent prompt append ${agentName} "${escaped}"` }, {
       onSuccess: (data) => {
         if (data.ok) {
-          notifications.show({ title: "Prompt appended", message: "Run 'Reload' to apply changes", color: "blue" });
+          notifications.show({ title: "Config updated", message: "Prompt appended to config. Click 'Apply to Runtime' to update running agents.", color: "blue" });
           setPromptText("");
         } else {
           notifications.show({ title: "Failed", message: data.error ?? data.output.join("\n"), color: "red" });
@@ -151,7 +151,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
     command.mutate({ command: `agent prompt clear ${agentName}` }, {
       onSuccess: (data) => {
         if (data.ok) {
-          notifications.show({ title: "Prompt cleared", message: "Run 'Reload' to apply changes", color: "blue" });
+          notifications.show({ title: "Config updated", message: "Prompt cleared from config. Click 'Apply to Runtime' to update running agents.", color: "blue" });
           setPromptText("");
         } else {
           notifications.show({ title: "Failed", message: data.error ?? data.output.join("\n"), color: "red" });
@@ -340,7 +340,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               loading={command.isPending}
               disabled={!promptText.trim()}
             >
-              Save (Replace)
+              Save to Config
             </Button>
             <Button
               size="xs"
@@ -375,7 +375,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               onClick={handleReload}
               loading={command.isPending}
             >
-              Reload to Apply
+              Apply to Runtime
             </Button>
           </Group>
         </Group>
@@ -384,7 +384,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
       <ConfirmDialog
         opened={confirmClear}
         title="Clear Custom Prompt"
-        message={`Clear the custom prompt for "${agentName}"? This removes only the inline prompt block.`}
+        message={`Clear the custom prompt for "${agentName}" from config? Click 'Apply to Runtime' afterward to update running agents.`}
         confirmLabel="Clear"
         onConfirm={handleClear}
         onCancel={() => setConfirmClear(false)}

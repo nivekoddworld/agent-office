@@ -80,6 +80,7 @@ import {
   agentSetManagerCommand,
   agentPromptSetCommand,
   agentPromptAppendCommand,
+  agentPromptClearCommand,
 } from "../src/commands/agent-config.js";
 import { cronTriggerCommand } from "../src/commands/cron.js";
 
@@ -525,5 +526,15 @@ describe("UI parity — prompt escaping", () => {
     );
     expect(result).toBe("handled");
     expect(agentPromptSetCommand).toHaveBeenCalledWith(officeId, "alice", md);
+  });
+
+  it("prompt clear dispatches agentPromptClearCommand", async () => {
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "agent prompt clear alice",
+    );
+    expect(result).toBe("handled");
+    expect(agentPromptClearCommand).toHaveBeenCalledWith(officeId, "alice");
   });
 });
