@@ -26,7 +26,7 @@ import {
   isSameDay,
   type DisplayItem,
 } from "./channel-helpers.js";
-import type { ChannelId } from "./SlackSidebar.js";
+import type { ChannelId } from "./channel-types.js";
 import type { CronJobEntry, Task, DmMessage } from "../../api/types.js";
 import { useAgentMessages } from "../../api/use-agent-messages.js";
 
@@ -132,26 +132,18 @@ export function ChannelView({
     if (!baseline?.messages?.length) return [];
     return baseline.messages.map((m: DmMessage) => ({
       id: `dm-${m.id}`,
-      sender: m.role === "user" ? "You" : m.agent,
+      sender: m.role === "user" ? "You" : (dmAgent ?? "bot"),
       text: m.text,
-      timestamp: m.ts_ms,
+      timestamp: m.ts,
       isBot: m.role === "assistant",
-      requestId: m.request_id ?? undefined,
+      requestId: m.requestId ?? undefined,
     }));
-  }, [baseline]);
+  }, [baseline, dmAgent]);
 
   const liveMessages = useMemo(
     () => eventToMessages(events, channel),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [events, channelKey],
-  );
-
-  const messages = useMemo(
-    () =>
-      dmAgent
-        ? mergeBaselineWithLive(baselineMessages, liveMessages)
-        : liveMessages,
-    [dmAgent, baselineMessages, liveMessages],
   );
 
   const agentThreads = useMemo(() => {
@@ -161,6 +153,12 @@ export function ChannelView({
     return threads;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threads, channelKey]);
+
+  const messages = useMemo(() => {
+    if (!dmAgent) return liveMessages;
+    const parents = agentThreads.map((t) => t.parentMessage);
+    return mergeBaselineWithLive(baselineMessages, liveMessages, parents);
+  }, [dmAgent, baselineMessages, liveMessages, agentThreads]);
 
   const displayItems = useMemo((): DisplayItem[] => {
     const items: DisplayItem[] = [];
@@ -298,6 +296,7 @@ export function ChannelView({
         text,
         timestamp: Date.now(),
         isBot: false,
+        requestId,
       };
       createThread(agentName, userMsg, requestId);
     },

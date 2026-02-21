@@ -169,11 +169,10 @@ export interface CommandEntry {
 
 export interface DmMessage {
   id: number;
-  agent: string;
   role: "user" | "assistant";
   text: string;
-  ts_ms: number;
-  request_id: string | null;
+  ts: number;
+  requestId: string | null;
 }
 
 export interface DmHistoryResponse {

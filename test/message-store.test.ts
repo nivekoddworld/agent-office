@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -273,5 +274,18 @@ describe("MessageStore", () => {
     store = createMessageStore(join(dir, "test.db"));
     expect(store.loadInbox("b")).toHaveLength(1);
     expect(store.queryDm("b", 10)).toHaveLength(1);
+  });
+
+  it("creates idx_inbox_to_priority_seq index", () => {
+    const require = createRequire(import.meta.url);
+    const { DatabaseSync } = require("node:sqlite") as any;
+    const db = new DatabaseSync(join(dir, "test.db"));
+    const rows = db
+      .prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'inbox_messages' AND name = ?`,
+      )
+      .all("idx_inbox_to_priority_seq") as { name: string }[];
+    db.close();
+    expect(rows).toHaveLength(1);
   });
 });

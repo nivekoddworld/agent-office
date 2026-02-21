@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname } from "node:path";
 import type { PersistedInbox, DmRecord } from "./types.js";
 
@@ -16,7 +17,7 @@ export interface MessageStore {
 export function createMessageStore(dbPath: string): MessageStore {
   let DatabaseSync: any;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const require = createRequire(import.meta.url);
     ({ DatabaseSync } = require("node:sqlite"));
   } catch {
     throw new Error(
@@ -63,6 +64,9 @@ export function createMessageStore(dbPath: string): MessageStore {
   )`);
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts ON dm_messages(agent, ts_ms DESC)`,
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_inbox_to_priority_seq ON inbox_messages(to_agent, priority DESC, seq ASC)`,
   );
 
   const insertInbox = db.prepare(

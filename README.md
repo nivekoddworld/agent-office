@@ -95,6 +95,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Bootstrap Files](#bootstrap-files)
   - [Watchdog](#watchdog)
   - [Resource Guards](#resource-guards)
+  - [Message Persistence](#message-persistence)
 - [Prompt Inspection](#prompt-inspection)
 - [Cost Tracking](#cost-tracking)
 - [Web UI](#web-ui)
@@ -1328,6 +1329,17 @@ workspace.semaphore.create("api-rate-limit", 3);
 const release = await workspace.semaphore.acquire("api-rate-limit");
 release();
 ```
+
+### Message Persistence
+
+Inbox queues and DM conversation history are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`).
+
+| What        | DB location                            | Behavior                                                                                                 |
+| ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.         |
+| DM history  | Same DB file                           | User and assistant messages saved with `requestId` for dedup correlation. `fire <agent>` purges history. |
+
+The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 
 ## Prompt Inspection
 

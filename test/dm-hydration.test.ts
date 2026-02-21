@@ -105,12 +105,9 @@ describe("mergeBaselineWithLive", () => {
       }),
     ];
     const result = mergeBaselineWithLive(baseline, live);
-    // b1 and b2 have different requestIds from l1, so no requestId match.
-    // Fingerprint match: b2 (ts 2000) vs l1 (ts 3000) = 1000ms < 3000ms window → deduped
-    // b1 (ts 1000) vs l1 (ts 3000) = 2000ms < 3000ms window → deduped
-    // Both baseline items removed, only live remains
-    expect(result).toHaveLength(1);
-    expect(result[0]!.id).toBe("l1");
+    // All three have distinct requestIds — no fingerprint dedup applied
+    expect(result).toHaveLength(3);
+    expect(result.map((m) => m.id)).toEqual(["b1", "b2", "l1"]);
   });
 
   it("differentiates user vs assistant with same text", () => {
@@ -121,6 +118,75 @@ describe("mergeBaselineWithLive", () => {
       msg({ id: "l1", text: "hello", timestamp: 1000, isBot: true }),
     ];
     const result = mergeBaselineWithLive(baseline, live);
+    expect(result).toHaveLength(2);
+  });
+
+  it("deduplicates baseline without requestId against live without requestId", () => {
+    const baseline = [
+      msg({ id: "b1", text: "hello", timestamp: 1000, isBot: true }),
+    ];
+    const live = [
+      msg({ id: "l1", text: "hello", timestamp: 1500, isBot: true }),
+    ];
+    const result = mergeBaselineWithLive(baseline, live);
+    // Both lack requestId, fingerprint match within window → dedup
+    expect(result).toHaveLength(1);
+    expect(result[0]!.id).toBe("l1");
+  });
+
+  it("keeps baseline with requestId even when live fingerprint matches", () => {
+    const baseline = [
+      msg({
+        id: "b1",
+        text: "hello",
+        timestamp: 1000,
+        isBot: true,
+        requestId: "r1",
+      }),
+    ];
+    const live = [
+      msg({ id: "l1", text: "hello", timestamp: 1500, isBot: true }),
+    ];
+    const result = mergeBaselineWithLive(baseline, live);
+    // b1 has requestId, l1 doesn't — no requestId match and no fingerprint
+    // fallback (b1 has requestId so fingerprint path is skipped)
+    expect(result).toHaveLength(2);
+  });
+
+  it("dedupes baseline against thread parent by requestId", () => {
+    const baseline = [
+      msg({
+        id: "b1",
+        sender: "You",
+        text: "fix bug",
+        timestamp: 5000,
+        isBot: false,
+        requestId: "r1",
+      }),
+    ];
+    const live: SlackMessageData[] = [];
+    const threadParents = [
+      msg({
+        id: "tp1",
+        sender: "You",
+        text: "fix bug",
+        timestamp: 5010,
+        isBot: false,
+        requestId: "r1",
+      }),
+    ];
+    const result = mergeBaselineWithLive(baseline, live, threadParents);
+    expect(result).toHaveLength(0);
+  });
+
+  it("thread parents do not appear in merge output", () => {
+    const baseline = [msg({ id: "b1", text: "old", timestamp: 100 })];
+    const live = [msg({ id: "l1", text: "new", timestamp: 200 })];
+    const threadParents = [
+      msg({ id: "tp1", text: "parent", timestamp: 150, requestId: "r99" }),
+    ];
+    const result = mergeBaselineWithLive(baseline, live, threadParents);
+    expect(result.find((m) => m.id === "tp1")).toBeUndefined();
     expect(result).toHaveLength(2);
   });
 

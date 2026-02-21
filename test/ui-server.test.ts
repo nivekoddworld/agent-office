@@ -63,6 +63,7 @@ function createMockWorkspace() {
   } as any;
 }
 
+let mockWs: ReturnType<typeof createMockWorkspace>;
 let sessionCookie = "";
 let origin = "";
 
@@ -81,8 +82,8 @@ function authHeaders(extra?: HeadersInit): HeadersInit {
 describe("UI server", () => {
   beforeAll(async () => {
     process.env["UI_PORT"] = "0";
-    const ws = createMockWorkspace();
-    const { port, url } = await startUiServer(ws, "test-office");
+    mockWs = createMockWorkspace();
+    const { port, url } = await startUiServer(mockWs as any, "test-office");
     origin = `http://${HOST}:${port}`;
     const token = url.match(/#token=(.+)/)?.[1];
 
@@ -428,11 +429,62 @@ describe("UI server", () => {
     expect(res.status).toBe(200);
   });
 
-  it("GET /api/agents/:name/messages returns correct shape", async () => {
+  it("GET /api/agents/:name/messages returns correct shape with data", async () => {
+    mockWs.store.queryDm.mockReturnValueOnce([
+      {
+        id: 1,
+        agent: "bob",
+        role: "user",
+        text: "hi",
+        ts_ms: 9999,
+        request_id: "r1",
+      },
+    ]);
     const res = await fetch(`${origin}/api/agents/bob/messages?limit=10`, {
       headers: { Cookie: sessionCookie },
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toHaveProperty("agent", "bob");
+    const body = await res.json();
+    expect(body.agent).toBe("bob");
+    expect(body.messages).toHaveLength(1);
+    expect(body.messages[0]).toEqual({
+      id: 1,
+      role: "user",
+      text: "hi",
+      ts: 9999,
+      requestId: "r1",
+    });
+  });
+
+  it("GET /api/agents/:name/messages passes capped limit to queryDm", async () => {
+    mockWs.store.queryDm.mockReturnValueOnce([]);
+    await fetch(`${origin}/api/agents/alice/messages?limit=999`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(mockWs.store.queryDm).toHaveBeenLastCalledWith(
+      "alice",
+      200,
+      undefined,
+    );
+  });
+
+  it("GET /api/agents/:name/messages passes default limit 50", async () => {
+    mockWs.store.queryDm.mockReturnValueOnce([]);
+    await fetch(`${origin}/api/agents/alice/messages`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(mockWs.store.queryDm).toHaveBeenLastCalledWith(
+      "alice",
+      50,
+      undefined,
+    );
+  });
+
+  it("GET /api/agents/:name/messages passes parsed beforeTs", async () => {
+    mockWs.store.queryDm.mockReturnValueOnce([]);
+    await fetch(`${origin}/api/agents/alice/messages?beforeTs=12345`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(mockWs.store.queryDm).toHaveBeenLastCalledWith("alice", 50, 12345);
   });
 });

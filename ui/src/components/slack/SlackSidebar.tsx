@@ -21,10 +21,9 @@ import { slack } from "../../theme/slack-theme.js";
 import { SidebarSection } from "./SidebarSection.js";
 import { UserPresence } from "./UserPresence.js";
 import type { AgentInfo } from "../../api/types.js";
+import type { ChannelId } from "./channel-types.js";
 
-export type ChannelId =
-  | { kind: "channel"; name: string }
-  | { kind: "dm"; agentName: string };
+export type { ChannelId } from "./channel-types.js";
 
 interface SlackSidebarProps {
   officeName: string;

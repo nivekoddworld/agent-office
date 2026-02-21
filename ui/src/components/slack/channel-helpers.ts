@@ -1,6 +1,6 @@
 import type { FeedEvent } from "../../store/event-store.js";
 import type { SlackMessageData } from "./types.js";
-import type { ChannelId } from "./SlackSidebar.js";
+import type { ChannelId } from "./channel-types.js";
 
 export function extractText(content: unknown): string {
   if (!Array.isArray(content)) return "";
@@ -121,30 +121,46 @@ const DEDUP_WINDOW_MS = 3000;
 
 /**
  * Merge baseline (SQLite) messages with live SSE messages, deduplicating
- * by requestId first, then by fingerprint (role+text) within a time window.
+ * by requestId first, then by fingerprint (role+text) within a time window
+ * only for messages that have no requestId at all.
+ *
+ * threadParents contribute to dedup indexes (their requestIds filter out
+ * matching baseline rows) but are NOT added to the output array.
  */
 export function mergeBaselineWithLive(
   baseline: SlackMessageData[],
   live: SlackMessageData[],
+  threadParents: SlackMessageData[] = [],
 ): SlackMessageData[] {
+  const allLive = [...live, ...threadParents];
+
   const liveByRequestId = new Set<string>();
-  for (const m of live) {
+  for (const m of allLive) {
     if (m.requestId) liveByRequestId.add(m.requestId);
   }
 
-  const liveFingerprints: { key: string; ts: number }[] = live.map((m) => ({
-    key: `${m.isBot ? "assistant" : "user"}:${m.text}`,
-    ts: m.timestamp,
-  }));
+  const liveFingerprints: { key: string; ts: number }[] = allLive
+    .filter((m) => !m.requestId)
+    .map((m) => ({
+      key: `${m.isBot ? "assistant" : "user"}:${m.text}`,
+      ts: m.timestamp,
+    }));
 
   const filtered = baseline.filter((b) => {
-    // Dedup by requestId
+    // Dedup by requestId — exact match against live or thread parent
     if (b.requestId && liveByRequestId.has(b.requestId)) return false;
-    // Dedup by fingerprint + time window
-    const fp = `${b.isBot ? "assistant" : "user"}:${b.text}`;
-    return !liveFingerprints.some(
-      (l) => l.key === fp && Math.abs(l.ts - b.timestamp) < DEDUP_WINDOW_MS,
-    );
+    // Fingerprint fallback — only for messages with NO requestId
+    if (!b.requestId) {
+      const fp = `${b.isBot ? "assistant" : "user"}:${b.text}`;
+      if (
+        liveFingerprints.some(
+          (l) => l.key === fp && Math.abs(l.ts - b.timestamp) < DEDUP_WINDOW_MS,
+        )
+      ) {
+        return false;
+      }
+    }
+    return true;
   });
 
   return [...filtered, ...live].sort((a, b) => a.timestamp - b.timestamp);
