@@ -21,10 +21,16 @@ cp examples/openserv-team/office.yaml ~/.agent-office/offices/openserv-team/offi
 pnpm dev start --office openserv-team --sandbox docker
 ```
 
-Then in the REPL or via Telegram:
+Then via the Web UI or API:
 
-```
-ao> send lead "Review latest ideas from scout and pick one for the team to build"
+```bash
+# API (requires session cookie + CSRF headers from POST /api/auth)
+curl -X POST http://127.0.0.1:<port>/api/send \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: http://127.0.0.1:<port>' \
+  -H 'X-Requested-With: XMLHttpRequest' \
+  -b 'ao_session=<session>' \
+  -d '{"agent": "lead", "message": "Review latest ideas from scout and pick one for the team to build"}'
 ```
 
 ## Environment
@@ -34,6 +40,4 @@ Set these in the project root `.env` (not inside Docker — the host forwards th
 ```env
 OPENAI_API_KEY=
 WALLET_PRIVATE_KEY=          # EVM wallet key for openserv-labs/skills agents
-TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
-ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
 ```

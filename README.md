@@ -1,6 +1,6 @@
 # agent-office
 
-Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, inbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, declarative YAML configuration, and Telegram as a messaging frontend.
+Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, inbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, and declarative YAML configuration.
 
 ## Get Started
 
@@ -17,8 +17,6 @@ pnpm dev start --office basic-team --sandbox docker
 
 ```env
 OPENAI_API_KEY=
-TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
-ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
 ```
 
 **OpenServ team** — idea scout, team lead, agent dev, and token launcher:
@@ -34,8 +32,6 @@ pnpm dev start --office openserv-team --sandbox docker
 ```env
 OPENAI_API_KEY=
 WALLET_PRIVATE_KEY=          # EVM wallet key for openserv-labs/skills agents
-TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
-ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
 ```
 
 **Feature team** — task-driven development with Kanban board:
@@ -90,7 +86,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [memory_search](#memory_search)
   - [memory_get](#memory_get)
   - [Citation Mode](#citation-mode)
-- [Telegram Integration](#telegram-integration)
+
 - [Concepts](#concepts)
   - [Tick-Based Scheduler](#tick-based-scheduler)
   - [Priority Levels](#priority-levels)
@@ -113,7 +109,6 @@ See [`examples/`](examples/) for more details — each has a README describing t
 graph TD
     YAML[office.yaml] --> WS
     CLI[CLI + Web UI] --> WS[Workspace]
-    TG[Telegram / grammY] --> WS
 
     WS --> SCH[Scheduler\ntick loop]
     WS --> BUS[MessageBus\ninboxes]
@@ -133,7 +128,7 @@ graph TD
     BUS --> HA
 ```
 
-**Core flow:** `office.yaml` (auto-spawn) / CLI / Telegram / Cron / Agent cron tools / Task notifications -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to Telegram.
+**Core flow:** `office.yaml` (auto-spawn) / CLI / Web UI / Cron / Agent cron tools / Task notifications -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to UI.
 
 Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
@@ -150,7 +145,7 @@ cp .env.example .env   # then fill in your keys
 # Create an office
 pnpm dev office create my-team
 
-# Start (Web UI auto-starts, Telegram auto-connects if token set)
+# Start (Web UI auto-starts)
 pnpm dev start --office my-team
 
 # Start with Docker sandbox isolation
@@ -163,9 +158,6 @@ Create a `.env` file with your provider keys:
 OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=sk-...
 # GEMINI_API_KEY=...
-TELEGRAM_BOT_TOKEN=...          # Telegram bridge auto-enables when set
-# TELEGRAM_ENABLED=false        # Set to disable Telegram
-# ALLOWED_USERS=alice,bob       # Comma-separated allowlist (empty = open access)
 # MY_GH_TOKEN=ghp_...           # Host env vars for secret refs (office.yaml secrets)
 ```
 
@@ -793,8 +785,6 @@ pnpm dev start
   --no-ui                   Run headless without the web UI
 ```
 
-Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via `TELEGRAM_ENABLED=false` in `.env`.
-
 > **Migration note:** The interactive `ao>` REPL has been removed. All runtime commands are now available through the Web UI controls and `POST /api/commands/:command`. Use `--no-ui` for headless operation; send `SIGINT`/`SIGTERM` to shut down.
 
 ### Execution Surfaces
@@ -1184,32 +1174,6 @@ office:
 | `off`  | Never add scope tags                                   |
 | `auto` | Add scope tags for office results only (default)       |
 
-## Telegram Integration
-
-Telegram bridge auto-enables when `TELEGRAM_BOT_TOKEN` is set in `.env` or the environment. All agent events (tool calls, text responses, completion) stream to the originating chat.
-
-```env
-# .env
-TELEGRAM_BOT_TOKEN=xxx
-# TELEGRAM_ENABLED=false   # uncomment to disable
-# ALLOWED_USERS=alice,bob  # optional allowlist
-```
-
-```bash
-pnpm dev start   # Telegram connects automatically
-```
-
-### Telegram Commands
-
-| Command              | Description                               |
-| -------------------- | ----------------------------------------- |
-| `/agents`            | List all running agents                   |
-| `/help`              | Show available commands                   |
-| `@agentname message` | Send directly to a specific agent         |
-| _(plain text)_       | Guidance reply: use `@agent <message>`    |
-
-Each agent's events are delivered to the last chat that messaged it (last-write-wins per agent). Different agents can serve different chats concurrently.
-
 ## Concepts
 
 ### Tick-Based Scheduler
@@ -1480,13 +1444,6 @@ hire copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marke
 hire reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
 ```
 
-Via Telegram:
-
-```
-@copywriter Write landing page copy for FlowPilot, an AI task manager.
-Include hero, 3 features, CTA. Send to designer when done.
-```
-
 What happens:
 
 1. **copywriter** writes copy, uses `list_agents` to discover designer, sends via `message_agent`
@@ -1585,23 +1542,7 @@ What happens:
 
 The agent never sees `ghp_...` — only the name `GITHUB_TOKEN`. In Docker sandbox mode, the secret never enters the container at all.
 
-### Example 4: Mixed Mode with Telegram
-
-```bash
-TELEGRAM_BOT_TOKEN=xxx pnpm dev start --office my-team --sandbox docker
-```
-
-```
-# In Telegram:
-@backend Set up a PostgreSQL schema for users and posts
-@frontend Build a React dashboard that displays user stats
-
-# Both agents work in isolated containers
-# Files persist on host for inspection
-# Status visible via /agents command in Telegram
-```
-
-### Example 5: Task-Driven Development
+### Example 4: Task-Driven Development
 
 Three agents collaborate with Kanban-style task management:
 
@@ -1727,9 +1668,6 @@ src/
     local.ts                  In-process priority inbox queues
     message-bus.ts            Bus wrapper over transport
 
-  bridges/
-    telegram.ts               grammY Telegram bridge
-
   commands/
     office-apply.ts           Apply office.yaml + reload/validate/path commands
     hire.ts                   Agent creation with YAML auto-sync
@@ -1801,7 +1739,7 @@ test/
 | `@sinclair/typebox`             | Tool parameter schemas                                          |
 | `commander`                     | CLI argument parsing                                            |
 | `dotenv`                        | Load `.env` into `process.env`                                  |
-| `grammy`                        | Telegram Bot API                                                |
+
 | `cron-parser`                   | Cron expression parsing (next/prev fire times)                  |
 | `yaml`                          | YAML parsing with comment-preserving Document API               |
 | `proper-lockfile`               | Cross-process file locking for per-office config safety         |

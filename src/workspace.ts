@@ -178,7 +178,7 @@ export class Workspace {
     this.agents.set(config.name, handle);
     this.bus.register(config.name);
 
-    // Forward agent events to workspace listeners (telegram, etc.)
+    // Forward agent events to workspace listeners
     handle.onEvent((e) => {
       const requestId = handle.getActiveRequestId();
       const event = requestId

@@ -28,10 +28,16 @@ cp -r examples/basic-team/ ~/.agent-office/offices/basic-team/
 pnpm dev start --office basic-team --sandbox docker
 ```
 
-Then in the REPL or via Telegram:
+Then via the Web UI or API:
 
-```
-ao> send pm "Build a REST API for a todo app with CRUD endpoints"
+```bash
+# API (requires session cookie + CSRF headers from POST /api/auth)
+curl -X POST http://127.0.0.1:<port>/api/send \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: http://127.0.0.1:<port>' \
+  -H 'X-Requested-With: XMLHttpRequest' \
+  -b 'ao_session=<session>' \
+  -d '{"agent": "pm", "message": "Build a REST API for a todo app with CRUD endpoints"}'
 ```
 
 The PM will break the task down and delegate to coder and reviewer.
@@ -42,7 +48,5 @@ Set these in the project root `.env` (not inside Docker — the host forwards th
 
 ```env
 OPENAI_API_KEY=
-TELEGRAM_BOT_TOKEN=          # optional, enables Telegram bridge
-ALLOWED_USERS=               # optional, comma-separated Telegram allowlist
 MY_GH_TOKEN=                 # optional, uncomment secrets block in office.yaml to use
 ```

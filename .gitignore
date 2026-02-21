@@ -5,3 +5,4 @@ dist/
 .claude
 AGENTS.md
 CLAUDE.md
+.spec2commit/

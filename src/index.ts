@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Command, Option } from "commander";
 import { Workspace } from "./workspace.js";
-import { createTelegramBridge } from "./bridges/telegram.js";
 import { applyOfficeYaml, officeValidateCommand } from "./commands/office-apply.js";
 import { AGENT_OFFICE_DIR, validateOfficeId } from "./constants.js";
 import {
@@ -164,25 +163,6 @@ program
       console.log(`[watchdog] Started (check=10s, threshold=120s)`);
       console.log(`[office] ${office.name} (${opts.office})`);
       if (sandboxMode !== "none") console.log(`[sandbox] Mode: ${sandboxMode}`);
-
-      // Telegram bridge
-      const telegramToken = process.env["TELEGRAM_BOT_TOKEN"];
-      const telegramEnabled = process.env["TELEGRAM_ENABLED"] !== "false";
-      if (telegramEnabled && telegramToken) {
-        const allowedUsers = (process.env["ALLOWED_USERS"] ?? "")
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-        const bot = createTelegramBridge(
-          workspace,
-          telegramToken,
-          allowedUsers,
-        );
-        bot.start();
-        console.log(
-          `[telegram] Connected${allowedUsers.length ? ` (allowed: ${allowedUsers.join(", ")})` : " (open access)"}`,
-        );
-      }
 
       // Apply office.yaml agents
       await applyOfficeYaml(workspace, opts.office);
