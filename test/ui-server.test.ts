@@ -35,7 +35,12 @@ function createMockWorkspace() {
   return {
     scheduler: {
       onTick: vi.fn(() => vi.fn()),
-      state: vi.fn(() => ({ running: true, tickCount: 0, intervalMs: 2000, agents: [] })),
+      state: vi.fn(() => ({
+        running: true,
+        tickCount: 0,
+        intervalMs: 2000,
+        agents: [],
+      })),
       intervalMs: 2000,
     },
     bus: { peekMessages: vi.fn(() => []) },
@@ -240,5 +245,154 @@ describe("UI server", () => {
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_request_id" });
+  });
+
+  // --- POST /api/commands (body endpoint) ---
+
+  it("POST /api/commands body endpoint dispatches and returns 200", async () => {
+    mockDispatchCommand.mockResolvedValueOnce("handled" as any);
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ command: "roster" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockDispatchCommand).toHaveBeenCalled();
+  });
+
+  it("POST /api/commands returns 400 for missing command field", async () => {
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "missing_command" });
+  });
+
+  it("POST /api/commands returns 400 for invalid JSON body", async () => {
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "text/plain" }),
+      body: "not json",
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_body" });
+  });
+
+  it("POST /api/commands returns 400 for unknown command", async () => {
+    mockDispatchCommand.mockResolvedValueOnce("unknown" as any);
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ command: "nosuchcmd" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("unknown_command");
+  });
+
+  it("POST /api/commands returns same result as path endpoint", async () => {
+    mockDispatchCommand.mockResolvedValue("handled" as any);
+    const [bodyRes, pathRes] = await Promise.all([
+      fetch(`${origin}/api/commands`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ command: "status" }),
+      }),
+      fetch(`${origin}/api/commands/${encodeURIComponent("status")}`, {
+        method: "POST",
+        headers: authHeaders(),
+      }),
+    ]);
+    expect(bodyRes.status).toBe(pathRes.status);
+    const bodyJson = await bodyRes.json();
+    const pathJson = await pathRes.json();
+    expect(bodyJson.ok).toBe(pathJson.ok);
+  });
+
+  // --- Auth & CSRF tests for POST /api/commands ---
+
+  it("POST /api/commands returns 401 without session cookie", async () => {
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: origin,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify({ command: "roster" }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /api/commands returns 403 without Origin header", async () => {
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify({ command: "roster" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("POST /api/commands returns 403 without X-Requested-With header", async () => {
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: {
+        Cookie: sessionCookie,
+        Origin: origin,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ command: "roster" }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  // --- noWait 409-busy parity test ---
+
+  it("POST /api/commands returns 409 when busy with noWait", async () => {
+    mockDispatchCommand.mockImplementationOnce(
+      () => new Promise((r) => setTimeout(() => r("handled"), 300)),
+    );
+    const slow = fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ command: "send alice long-task" }),
+    });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ command: "roster", noWait: true }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.busy).toBe(true);
+
+    await slow;
+  });
+
+  // --- Null-hierarchy manager-set integration test ---
+
+  it("POST /api/commands dispatches agent-set-manager for null-hierarchy agent", async () => {
+    mockDispatchCommand.mockResolvedValueOnce("handled" as any);
+    const res = await fetch(`${origin}/api/commands`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ command: "agent-set-manager alice bob" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(mockDispatchCommand).toHaveBeenCalledWith(
+      expect.anything(),
+      "test-office",
+      "agent-set-manager alice bob",
+    );
   });
 });

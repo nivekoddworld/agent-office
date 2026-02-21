@@ -1,4 +1,9 @@
-import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+  type Server,
+} from "node:http";
 import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
 import { readFileSync, existsSync, statSync } from "node:fs";
@@ -45,7 +50,9 @@ const TASK_PRIORITY_MAP: Record<string, Priority> = {
 };
 const TASK_PRIORITY_VALUES = Object.keys(TASK_PRIORITY_MAP).join(", ");
 
-type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
+type ValidationResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: string };
 
 interface TaskCreateBody {
   title: string;
@@ -182,7 +189,10 @@ function parseTaskCreateBody(value: unknown): ValidationResult<TaskCreateBody> {
     (!Array.isArray(dependsOn) ||
       dependsOn.some((id) => typeof id !== "string" || !id.trim()))
   ) {
-    return { ok: false, error: "dependsOn must be an array of non-empty strings" };
+    return {
+      ok: false,
+      error: "dependsOn must be an array of non-empty strings",
+    };
   }
 
   const priorityResult = parsePriority(value["priority"]);
@@ -214,14 +224,21 @@ function parseTaskUpdateBody(value: unknown): ValidationResult<TaskUpdateBody> {
   if (!hasAnyField) {
     return {
       ok: false,
-      error: "at least one field must be provided: status, result, assignee, priority",
+      error:
+        "at least one field must be provided: status, result, assignee, priority",
     };
   }
 
   const status = value["status"];
   if (status !== undefined) {
-    if (typeof status !== "string" || !TASK_STATUSES.includes(status as TaskStatus)) {
-      return { ok: false, error: `status must be one of: ${TASK_STATUSES.join(", ")}` };
+    if (
+      typeof status !== "string" ||
+      !TASK_STATUSES.includes(status as TaskStatus)
+    ) {
+      return {
+        ok: false,
+        error: `status must be one of: ${TASK_STATUSES.join(", ")}`,
+      };
     }
   }
 
@@ -231,7 +248,10 @@ function parseTaskUpdateBody(value: unknown): ValidationResult<TaskUpdateBody> {
   }
 
   const assignee = value["assignee"];
-  if (assignee !== undefined && (typeof assignee !== "string" || !assignee.trim())) {
+  if (
+    assignee !== undefined &&
+    (typeof assignee !== "string" || !assignee.trim())
+  ) {
     return { ok: false, error: "assignee must be a non-empty string" };
   }
 
@@ -263,7 +283,9 @@ export async function startUiServer(
   // Idempotent: if already running, refresh token and return existing URL
   if (instance) {
     if (requestedPort !== 0 && requestedPort !== instance.port) {
-      console.log(`[ui] Already running on port ${instance.port}, ignoring requested port ${requestedPort}`);
+      console.log(
+        `[ui] Already running on port ${instance.port}, ignoring requested port ${requestedPort}`,
+      );
     }
     const token = newBootstrapToken();
     const url = `http://${HOST}:${instance.port}/#token=${token}`;
@@ -283,7 +305,9 @@ export async function startUiServer(
     }
   };
 
-  const unsubTick = workspace.scheduler.onTick((state) => broadcast("scheduler_tick", state));
+  const unsubTick = workspace.scheduler.onTick((state) =>
+    broadcast("scheduler_tick", state),
+  );
   const unsubAgent = workspace.onAgentEvent((name, event) =>
     broadcast("agent_event", { agent: name, ...event }),
   );
@@ -292,6 +316,54 @@ export async function startUiServer(
   // Static file root
   const thisDir = fileURLToPath(new URL(".", import.meta.url));
   const distDir = join(thisDir, "..", "..", "ui", "dist");
+
+  async function handleCommandDispatch(
+    command: string,
+    noWait: boolean,
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+    const xrw = req.headers["x-requested-with"];
+    if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+    const dispatch: { result: DispatchResult } = { result: "unknown" };
+    const result = await executeCommand(
+      command,
+      async () => {
+        dispatch.result = await dispatchCommand(workspace, officeId, command);
+        if (dispatch.result !== "handled" && dispatch.result !== "noop") {
+          throw new Error("unknown_command");
+        }
+      },
+      noWait,
+    );
+
+    if (result.ok && dispatch.result === "handled" && isMutation(command)) {
+      broadcast("state_changed", getBootstrapState(workspace, officeId));
+    }
+
+    if (
+      result.error === `busy:${command}` ||
+      result.error?.startsWith("busy:")
+    ) {
+      return json(res, 409, {
+        ok: false,
+        busy: true,
+        command: result.error.slice(5),
+      });
+    }
+    if (result.error === "queue_full") return json(res, 429, result);
+    if (result.error === "timeout") return json(res, 504, result);
+    if (result.error === "unknown_command") {
+      return json(res, 400, {
+        ok: false,
+        output: result.output,
+        error: result.error,
+      });
+    }
+    return json(res, result.ok ? 200 : 500, result);
+  }
 
   let boundPort = requestedPort;
   const server = createServer(async (req, res) => {
@@ -377,7 +449,11 @@ export async function startUiServer(
     if (inboxMatch && method === "GET") {
       const name = inboxMatch[1]!;
       const messages = workspace.bus.peekMessages(name);
-      return json(res, 200, { agent: name, pending: messages.length, messages });
+      return json(res, 200, {
+        agent: name,
+        pending: messages.length,
+        messages,
+      });
     }
 
     // --- GET /api/agents/:name/files ---
@@ -391,7 +467,9 @@ export async function startUiServer(
     }
 
     // --- GET /api/agents/:name/files/content?path=... ---
-    const fileContentMatch = path.match(/^\/api\/agents\/([^/]+)\/files\/content$/);
+    const fileContentMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/files\/content$/,
+    );
     if (fileContentMatch && method === "GET") {
       const name = fileContentMatch[1]!;
       const handle = workspace.getAgent(name);
@@ -416,7 +494,11 @@ export async function startUiServer(
     if (path === "/api/tasks" && method === "GET") {
       const assignee = url.searchParams.get("assignee") ?? undefined;
       const status = url.searchParams.get("status") ?? undefined;
-      return json(res, 200, workspace.tasks.list({ assignee, status: status as any }));
+      return json(
+        res,
+        200,
+        workspace.tasks.list({ assignee, status: status as any }),
+      );
     }
 
     // --- GET /api/tasks/board ---
@@ -439,11 +521,17 @@ export async function startUiServer(
       if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
       const body = await readBody(req);
       let parsed: unknown;
-      try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
       const validated = parseTaskCreateBody(parsed);
-      if (!validated.ok) return json(res, 400, { ok: false, error: validated.error });
+      if (!validated.ok)
+        return json(res, 400, { ok: false, error: validated.error });
       const result = workspace.tasks.create("__user__", validated.value);
-      if (typeof result === "string") return json(res, 400, { ok: false, error: result });
+      if (typeof result === "string")
+        return json(res, 400, { ok: false, error: result });
       broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, 201, result);
     }
@@ -456,11 +544,21 @@ export async function startUiServer(
       if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
       const body = await readBody(req);
       let parsed: unknown;
-      try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
       const validated = parseTaskUpdateBody(parsed);
-      if (!validated.ok) return json(res, 400, { ok: false, error: validated.error });
-      const result = workspace.tasks.update("__user__", taskPatchMatch[1]!, validated.value);
-      if (typeof result === "string") return json(res, 400, { ok: false, error: result });
+      if (!validated.ok)
+        return json(res, 400, { ok: false, error: validated.error });
+      const result = workspace.tasks.update(
+        "__user__",
+        taskPatchMatch[1]!,
+        validated.value,
+      );
+      if (typeof result === "string")
+        return json(res, 400, { ok: false, error: result });
       broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, 200, result);
     }
@@ -494,8 +592,13 @@ export async function startUiServer(
         priority?: number;
         requestId?: string;
       };
-      try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
-      if (!parsed.agent || !parsed.message) return json(res, 400, { error: "missing_agent_or_message" });
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.agent || !parsed.message)
+        return json(res, 400, { error: "missing_agent_or_message" });
       if (
         parsed.requestId !== undefined &&
         (typeof parsed.requestId !== "string" || !parsed.requestId.trim())
@@ -509,50 +612,32 @@ export async function startUiServer(
         parsed.priority,
         parsed.requestId,
       );
-      if (result.ok) broadcast("state_changed", getBootstrapState(workspace, officeId));
+      if (result.ok)
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, result.ok ? 200 : 400, result);
+    }
+
+    // --- POST /api/commands (body-based) ---
+    if (path === "/api/commands" && method === "POST") {
+      const body = await readBody(req);
+      let parsed: { command?: string; noWait?: boolean };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.command || typeof parsed.command !== "string") {
+        return json(res, 400, { error: "missing_command" });
+      }
+      return handleCommandDispatch(parsed.command, !!parsed.noWait, req, res);
     }
 
     // --- POST /api/commands/:command ---
     const cmdMatch = path.match(/^\/api\/commands\/(.+)$/);
     if (cmdMatch && method === "POST") {
-      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
-      const xrw = req.headers["x-requested-with"];
-      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
-
       const command = decodeURIComponent(cmdMatch[1]!);
       const noWait = url.searchParams.get("noWait") === "1";
-
-      const dispatch: { result: DispatchResult } = { result: "unknown" };
-      const result = await executeCommand(
-        command,
-        async () => {
-          dispatch.result = await dispatchCommand(workspace, officeId, command);
-          if (dispatch.result !== "handled" && dispatch.result !== "noop") {
-            throw new Error("unknown_command");
-          }
-        },
-        noWait,
-      );
-
-      // Broadcast updated state to all SSE clients after successful mutations
-      if (result.ok && dispatch.result === "handled" && isMutation(command)) {
-        broadcast("state_changed", getBootstrapState(workspace, officeId));
-      }
-
-      if (result.error === `busy:${command}` || result.error?.startsWith("busy:")) {
-        return json(res, 409, {
-          ok: false,
-          busy: true,
-          command: result.error.slice(5),
-        });
-      }
-      if (result.error === "queue_full") return json(res, 429, result);
-      if (result.error === "timeout") return json(res, 504, result);
-      if (result.error === "unknown_command") {
-        return json(res, 400, { ok: false, output: result.output, error: result.error });
-      }
-      return json(res, result.ok ? 200 : 500, result);
+      return handleCommandDispatch(command, noWait, req, res);
     }
 
     // --- Catch-all for unknown /api/* paths ---
@@ -567,15 +652,16 @@ export async function startUiServer(
         res.writeHead(503, { "Content-Type": "text/html" });
         return res.end(
           '<html><body style="font-family:system-ui;padding:2rem">' +
-          "<h2>UI not built</h2>" +
-          "<p>Run <code>pnpm -C ui build</code> then reload.</p>" +
-          "</body></html>",
+            "<h2>UI not built</h2>" +
+            "<p>Run <code>pnpm -C ui build</code> then reload.</p>" +
+            "</body></html>",
         );
       }
       const filePath = path === "/" ? "/index.html" : path;
       const abs = resolve(join(distDir, filePath));
       const rel = relative(distDir, abs);
-      if (rel.startsWith("..") || isAbsolute(rel)) return json(res, 403, { error: "forbidden" });
+      if (rel.startsWith("..") || isAbsolute(rel))
+        return json(res, 403, { error: "forbidden" });
       if (existsSync(abs) && statSync(abs).isFile()) {
         const ext = extname(abs);
         const mime = MIME[ext] ?? "application/octet-stream";

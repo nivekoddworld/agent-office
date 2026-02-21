@@ -35,21 +35,17 @@ export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySecti
     );
   };
 
-  if (!hierarchy) {
-    return (
-      <Text size="xs" style={{ color: slack.textMuted }}>
-        No hierarchy configured
-      </Text>
-    );
-  }
+  const managerDisplay = hierarchy?.manager ?? null;
+  const peers = hierarchy?.peers ?? [];
+  const reports = hierarchy?.reports ?? [];
 
   return (
     <Stack gap="sm">
       <Group gap="xs" align="center">
         <IconArrowUp size={14} color={slack.textMuted} />
         <Text size="xs" style={{ color: slack.textMuted }}>Manager:</Text>
-        {hierarchy.manager ? (
-          <Badge size="sm" variant="light" color="violet">{hierarchy.manager}</Badge>
+        {managerDisplay ? (
+          <Badge size="sm" variant="light" color="violet">{managerDisplay}</Badge>
         ) : (
           <Text size="xs" style={{ color: slack.textMuted }}>None</Text>
         )}
@@ -58,8 +54,8 @@ export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySecti
       <Group gap="xs" align="center">
         <IconArrowsHorizontal size={14} color={slack.textMuted} />
         <Text size="xs" style={{ color: slack.textMuted }}>Peers:</Text>
-        {hierarchy.peers.length > 0 ? (
-          hierarchy.peers.map((p) => (
+        {peers.length > 0 ? (
+          peers.map((p) => (
             <Badge key={p} size="sm" variant="light" color="blue">{p}</Badge>
           ))
         ) : (
@@ -70,8 +66,8 @@ export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySecti
       <Group gap="xs" align="center">
         <IconArrowDown size={14} color={slack.textMuted} />
         <Text size="xs" style={{ color: slack.textMuted }}>Reports:</Text>
-        {hierarchy.reports.length > 0 ? (
-          hierarchy.reports.map((r) => (
+        {reports.length > 0 ? (
+          reports.map((r) => (
             <Badge key={r} size="sm" variant="light" color="cyan">{r}</Badge>
           ))
         ) : (
@@ -101,11 +97,11 @@ export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySecti
           variant="subtle"
           color="gray"
           onClick={() => {
-            setSelectedManager(hierarchy.manager ?? "__clear__");
+            setSelectedManager(managerDisplay ?? "__clear__");
             setEditing(true);
           }}
         >
-          Change manager
+          {hierarchy ? "Change manager" : "Set manager"}
         </Button>
       )}
     </Stack>

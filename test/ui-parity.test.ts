@@ -76,7 +76,11 @@ import { hireCommand } from "../src/commands/hire.js";
 import { officeReloadCommand } from "../src/commands/office-apply.js";
 import { rosterCommand } from "../src/commands/roster.js";
 import { statusCommand } from "../src/commands/status.js";
-import { agentSetManagerCommand } from "../src/commands/agent-config.js";
+import {
+  agentSetManagerCommand,
+  agentPromptSetCommand,
+  agentPromptAppendCommand,
+} from "../src/commands/agent-config.js";
 import { cronTriggerCommand } from "../src/commands/cron.js";
 
 const mockWorkspace = {} as Parameters<typeof dispatchCommand>[0];
@@ -90,7 +94,15 @@ describe("UI parity — structural", () => {
   });
 
   it("manifest categories are all valid", () => {
-    const valid = new Set(["agent", "office", "cron", "task", "cost", "ui", "general"]);
+    const valid = new Set([
+      "agent",
+      "office",
+      "cron",
+      "task",
+      "cost",
+      "ui",
+      "general",
+    ]);
     for (const entry of COMMAND_MANIFEST) {
       expect(valid.has(entry.category)).toBe(true);
     }
@@ -108,7 +120,9 @@ describe("UI parity — structural", () => {
   });
 
   it("agent-set-manager exists in manifest", () => {
-    expect(COMMAND_MANIFEST.find((c) => c.name === "agent-set-manager")).toBeDefined();
+    expect(
+      COMMAND_MANIFEST.find((c) => c.name === "agent-set-manager"),
+    ).toBeDefined();
   });
 
   it("removed REPL-only commands are absent from manifest", () => {
@@ -127,9 +141,18 @@ describe("UI parity — dispatch", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("dispatches send command to sendCommand handler", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "send alice hello world");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "send alice hello world",
+    );
     expect(result).toBe("handled");
-    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "alice", "hello world", undefined);
+    expect(sendCommand).toHaveBeenCalledWith(
+      mockWorkspace,
+      "alice",
+      "hello world",
+      undefined,
+    );
   });
 
   it("dispatches fire command to fireCommand handler", async () => {
@@ -140,20 +163,33 @@ describe("UI parity — dispatch", () => {
 
   it("dispatches hire command to hireCommand handler", async () => {
     const result = await dispatchCommand(
-      mockWorkspace, officeId,
+      mockWorkspace,
+      officeId,
       "hire alice --model openai:gpt-4 --priority 2",
     );
     expect(result).toBe("handled");
     expect(hireCommand).toHaveBeenCalledWith(
       mockWorkspace,
-      expect.objectContaining({ name: "alice", model: "openai:gpt-4", priority: "2" }),
+      expect.objectContaining({
+        name: "alice",
+        model: "openai:gpt-4",
+        priority: "2",
+      }),
     );
   });
 
   it("dispatches office reload --force to officeReloadCommand", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "office reload --force");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "office reload --force",
+    );
     expect(result).toBe("handled");
-    expect(officeReloadCommand).toHaveBeenCalledWith(mockWorkspace, officeId, true);
+    expect(officeReloadCommand).toHaveBeenCalledWith(
+      mockWorkspace,
+      officeId,
+      true,
+    );
   });
 
   it("dispatches roster to rosterCommand", async () => {
@@ -169,25 +205,53 @@ describe("UI parity — dispatch", () => {
   });
 
   it("dispatches agent-set-manager to agentSetManagerCommand", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "agent-set-manager alice bob");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "agent-set-manager alice bob",
+    );
     expect(result).toBe("handled");
-    expect(agentSetManagerCommand).toHaveBeenCalledWith(officeId, "alice", "bob");
+    expect(agentSetManagerCommand).toHaveBeenCalledWith(
+      officeId,
+      "alice",
+      "bob",
+    );
   });
 
   it("dispatches agent-set-manager __clear__ as null", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "agent-set-manager alice __clear__");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "agent-set-manager alice __clear__",
+    );
     expect(result).toBe("handled");
-    expect(agentSetManagerCommand).toHaveBeenCalledWith(officeId, "alice", null);
+    expect(agentSetManagerCommand).toHaveBeenCalledWith(
+      officeId,
+      "alice",
+      null,
+    );
   });
 
   it("dispatches cron trigger to cronTriggerCommand", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "cron trigger alice daily");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "cron trigger alice daily",
+    );
     expect(result).toBe("handled");
-    expect(cronTriggerCommand).toHaveBeenCalledWith(mockWorkspace, "alice", "daily");
+    expect(cronTriggerCommand).toHaveBeenCalledWith(
+      mockWorkspace,
+      "alice",
+      "daily",
+    );
   });
 
   it("returns 'unknown' for unrecognized commands", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "nosuchcommand");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "nosuchcommand",
+    );
     expect(result).toBe("unknown");
   });
 
@@ -207,15 +271,33 @@ describe("UI parity — dispatch", () => {
   });
 
   it("send with short agent name 'e' parses correctly", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "send e hello world");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "send e hello world",
+    );
     expect(result).toBe("handled");
-    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "e", "hello world", undefined);
+    expect(sendCommand).toHaveBeenCalledWith(
+      mockWorkspace,
+      "e",
+      "hello world",
+      undefined,
+    );
   });
 
   it("send with agent name 'end' parses correctly", async () => {
-    const result = await dispatchCommand(mockWorkspace, officeId, "send end test msg");
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      "send end test msg",
+    );
     expect(result).toBe("handled");
-    expect(sendCommand).toHaveBeenCalledWith(mockWorkspace, "end", "test msg", undefined);
+    expect(sendCommand).toHaveBeenCalledWith(
+      mockWorkspace,
+      "end",
+      "test msg",
+      undefined,
+    );
   });
 
   it("hire with no args throws usage error", async () => {
@@ -235,7 +317,9 @@ describe("UI parity — noop dispatch", () => {
   });
 
   it("send with agent but no message returns noop", async () => {
-    expect(await dispatchCommand(mockWorkspace, officeId, "send alice")).toBe("noop");
+    expect(await dispatchCommand(mockWorkspace, officeId, "send alice")).toBe(
+      "noop",
+    );
   });
 
   it("fire with no agent returns noop", async () => {
@@ -243,31 +327,49 @@ describe("UI parity — noop dispatch", () => {
   });
 
   it("agent-set-manager with missing args returns noop", async () => {
-    expect(await dispatchCommand(mockWorkspace, officeId, "agent-set-manager")).toBe("noop");
-    expect(await dispatchCommand(mockWorkspace, officeId, "agent-set-manager alice")).toBe("noop");
+    expect(
+      await dispatchCommand(mockWorkspace, officeId, "agent-set-manager"),
+    ).toBe("noop");
+    expect(
+      await dispatchCommand(mockWorkspace, officeId, "agent-set-manager alice"),
+    ).toBe("noop");
   });
 
   it("route command returns unknown (removed)", async () => {
-    expect(await dispatchCommand(mockWorkspace, officeId, "route foo bar")).toBe("unknown");
+    expect(
+      await dispatchCommand(mockWorkspace, officeId, "route foo bar"),
+    ).toBe("unknown");
   });
 
   it("skill with invalid sub returns noop", async () => {
-    expect(await dispatchCommand(mockWorkspace, officeId, "skill")).toBe("noop");
-    expect(await dispatchCommand(mockWorkspace, officeId, "skill bogus")).toBe("noop");
+    expect(await dispatchCommand(mockWorkspace, officeId, "skill")).toBe(
+      "noop",
+    );
+    expect(await dispatchCommand(mockWorkspace, officeId, "skill bogus")).toBe(
+      "noop",
+    );
   });
 
   it("office with invalid sub returns noop", async () => {
-    expect(await dispatchCommand(mockWorkspace, officeId, "office bogus")).toBe("noop");
+    expect(await dispatchCommand(mockWorkspace, officeId, "office bogus")).toBe(
+      "noop",
+    );
   });
 
   it("cron with invalid sub returns noop", async () => {
     expect(await dispatchCommand(mockWorkspace, officeId, "cron")).toBe("noop");
-    expect(await dispatchCommand(mockWorkspace, officeId, "cron bogus")).toBe("noop");
+    expect(await dispatchCommand(mockWorkspace, officeId, "cron bogus")).toBe(
+      "noop",
+    );
   });
 
   it("agent with invalid sub returns noop", async () => {
-    expect(await dispatchCommand(mockWorkspace, officeId, "agent")).toBe("noop");
-    expect(await dispatchCommand(mockWorkspace, officeId, "agent bogus")).toBe("noop");
+    expect(await dispatchCommand(mockWorkspace, officeId, "agent")).toBe(
+      "noop",
+    );
+    expect(await dispatchCommand(mockWorkspace, officeId, "agent bogus")).toBe(
+      "noop",
+    );
   });
 });
 
@@ -287,7 +389,7 @@ describe("isMutation", () => {
     expect(isMutation("fire bob")).toBe(true);
     expect(isMutation("send alice hello")).toBe(true);
     expect(isMutation("office reload --force")).toBe(true);
-    expect(isMutation("cron add bob daily \"0 9 * * *\" hello")).toBe(true);
+    expect(isMutation('cron add bob daily "0 9 * * *" hello')).toBe(true);
     expect(isMutation("agent-set-manager alice bob")).toBe(true);
     expect(isMutation("skill add alice owner/repo")).toBe(true);
   });
@@ -313,13 +415,21 @@ describe("UI parity — agent permission noop", () => {
 
   it("agent permission set office_cron with invalid value returns noop", async () => {
     expect(
-      await dispatchCommand(mockWorkspace, officeId, "agent permission set alice office_cron maybe"),
+      await dispatchCommand(
+        mockWorkspace,
+        officeId,
+        "agent permission set alice office_cron maybe",
+      ),
     ).toBe("noop");
   });
 
   it("agent permission set tools with empty tool list returns noop", async () => {
     expect(
-      await dispatchCommand(mockWorkspace, officeId, "agent permission set alice tools allow ,,"),
+      await dispatchCommand(
+        mockWorkspace,
+        officeId,
+        "agent permission set alice tools allow ,,",
+      ),
     ).toBe("noop");
   });
 });
@@ -331,7 +441,9 @@ describe("UI parity — no REPL remnants", () => {
 
   it("former REPL-only commands dispatch as unknown", async () => {
     for (const cmd of ["help", "exit", "quit", "ui"]) {
-      expect(await dispatchCommand(mockWorkspace, officeId, cmd)).toBe("unknown");
+      expect(await dispatchCommand(mockWorkspace, officeId, cmd)).toBe(
+        "unknown",
+      );
     }
   });
 
@@ -339,5 +451,79 @@ describe("UI parity — no REPL remnants", () => {
     for (const name of ["ui", "help", "exit", "quit"]) {
       expect(COMMAND_MANIFEST.find((c) => c.name === name)).toBeUndefined();
     }
+  });
+});
+
+// --- Prompt escaping round-trip tests ---
+
+describe("UI parity — prompt escaping", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("prompt set with escaped quotes passes unescaped text to handler", async () => {
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      'agent prompt set alice "say \\"hi\\""',
+    );
+    expect(result).toBe("handled");
+    expect(agentPromptSetCommand).toHaveBeenCalledWith(
+      officeId,
+      "alice",
+      'say "hi"',
+    );
+  });
+
+  it("prompt append with escaped quotes passes unescaped text to handler", async () => {
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      'agent prompt append alice "say \\"hi\\""',
+    );
+    expect(result).toBe("handled");
+    expect(agentPromptAppendCommand).toHaveBeenCalledWith(
+      officeId,
+      "alice",
+      'say "hi"',
+    );
+  });
+
+  it("prompt set with escaped backslashes passes unescaped text to handler", async () => {
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      'agent prompt set alice "path\\\\to\\\\file"',
+    );
+    expect(result).toBe("handled");
+    expect(agentPromptSetCommand).toHaveBeenCalledWith(
+      officeId,
+      "alice",
+      "path\\to\\file",
+    );
+  });
+
+  it("prompt set with literal newline preserves newline in handler arg", async () => {
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      'agent prompt set alice "line1\nline2"',
+    );
+    expect(result).toBe("handled");
+    expect(agentPromptSetCommand).toHaveBeenCalledWith(
+      officeId,
+      "alice",
+      "line1\nline2",
+    );
+  });
+
+  it("prompt set with multiline markdown round-trips correctly", async () => {
+    const md = "# Title\n\n- item 1\n- item 2\n\n> quote";
+    const escaped = md.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    const result = await dispatchCommand(
+      mockWorkspace,
+      officeId,
+      `agent prompt set alice "${escaped}"`,
+    );
+    expect(result).toBe("handled");
+    expect(agentPromptSetCommand).toHaveBeenCalledWith(officeId, "alice", md);
   });
 });

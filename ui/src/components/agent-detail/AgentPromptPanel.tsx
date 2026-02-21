@@ -119,7 +119,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
   const handleSet = () => {
     const text = promptText.trim();
     if (!text) return;
-    const escaped = text.replace(/"/g, '\\"');
+    const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     command.mutate({ command: `agent prompt set ${agentName} "${escaped}"` }, {
       onSuccess: (data) => {
         if (data.ok) {
@@ -134,7 +134,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
   const handleAppend = () => {
     const text = promptText.trim();
     if (!text) return;
-    const escaped = text.replace(/"/g, '\\"');
+    const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     command.mutate({ command: `agent prompt append ${agentName} "${escaped}"` }, {
       onSuccess: (data) => {
         if (data.ok) {

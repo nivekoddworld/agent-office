@@ -40,8 +40,13 @@ export function parseReplInput(input: string): string[] {
   let inQuote = false;
   let quoteChar = "";
 
-  for (const ch of input) {
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
     if (inQuote) {
+      if (ch === "\\" && (input[i + 1] === quoteChar || input[i + 1] === "\\")) {
+        current += input[++i];
+        continue;
+      }
       if (ch === quoteChar) {
         inQuote = false;
         continue;
@@ -140,26 +145,35 @@ export async function dispatchCommand(
     case "send": {
       const name = parts[1];
       if (!name) {
-        console.log("Usage: send <agent> [--priority low|normal|high|critical] <message>");
+        console.log(
+          "Usage: send <agent> [--priority low|normal|high|critical] <message>",
+        );
         return "noop";
       }
       let priority: Priority | undefined;
       let msgParts = parts.slice(2);
       if (msgParts[0] === "--priority" && msgParts[1]) {
         const pMap: Record<string, Priority> = {
-          idle: Priority.IDLE, low: Priority.LOW, normal: Priority.NORMAL,
-          high: Priority.HIGH, critical: Priority.CRITICAL,
+          idle: Priority.IDLE,
+          low: Priority.LOW,
+          normal: Priority.NORMAL,
+          high: Priority.HIGH,
+          critical: Priority.CRITICAL,
         };
         priority = pMap[msgParts[1].toLowerCase()];
         if (priority === undefined) {
-          console.log(`Unknown priority "${msgParts[1]}". Use: idle, low, normal, high, critical`);
+          console.log(
+            `Unknown priority "${msgParts[1]}". Use: idle, low, normal, high, critical`,
+          );
           return "noop";
         }
         msgParts = msgParts.slice(2);
       }
       const msg = msgParts.join(" ");
       if (!msg) {
-        console.log("Usage: send <agent> [--priority low|normal|high|critical] <message>");
+        console.log(
+          "Usage: send <agent> [--priority low|normal|high|critical] <message>",
+        );
         return "noop";
       }
       sendCommand(workspace, name, msg, priority);
