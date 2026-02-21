@@ -405,9 +405,7 @@ describe("appendAgentPrompt", () => {
     );
     await appendAgentPrompt(OFFICE_ID, "bot", "Second line");
     const yaml = loadOfficeYaml(OFFICE_ID)!;
-    expect(yaml.agents["bot"]!.prompt_inline).toBe(
-      "First line\n\nSecond line",
-    );
+    expect(yaml.agents["bot"]!.prompt_inline).toBe("First line\n\nSecond line");
   });
 
   it("sets prompt_inline when none exists", async () => {
@@ -435,9 +433,7 @@ describe("appendAgentPrompt", () => {
     await appendAgentPrompt(OFFICE_ID, "bot", "Extra line");
     const raw = readYaml();
     const yaml = loadOfficeYaml(OFFICE_ID)!;
-    expect(yaml.agents["bot"]!.prompt_inline).toBe(
-      "Legacy text\n\nExtra line",
-    );
+    expect(yaml.agents["bot"]!.prompt_inline).toBe("Legacy text\n\nExtra line");
     expect(raw).not.toMatch(/\bprompt:(?!_)/); // legacy key removed
   });
 
@@ -445,9 +441,9 @@ describe("appendAgentPrompt", () => {
     writeYaml(
       "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
     );
-    await expect(
-      appendAgentPrompt(OFFICE_ID, "bot", "extra"),
-    ).rejects.toThrow("uses prompt_file");
+    await expect(appendAgentPrompt(OFFICE_ID, "bot", "extra")).rejects.toThrow(
+      "uses prompt_file",
+    );
   });
 
   it("throws on missing agent", async () => {
@@ -715,7 +711,10 @@ describe("clearAgentPermissionOfficeCron", () => {
 describe("setAgentPermissionTools", () => {
   it("sets tools.allow", async () => {
     writeYaml("office:\n  name: Test\nagents:\n  bot: {}\n");
-    await setAgentPermissionTools(OFFICE_ID, "bot", "allow", ["bash", "browser"]);
+    await setAgentPermissionTools(OFFICE_ID, "bot", "allow", [
+      "bash",
+      "browser",
+    ]);
     const raw = readYaml();
     expect(raw).toContain("allow:");
     expect(raw).toContain("bash");
@@ -786,9 +785,9 @@ describe("clearAgentPermissionTools", () => {
 
   it("throws on missing agent", async () => {
     writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
-    await expect(
-      clearAgentPermissionTools(OFFICE_ID, "bot"),
-    ).rejects.toThrow("not found in office.yaml");
+    await expect(clearAgentPermissionTools(OFFICE_ID, "bot")).rejects.toThrow(
+      "not found in office.yaml",
+    );
   });
 });
 
@@ -843,7 +842,9 @@ describe("agentConfigShowCommand permissions", () => {
   });
 
   it("omits permissions when not configured", () => {
-    writeYaml("office:\n  name: Test\nagents:\n  bot:\n    model: openai:gpt-4\n");
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    model: openai:gpt-4\n",
+    );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     agentConfigShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");

@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Menu } from "@mantine/core";
-import { IconTrash, IconUserPlus, IconArrowsTransferUp } from "@tabler/icons-react";
+import {
+  IconTrash,
+  IconUserPlus,
+  IconArrowsTransferUp,
+} from "@tabler/icons-react";
 import { useCommand } from "../../api/use-command.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 
@@ -12,7 +16,13 @@ interface NodeActionsProps {
   onHireReport: (manager: string) => void;
 }
 
-export function NodeActions({ agentName, x, y, onClose, onHireReport }: NodeActionsProps) {
+export function NodeActions({
+  agentName,
+  x,
+  y,
+  onClose,
+  onHireReport,
+}: NodeActionsProps) {
   const [confirmFire, setConfirmFire] = useState(false);
   const command = useCommand();
 
@@ -24,19 +34,26 @@ export function NodeActions({ agentName, x, y, onClose, onHireReport }: NodeActi
     <>
       <Menu opened position="bottom-start" onClose={onClose} offset={0}>
         <Menu.Target>
-          <div style={{ position: "fixed", left: x, top: y, width: 1, height: 1 }} />
+          <div
+            style={{ position: "fixed", left: x, top: y, width: 1, height: 1 }}
+          />
         </Menu.Target>
         <Menu.Dropdown>
           <Menu.Item
             leftSection={<IconUserPlus size={14} />}
-            onClick={() => { onHireReport(agentName); onClose(); }}
+            onClick={() => {
+              onHireReport(agentName);
+              onClose();
+            }}
           >
             Add Report
           </Menu.Item>
           <Menu.Item
             leftSection={<IconArrowsTransferUp size={14} />}
             onClick={() => {
-              const manager = prompt(`Set manager for "${agentName}" (blank to clear):`);
+              const manager = prompt(
+                `Set manager for "${agentName}" (blank to clear):`,
+              );
               if (manager !== null) {
                 command.mutate({
                   command: `agent-set-manager ${agentName} ${manager || "__clear__"}`,
@@ -65,7 +82,10 @@ export function NodeActions({ agentName, x, y, onClose, onHireReport }: NodeActi
         confirmLabel="Fire"
         confirmColor="red"
         onConfirm={handleFire}
-        onCancel={() => { setConfirmFire(false); onClose(); }}
+        onCancel={() => {
+          setConfirmFire(false);
+          onClose();
+        }}
         loading={command.isPending}
       />
     </>

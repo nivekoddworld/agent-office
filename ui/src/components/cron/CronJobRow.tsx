@@ -10,7 +10,10 @@ interface CronJobRowProps {
 function formatTime(ts: number | null): string {
   if (!ts) return "—";
   return new Date(ts).toLocaleString([], {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -29,7 +32,9 @@ export function CronJobRow({ job }: CronJobRowProps) {
     if (job.scope === "office") {
       command.mutate({ command: `cron trigger office ${job.jobName}` });
     } else {
-      command.mutate({ command: `cron trigger ${job.agentName} ${job.jobName}` });
+      command.mutate({
+        command: `cron trigger ${job.agentName} ${job.jobName}`,
+      });
     }
   };
 
@@ -37,7 +42,9 @@ export function CronJobRow({ job }: CronJobRowProps) {
     if (job.scope === "office") {
       command.mutate({ command: `cron remove office ${job.jobName} --apply` });
     } else {
-      command.mutate({ command: `cron remove ${job.agentName} ${job.jobName} --apply` });
+      command.mutate({
+        command: `cron remove ${job.agentName} ${job.jobName} --apply`,
+      });
     }
   };
 
@@ -57,19 +64,32 @@ export function CronJobRow({ job }: CronJobRowProps) {
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         <Group gap={4}>
-          <Text size="sm" fw={500}>{job.jobName}</Text>
-          <Badge size="xs" variant="light" color={job.scope === "office" ? "violet" : "blue"}>
+          <Text size="sm" fw={500}>
+            {job.jobName}
+          </Text>
+          <Badge
+            size="xs"
+            variant="light"
+            color={job.scope === "office" ? "violet" : "blue"}
+          >
             {job.scope}
           </Badge>
         </Group>
-        <Text size="xs" c="dimmed">{job.agentName} — {job.config.schedule}</Text>
+        <Text size="xs" c="dimmed">
+          {job.agentName} — {job.config.schedule}
+        </Text>
       </div>
 
       <div style={{ textAlign: "right", minWidth: 100 }}>
-        <Text size="xs" c="dimmed">Next: {formatTime(job.state.nextRunAt)}</Text>
+        <Text size="xs" c="dimmed">
+          Next: {formatTime(job.state.nextRunAt)}
+        </Text>
         <Group gap={4} justify="flex-end">
           {job.state.lastStatus && (
-            <Badge size="xs" color={STATUS_COLORS[job.state.lastStatus] ?? "gray"}>
+            <Badge
+              size="xs"
+              color={STATUS_COLORS[job.state.lastStatus] ?? "gray"}
+            >
               {job.state.lastStatus}
             </Badge>
           )}
@@ -86,10 +106,21 @@ export function CronJobRow({ job }: CronJobRowProps) {
         <Switch size="xs" checked={enabled} onChange={toggleEnable} />
       )}
 
-      <ActionIcon size="sm" variant="subtle" onClick={trigger} title="Trigger now">
+      <ActionIcon
+        size="sm"
+        variant="subtle"
+        onClick={trigger}
+        title="Trigger now"
+      >
         <IconPlayerPlay size={14} />
       </ActionIcon>
-      <ActionIcon size="sm" variant="subtle" color="red" onClick={remove} title="Remove">
+      <ActionIcon
+        size="sm"
+        variant="subtle"
+        color="red"
+        onClick={remove}
+        title="Remove"
+      >
         <IconTrash size={14} />
       </ActionIcon>
     </Group>

@@ -16,7 +16,10 @@ export async function apiFetch<T>(
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, (body as Record<string, string>).error ?? res.statusText);
+    throw new ApiError(
+      res.status,
+      (body as Record<string, string>).error ?? res.statusText,
+    );
   }
   return res.json() as Promise<T>;
 }

@@ -18,7 +18,11 @@ export function AgentNode({ data }: NodeProps) {
 
   return (
     <>
-      <Handle type="target" position={Position.Top} style={{ visibility: "hidden" }} />
+      <Handle
+        type="target"
+        position={Position.Top}
+        style={{ visibility: "hidden" }}
+      />
       <Paper
         shadow="sm"
         radius="md"
@@ -69,7 +73,11 @@ export function AgentNode({ data }: NodeProps) {
           )}
         </Stack>
       </Paper>
-      <Handle type="source" position={Position.Bottom} style={{ visibility: "hidden" }} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        style={{ visibility: "hidden" }}
+      />
     </>
   );
 }

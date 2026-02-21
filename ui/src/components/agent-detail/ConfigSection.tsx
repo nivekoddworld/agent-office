@@ -23,7 +23,9 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
         {rows.map(([label, value]) => (
           <Table.Tr key={label}>
             <Table.Td w={120}>
-              <Text size="xs" c="dimmed">{label}</Text>
+              <Text size="xs" c="dimmed">
+                {label}
+              </Text>
             </Table.Td>
             <Table.Td>
               <Text size="xs">{value}</Text>

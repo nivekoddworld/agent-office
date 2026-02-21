@@ -2,11 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { MessageBus } from "../transport/message-bus.js";
 import { Priority } from "../types.js";
 import type { TaskStore } from "./task-store.js";
-import type {
-  Task,
-  TaskStatus,
-  TaskFilter,
-} from "./types.js";
+import type { Task, TaskStatus, TaskFilter } from "./types.js";
 import { STATUS_TRANSITIONS, TASK_STATUSES } from "./types.js";
 import { auditTaskAction } from "./task-audit.js";
 
@@ -102,9 +98,7 @@ export class TaskService {
     }
 
     const now = Date.now();
-    const hasUnmetDeps = deps.some(
-      (id) => this.tasks[id]?.status !== "done",
-    );
+    const hasUnmetDeps = deps.some((id) => this.tasks[id]?.status !== "done");
     const initialStatus: TaskStatus = hasUnmetDeps ? "backlog" : "todo";
 
     const task: Task = {
@@ -167,10 +161,7 @@ export class TaskService {
     if (params.assignee && !this.agentExists(params.assignee)) {
       return `Error: agent "${params.assignee}" not found`;
     }
-    if (
-      params.priority !== undefined &&
-      !isValidPriority(params.priority)
-    ) {
+    if (params.priority !== undefined && !isValidPriority(params.priority)) {
       return 'Error: invalid priority. Use numeric enum 0-4 ("idle"..."critical")';
     }
 
@@ -337,8 +328,7 @@ export class TaskService {
   }
 
   private notifyAssignee(task: Task, reason: "new" | "ready"): void {
-    const prefix =
-      reason === "new" ? "[New Task]" : "[Task Ready]";
+    const prefix = reason === "new" ? "[New Task]" : "[Task Ready]";
     const depInfo =
       reason === "ready" && task.dependsOn.length > 0
         ? `\nDepends on: ${task.dependsOn.map((id) => `#${id}`).join(", ")} (all done)`
@@ -347,9 +337,7 @@ export class TaskService {
     const payload =
       `${prefix} #${task.id}: ${task.title}\n` +
       `Created by: ${task.createdBy}${depInfo}\n` +
-      (task.description
-        ? `Description: ${task.description}\n`
-        : "") +
+      (task.description ? `Description: ${task.description}\n` : "") +
       `Use task_get("${task.id}") for full details.`;
 
     try {

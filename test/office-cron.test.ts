@@ -248,7 +248,8 @@ describe("Office CronService", () => {
     svc2.setOfficeJobs({ standup: makeOfficeConfig() });
     svc2.start();
     expect(
-      svc2.listJobs().filter((j) => j.scope === "office")[0]!.state.attemptCount,
+      svc2.listJobs().filter((j) => j.scope === "office")[0]!.state
+        .attemptCount,
     ).toBe(1);
     expect(
       svc2.listJobs().filter((j) => j.scope === "office")[0]!.state.sentCount,

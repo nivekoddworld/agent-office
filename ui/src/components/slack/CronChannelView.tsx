@@ -19,7 +19,10 @@ interface CronChannelViewProps {
   agentNames: string[];
 }
 
-export function CronChannelView({ cronJobs, agentNames }: CronChannelViewProps) {
+export function CronChannelView({
+  cronJobs,
+  agentNames,
+}: CronChannelViewProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [filter, setFilter] = useState("all");
 
@@ -73,10 +76,7 @@ export function CronChannelView({ cronJobs, agentNames }: CronChannelViewProps) 
         ) : (
           <Stack gap={0}>
             {filtered.map((job) => (
-              <CronJobRow
-                key={`${job.agentName}:${job.jobName}`}
-                job={job}
-              />
+              <CronJobRow key={`${job.agentName}:${job.jobName}`} job={job} />
             ))}
           </Stack>
         )}

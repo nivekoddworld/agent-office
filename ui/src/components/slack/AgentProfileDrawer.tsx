@@ -108,7 +108,11 @@ export function AgentProfileDrawer({
                   {agent.name}
                 </Text>
                 <Group gap={6}>
-                  <UserPresence status={agent.status} agentName={agent.name} size={10} />
+                  <UserPresence
+                    status={agent.status}
+                    agentName={agent.name}
+                    size={10}
+                  />
                   <Text size="sm" style={{ color: slack.textSecondary }}>
                     {activity.kind === "tool"
                       ? `Running: ${activity.toolName}`
@@ -158,7 +162,10 @@ export function AgentProfileDrawer({
             mx="sm"
             mt="sm"
             styles={{
-              item: { backgroundColor: slack.messageBg, borderColor: slack.borderColor },
+              item: {
+                backgroundColor: slack.messageBg,
+                borderColor: slack.borderColor,
+              },
               control: { color: slack.textPrimary },
             }}
           >

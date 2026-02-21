@@ -55,11 +55,7 @@ export function QueuePreview({ agentName }: QueuePreviewProps) {
               P{msg.priority}
             </Badge>
           </Group>
-          <Text
-            size="xs"
-            style={{ color: slack.textMuted }}
-            lineClamp={2}
-          >
+          <Text size="xs" style={{ color: slack.textMuted }} lineClamp={2}>
             {msg.payload}
           </Text>
         </Box>

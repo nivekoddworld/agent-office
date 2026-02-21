@@ -56,7 +56,11 @@ export function ThreadDrawer({
     setSending(true);
     const requestId = createClientRequestId();
     try {
-      await sendMessage({ agent: thread.agentName, message: content, requestId });
+      await sendMessage({
+        agent: thread.agentName,
+        message: content,
+        requestId,
+      });
     } catch (err) {
       notifications.show({
         title: "Message failed",
@@ -132,7 +136,13 @@ export function ThreadDrawer({
       </Group>
 
       {thread && (
-        <Box style={{ display: "flex", flexDirection: "column", height: "calc(100% - 45px)" }}>
+        <Box
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            height: "calc(100% - 45px)",
+          }}
+        >
           <Box py="xs">
             <SlackMessage
               message={thread.parentMessage}
@@ -144,7 +154,8 @@ export function ThreadDrawer({
             color={slack.borderColor}
             label={
               <Text size="xs" style={{ color: slack.textMuted }}>
-                {thread.replies.length} {thread.replies.length === 1 ? "reply" : "replies"}
+                {thread.replies.length}{" "}
+                {thread.replies.length === 1 ? "reply" : "replies"}
               </Text>
             }
             labelPosition="center"
@@ -158,7 +169,10 @@ export function ThreadDrawer({
           >
             {thread.replies.length === 0 ? (
               <Box px="md" py="xl">
-                <Text size="sm" style={{ color: slack.textMuted, textAlign: "center" }}>
+                <Text
+                  size="sm"
+                  style={{ color: slack.textMuted, textAlign: "center" }}
+                >
                   Waiting for response...
                 </Text>
               </Box>

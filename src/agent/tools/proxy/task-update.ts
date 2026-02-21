@@ -17,7 +17,9 @@ export function createTaskUpdateProxy(hostFetch: HostFetch): AgentTool<any> {
         try {
           const body = (await res.json()) as { error?: string };
           if (body.error) msg = body.error;
-        } catch { /* use statusText */ }
+        } catch {
+          /* use statusText */
+        }
         return textResult(`Error updating task: ${msg}`);
       }
       const body = (await res.json()) as { result: string };

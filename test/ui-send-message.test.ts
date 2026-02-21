@@ -33,15 +33,19 @@ describe("sendMessage", () => {
 
     expect(mockApiFetch).toHaveBeenCalledWith("/api/send", {
       method: "POST",
-      body: JSON.stringify({ agent: "pm", message: "hello", requestId: "req-1" }),
+      body: JSON.stringify({
+        agent: "pm",
+        message: "hello",
+        requestId: "req-1",
+      }),
     });
   });
 
   it("throws when API call fails", async () => {
     mockApiFetch.mockRejectedValueOnce(new Error("boom"));
 
-    await expect(sendMessage({ agent: "pm", message: "hello" })).rejects.toThrow(
-      "boom",
-    );
+    await expect(
+      sendMessage({ agent: "pm", message: "hello" }),
+    ).rejects.toThrow("boom");
   });
 });

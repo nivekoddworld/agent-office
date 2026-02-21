@@ -185,7 +185,9 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
         const cycleKey = [...visited].sort().join(",");
         if (!reportedCycles.has(cycleKey)) {
           reportedCycles.add(cycleKey);
-          errors.push(`[hierarchy] Hierarchy cycle detected involving agent "${name}"`);
+          errors.push(
+            `[hierarchy] Hierarchy cycle detected involving agent "${name}"`,
+          );
         }
         break;
       }
@@ -281,10 +283,13 @@ export async function setAgentManager(
       let current: string | undefined = manager;
       while (current) {
         if (visited.has(current)) {
-          throw new Error(`Setting manager would create a cycle: ${agentName} → ${manager}`);
+          throw new Error(
+            `Setting manager would create a cycle: ${agentName} → ${manager}`,
+          );
         }
         visited.add(current);
-        current = (doc.getIn(["agents", current, "reports_to"]) as string) ?? undefined;
+        current =
+          (doc.getIn(["agents", current, "reports_to"]) as string) ?? undefined;
       }
     }
 

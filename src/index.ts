@@ -3,7 +3,10 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Command, Option } from "commander";
 import { Workspace } from "./workspace.js";
-import { applyOfficeYaml, officeValidateCommand } from "./commands/office-apply.js";
+import {
+  applyOfficeYaml,
+  officeValidateCommand,
+} from "./commands/office-apply.js";
 import { AGENT_OFFICE_DIR, validateOfficeId } from "./constants.js";
 import {
   loadOfficeYaml,
@@ -104,7 +107,12 @@ program
   )
   .option("--no-ui", "Run headless without the web UI")
   .action(
-    async (opts: { office: string; tickInterval: string; sandbox: string; ui: boolean }) => {
+    async (opts: {
+      office: string;
+      tickInterval: string;
+      sandbox: string;
+      ui: boolean;
+    }) => {
       // Validate office id
       try {
         validateOfficeId(opts.office);

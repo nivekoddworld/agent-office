@@ -99,13 +99,22 @@ export function validateAgentEntry(
       `Cannot specify both "prompt_inline" and "prompt_file" — use exactly one.`,
     );
   }
-  if (entry.prompt_inline !== undefined && typeof entry.prompt_inline !== "string") {
+  if (
+    entry.prompt_inline !== undefined &&
+    typeof entry.prompt_inline !== "string"
+  ) {
     errors.push(`prompt_inline must be a string`);
   }
-  if (entry.prompt_file !== undefined && typeof entry.prompt_file !== "string") {
+  if (
+    entry.prompt_file !== undefined &&
+    typeof entry.prompt_file !== "string"
+  ) {
     errors.push(`prompt_file must be a string`);
   }
-  if (entry.bootstrap_dir !== undefined && typeof entry.bootstrap_dir !== "string") {
+  if (
+    entry.bootstrap_dir !== undefined &&
+    typeof entry.bootstrap_dir !== "string"
+  ) {
     errors.push(`bootstrap_dir must be a string`);
   }
 
@@ -229,18 +238,11 @@ export function validateAgentEntry(
             t.allow &&
             t.allow.some((v: unknown) => typeof v !== "string")
           )
-            errors.push(
-              `permissions.tools.allow must contain only strings`,
-            );
+            errors.push(`permissions.tools.allow must contain only strings`);
           if (t.deny && !Array.isArray(t.deny))
             errors.push(`permissions.tools.deny must be an array`);
-          else if (
-            t.deny &&
-            t.deny.some((v: unknown) => typeof v !== "string")
-          )
-            errors.push(
-              `permissions.tools.deny must contain only strings`,
-            );
+          else if (t.deny && t.deny.some((v: unknown) => typeof v !== "string"))
+            errors.push(`permissions.tools.deny must contain only strings`);
         }
       }
     }

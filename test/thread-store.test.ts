@@ -47,7 +47,11 @@ describe("thread store request correlation", () => {
 
   it("binds thread replies to newer requestIds after thread reply", () => {
     const store = createThreadStore();
-    const threadId = store.createThread("coder", msg("u1", "You", "start"), "req-1");
+    const threadId = store.createThread(
+      "coder",
+      msg("u1", "You", "start"),
+      "req-1",
+    );
 
     store.replyInThread(threadId, msg("u2", "You", "follow-up"), "req-2");
     store.addReply("coder", msg("a2", "coder", "follow-up reply"), "req-2");

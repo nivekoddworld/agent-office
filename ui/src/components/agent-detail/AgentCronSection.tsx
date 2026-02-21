@@ -12,7 +12,10 @@ interface AgentCronSectionProps {
 function formatTime(ts: number | null): string {
   if (!ts) return "—";
   return new Date(ts).toLocaleString([], {
-    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -23,11 +26,15 @@ const STATUS_COLORS: Record<string, string> = {
   skipped_cap: "orange",
 };
 
-export function AgentCronSection({ agentName, cronJobs }: AgentCronSectionProps) {
+export function AgentCronSection({
+  agentName,
+  cronJobs,
+}: AgentCronSectionProps) {
   const command = useCommand();
   const agentJobs = cronJobs.filter(
-    (j) => (j.scope === "agent" && j.agentName === agentName) ||
-           (j.scope === "office" && j.targets?.includes(agentName)),
+    (j) =>
+      (j.scope === "agent" && j.agentName === agentName) ||
+      (j.scope === "office" && j.targets?.includes(agentName)),
   );
 
   if (agentJobs.length === 0) {
@@ -47,15 +54,21 @@ export function AgentCronSection({ agentName, cronJobs }: AgentCronSectionProps)
           if (job.scope === "office") {
             command.mutate({ command: `cron trigger office ${job.jobName}` });
           } else {
-            command.mutate({ command: `cron trigger ${job.agentName} ${job.jobName}` });
+            command.mutate({
+              command: `cron trigger ${job.agentName} ${job.jobName}`,
+            });
           }
         };
 
         const remove = () => {
           if (job.scope === "office") {
-            command.mutate({ command: `cron remove office ${job.jobName} --apply` });
+            command.mutate({
+              command: `cron remove office ${job.jobName} --apply`,
+            });
           } else {
-            command.mutate({ command: `cron remove ${job.agentName} ${job.jobName} --apply` });
+            command.mutate({
+              command: `cron remove ${job.agentName} ${job.jobName} --apply`,
+            });
           }
         };
 
@@ -79,7 +92,11 @@ export function AgentCronSection({ agentName, cronJobs }: AgentCronSectionProps)
                 <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
                   {job.jobName}
                 </Text>
-                <Badge size="xs" variant="light" color={job.scope === "office" ? "violet" : "blue"}>
+                <Badge
+                  size="xs"
+                  variant="light"
+                  color={job.scope === "office" ? "violet" : "blue"}
+                >
                   {job.scope}
                 </Badge>
               </Group>
@@ -93,7 +110,10 @@ export function AgentCronSection({ agentName, cronJobs }: AgentCronSectionProps)
                 Next: {formatTime(job.state.nextRunAt)}
               </Text>
               {job.state.lastStatus && (
-                <Badge size="xs" color={STATUS_COLORS[job.state.lastStatus] ?? "gray"}>
+                <Badge
+                  size="xs"
+                  color={STATUS_COLORS[job.state.lastStatus] ?? "gray"}
+                >
                   {job.state.lastStatus}
                 </Badge>
               )}
@@ -103,10 +123,21 @@ export function AgentCronSection({ agentName, cronJobs }: AgentCronSectionProps)
               <Switch size="xs" checked={enabled} onChange={toggleEnable} />
             )}
 
-            <ActionIcon size="sm" variant="subtle" onClick={trigger} title="Trigger now">
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              onClick={trigger}
+              title="Trigger now"
+            >
               <IconPlayerPlay size={14} />
             </ActionIcon>
-            <ActionIcon size="sm" variant="subtle" color="red" onClick={remove} title="Remove">
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              color="red"
+              onClick={remove}
+              title="Remove"
+            >
               <IconTrash size={14} />
             </ActionIcon>
           </Group>

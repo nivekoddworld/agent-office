@@ -17,7 +17,13 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          mantine: ["react", "react-dom", "@mantine/core", "@mantine/hooks", "@mantine/notifications"],
+          mantine: [
+            "react",
+            "react-dom",
+            "@mantine/core",
+            "@mantine/hooks",
+            "@mantine/notifications",
+          ],
           icons: ["@tabler/icons-react"],
           markdown: ["react-markdown", "rehype-highlight", "remark-gfm"],
           xyflow: ["@xyflow/react", "dagre"],

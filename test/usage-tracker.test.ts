@@ -41,7 +41,10 @@ describe("usage-tracker", () => {
     const record = makeRecord();
     recordUsage(dir, record);
 
-    const content = readFileSync(join(dir, "logs", "usage-cost.jsonl"), "utf-8");
+    const content = readFileSync(
+      join(dir, "logs", "usage-cost.jsonl"),
+      "utf-8",
+    );
     const parsed = JSON.parse(content.trim());
     expect(parsed.agent).toBe("bot");
     expect(parsed.totalTokens).toBe(180);
@@ -59,9 +62,18 @@ describe("usage-tracker", () => {
   });
 
   it("reads and summarizes correctly", () => {
-    recordUsage(dir, makeRecord({ agent: "bot", totalTokens: 100, totalCost: 0.01 }));
-    recordUsage(dir, makeRecord({ agent: "bot", totalTokens: 200, totalCost: 0.02 }));
-    recordUsage(dir, makeRecord({ agent: "helper", totalTokens: 50, totalCost: 0.005 }));
+    recordUsage(
+      dir,
+      makeRecord({ agent: "bot", totalTokens: 100, totalCost: 0.01 }),
+    );
+    recordUsage(
+      dir,
+      makeRecord({ agent: "bot", totalTokens: 200, totalCost: 0.02 }),
+    );
+    recordUsage(
+      dir,
+      makeRecord({ agent: "helper", totalTokens: 50, totalCost: 0.005 }),
+    );
 
     const records = readUsageRecords(dir);
     const summary = summarizeUsage(records);
@@ -85,7 +97,10 @@ describe("usage-tracker", () => {
     const old = new Date();
     old.setDate(old.getDate() - 5);
     recordUsage(dir, makeRecord({ ts: old.toISOString(), agent: "old" }));
-    recordUsage(dir, makeRecord({ ts: new Date().toISOString(), agent: "recent" }));
+    recordUsage(
+      dir,
+      makeRecord({ ts: new Date().toISOString(), agent: "recent" }),
+    );
 
     const records = readUsageRecords(dir, { days: 2 });
     expect(records).toHaveLength(1);

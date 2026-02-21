@@ -70,7 +70,11 @@ describe("TaskService", () => {
   });
 
   it("sends notification to assignee on todo task", () => {
-    service.create("pm", { title: "Notify me", assignee: "coder", priority: P });
+    service.create("pm", {
+      title: "Notify me",
+      assignee: "coder",
+      priority: P,
+    });
     const messages = bus.peekMessages("coder");
     expect(messages.length).toBe(1);
     expect(messages[0]!.payload).toContain("[New Task]");
@@ -107,7 +111,11 @@ describe("TaskService", () => {
   });
 
   it("rejects empty title", () => {
-    const result = service.create("pm", { title: "", assignee: "coder", priority: P });
+    const result = service.create("pm", {
+      title: "",
+      assignee: "coder",
+      priority: P,
+    });
     expect(typeof result).toBe("string");
     expect(result).toContain("title");
   });
@@ -502,7 +510,11 @@ describe("TaskService", () => {
   // --- persistence ---
 
   it("persists tasks across service restarts", () => {
-    service.create("pm", { title: "Persistent", assignee: "coder", priority: P });
+    service.create("pm", {
+      title: "Persistent",
+      assignee: "coder",
+      priority: P,
+    });
     service.stop();
 
     const service2 = new TaskService(

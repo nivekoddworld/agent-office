@@ -101,16 +101,34 @@ function getFileIcon(name: string) {
   const ext = name.split(".").pop()?.toLowerCase();
   const size = 16;
   switch (ext) {
-    case "md": return <IconMarkdown size={size} color={slack.accentBlue} />;
-    case "ts": case "tsx": return <IconCode size={size} color="#3178c6" />;
-    case "js": case "mjs": case "cjs": return <IconCode size={size} color="#f7df1e" />;
-    case "jsx": return <IconCode size={size} color="#61dafb" />;
-    case "css": case "scss": return <IconCode size={size} color="#264de4" />;
-    case "json": case "jsonl": return <IconBraces size={size} color={slack.accentYellow} />;
-    case "py": return <IconBrandPython size={size} color="#3776ab" />;
-    case "sh": case "bash": case "zsh": return <IconTerminal size={size} color={slack.accentGreen} />;
-    case "yaml": case "yml": return <IconFile size={size} color={slack.accentPurple} />;
-    default: return <IconFile size={size} color={slack.textMuted} />;
+    case "md":
+      return <IconMarkdown size={size} color={slack.accentBlue} />;
+    case "ts":
+    case "tsx":
+      return <IconCode size={size} color="#3178c6" />;
+    case "js":
+    case "mjs":
+    case "cjs":
+      return <IconCode size={size} color="#f7df1e" />;
+    case "jsx":
+      return <IconCode size={size} color="#61dafb" />;
+    case "css":
+    case "scss":
+      return <IconCode size={size} color="#264de4" />;
+    case "json":
+    case "jsonl":
+      return <IconBraces size={size} color={slack.accentYellow} />;
+    case "py":
+      return <IconBrandPython size={size} color="#3776ab" />;
+    case "sh":
+    case "bash":
+    case "zsh":
+      return <IconTerminal size={size} color={slack.accentGreen} />;
+    case "yaml":
+    case "yml":
+      return <IconFile size={size} color={slack.accentPurple} />;
+    default:
+      return <IconFile size={size} color={slack.textMuted} />;
   }
 }
 
@@ -124,7 +142,12 @@ function formatSize(bytes: number): string {
 function formatDate(ms: number): string {
   if (!ms) return "";
   const d = new Date(ms);
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function FileTreeItem({
@@ -146,8 +169,12 @@ function FileTreeItem({
           px="xs"
           py={4}
           style={{ borderRadius: 4 }}
-          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = slack.sidebarHover; }}
-          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = slack.sidebarHover;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "transparent";
+          }}
           onClick={() => setExpanded((v) => !v)}
         >
           <Group gap={4} wrap="nowrap" style={{ paddingLeft: depth * 16 }}>
@@ -164,7 +191,14 @@ function FileTreeItem({
             <Text size="sm" style={{ color: slack.textPrimary }} truncate>
               {node.name}
             </Text>
-            <Text size="xs" style={{ color: slack.textMuted, marginLeft: "auto", flexShrink: 0 }}>
+            <Text
+              size="xs"
+              style={{
+                color: slack.textMuted,
+                marginLeft: "auto",
+                flexShrink: 0,
+              }}
+            >
               {node.children.length} item{node.children.length !== 1 ? "s" : ""}
             </Text>
           </Group>
@@ -188,8 +222,12 @@ function FileTreeItem({
       px="xs"
       py={4}
       style={{ borderRadius: 4 }}
-      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = slack.sidebarHover; }}
-      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent"; }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = slack.sidebarHover;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "transparent";
+      }}
       onClick={() => onSelect(node.path)}
     >
       <Group gap={6} wrap="nowrap" style={{ paddingLeft: depth * 16 + 18 }}>
@@ -197,7 +235,11 @@ function FileTreeItem({
         <Text size="sm" style={{ color: slack.textPrimary }} truncate>
           {node.name}
         </Text>
-        <Group gap={8} wrap="nowrap" style={{ marginLeft: "auto", flexShrink: 0 }}>
+        <Group
+          gap={8}
+          wrap="nowrap"
+          style={{ marginLeft: "auto", flexShrink: 0 }}
+        >
           <Text size="xs" style={{ color: slack.textMuted }}>
             {formatSize(node.size)}
           </Text>
@@ -237,7 +279,10 @@ function FileViewer({
       withCloseButton={false}
       overlayProps={{ backgroundOpacity: 0.5, blur: 2 }}
       styles={{
-        content: { backgroundColor: slack.mainBg, border: `1px solid ${slack.borderColor}` },
+        content: {
+          backgroundColor: slack.mainBg,
+          border: `1px solid ${slack.borderColor}`,
+        },
       }}
     >
       <Box
@@ -247,7 +292,12 @@ function FileViewer({
       >
         <Group justify="space-between" wrap="nowrap">
           <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
-            <ActionIcon variant="subtle" color="gray" size="sm" onClick={onClose}>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
+              onClick={onClose}
+            >
               <IconArrowLeft size={16} />
             </ActionIcon>
             {getFileIcon(filePath.split("/").pop() ?? "")}
@@ -330,7 +380,10 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
       <Box
         px="md"
         py="xs"
-        style={{ borderBottom: `1px solid ${slack.borderColor}`, flexShrink: 0 }}
+        style={{
+          borderBottom: `1px solid ${slack.borderColor}`,
+          flexShrink: 0,
+        }}
       >
         <Group justify="space-between">
           <Group gap={8}>

@@ -83,11 +83,7 @@ describe("truncateBlocks", () => {
       { name: "identity", text: "third" },
     ];
     const { blocks: result } = truncateBlocks(blocks);
-    expect(result.map((b) => b.name)).toEqual([
-      "base",
-      "office",
-      "identity",
-    ]);
+    expect(result.map((b) => b.name)).toEqual(["base", "office", "identity"]);
   });
 
   it("produces deterministic output", () => {
@@ -110,9 +106,7 @@ describe("truncateBlocks", () => {
   });
 
   it("respects custom per-block limits", () => {
-    const blocks: BlockContent[] = [
-      { name: "base", text: "A".repeat(200) },
-    ];
+    const blocks: BlockContent[] = [{ name: "base", text: "A".repeat(200) }];
     const { blocks: result } = truncateBlocks(blocks, {
       perBlockLimits: { base: 50 },
     });

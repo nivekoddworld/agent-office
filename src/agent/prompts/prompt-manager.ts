@@ -98,8 +98,12 @@ function buildCustomBlock(customPrompt?: string): string {
 function buildHierarchyBlock(ctx: PromptContext): string {
   if (!ctx.hierarchy) return "";
   const mgr = ctx.hierarchy.manager ?? "the user (office operator)";
-  const peers = ctx.hierarchy.peers.length > 0 ? ctx.hierarchy.peers.join(", ") : "none";
-  const reports = ctx.hierarchy.reports.length > 0 ? ctx.hierarchy.reports.join(", ") : "none";
+  const peers =
+    ctx.hierarchy.peers.length > 0 ? ctx.hierarchy.peers.join(", ") : "none";
+  const reports =
+    ctx.hierarchy.reports.length > 0
+      ? ctx.hierarchy.reports.join(", ")
+      : "none";
   return (
     `\n\n## Hierarchy\n` +
     `You report to: ${mgr}\n` +
@@ -149,5 +153,10 @@ export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
     ctx.truncationConfig,
   );
   const text = truncated.map((b) => b.text).join("");
-  return { text, version: PROMPT_VERSION, hash: hashPrompt(text), blocks: meta };
+  return {
+    text,
+    version: PROMPT_VERSION,
+    hash: hashPrompt(text),
+    blocks: meta,
+  };
 }

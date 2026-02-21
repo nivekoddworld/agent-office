@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { Stack, Switch, Text, Group, Badge, TextInput, Button, ActionIcon } from "@mantine/core";
+import {
+  Stack,
+  Switch,
+  Text,
+  Group,
+  Badge,
+  TextInput,
+  Button,
+  ActionIcon,
+} from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { useCommand } from "../../api/use-command.js";
@@ -20,9 +29,17 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
 
   const notify = (data: { ok: boolean; error?: string; output: string[] }) => {
     if (data.ok) {
-      notifications.show({ title: "Permission updated", message: "Run 'office reload --force' to apply", color: "blue" });
+      notifications.show({
+        title: "Permission updated",
+        message: "Run 'office reload --force' to apply",
+        color: "blue",
+      });
     } else {
-      notifications.show({ title: "Failed", message: data.error ?? data.output.join("\n"), color: "red" });
+      notifications.show({
+        title: "Failed",
+        message: data.error ?? data.output.join("\n"),
+        color: "red",
+      });
     }
   };
 
@@ -42,7 +59,9 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
       );
     } else {
       command.mutate(
-        { command: `agent permission set ${agent.name} tools ${mode} ${tools.join(",")}` },
+        {
+          command: `agent permission set ${agent.name} tools ${mode} ${tools.join(",")}`,
+        },
         { onSuccess: notify },
       );
     }
@@ -90,24 +109,43 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
           description="Can run office-level cron jobs"
         />
         {perms.office_cron !== undefined && (
-          <Button size="xs" variant="subtle" color="gray" onClick={clearOfficeCron}>
+          <Button
+            size="xs"
+            variant="subtle"
+            color="gray"
+            onClick={clearOfficeCron}
+          >
             Reset
           </Button>
         )}
       </Group>
 
       <div>
-        <Text size="xs" c="dimmed" mb={4}>Tool Allow List</Text>
+        <Text size="xs" c="dimmed" mb={4}>
+          Tool Allow List
+        </Text>
         <Group gap={4} mb={4}>
           {allow.length === 0 && (
-            <Text size="xs" c="dimmed">All tools allowed (no allowlist)</Text>
+            <Text size="xs" c="dimmed">
+              All tools allowed (no allowlist)
+            </Text>
           )}
           {allow.map((t) => (
-            <Badge key={t} size="xs" variant="light" color="green" rightSection={
-              <ActionIcon size={12} variant="transparent" onClick={() => removeAllowTool(t)}>
-                <IconX size={10} />
-              </ActionIcon>
-            }>
+            <Badge
+              key={t}
+              size="xs"
+              variant="light"
+              color="green"
+              rightSection={
+                <ActionIcon
+                  size={12}
+                  variant="transparent"
+                  onClick={() => removeAllowTool(t)}
+                >
+                  <IconX size={10} />
+                </ActionIcon>
+              }
+            >
               {t}
             </Badge>
           ))}
@@ -121,24 +159,44 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
             onKeyDown={(e) => e.key === "Enter" && addAllowTool()}
             style={{ flex: 1, maxWidth: 200 }}
           />
-          <Button size="xs" variant="light" color="green" onClick={addAllowTool} disabled={!newAllowTool.trim()}>
+          <Button
+            size="xs"
+            variant="light"
+            color="green"
+            onClick={addAllowTool}
+            disabled={!newAllowTool.trim()}
+          >
             Add
           </Button>
         </Group>
       </div>
 
       <div>
-        <Text size="xs" c="dimmed" mb={4}>Tool Deny List</Text>
+        <Text size="xs" c="dimmed" mb={4}>
+          Tool Deny List
+        </Text>
         <Group gap={4} mb={4}>
           {deny.length === 0 && (
-            <Text size="xs" c="dimmed">No denials</Text>
+            <Text size="xs" c="dimmed">
+              No denials
+            </Text>
           )}
           {deny.map((t) => (
-            <Badge key={t} size="xs" variant="light" color="red" rightSection={
-              <ActionIcon size={12} variant="transparent" onClick={() => removeDenyTool(t)}>
-                <IconX size={10} />
-              </ActionIcon>
-            }>
+            <Badge
+              key={t}
+              size="xs"
+              variant="light"
+              color="red"
+              rightSection={
+                <ActionIcon
+                  size={12}
+                  variant="transparent"
+                  onClick={() => removeDenyTool(t)}
+                >
+                  <IconX size={10} />
+                </ActionIcon>
+              }
+            >
               {t}
             </Badge>
           ))}
@@ -152,7 +210,13 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
             onKeyDown={(e) => e.key === "Enter" && addDenyTool()}
             style={{ flex: 1, maxWidth: 200 }}
           />
-          <Button size="xs" variant="light" color="red" onClick={addDenyTool} disabled={!newDenyTool.trim()}>
+          <Button
+            size="xs"
+            variant="light"
+            color="red"
+            onClick={addDenyTool}
+            disabled={!newDenyTool.trim()}
+          >
             Add
           </Button>
         </Group>

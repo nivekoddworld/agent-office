@@ -220,7 +220,13 @@ export class HostApi {
       if (req.method === "GET" && path === "/api/secrets") {
         handleSecrets(res, this.agentSecrets.get(token) ?? {});
       } else if (req.method === "POST" && path === "/api/message-agent") {
-        await handleMessageAgent(req, res, agentName, this.bus, this.seenMessages);
+        await handleMessageAgent(
+          req,
+          res,
+          agentName,
+          this.bus,
+          this.seenMessages,
+        );
       } else if (req.method === "GET" && path === "/api/agents") {
         handleAgents(res, this.listFn);
       } else if (req.method === "GET" && path === "/api/agent-file") {
@@ -228,13 +234,38 @@ export class HostApi {
       } else if (req.method === "POST" && path === "/api/prompt-done") {
         await handlePromptDone(req, res, agentName, this.pendingPrompts);
       } else if (req.method === "POST" && path === "/api/agent-event") {
-        await handleAgentEvent(req, res, agentName, token, this.eventListeners, this.redactors);
+        await handleAgentEvent(
+          req,
+          res,
+          agentName,
+          token,
+          this.eventListeners,
+          this.redactors,
+        );
       } else if (req.method === "POST" && path === "/api/authenticated-fetch") {
-        await handleAuthenticatedFetch(req, res, agentName, token, this.agentSecrets);
+        await handleAuthenticatedFetch(
+          req,
+          res,
+          agentName,
+          token,
+          this.agentSecrets,
+        );
       } else if (req.method === "POST" && path === "/api/memory-search") {
-        await handleMemorySearch(req, res, agentName, this.baseDir, this.citationModes);
+        await handleMemorySearch(
+          req,
+          res,
+          agentName,
+          this.baseDir,
+          this.citationModes,
+        );
       } else if (req.method === "POST" && path === "/api/memory-get") {
-        await handleMemoryGet(req, res, agentName, this.baseDir, this.citationModes);
+        await handleMemoryGet(
+          req,
+          res,
+          agentName,
+          this.baseDir,
+          this.citationModes,
+        );
       } else if (req.method === "POST" && path === "/api/cron-add") {
         if (this.checkToolPolicy(path, agentName, res))
           await handleCronAdd(req, res, this.buildCronDeps(agentName));

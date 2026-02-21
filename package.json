@@ -24,7 +24,6 @@
     "commander": "^13.1.0",
     "cron-parser": "^5.5.0",
     "dotenv": "^17.2.4",
-
     "proper-lockfile": "^4.1.2",
     "yaml": "^2.8.2"
   },

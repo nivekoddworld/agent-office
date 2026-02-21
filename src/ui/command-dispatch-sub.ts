@@ -44,12 +44,24 @@ export async function dispatchAgentSubcommand(
   const action = parts[2];
   const agent = parts[3];
 
-  if (sub === "env" && action === "set" && agent && parts[4] && parts[5] !== undefined) {
+  if (
+    sub === "env" &&
+    action === "set" &&
+    agent &&
+    parts[4] &&
+    parts[5] !== undefined
+  ) {
     const value = parts.slice(5).join(" ");
     await agentEnvSetCommand(officeId, agent, parts[4], value);
   } else if (sub === "env" && action === "unset" && agent && parts[4]) {
     await agentEnvUnsetCommand(officeId, agent, parts[4]);
-  } else if (sub === "secret-ref" && action === "set" && agent && parts[4] && parts[5]) {
+  } else if (
+    sub === "secret-ref" &&
+    action === "set" &&
+    agent &&
+    parts[4] &&
+    parts[5]
+  ) {
     await agentSecretRefSetCommand(officeId, agent, parts[4], parts[5]);
   } else if (sub === "secret-ref" && action === "unset" && agent && parts[4]) {
     await agentSecretRefUnsetCommand(officeId, agent, parts[4]);
@@ -68,28 +80,54 @@ export async function dispatchAgentSubcommand(
   } else if (sub === "permission" && action === "show" && agent) {
     agentPermissionShowCommand(officeId, agent);
   } else if (
-    sub === "permission" && action === "set" && agent &&
-    parts[4] === "office_cron" && parts[5]
+    sub === "permission" &&
+    action === "set" &&
+    agent &&
+    parts[4] === "office_cron" &&
+    parts[5]
   ) {
     const val = parts[5].toLowerCase();
     if (val !== "true" && val !== "false") {
-      console.log("Usage: agent permission set <agent> office_cron <true|false>");
+      console.log(
+        "Usage: agent permission set <agent> office_cron <true|false>",
+      );
       return "noop";
     }
     await agentPermissionSetOfficeCronCommand(officeId, agent, val === "true");
   } else if (
-    sub === "permission" && action === "set" && agent &&
-    parts[4] === "tools" && (parts[5] === "allow" || parts[5] === "deny") && parts[6]
+    sub === "permission" &&
+    action === "set" &&
+    agent &&
+    parts[4] === "tools" &&
+    (parts[5] === "allow" || parts[5] === "deny") &&
+    parts[6]
   ) {
-    const tools = parts.slice(6).join(" ").split(",").map((s) => s.trim()).filter(Boolean);
+    const tools = parts
+      .slice(6)
+      .join(" ")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (tools.length === 0) {
-      console.log("Usage: agent permission set <agent> tools allow|deny <tool1,tool2,...>");
+      console.log(
+        "Usage: agent permission set <agent> tools allow|deny <tool1,tool2,...>",
+      );
       return "noop";
     }
     await agentPermissionSetToolsCommand(officeId, agent, parts[5], tools);
-  } else if (sub === "permission" && action === "clear" && agent && parts[4] === "office_cron") {
+  } else if (
+    sub === "permission" &&
+    action === "clear" &&
+    agent &&
+    parts[4] === "office_cron"
+  ) {
     await agentPermissionClearOfficeCronCommand(officeId, agent);
-  } else if (sub === "permission" && action === "clear" && agent && parts[4] === "tools") {
+  } else if (
+    sub === "permission" &&
+    action === "clear" &&
+    agent &&
+    parts[4] === "tools"
+  ) {
     await agentPermissionClearToolsCommand(officeId, agent);
   } else {
     console.log(
@@ -123,7 +161,13 @@ export async function dispatchCronSubcommand(
     cronTriggerCommand(workspace, parts[2], parts[3]);
     return "handled";
   }
-  if (sub === "add" && parts[2] === "office" && parts[3] && parts[4] && parts[5]) {
+  if (
+    sub === "add" &&
+    parts[2] === "office" &&
+    parts[3] &&
+    parts[4] &&
+    parts[5]
+  ) {
     const schedule = parts[4];
     const fieldCount = schedule.split(/\s+/).length;
     if (fieldCount !== 5) {
@@ -146,7 +190,15 @@ export async function dispatchCronSubcommand(
       return "noop";
     }
     const cronOpts = parseCronAddOpts(parts.slice(msgEnd));
-    const ok = await cronAddOfficeCommand(officeId, parts[3], schedule, message, targets, cronOpts, workspace);
+    const ok = await cronAddOfficeCommand(
+      officeId,
+      parts[3],
+      schedule,
+      message,
+      targets,
+      cronOpts,
+      workspace,
+    );
     return ok ? "handled" : "noop";
   }
   if (sub === "remove" && parts[2] === "office" && parts[3]) {
@@ -171,22 +223,45 @@ export async function dispatchCronSubcommand(
       return "noop";
     }
     const cronOpts = parseCronAddOpts(parts.slice(msgEnd));
-    const ok = await cronAddCommand(officeId, parts[2], parts[3], schedule, message, cronOpts, apply ? workspace : undefined);
+    const ok = await cronAddCommand(
+      officeId,
+      parts[2],
+      parts[3],
+      schedule,
+      message,
+      cronOpts,
+      apply ? workspace : undefined,
+    );
     return ok ? "handled" : "noop";
   }
   if (sub === "remove" && parts[2] && parts[3]) {
     const apply = parts.includes("--apply");
-    const ok = await cronRemoveCommand(officeId, parts[2], parts[3], apply ? workspace : undefined);
+    const ok = await cronRemoveCommand(
+      officeId,
+      parts[2],
+      parts[3],
+      apply ? workspace : undefined,
+    );
     return ok ? "handled" : "noop";
   }
   if (sub === "enable" && parts[2] && parts[3]) {
     const apply = parts.includes("--apply");
-    const ok = await cronEnableCommand(officeId, parts[2], parts[3], apply ? workspace : undefined);
+    const ok = await cronEnableCommand(
+      officeId,
+      parts[2],
+      parts[3],
+      apply ? workspace : undefined,
+    );
     return ok ? "handled" : "noop";
   }
   if (sub === "disable" && parts[2] && parts[3]) {
     const apply = parts.includes("--apply");
-    const ok = await cronDisableCommand(officeId, parts[2], parts[3], apply ? workspace : undefined);
+    const ok = await cronDisableCommand(
+      officeId,
+      parts[2],
+      parts[3],
+      apply ? workspace : undefined,
+    );
     return ok ? "handled" : "noop";
   }
   console.log(

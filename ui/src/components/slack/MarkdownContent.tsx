@@ -13,7 +13,10 @@ const MD_PATTERN = /[#*`[\]|>~]{2,}|```|^\s*[-*+] |^\s*\d+\. |^\s*>/m;
 export function MarkdownContent({ content }: MarkdownContentProps) {
   if (!MD_PATTERN.test(content)) {
     return (
-      <Text size="sm" style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}>
+      <Text
+        size="sm"
+        style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}
+      >
         {content}
       </Text>
     );

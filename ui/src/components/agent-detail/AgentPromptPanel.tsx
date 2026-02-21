@@ -93,7 +93,9 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
     }
   }, [agent, agentName, loadedFor]);
 
-  const customBlock = agent?.promptReport.blocks.find((b) => b.name === "custom");
+  const customBlock = agent?.promptReport.blocks.find(
+    (b) => b.name === "custom",
+  );
   const customChars = customBlock?.chars ?? 0;
 
   const wrap = useCallback((before: string, after: string) => {
@@ -120,57 +122,111 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
     const text = promptText.trim();
     if (!text) return;
     const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    command.mutate({ command: `agent prompt set ${agentName} "${escaped}"` }, {
-      onSuccess: (data) => {
-        if (data.ok) {
-          notifications.show({ title: "Config updated", message: "Prompt saved to config. Click 'Apply to Runtime' to update running agents.", color: "blue" });
-        } else {
-          notifications.show({ title: "Failed", message: data.error ?? data.output.join("\n"), color: "red" });
-        }
+    command.mutate(
+      { command: `agent prompt set ${agentName} "${escaped}"` },
+      {
+        onSuccess: (data) => {
+          if (data.ok) {
+            notifications.show({
+              title: "Config updated",
+              message:
+                "Prompt saved to config. Click 'Apply to Runtime' to update running agents.",
+              color: "blue",
+            });
+          } else {
+            notifications.show({
+              title: "Failed",
+              message: data.error ?? data.output.join("\n"),
+              color: "red",
+            });
+          }
+        },
+        onError: (err) => {
+          notifications.show({
+            title: "Save failed",
+            message: err.message,
+            color: "red",
+          });
+        },
       },
-      onError: (err) => {
-        notifications.show({ title: "Save failed", message: err.message, color: "red" });
-      },
-    });
+    );
   };
 
   const handleClear = () => {
-    command.mutate({ command: `agent prompt clear ${agentName}` }, {
-      onSuccess: (data) => {
-        if (data.ok) {
-          notifications.show({ title: "Config updated", message: "Prompt cleared from config. Click 'Apply to Runtime' to update running agents.", color: "blue" });
-          setPromptText("");
-        } else {
-          notifications.show({ title: "Failed", message: data.error ?? data.output.join("\n"), color: "red" });
-        }
+    command.mutate(
+      { command: `agent prompt clear ${agentName}` },
+      {
+        onSuccess: (data) => {
+          if (data.ok) {
+            notifications.show({
+              title: "Config updated",
+              message:
+                "Prompt cleared from config. Click 'Apply to Runtime' to update running agents.",
+              color: "blue",
+            });
+            setPromptText("");
+          } else {
+            notifications.show({
+              title: "Failed",
+              message: data.error ?? data.output.join("\n"),
+              color: "red",
+            });
+          }
+        },
+        onError: (err) => {
+          notifications.show({
+            title: "Clear failed",
+            message: err.message,
+            color: "red",
+          });
+        },
       },
-      onError: (err) => {
-        notifications.show({ title: "Clear failed", message: err.message, color: "red" });
-      },
-    });
+    );
     setConfirmClear(false);
   };
 
   const handleReload = () => {
-    command.mutate({ command: "office reload --force" }, {
-      onSuccess: (data) => {
-        if (data.ok) {
-          notifications.show({ title: "Applied", message: "Config reloaded into running agents.", color: "green" });
-        } else {
-          notifications.show({ title: "Reload failed", message: data.error ?? data.output.join("\n"), color: "red" });
-        }
+    command.mutate(
+      { command: "office reload --force" },
+      {
+        onSuccess: (data) => {
+          if (data.ok) {
+            notifications.show({
+              title: "Applied",
+              message: "Config reloaded into running agents.",
+              color: "green",
+            });
+          } else {
+            notifications.show({
+              title: "Reload failed",
+              message: data.error ?? data.output.join("\n"),
+              color: "red",
+            });
+          }
+        },
+        onError: (err) => {
+          notifications.show({
+            title: "Reload failed",
+            message: err.message,
+            color: "red",
+          });
+        },
       },
-      onError: (err) => {
-        notifications.show({ title: "Reload failed", message: err.message, color: "red" });
-      },
-    });
+    );
   };
 
   const showEditor = viewMode === "edit" || viewMode === "split";
   const showPreview = viewMode === "preview" || viewMode === "split";
 
   return (
-    <Box style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+    <Box
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        overflow: "hidden",
+      }}
+    >
       {/* Toolbar */}
       <Box
         px="sm"
@@ -184,43 +240,82 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
         <Group gap="xs" justify="space-between">
           <Group gap={4}>
             <Tooltip label="Bold">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("**", "**")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("**", "**")}
+              >
                 <IconBold size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Italic">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("_", "_")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("_", "_")}
+              >
                 <IconItalic size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Inline code">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("`", "`")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("`", "`")}
+              >
                 <IconCode size={15} />
               </ActionIcon>
             </Tooltip>
-            <Box style={{ width: 1, height: 18, backgroundColor: slack.borderColor }} mx={4} />
+            <Box
+              style={{
+                width: 1,
+                height: 18,
+                backgroundColor: slack.borderColor,
+              }}
+              mx={4}
+            />
             <Tooltip label="Heading">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("## ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("## ")}
+              >
                 <IconHeading size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Bullet list">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("- ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("- ")}
+              >
                 <IconList size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Numbered list">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("1. ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("1. ")}
+              >
                 <IconListNumbers size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Quote">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("> ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("> ")}
+              >
                 <IconBlockquote size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Code block">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("```\n", "\n```")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("```\n", "\n```")}
+              >
                 <IconCode size={15} />
               </ActionIcon>
             </Tooltip>
@@ -266,7 +361,9 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               flex: 1,
               display: "flex",
               flexDirection: "column",
-              borderRight: showPreview ? `1px solid ${slack.borderColor}` : undefined,
+              borderRight: showPreview
+                ? `1px solid ${slack.borderColor}`
+                : undefined,
               overflow: "hidden",
             }}
           >
@@ -306,14 +403,24 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
             {promptText.trim() ? (
               <Box
                 className="markdown-body"
-                style={{ color: slack.textPrimary, fontSize: 14, lineHeight: 1.6 }}
+                style={{
+                  color: slack.textPrimary,
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                }}
               >
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                >
                   {promptText}
                 </ReactMarkdown>
               </Box>
             ) : (
-              <Text size="sm" style={{ color: slack.textMuted, fontStyle: "italic" }}>
+              <Text
+                size="sm"
+                style={{ color: slack.textMuted, fontStyle: "italic" }}
+              >
                 Markdown preview will appear here...
               </Text>
             )}

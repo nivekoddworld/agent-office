@@ -1,4 +1,13 @@
-import { Box, Text, UnstyledButton, Group, ScrollArea, Badge, Tooltip, ActionIcon } from "@mantine/core";
+import {
+  Box,
+  Text,
+  UnstyledButton,
+  Group,
+  ScrollArea,
+  Badge,
+  Tooltip,
+  ActionIcon,
+} from "@mantine/core";
 import {
   IconHash,
   IconSitemap,
@@ -46,7 +55,14 @@ interface SidebarItemProps {
   rightSection?: React.ReactNode;
 }
 
-function SidebarItem({ icon, label, active, bold, onClick, rightSection }: SidebarItemProps) {
+function SidebarItem({
+  icon,
+  label,
+  active,
+  bold,
+  onClick,
+  rightSection,
+}: SidebarItemProps) {
   return (
     <UnstyledButton
       onClick={onClick}
@@ -115,19 +131,29 @@ export function SlackSidebar({
             <Text fw={700} size="lg" style={{ color: "#fff" }}>
               {officeName}
             </Text>
-            <Tooltip label={schedulerRunning ? "Scheduler running" : "Scheduler stopped"} withArrow>
+            <Tooltip
+              label={
+                schedulerRunning ? "Scheduler running" : "Scheduler stopped"
+              }
+              withArrow
+            >
               <Box
                 style={{
                   width: 8,
                   height: 8,
                   borderRadius: "50%",
-                  backgroundColor: schedulerRunning ? slack.onlineGreen : slack.textMuted,
+                  backgroundColor: schedulerRunning
+                    ? slack.onlineGreen
+                    : slack.textMuted,
                 }}
               />
             </Tooltip>
           </Group>
           {onToggleScheduler && (
-            <Tooltip label={schedulerRunning ? "Pause scheduler" : "Start scheduler"} withArrow>
+            <Tooltip
+              label={schedulerRunning ? "Pause scheduler" : "Start scheduler"}
+              withArrow
+            >
               <ActionIcon
                 size="xs"
                 variant="subtle"
@@ -152,8 +178,13 @@ export function SlackSidebar({
             <SidebarItem
               icon={<IconLayoutKanban size={15} color={slack.accentBlue} />}
               label="Tasks"
-              active={isActive(activeChannel, { kind: "channel", name: "tasks" })}
-              onClick={() => onSelectChannel({ kind: "channel", name: "tasks" })}
+              active={isActive(activeChannel, {
+                kind: "channel",
+                name: "tasks",
+              })}
+              onClick={() =>
+                onSelectChannel({ kind: "channel", name: "tasks" })
+              }
             />
           </Box>
 
@@ -162,13 +193,21 @@ export function SlackSidebar({
             <SidebarItem
               icon={<IconHash size={15} color={slack.channelHashColor} />}
               label="general"
-              active={isActive(activeChannel, { kind: "channel", name: "general" })}
-              onClick={() => onSelectChannel({ kind: "channel", name: "general" })}
+              active={isActive(activeChannel, {
+                kind: "channel",
+                name: "general",
+              })}
+              onClick={() =>
+                onSelectChannel({ kind: "channel", name: "general" })
+              }
             />
             <SidebarItem
               icon={<IconHash size={15} color={slack.channelHashColor} />}
               label="cron"
-              active={isActive(activeChannel, { kind: "channel", name: "cron" })}
+              active={isActive(activeChannel, {
+                kind: "channel",
+                name: "cron",
+              })}
               onClick={() => onSelectChannel({ kind: "channel", name: "cron" })}
             />
           </SidebarSection>
@@ -195,26 +234,47 @@ export function SlackSidebar({
               return (
                 <SidebarItem
                   key={agent.name}
-                  icon={<UserPresence status={agent.status} agentName={agent.name} />}
+                  icon={
+                    <UserPresence
+                      status={agent.status}
+                      agentName={agent.name}
+                    />
+                  }
                   label={agent.name}
-                  active={isActive(activeChannel, { kind: "dm", agentName: agent.name })}
+                  active={isActive(activeChannel, {
+                    kind: "dm",
+                    agentName: agent.name,
+                  })}
                   bold={unread > 0}
-                  onClick={() => onSelectChannel({ kind: "dm", agentName: agent.name })}
+                  onClick={() =>
+                    onSelectChannel({ kind: "dm", agentName: agent.name })
+                  }
                   rightSection={
                     unread > 0 ? (
                       <Badge
                         size="xs"
                         variant="filled"
-                        style={{ backgroundColor: slack.mentionBadge, minWidth: 18 }}
+                        style={{
+                          backgroundColor: slack.mentionBadge,
+                          minWidth: 18,
+                        }}
                       >
                         {unread}
                       </Badge>
                     ) : agent.queueDepth > 0 ? (
-                      <Tooltip label={`${agent.queueDepth} pending`} withArrow position="right">
+                      <Tooltip
+                        label={`${agent.queueDepth} pending`}
+                        withArrow
+                        position="right"
+                      >
                         <Badge
                           size="xs"
                           variant="filled"
-                          style={{ backgroundColor: slack.accentYellow, color: "#000", minWidth: 18 }}
+                          style={{
+                            backgroundColor: slack.accentYellow,
+                            color: "#000",
+                            minWidth: 18,
+                          }}
                         >
                           {agent.queueDepth}
                         </Badge>

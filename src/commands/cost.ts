@@ -47,16 +47,9 @@ export function costStatusCommand(): void {
   );
 }
 
-export function costTodayCommand(
-  officeDir: string,
-  agent?: string,
-): void {
+export function costTodayCommand(officeDir: string, agent?: string): void {
   const now = new Date();
-  const startOfDay = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  );
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const records = readUsageRecords(officeDir).filter(
     (r) => new Date(r.ts) >= startOfDay,
   );
@@ -82,13 +75,9 @@ export function costReportCommand(
 }
 
 function printSummary(summary: UsageSummary): void {
-  console.log(
-    `Total tokens: ${summary.totalTokens.toLocaleString("en-US")}`,
-  );
+  console.log(`Total tokens: ${summary.totalTokens.toLocaleString("en-US")}`);
   console.log(`  Input:       ${summary.inputTokens.toLocaleString("en-US")}`);
-  console.log(
-    `  Output:      ${summary.outputTokens.toLocaleString("en-US")}`,
-  );
+  console.log(`  Output:      ${summary.outputTokens.toLocaleString("en-US")}`);
   console.log(
     `  Cache read:  ${summary.cacheReadTokens.toLocaleString("en-US")}`,
   );

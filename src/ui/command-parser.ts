@@ -43,7 +43,10 @@ export function parseReplInput(input: string): string[] {
   for (let i = 0; i < input.length; i++) {
     const ch = input[i]!;
     if (inQuote) {
-      if (ch === "\\" && (input[i + 1] === quoteChar || input[i + 1] === "\\")) {
+      if (
+        ch === "\\" &&
+        (input[i + 1] === quoteChar || input[i + 1] === "\\")
+      ) {
         current += input[++i];
         continue;
       }

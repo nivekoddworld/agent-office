@@ -420,7 +420,9 @@ describe("buildBasePrompt", () => {
     const base = buildBasePrompt();
     expect(base).toContain("No Invented Details");
     expect(base).toContain("Do not invent external systems");
-    expect(base).toContain("ask a clarifying question or state that it is unknown");
+    expect(base).toContain(
+      "ask a clarifying question or state that it is unknown",
+    );
   });
 
   it("contains office-awareness rule", () => {

@@ -26,14 +26,22 @@ function createAgentActivityStore() {
   const setActivity = (agent: string, activity: AgentActivity) => {
     if (state[agent]?.kind === activity.kind) {
       if (activity.kind === "idle" || activity.kind === "thinking") return;
-      if (activity.kind === "tool" && state[agent]?.kind === "tool" &&
-        (state[agent] as { toolName: string }).toolName === activity.toolName) return;
+      if (
+        activity.kind === "tool" &&
+        state[agent]?.kind === "tool" &&
+        (state[agent] as { toolName: string }).toolName === activity.toolName
+      )
+        return;
     }
     state = { ...state, [agent]: activity };
     notify();
   };
 
-  const handleEvent = (eventType: string, agent: string, data: Record<string, unknown>) => {
+  const handleEvent = (
+    eventType: string,
+    agent: string,
+    data: Record<string, unknown>,
+  ) => {
     if (!agent) return;
 
     switch (eventType) {
@@ -41,7 +49,11 @@ function createAgentActivityStore() {
         setActivity(agent, { kind: "thinking", since: Date.now() });
         break;
       case "tool_execution_start":
-        setActivity(agent, { kind: "tool", toolName: (data.toolName as string) ?? "unknown", since: Date.now() });
+        setActivity(agent, {
+          kind: "tool",
+          toolName: (data.toolName as string) ?? "unknown",
+          since: Date.now(),
+        });
         break;
       case "tool_execution_end":
         setActivity(agent, { kind: "thinking", since: Date.now() });

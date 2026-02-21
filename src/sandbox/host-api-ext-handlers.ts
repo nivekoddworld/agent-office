@@ -176,7 +176,12 @@ export async function handleMemoryGet(
   }
   const scope = ["agent", "office"].includes(rawScope) ? rawScope : "agent";
 
-  const result = getMemoryFile({ filePath, scope, agentName, officeDir: baseDir });
+  const result = getMemoryFile({
+    filePath,
+    scope,
+    agentName,
+    officeDir: baseDir,
+  });
 
   if ("error" in result) {
     res.writeHead(400, { "Content-Type": "application/json" });

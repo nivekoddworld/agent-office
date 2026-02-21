@@ -36,27 +36,39 @@ export function App() {
     agentActivityStore.handleEvent(eventType, agent, d);
 
     if (eventType === "message_end" && agent) {
-      const msg = d.message as { role?: string; content?: unknown; usage?: unknown } | undefined;
+      const msg = d.message as
+        | { role?: string; content?: unknown; usage?: unknown }
+        | undefined;
       if (msg?.role === "assistant") {
         const text = extractText(msg.content);
         if (text) {
           unreadStore.increment(agent);
           let usage: { totalTokens: number; totalCost: number } | undefined;
           if (msg.usage) {
-            const u = msg.usage as { totalTokens?: number; cost?: { total?: number } };
+            const u = msg.usage as {
+              totalTokens?: number;
+              cost?: { total?: number };
+            };
             if (u.totalTokens) {
-              usage = { totalTokens: u.totalTokens, totalCost: u.cost?.total ?? 0 };
+              usage = {
+                totalTokens: u.totalTokens,
+                totalCost: u.cost?.total ?? 0,
+              };
             }
           }
-          threadStore.addReply(agent, {
-            id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            sender: agent,
-            text,
-            timestamp: Date.now(),
-            isBot: true,
-            eventType,
-            usage,
-          }, requestId);
+          threadStore.addReply(
+            agent,
+            {
+              id: `reply-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              sender: agent,
+              text,
+              timestamp: Date.now(),
+              isBot: true,
+              eventType,
+              usage,
+            },
+            requestId,
+          );
         }
       }
     } else if (eventType === "agent_end" && agent) {
@@ -72,7 +84,9 @@ export function App() {
     return (
       <Center h="100vh">
         <Stack align="center" gap="xs">
-          <Text size="lg" fw={600}>Session Expired</Text>
+          <Text size="lg" fw={600}>
+            Session Expired
+          </Text>
           <Text c="dimmed" size="sm">
             Restart the server to get a fresh dashboard link.
           </Text>

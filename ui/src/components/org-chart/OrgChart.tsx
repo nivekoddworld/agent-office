@@ -48,14 +48,11 @@ export function OrgChart({ agents, hierarchy, onSelectAgent }: OrgChartProps) {
     [onSelectAgent],
   );
 
-  const onNodeContextMenu: NodeMouseHandler = useCallback(
-    (event, node) => {
-      if (node.id === ROOT_ID) return;
-      event.preventDefault();
-      setContextMenu({ agentName: node.id, x: event.clientX, y: event.clientY });
-    },
-    [],
-  );
+  const onNodeContextMenu: NodeMouseHandler = useCallback((event, node) => {
+    if (node.id === ROOT_ID) return;
+    event.preventDefault();
+    setContextMenu({ agentName: node.id, x: event.clientX, y: event.clientY });
+  }, []);
 
   const onNodeDragStop: NodeMouseHandler = useCallback(
     (_event, draggedNode) => {
@@ -137,7 +134,10 @@ export function OrgChart({ agents, hierarchy, onSelectAgent }: OrgChartProps) {
             variant="filled"
             color="blue"
             size="lg"
-            onClick={() => { setDefaultManager(null); setHireOpen(true); }}
+            onClick={() => {
+              setDefaultManager(null);
+              setHireOpen(true);
+            }}
           >
             <IconPlus size={18} />
           </ActionIcon>

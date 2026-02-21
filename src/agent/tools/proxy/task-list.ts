@@ -17,7 +17,9 @@ export function createTaskListProxy(hostFetch: HostFetch): AgentTool<any> {
         try {
           const body = (await res.json()) as { error?: string };
           if (body.error) msg = body.error;
-        } catch { /* use statusText */ }
+        } catch {
+          /* use statusText */
+        }
         return textResult(`Error listing tasks: ${msg}`);
       }
       const body = (await res.json()) as { result: string };

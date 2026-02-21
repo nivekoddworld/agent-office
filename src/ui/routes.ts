@@ -12,7 +12,12 @@ import { officeDir } from "../constants.js";
 
 // --- Scoped logger ---
 
-export type LogSource = "command" | "scheduler" | "watchdog" | "cron" | "system";
+export type LogSource =
+  | "command"
+  | "scheduler"
+  | "watchdog"
+  | "cron"
+  | "system";
 
 export interface ScopedLine {
   source: LogSource;
@@ -188,7 +193,11 @@ export interface FileEntry {
 const MAX_FILES = 500;
 const MAX_FILE_READ = 512 * 1024; // 512 KB
 
-async function walkDir(root: string, dir: string, out: FileEntry[]): Promise<void> {
+async function walkDir(
+  root: string,
+  dir: string,
+  out: FileEntry[],
+): Promise<void> {
   if (out.length >= MAX_FILES) return;
   let entries;
   try {
@@ -200,23 +209,44 @@ async function walkDir(root: string, dir: string, out: FileEntry[]): Promise<voi
     if (out.length >= MAX_FILES) return;
     const full = join(dir, entry.name);
     const rel = relative(root, full).split(sep).join("/");
-    if (entry.name.startsWith(".") && entry.name !== ".effective-prompt.md") continue;
+    if (entry.name.startsWith(".") && entry.name !== ".effective-prompt.md")
+      continue;
     if (entry.isDirectory()) {
       if (entry.name === "node_modules" || entry.name === ".git") continue;
-      out.push({ path: rel, name: entry.name, isDirectory: true, size: 0, modifiedAt: 0 });
+      out.push({
+        path: rel,
+        name: entry.name,
+        isDirectory: true,
+        size: 0,
+        modifiedAt: 0,
+      });
       await walkDir(root, full, out);
     } else {
       try {
         const s = await stat(full);
-        out.push({ path: rel, name: entry.name, isDirectory: false, size: s.size, modifiedAt: s.mtimeMs });
+        out.push({
+          path: rel,
+          name: entry.name,
+          isDirectory: false,
+          size: s.size,
+          modifiedAt: s.mtimeMs,
+        });
       } catch {
-        out.push({ path: rel, name: entry.name, isDirectory: false, size: 0, modifiedAt: 0 });
+        out.push({
+          path: rel,
+          name: entry.name,
+          isDirectory: false,
+          size: 0,
+          modifiedAt: 0,
+        });
       }
     }
   }
 }
 
-export async function getAgentFiles(handle: AgentHandle): Promise<{ files: FileEntry[]; truncated: boolean }> {
+export async function getAgentFiles(
+  handle: AgentHandle,
+): Promise<{ files: FileEntry[]; truncated: boolean }> {
   const files: FileEntry[] = [];
   await walkDir(handle.cwd, handle.cwd, files);
   return { files, truncated: files.length >= MAX_FILES };
@@ -237,7 +267,10 @@ export async function getAgentFileContent(
     if (!real.startsWith(handle.cwd)) return { error: "path_traversal" };
     const s = await stat(real);
     if (!s.isFile()) return { error: "not_a_file" };
-    if (s.size > MAX_FILE_READ) return { error: `file_too_large (${s.size} bytes, max ${MAX_FILE_READ})` };
+    if (s.size > MAX_FILE_READ)
+      return {
+        error: `file_too_large (${s.size} bytes, max ${MAX_FILE_READ})`,
+      };
     const content = await readFile(real, "utf-8");
     return { content, size: s.size };
   } catch {
@@ -258,6 +291,9 @@ export function executeSend(
     workspace.send(agent, message, "prompt", priority, requestId);
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
 }

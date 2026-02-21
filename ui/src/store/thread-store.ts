@@ -28,10 +28,14 @@ function pruneThreadMaps(
 ): Pick<ThreadState, "activeThreadByAgent" | "threadByRequestId"> {
   const ids = new Set(threads.map((t) => t.id));
   const active = Object.fromEntries(
-    Object.entries(activeThreadByAgent).filter(([, threadId]) => ids.has(threadId)),
+    Object.entries(activeThreadByAgent).filter(([, threadId]) =>
+      ids.has(threadId),
+    ),
   );
   const byRequestId = Object.fromEntries(
-    Object.entries(threadByRequestId).filter(([, threadId]) => ids.has(threadId)),
+    Object.entries(threadByRequestId).filter(([, threadId]) =>
+      ids.has(threadId),
+    ),
   );
   return { activeThreadByAgent: active, threadByRequestId: byRequestId };
 }
@@ -89,7 +93,10 @@ export function createThreadStore() {
       const toRemove = new Set(completed.slice(0, evictCount).map((t) => t.id));
       threads = threads.filter((t) => !toRemove.has(t.id));
     }
-    const activeThreadByAgent = { ...state.activeThreadByAgent, [agentName]: id };
+    const activeThreadByAgent = {
+      ...state.activeThreadByAgent,
+      [agentName]: id,
+    };
     const threadByRequestId = requestId
       ? { ...state.threadByRequestId, [requestId]: id }
       : state.threadByRequestId;
@@ -178,7 +185,11 @@ export function createThreadStore() {
     const threadByRequestId = requestId
       ? { ...state.threadByRequestId, [requestId]: threadId }
       : state.threadByRequestId;
-    const pruned = pruneThreadMaps(threads, activeThreadByAgent, threadByRequestId);
+    const pruned = pruneThreadMaps(
+      threads,
+      activeThreadByAgent,
+      threadByRequestId,
+    );
     state = {
       threads,
       ...pruned,
@@ -209,6 +220,9 @@ export function createThreadStore() {
 export const threadStore = createThreadStore();
 
 export function useThreadStore() {
-  const state = useSyncExternalStore(threadStore.subscribe, threadStore.getSnapshot);
+  const state = useSyncExternalStore(
+    threadStore.subscribe,
+    threadStore.getSnapshot,
+  );
   return useMemo(() => ({ ...state, ...threadStore }), [state]);
 }

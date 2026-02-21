@@ -23,10 +23,7 @@ function createEventStore() {
   const getSnapshot = () => events;
 
   const push = (type: string, data: unknown) => {
-    events = [
-      ...events,
-      { id: nextId++, type, data, timestamp: Date.now() },
-    ];
+    events = [...events, { id: nextId++, type, data, timestamp: Date.now() }];
     if (events.length > MAX_EVENTS) events = events.slice(-MAX_EVENTS);
     for (const fn of listeners) fn();
   };

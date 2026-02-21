@@ -34,7 +34,12 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         </Text>
         {task.priority !== 2 && <PriorityBadge priority={task.priority} />}
       </Group>
-      <Text size="sm" fw={600} style={{ color: slack.textPrimary }} lineClamp={2}>
+      <Text
+        size="sm"
+        fw={600}
+        style={{ color: slack.textPrimary }}
+        lineClamp={2}
+      >
         {task.title}
       </Text>
 
@@ -46,10 +51,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
           </Text>
         </Group>
         {task.dependsOn.length > 0 && (
-          <Tooltip
-            label={`Depends on: ${task.dependsOn.join(", ")}`}
-            withArrow
-          >
+          <Tooltip label={`Depends on: ${task.dependsOn.join(", ")}`} withArrow>
             <Group gap={2}>
               <IconLink size={12} color={slack.textMuted} />
               <Text size="xs" style={{ color: slack.textMuted }}>

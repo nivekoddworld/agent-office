@@ -1,9 +1,4 @@
-import {
-  existsSync,
-  lstatSync,
-  readFileSync,
-  realpathSync,
-} from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { resolve, sep } from "node:path";
 
 /**

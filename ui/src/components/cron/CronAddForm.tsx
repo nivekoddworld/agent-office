@@ -21,22 +21,32 @@ export function CronAddForm({ opened, onClose, agentNames }: CronAddFormProps) {
     if (scope === "agent" && !agent) return;
 
     const escapedMsg = message.replace(/"/g, '\\"');
-    const cmd = scope === "office"
-      ? `cron add office ${jobName} "${schedule}" "${escapedMsg}" --targets ${agentNames.join(",")}`
-      : `cron add ${agent} ${jobName} "${schedule}" "${escapedMsg}" --apply`;
+    const cmd =
+      scope === "office"
+        ? `cron add office ${jobName} "${schedule}" "${escapedMsg}" --targets ${agentNames.join(",")}`
+        : `cron add ${agent} ${jobName} "${schedule}" "${escapedMsg}" --apply`;
 
-    command.mutate({ command: cmd }, {
-      onSuccess: () => {
-        setJobName("");
-        setSchedule("");
-        setMessage("");
-        onClose();
+    command.mutate(
+      { command: cmd },
+      {
+        onSuccess: () => {
+          setJobName("");
+          setSchedule("");
+          setMessage("");
+          onClose();
+        },
       },
-    });
+    );
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Add Cron Job" size="md" centered>
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title="Add Cron Job"
+      size="md"
+      centered
+    >
       <Stack gap="sm">
         <Select
           label="Scope"
@@ -78,7 +88,9 @@ export function CronAddForm({ opened, onClose, agentNames }: CronAddFormProps) {
           required
         />
         <Group justify="flex-end" mt="sm">
-          <Button variant="default" onClick={onClose}>Cancel</Button>
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             onClick={handleSubmit}
             disabled={!jobName.trim() || !schedule.trim() || !message.trim()}

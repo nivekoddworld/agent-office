@@ -2,12 +2,18 @@ import type { Workspace } from "../workspace.js";
 import type { TaskStatus } from "../tasks/types.js";
 import { TASK_STATUSES } from "../tasks/types.js";
 
-export function taskListCommand(workspace: Workspace, assignee?: string, status?: string): void {
+export function taskListCommand(
+  workspace: Workspace,
+  assignee?: string,
+  status?: string,
+): void {
   const filter: { assignee?: string; status?: TaskStatus } = {};
   if (assignee) filter.assignee = assignee;
   if (status) {
     if (!TASK_STATUSES.includes(status as TaskStatus)) {
-      console.log(`Error: invalid status "${status}". Valid: ${TASK_STATUSES.join(", ")}`);
+      console.log(
+        `Error: invalid status "${status}". Valid: ${TASK_STATUSES.join(", ")}`,
+      );
       return;
     }
     filter.status = status as TaskStatus;
@@ -21,14 +27,21 @@ export function taskListCommand(workspace: Workspace, assignee?: string, status?
 
   console.log(`Tasks (${tasks.length}):`);
   for (const t of tasks) {
-    const deps = t.dependsOn.length > 0 ? ` deps:[${t.dependsOn.join(",")}]` : "";
+    const deps =
+      t.dependsOn.length > 0 ? ` deps:[${t.dependsOn.join(",")}]` : "";
     console.log(`  #${t.id} [${t.status}] → ${t.assignee}: ${t.title}${deps}`);
   }
 }
 
 export function taskBoardCommand(workspace: Workspace): void {
   const board = workspace.tasks.board();
-  const columns: TaskStatus[] = ["backlog", "todo", "in_progress", "review", "done"];
+  const columns: TaskStatus[] = [
+    "backlog",
+    "todo",
+    "in_progress",
+    "review",
+    "done",
+  ];
   for (const col of columns) {
     const tasks = board[col];
     console.log(`\n--- ${col.toUpperCase()} (${tasks.length}) ---`);
@@ -56,6 +69,7 @@ export function taskGetCommand(workspace: Workspace, taskId: string): void {
   console.log(`  Created:    ${new Date(task.createdAt).toISOString()}`);
   console.log(`  Updated:    ${new Date(task.updatedAt).toISOString()}`);
   if (task.description) console.log(`  Description: ${task.description}`);
-  if (task.dependsOn.length > 0) console.log(`  Depends on: ${task.dependsOn.join(", ")}`);
+  if (task.dependsOn.length > 0)
+    console.log(`  Depends on: ${task.dependsOn.join(", ")}`);
   if (task.result) console.log(`  Result: ${task.result}`);
 }

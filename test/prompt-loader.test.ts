@@ -65,10 +65,7 @@ describe("resolveCustomPrompt", () => {
 
   it("rejects symlink that points outside office dir", () => {
     writeFileSync(join(OUTSIDE_DIR, "secret.md"), "outside content");
-    symlinkSync(
-      join(OUTSIDE_DIR, "secret.md"),
-      join(TEST_DIR, "escape.md"),
-    );
+    symlinkSync(join(OUTSIDE_DIR, "secret.md"), join(TEST_DIR, "escape.md"));
 
     expect(() =>
       resolveCustomPrompt({ prompt_file: "escape.md" }, TEST_DIR),
@@ -103,16 +100,16 @@ describe("resolveBootstrapDir", () => {
   });
 
   it("rejects bootstrap_dir that escapes office dir", () => {
-    expect(() =>
-      resolveBootstrapDir("../../etc", TEST_DIR, "bot"),
-    ).toThrow(/escapes office directory/);
+    expect(() => resolveBootstrapDir("../../etc", TEST_DIR, "bot")).toThrow(
+      /escapes office directory/,
+    );
   });
 
   it("rejects symlink bootstrap_dir that escapes office dir", () => {
     symlinkSync(OUTSIDE_DIR, join(TEST_DIR, "escape-link"));
 
-    expect(() =>
-      resolveBootstrapDir("escape-link", TEST_DIR, "bot"),
-    ).toThrow(/escapes office directory/);
+    expect(() => resolveBootstrapDir("escape-link", TEST_DIR, "bot")).toThrow(
+      /escapes office directory/,
+    );
   });
 });

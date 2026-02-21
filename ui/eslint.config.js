@@ -9,7 +9,10 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "max-lines": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
+      "max-lines": [
+        "error",
+        { max: 400, skipBlankLines: true, skipComments: true },
+      ],
       "@typescript-eslint/no-explicit-any": "error",
     },
   },

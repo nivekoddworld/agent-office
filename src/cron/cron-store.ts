@@ -50,7 +50,8 @@ function normalizeState(raw: unknown): CronJobState | null {
     skippedBusyCount: asNonNegativeNumber(state["skippedBusyCount"]),
     skippedCapCount: asNonNegativeNumber(state["skippedCapCount"]),
     lastStatus: validStatus,
-    lastError: typeof state["lastError"] === "string" ? state["lastError"] : null,
+    lastError:
+      typeof state["lastError"] === "string" ? state["lastError"] : null,
   };
 }
 

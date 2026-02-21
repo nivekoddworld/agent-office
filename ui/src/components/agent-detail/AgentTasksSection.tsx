@@ -17,10 +17,18 @@ function TaskRow({ task }: { task: Task }) {
       wrap="nowrap"
       style={{ borderBottom: `1px solid ${slack.borderColor}` }}
     >
-      <Text size="xs" ff="monospace" style={{ color: slack.textMuted, flexShrink: 0 }}>
+      <Text
+        size="xs"
+        ff="monospace"
+        style={{ color: slack.textMuted, flexShrink: 0 }}
+      >
         {task.id}
       </Text>
-      <Text size="sm" style={{ color: slack.textPrimary, flex: 1, minWidth: 0 }} lineClamp={1}>
+      <Text
+        size="sm"
+        style={{ color: slack.textPrimary, flex: 1, minWidth: 0 }}
+        lineClamp={1}
+      >
         {task.title}
       </Text>
       <StatusBadge status={task.status} />
@@ -29,9 +37,14 @@ function TaskRow({ task }: { task: Task }) {
   );
 }
 
-export function AgentTasksSection({ agentName, tasks }: AgentTasksSectionProps) {
+export function AgentTasksSection({
+  agentName,
+  tasks,
+}: AgentTasksSectionProps) {
   const assigned = tasks.filter((t) => t.assignee === agentName);
-  const created = tasks.filter((t) => t.createdBy === agentName && t.assignee !== agentName);
+  const created = tasks.filter(
+    (t) => t.createdBy === agentName && t.assignee !== agentName,
+  );
 
   if (assigned.length === 0 && created.length === 0) {
     return (
@@ -45,22 +58,36 @@ export function AgentTasksSection({ agentName, tasks }: AgentTasksSectionProps) 
     <Stack gap="md">
       {assigned.length > 0 && (
         <Box>
-          <Text size="xs" fw={600} style={{ color: slack.textSecondary }} mb={4}>
+          <Text
+            size="xs"
+            fw={600}
+            style={{ color: slack.textSecondary }}
+            mb={4}
+          >
             Assigned ({assigned.length})
           </Text>
           <Stack gap={0}>
-            {assigned.map((t) => <TaskRow key={t.id} task={t} />)}
+            {assigned.map((t) => (
+              <TaskRow key={t.id} task={t} />
+            ))}
           </Stack>
         </Box>
       )}
 
       {created.length > 0 && (
         <Box>
-          <Text size="xs" fw={600} style={{ color: slack.textSecondary }} mb={4}>
+          <Text
+            size="xs"
+            fw={600}
+            style={{ color: slack.textSecondary }}
+            mb={4}
+          >
             Created by this agent ({created.length})
           </Text>
           <Stack gap={0}>
-            {created.map((t) => <TaskRow key={t.id} task={t} />)}
+            {created.map((t) => (
+              <TaskRow key={t.id} task={t} />
+            ))}
           </Stack>
         </Box>
       )}

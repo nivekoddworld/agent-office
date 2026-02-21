@@ -32,18 +32,39 @@ interface OfficeSettingsModalProps {
   state: BootstrapState;
 }
 
-function InfoRow({ label, value, copyable }: { label: string; value: string; copyable?: boolean }) {
+function InfoRow({
+  label,
+  value,
+  copyable,
+}: {
+  label: string;
+  value: string;
+  copyable?: boolean;
+}) {
   return (
     <Group justify="space-between" py={4}>
-      <Text size="sm" style={{ color: slack.textMuted }}>{label}</Text>
+      <Text size="sm" style={{ color: slack.textMuted }}>
+        {label}
+      </Text>
       <Group gap={6}>
-        <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>{value}</Text>
+        <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
+          {value}
+        </Text>
         {copyable && (
           <CopyButton value={value} timeout={1500}>
             {({ copied, copy }) => (
               <Tooltip label={copied ? "Copied" : "Copy"} withArrow>
-                <ActionIcon variant="subtle" color="gray" size="xs" onClick={copy}>
-                  {copied ? <IconCheck size={12} color={slack.accentGreen} /> : <IconCopy size={12} color={slack.textMuted} />}
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="xs"
+                  onClick={copy}
+                >
+                  {copied ? (
+                    <IconCheck size={12} color={slack.accentGreen} />
+                  ) : (
+                    <IconCopy size={12} color={slack.textMuted} />
+                  )}
                 </ActionIcon>
               </Tooltip>
             )}
@@ -54,23 +75,39 @@ function InfoRow({ label, value, copyable }: { label: string; value: string; cop
   );
 }
 
-function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
+function SectionHeader({
+  icon,
+  label,
+}: {
+  icon: React.ReactNode;
+  label: string;
+}) {
   return (
     <Group gap={8} mb={6}>
       {icon}
-      <Text size="sm" fw={700} style={{ color: "#fff" }}>{label}</Text>
+      <Text size="sm" fw={700} style={{ color: "#fff" }}>
+        {label}
+      </Text>
     </Group>
   );
 }
 
-export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsModalProps) {
+export function OfficeSettingsModal({
+  opened,
+  onClose,
+  state,
+}: OfficeSettingsModalProps) {
   const command = useCommand();
 
-  const activeAgents = state.agents.filter((a) => a.status === "running").length;
+  const activeAgents = state.agents.filter(
+    (a) => a.status === "running",
+  ).length;
   const idleAgents = state.agents.filter((a) => a.status === "idle").length;
   const deadAgents = state.agents.filter((a) => a.status === "dead").length;
   const models = [...new Set(state.agents.map((a) => a.model))];
-  const activeCronJobs = state.cronJobs.filter((j) => j.config.enabled !== false).length;
+  const activeCronJobs = state.cronJobs.filter(
+    (j) => j.config.enabled !== false,
+  ).length;
 
   const handleToggleScheduler = () => {
     const cmd = state.scheduler.running ? "scheduler stop" : "scheduler start";
@@ -106,7 +143,10 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
       <Stack gap="lg" py="md">
         {/* Office Info */}
         <Box>
-          <SectionHeader icon={<IconBuilding size={16} color={slack.accentBlue} />} label="Office" />
+          <SectionHeader
+            icon={<IconBuilding size={16} color={slack.accentBlue} />}
+            label="Office"
+          />
           <Box
             p="sm"
             style={{
@@ -129,7 +169,10 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
 
         {/* Scheduler */}
         <Box>
-          <SectionHeader icon={<IconClock size={16} color={slack.accentYellow} />} label="Scheduler" />
+          <SectionHeader
+            icon={<IconClock size={16} color={slack.accentYellow} />}
+            label="Scheduler"
+          />
           <Box
             p="sm"
             style={{
@@ -139,7 +182,9 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
             }}
           >
             <Group justify="space-between" py={4}>
-              <Text size="sm" style={{ color: slack.textMuted }}>Status</Text>
+              <Text size="sm" style={{ color: slack.textMuted }}>
+                Status
+              </Text>
               <Group gap={8}>
                 <Badge
                   size="sm"
@@ -153,15 +198,21 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
                   checked={state.scheduler.running}
                   onChange={handleToggleScheduler}
                   color="teal"
-                  thumbIcon={state.scheduler.running
-                    ? <IconPlayerPause size={10} />
-                    : <IconPlayerPlay size={10} />
+                  thumbIcon={
+                    state.scheduler.running ? (
+                      <IconPlayerPause size={10} />
+                    ) : (
+                      <IconPlayerPlay size={10} />
+                    )
                   }
                 />
               </Group>
             </Group>
             <InfoRow label="Tick interval" value={`${intervalSec}s`} />
-            <InfoRow label="Total ticks" value={state.scheduler.tickCount.toLocaleString()} />
+            <InfoRow
+              label="Total ticks"
+              value={state.scheduler.tickCount.toLocaleString()}
+            />
           </Box>
         </Box>
 
@@ -169,7 +220,10 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
 
         {/* Agents Summary */}
         <Box>
-          <SectionHeader icon={<IconRobot size={16} color={slack.accentGreen} />} label="Agents" />
+          <SectionHeader
+            icon={<IconRobot size={16} color={slack.accentGreen} />}
+            label="Agents"
+          />
           <Box
             p="sm"
             style={{
@@ -180,24 +234,36 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
           >
             <InfoRow label="Total" value={`${state.agents.length}`} />
             <Group justify="space-between" py={4}>
-              <Text size="sm" style={{ color: slack.textMuted }}>Breakdown</Text>
+              <Text size="sm" style={{ color: slack.textMuted }}>
+                Breakdown
+              </Text>
               <Group gap={6}>
                 {activeAgents > 0 && (
-                  <Badge size="xs" variant="light" color="green">{activeAgents} active</Badge>
+                  <Badge size="xs" variant="light" color="green">
+                    {activeAgents} active
+                  </Badge>
                 )}
                 {idleAgents > 0 && (
-                  <Badge size="xs" variant="light" color="blue">{idleAgents} idle</Badge>
+                  <Badge size="xs" variant="light" color="blue">
+                    {idleAgents} idle
+                  </Badge>
                 )}
                 {deadAgents > 0 && (
-                  <Badge size="xs" variant="light" color="red">{deadAgents} dead</Badge>
+                  <Badge size="xs" variant="light" color="red">
+                    {deadAgents} dead
+                  </Badge>
                 )}
               </Group>
             </Group>
             <Group justify="space-between" py={4}>
-              <Text size="sm" style={{ color: slack.textMuted }}>Models</Text>
+              <Text size="sm" style={{ color: slack.textMuted }}>
+                Models
+              </Text>
               <Group gap={4}>
                 {models.map((m) => (
-                  <Badge key={m} size="xs" variant="light" color="gray">{m}</Badge>
+                  <Badge key={m} size="xs" variant="light" color="gray">
+                    {m}
+                  </Badge>
                 ))}
               </Group>
             </Group>
@@ -208,7 +274,10 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
 
         {/* Cron Summary */}
         <Box>
-          <SectionHeader icon={<IconCalendarEvent size={16} color={slack.accentPurple} />} label="Cron Jobs" />
+          <SectionHeader
+            icon={<IconCalendarEvent size={16} color={slack.accentPurple} />}
+            label="Cron Jobs"
+          />
           <Box
             p="sm"
             style={{
@@ -226,7 +295,9 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
 
         {/* Quick Actions */}
         <Box>
-          <Text size="sm" fw={700} style={{ color: "#fff" }} mb={8}>Quick Actions</Text>
+          <Text size="sm" fw={700} style={{ color: "#fff" }} mb={8}>
+            Quick Actions
+          </Text>
           <Group gap="sm">
             <Tooltip label="Reload office.yaml configuration" withArrow>
               <ActionIcon
@@ -239,7 +310,9 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
                 <IconRefresh size={18} />
               </ActionIcon>
             </Tooltip>
-            <Text size="xs" style={{ color: slack.textMuted }}>Reload Config</Text>
+            <Text size="xs" style={{ color: slack.textMuted }}>
+              Reload Config
+            </Text>
 
             <Box style={{ width: 16 }} />
 
@@ -254,7 +327,9 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
                 <IconCheck size={18} />
               </ActionIcon>
             </Tooltip>
-            <Text size="xs" style={{ color: slack.textMuted }}>Validate Config</Text>
+            <Text size="xs" style={{ color: slack.textMuted }}>
+              Validate Config
+            </Text>
           </Group>
 
           {command.data && !command.isPending && (
@@ -274,7 +349,9 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
                   key={i}
                   size="xs"
                   style={{
-                    color: command.data!.ok ? slack.textSecondary : slack.accentRed,
+                    color: command.data!.ok
+                      ? slack.textSecondary
+                      : slack.accentRed,
                     fontFamily: "monospace",
                   }}
                 >
@@ -282,7 +359,10 @@ export function OfficeSettingsModal({ opened, onClose, state }: OfficeSettingsMo
                 </Text>
               ))}
               {command.data.output.length === 0 && (
-                <Text size="xs" style={{ color: slack.accentGreen, fontFamily: "monospace" }}>
+                <Text
+                  size="xs"
+                  style={{ color: slack.accentGreen, fontFamily: "monospace" }}
+                >
                   {command.data.ok ? "OK" : `Error: ${command.data.error}`}
                 </Text>
               )}

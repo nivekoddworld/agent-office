@@ -27,7 +27,11 @@ interface KanbanColumnProps {
   onTaskClick: (task: Task) => void;
 }
 
-export function KanbanColumn({ status, tasks, onTaskClick }: KanbanColumnProps) {
+export function KanbanColumn({
+  status,
+  tasks,
+  onTaskClick,
+}: KanbanColumnProps) {
   return (
     <Box
       style={{
@@ -61,7 +65,12 @@ export function KanbanColumn({ status, tasks, onTaskClick }: KanbanColumnProps) 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
         <Stack gap={8} p="xs">
           {tasks.length === 0 ? (
-            <Text size="xs" ta="center" py="lg" style={{ color: slack.textMuted }}>
+            <Text
+              size="xs"
+              ta="center"
+              py="lg"
+              style={{ color: slack.textMuted }}
+            >
               No tasks
             </Text>
           ) : (

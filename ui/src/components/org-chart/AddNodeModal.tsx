@@ -42,7 +42,9 @@ export function AddNodeModal({
   const [priority, setPriority] = useState<string | null>("2");
   const [thinking, setThinking] = useState<string | null>("");
   const [description, setDescription] = useState("");
-  const [reportsTo, setReportsTo] = useState<string | null>(defaultManager ?? null);
+  const [reportsTo, setReportsTo] = useState<string | null>(
+    defaultManager ?? null,
+  );
   const command = useCommand();
 
   const reset = () => {
@@ -62,15 +64,20 @@ export function AddNodeModal({
       const safe = description.trim().replace(/"/g, "");
       cmd += ` --desc "${safe}"`;
     }
-    command.mutate({ command: cmd }, {
-      onSuccess: () => {
-        if (reportsTo) {
-          command.mutate({ command: `agent-set-manager ${name} ${reportsTo}` });
-        }
-        reset();
-        onClose();
+    command.mutate(
+      { command: cmd },
+      {
+        onSuccess: () => {
+          if (reportsTo) {
+            command.mutate({
+              command: `agent-set-manager ${name} ${reportsTo}`,
+            });
+          }
+          reset();
+          onClose();
+        },
       },
-    });
+    );
   };
 
   const managerOptions = [
@@ -79,7 +86,13 @@ export function AddNodeModal({
   ];
 
   return (
-    <Modal opened={opened} onClose={onClose} title="Hire Agent" size="md" centered>
+    <Modal
+      opened={opened}
+      onClose={onClose}
+      title="Hire Agent"
+      size="md"
+      centered
+    >
       <Stack gap="sm">
         <TextInput
           label="Name"
@@ -123,7 +136,9 @@ export function AddNodeModal({
           onChange={(v) => setReportsTo(v === "__none__" ? null : v)}
         />
         <Group justify="flex-end" mt="sm">
-          <Button variant="default" onClick={onClose}>Cancel</Button>
+          <Button variant="default" onClick={onClose}>
+            Cancel
+          </Button>
           <Button
             onClick={handleSubmit}
             disabled={!name.trim() || !model}

@@ -56,7 +56,10 @@ export function useOrgLayout(
       nodes.push({
         id: ROOT_ID,
         type: "agentNode",
-        position: { x: rootPos.x - NODE_WIDTH / 2, y: rootPos.y - NODE_HEIGHT / 2 },
+        position: {
+          x: rootPos.x - NODE_WIDTH / 2,
+          y: rootPos.y - NODE_HEIGHT / 2,
+        },
         data: {
           agentName: null,
           label: "You",

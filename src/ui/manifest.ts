@@ -10,7 +10,7 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
     name: "hire",
     description: "Hire a new agent",
     category: "agent",
-    args: '<name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path] [--desc text] [--api-key-ref ENV] [--env K=V] [--secret-ref K=ENV] [--ephemeral]',
+    args: "<name> [--model p:id] [--priority 0-4] [--thinking level] [--cwd path] [--desc text] [--api-key-ref ENV] [--env K=V] [--secret-ref K=ENV] [--ephemeral]",
   },
   {
     name: "roster",
@@ -272,5 +272,4 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
     category: "cost",
     args: "--days <n> [--agent <name>]",
   },
-
 ];

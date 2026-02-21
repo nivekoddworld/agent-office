@@ -28,7 +28,10 @@ export function OrgChartModal({
       centered
       styles={{
         content: { backgroundColor: slack.mainBg },
-        header: { backgroundColor: slack.mainBg, borderBottom: `1px solid ${slack.borderColor}` },
+        header: {
+          backgroundColor: slack.mainBg,
+          borderBottom: `1px solid ${slack.borderColor}`,
+        },
         title: { color: "#fff", fontWeight: 700 },
       }}
     >

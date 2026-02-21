@@ -23,12 +23,19 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Modal opened={opened} onClose={onCancel} title={title} size="sm" centered>
-      <Text size="sm" mb="lg">{message}</Text>
+      <Text size="sm" mb="lg">
+        {message}
+      </Text>
       <Group justify="flex-end" gap="xs">
         <Button variant="default" size="sm" onClick={onCancel}>
           Cancel
         </Button>
-        <Button color={confirmColor} size="sm" onClick={onConfirm} loading={loading}>
+        <Button
+          color={confirmColor}
+          size="sm"
+          onClick={onConfirm}
+          loading={loading}
+        >
           {confirmLabel}
         </Button>
       </Group>

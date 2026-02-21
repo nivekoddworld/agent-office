@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { Stack, Text, Badge, Group, TextInput, Button, ActionIcon } from "@mantine/core";
+import {
+  Stack,
+  Text,
+  Badge,
+  Group,
+  TextInput,
+  Button,
+  ActionIcon,
+} from "@mantine/core";
 import { IconKey, IconLock, IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { useCommand } from "../../api/use-command.js";
@@ -21,9 +29,17 @@ export function EnvEditor({ agent }: EnvEditorProps) {
 
   const notify = (data: { ok: boolean; error?: string; output: string[] }) => {
     if (data.ok) {
-      notifications.show({ title: "Updated", message: "Run 'office reload --force' to apply", color: "blue" });
+      notifications.show({
+        title: "Updated",
+        message: "Run 'office reload --force' to apply",
+        color: "blue",
+      });
     } else {
-      notifications.show({ title: "Failed", message: data.error ?? data.output.join("\n"), color: "red" });
+      notifications.show({
+        title: "Failed",
+        message: data.error ?? data.output.join("\n"),
+        color: "red",
+      });
     }
   };
 
@@ -33,7 +49,15 @@ export function EnvEditor({ agent }: EnvEditorProps) {
     if (!key || !val) return;
     command.mutate(
       { command: `agent env set ${agent.name} ${key} ${val}` },
-      { onSuccess: (d) => { notify(d); if (d.ok) { setNewEnvKey(""); setNewEnvVal(""); } } },
+      {
+        onSuccess: (d) => {
+          notify(d);
+          if (d.ok) {
+            setNewEnvKey("");
+            setNewEnvVal("");
+          }
+        },
+      },
     );
   };
 
@@ -50,7 +74,15 @@ export function EnvEditor({ agent }: EnvEditorProps) {
     if (!key || !env) return;
     command.mutate(
       { command: `agent secret-ref set ${agent.name} ${key} ${env}` },
-      { onSuccess: (d) => { notify(d); if (d.ok) { setNewSecKey(""); setNewSecEnv(""); } } },
+      {
+        onSuccess: (d) => {
+          notify(d);
+          if (d.ok) {
+            setNewSecKey("");
+            setNewSecEnv("");
+          }
+        },
+      },
     );
   };
 
@@ -66,22 +98,37 @@ export function EnvEditor({ agent }: EnvEditorProps) {
       <div>
         <Group gap={4} mb={4}>
           <IconKey size={14} />
-          <Text size="xs" c="dimmed">Environment Variables</Text>
+          <Text size="xs" c="dimmed">
+            Environment Variables
+          </Text>
         </Group>
         {hasEnv && (
           <Group gap={4} mb={6}>
             {agent.envKeys.map((k) => (
-              <Badge key={k} size="xs" variant="outline" rightSection={
-                <ActionIcon size={12} variant="transparent" onClick={() => removeEnv(k)}>
-                  <IconX size={10} />
-                </ActionIcon>
-              }>
+              <Badge
+                key={k}
+                size="xs"
+                variant="outline"
+                rightSection={
+                  <ActionIcon
+                    size={12}
+                    variant="transparent"
+                    onClick={() => removeEnv(k)}
+                  >
+                    <IconX size={10} />
+                  </ActionIcon>
+                }
+              >
                 {k}
               </Badge>
             ))}
           </Group>
         )}
-        {!hasEnv && <Text size="xs" c="dimmed" mb={6}>No environment variables</Text>}
+        {!hasEnv && (
+          <Text size="xs" c="dimmed" mb={6}>
+            No environment variables
+          </Text>
+        )}
         <Group gap="xs">
           <TextInput
             size="xs"
@@ -98,7 +145,12 @@ export function EnvEditor({ agent }: EnvEditorProps) {
             onKeyDown={(e) => e.key === "Enter" && addEnv()}
             style={{ flex: 1, maxWidth: 200 }}
           />
-          <Button size="xs" variant="light" onClick={addEnv} disabled={!newEnvKey.trim() || !newEnvVal.trim()}>
+          <Button
+            size="xs"
+            variant="light"
+            onClick={addEnv}
+            disabled={!newEnvKey.trim() || !newEnvVal.trim()}
+          >
             Set
           </Button>
         </Group>
@@ -107,22 +159,38 @@ export function EnvEditor({ agent }: EnvEditorProps) {
       <div>
         <Group gap={4} mb={4}>
           <IconLock size={14} />
-          <Text size="xs" c="dimmed">Secret References</Text>
+          <Text size="xs" c="dimmed">
+            Secret References
+          </Text>
         </Group>
         {hasSecrets && (
           <Group gap={4} mb={6}>
             {agent.secretKeys.map((k) => (
-              <Badge key={k} size="xs" variant="outline" color="yellow" rightSection={
-                <ActionIcon size={12} variant="transparent" onClick={() => removeSecret(k)}>
-                  <IconX size={10} />
-                </ActionIcon>
-              }>
+              <Badge
+                key={k}
+                size="xs"
+                variant="outline"
+                color="yellow"
+                rightSection={
+                  <ActionIcon
+                    size={12}
+                    variant="transparent"
+                    onClick={() => removeSecret(k)}
+                  >
+                    <IconX size={10} />
+                  </ActionIcon>
+                }
+              >
                 {k}
               </Badge>
             ))}
           </Group>
         )}
-        {!hasSecrets && <Text size="xs" c="dimmed" mb={6}>No secret references</Text>}
+        {!hasSecrets && (
+          <Text size="xs" c="dimmed" mb={6}>
+            No secret references
+          </Text>
+        )}
         <Group gap="xs">
           <TextInput
             size="xs"
@@ -139,7 +207,13 @@ export function EnvEditor({ agent }: EnvEditorProps) {
             onKeyDown={(e) => e.key === "Enter" && addSecret()}
             style={{ flex: 1, maxWidth: 200 }}
           />
-          <Button size="xs" variant="light" color="yellow" onClick={addSecret} disabled={!newSecKey.trim() || !newSecEnv.trim()}>
+          <Button
+            size="xs"
+            variant="light"
+            color="yellow"
+            onClick={addSecret}
+            disabled={!newSecKey.trim() || !newSecEnv.trim()}
+          >
             Set
           </Button>
         </Group>

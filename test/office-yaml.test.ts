@@ -424,9 +424,9 @@ describe("validateOfficeConfig", () => {
         bot: { permissions: { tools: { allow: ["bash", 42] } } as any },
       },
     });
-    expect(
-      errors.some((e) => e.includes("must contain only strings")),
-    ).toBe(true);
+    expect(errors.some((e) => e.includes("must contain only strings"))).toBe(
+      true,
+    );
   });
 
   it("rejects non-string elements in permissions.tools.deny", () => {
@@ -436,9 +436,9 @@ describe("validateOfficeConfig", () => {
         bot: { permissions: { tools: { deny: [true] } } as any },
       },
     });
-    expect(
-      errors.some((e) => e.includes("must contain only strings")),
-    ).toBe(true);
+    expect(errors.some((e) => e.includes("must contain only strings"))).toBe(
+      true,
+    );
   });
 });
 
@@ -542,9 +542,9 @@ describe("prompt source validation", () => {
       office: { name: "Test" },
       agents: { bot: { prompt: "old style" } as any },
     });
-    expect(errors.some((e) => e.includes('"prompt" is no longer supported'))).toBe(
-      true,
-    );
+    expect(
+      errors.some((e) => e.includes('"prompt" is no longer supported')),
+    ).toBe(true);
     expect(errors.some((e) => e.includes("prompt_inline"))).toBe(true);
   });
 

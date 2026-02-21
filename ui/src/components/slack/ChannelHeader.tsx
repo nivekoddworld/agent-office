@@ -25,12 +25,11 @@ export function ChannelHeader({
   showSystemMessages,
   onToggleSystemMessages,
 }: ChannelHeaderProps) {
-  const name =
-    channel.kind === "channel" ? channel.name : channel.agentName;
+  const name = channel.kind === "channel" ? channel.name : channel.agentName;
   const desc =
     description ??
     (channel.kind === "channel"
-      ? CHANNEL_DESCRIPTIONS[channel.name] ?? ""
+      ? (CHANNEL_DESCRIPTIONS[channel.name] ?? "")
       : "");
 
   return (
@@ -60,11 +59,7 @@ export function ChannelHeader({
                   flexShrink: 0,
                 }}
               />
-              <Text
-                size="xs"
-                style={{ color: slack.textMuted }}
-                truncate
-              >
+              <Text size="xs" style={{ color: slack.textMuted }} truncate>
                 {desc}
               </Text>
             </>
@@ -74,7 +69,9 @@ export function ChannelHeader({
         <Group gap={6}>
           {onToggleSystemMessages != null && (
             <Tooltip
-              label={showSystemMessages ? "Hide system events" : "Show system events"}
+              label={
+                showSystemMessages ? "Hide system events" : "Show system events"
+              }
               withArrow
             >
               <ActionIcon
@@ -92,7 +89,9 @@ export function ChannelHeader({
             </Tooltip>
           )}
           {agentCount != null && (
-            <Tooltip label={`${activeCount ?? 0} active / ${agentCount} total agents`}>
+            <Tooltip
+              label={`${activeCount ?? 0} active / ${agentCount} total agents`}
+            >
               <Group gap={4} style={{ cursor: "default" }}>
                 <IconUsers size={16} color={slack.textSecondary} />
                 <Text size="xs" style={{ color: slack.textSecondary }}>

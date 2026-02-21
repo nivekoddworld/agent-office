@@ -1,6 +1,19 @@
 import { useState } from "react";
-import { Box, Text, Group, UnstyledButton, ActionIcon, Tooltip } from "@mantine/core";
-import { IconMessage, IconCopy, IconArrowForwardUp, IconRobot, IconUser } from "@tabler/icons-react";
+import {
+  Box,
+  Text,
+  Group,
+  UnstyledButton,
+  ActionIcon,
+  Tooltip,
+} from "@mantine/core";
+import {
+  IconMessage,
+  IconCopy,
+  IconArrowForwardUp,
+  IconRobot,
+  IconUser,
+} from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { MarkdownContent } from "./MarkdownContent.js";
 import { formatTime, agentHue } from "./channel-helpers.js";
@@ -87,7 +100,12 @@ function HoverActions({
       )}
       {onResend && (
         <Tooltip label="Re-send" position="top" withArrow>
-          <ActionIcon size="sm" variant="subtle" color="gray" onClick={onResend}>
+          <ActionIcon
+            size="sm"
+            variant="subtle"
+            color="gray"
+            onClick={onResend}
+          >
             <IconArrowForwardUp size={16} color={slack.textSecondary} />
           </ActionIcon>
         </Tooltip>
@@ -125,7 +143,9 @@ export function SlackMessage({
         <HoverActions
           onCopy={handleCopy}
           onReply={onReply ? () => onReply(message) : undefined}
-          onResend={onResend && isOperator ? () => onResend(message) : undefined}
+          onResend={
+            onResend && isOperator ? () => onResend(message) : undefined
+          }
         />
       )}
 
@@ -182,14 +202,22 @@ export function SlackMessage({
           )}
 
           {compact && (
-            <Text component="span" size="xs" mr={6} style={{ color: slack.textMuted }}>
+            <Text
+              component="span"
+              size="xs"
+              mr={6}
+              style={{ color: slack.textMuted }}
+            >
               {formatTime(message.timestamp)}
             </Text>
           )}
           {message.isBot ? (
             <MarkdownContent content={message.text} />
           ) : (
-            <Text size="sm" style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}>
+            <Text
+              size="sm"
+              style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}
+            >
               {message.text}
             </Text>
           )}

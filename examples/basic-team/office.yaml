@@ -32,10 +32,10 @@ agents:
     thinking: medium
     description: "Code reviewer — reviews quality and correctness"
     reports_to: pm
-    prompt_mode: minimal  # only base + identity + custom (skips office/memory/skills)
+    prompt_mode: minimal # only base + identity + custom (skips office/memory/skills)
     permissions:
       tools:
-        deny: [cron_add, cron_remove]  # reviewer shouldn't manage cron jobs
+        deny: [cron_add, cron_remove] # reviewer shouldn't manage cron jobs
     prompt_inline: |
       You are a code reviewer. Read agent files, review for bugs,
       style, and correctness, then send feedback via send_mail.

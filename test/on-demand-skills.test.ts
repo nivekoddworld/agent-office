@@ -50,20 +50,28 @@ describe("createReadSkillTool", () => {
   it("returns content for existing skill", async () => {
     const tool = createReadSkillTool(skillsMap);
     const result = await tool.execute("test-id", { name: "web-skills" });
-    expect((result.content[0] as { text: string }).text).toBe("Full web skills content here");
+    expect((result.content[0] as { text: string }).text).toBe(
+      "Full web skills content here",
+    );
   });
 
   it("returns error with available skills for missing skill", async () => {
     const tool = createReadSkillTool(skillsMap);
     const result = await tool.execute("test-id", { name: "nonexistent" });
     expect((result.content[0] as { text: string }).text).toContain("not found");
-    expect((result.content[0] as { text: string }).text).toContain("code-review");
-    expect((result.content[0] as { text: string }).text).toContain("web-skills");
+    expect((result.content[0] as { text: string }).text).toContain(
+      "code-review",
+    );
+    expect((result.content[0] as { text: string }).text).toContain(
+      "web-skills",
+    );
   });
 
   it("lists available as none when map is empty", async () => {
     const tool = createReadSkillTool(new Map());
     const result = await tool.execute("test-id", { name: "anything" });
-    expect((result.content[0] as { text: string }).text).toContain("Available: none");
+    expect((result.content[0] as { text: string }).text).toContain(
+      "Available: none",
+    );
   });
 });

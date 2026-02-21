@@ -8,5 +8,7 @@ export function sendCommand(
   priority?: Priority,
 ): void {
   workspace.send(agentName, message, "prompt", priority);
-  console.log(`[send] Message queued for ${agentName}${priority != null ? ` (priority=${priority})` : ""}`);
+  console.log(
+    `[send] Message queued for ${agentName}${priority != null ? ` (priority=${priority})` : ""}`,
+  );
 }

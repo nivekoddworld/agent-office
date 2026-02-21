@@ -4,15 +4,16 @@ Demonstrates task tools with dependency chains and Kanban board.
 
 ## Agents
 
-| Agent | Role | Description |
-|-------|------|-------------|
+| Agent            | Role         | Description                                             |
+| ---------------- | ------------ | ------------------------------------------------------- |
 | **task-manager** | Task Manager | Receives user requests, creates tasks with dependencies |
-| **coder** | Developer | Implements coding tasks |
-| **reviewer** | Reviewer | Reviews code when coding tasks complete |
+| **coder**        | Developer    | Implements coding tasks                                 |
+| **reviewer**     | Reviewer     | Reviews code when coding tasks complete                 |
 
 ## How It Works
 
 1. Send task-manager a feature request:
+
    ```
    send task-manager Add a forgot-password feature to the login page
    ```

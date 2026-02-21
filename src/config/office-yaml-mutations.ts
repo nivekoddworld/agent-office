@@ -225,7 +225,9 @@ export async function appendAgentPrompt(
       );
     }
     const existing =
-      (doc.getIn(["agents", agentName, "prompt_inline"]) as string | undefined) ??
+      (doc.getIn(["agents", agentName, "prompt_inline"]) as
+        | string
+        | undefined) ??
       (doc.getIn(["agents", agentName, "prompt"]) as string | undefined);
     const merged = existing ? `${existing}\n\n${text}` : text;
     doc.setIn(["agents", agentName, "prompt_inline"], merged);
@@ -341,7 +343,10 @@ export async function clearAgentPermissionOfficeCron(
     const { path, doc } = requireOfficeDoc(officeId);
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (doc.getIn(["agents", agentName, "permissions", "office_cron"]) !== undefined) {
+    if (
+      doc.getIn(["agents", agentName, "permissions", "office_cron"]) !==
+      undefined
+    ) {
       doc.deleteIn(["agents", agentName, "permissions", "office_cron"]);
       cleanupEmptyMap(doc, ["agents", agentName, "permissions"]);
     }
@@ -360,7 +365,10 @@ export async function setAgentPermissionTools(
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
     const opposite = mode === "allow" ? "deny" : "allow";
-    if (doc.getIn(["agents", agentName, "permissions", "tools", opposite]) !== undefined) {
+    if (
+      doc.getIn(["agents", agentName, "permissions", "tools", opposite]) !==
+      undefined
+    ) {
       doc.deleteIn(["agents", agentName, "permissions", "tools", opposite]);
     }
     doc.setIn(["agents", agentName, "permissions", "tools", mode], tools);
@@ -376,7 +384,9 @@ export async function clearAgentPermissionTools(
     const { path, doc } = requireOfficeDoc(officeId);
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (doc.getIn(["agents", agentName, "permissions", "tools"]) !== undefined) {
+    if (
+      doc.getIn(["agents", agentName, "permissions", "tools"]) !== undefined
+    ) {
       doc.deleteIn(["agents", agentName, "permissions", "tools"]);
       cleanupEmptyMap(doc, ["agents", agentName, "permissions"]);
     }

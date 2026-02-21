@@ -1,10 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import {
-  type AgentEvent,
-  type Agent,
-} from "@mariozechner/pi-agent-core";
+import { type AgentEvent, type Agent } from "@mariozechner/pi-agent-core";
 import {
   loadSkills,
   formatSkillsForPrompt,
@@ -166,7 +163,8 @@ export class AgentHandle {
       );
       this.sandboxInfo = result.sandboxInfo;
       this._toolCount = result.toolCount;
-      if (result.skillsMap) this.hostApi?.setAgentSkills(this.name, result.skillsMap);
+      if (result.skillsMap)
+        this.hostApi?.setAgentSkills(this.name, result.skillsMap);
 
       if (this.hostApi) {
         this.hostApi.onAgentEvent(this.name, (event) => {
@@ -291,9 +289,7 @@ export class AgentHandle {
       secretNames: this.config.discloseSecrets
         ? Object.keys(this.config.secrets ?? {})
         : undefined,
-      cronJobs: this.officeId
-        ? getCronSummaries(this.officeId, this.name)
-        : [],
+      cronJobs: this.officeId ? getCronSummaries(this.officeId, this.name) : [],
       officeName: this.officeName,
       officeDescription: this.officeDescription,
       hasMemory: hasMemoryFiles,

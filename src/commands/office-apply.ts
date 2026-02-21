@@ -60,7 +60,10 @@ function normalizeEntry(
   baseDir: string,
   name: string,
   entry: AgentYamlEntry,
-  hierarchyMap?: Map<string, { manager: string | null; peers: string[]; reports: string[] }>,
+  hierarchyMap?: Map<
+    string,
+    { manager: string | null; peers: string[]; reports: string[] }
+  >,
 ): NormalizedConfig {
   return {
     model: entry.model ?? "anthropic:claude-sonnet-4-20250514",

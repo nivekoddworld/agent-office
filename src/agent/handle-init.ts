@@ -1,7 +1,4 @@
-import {
-  Agent,
-  type AgentTool,
-} from "@mariozechner/pi-agent-core";
+import { Agent, type AgentTool } from "@mariozechner/pi-agent-core";
 import {
   createCodingTools,
   loadSkills,
@@ -10,11 +7,7 @@ import {
 import { streamSimple } from "@mariozechner/pi-ai";
 import { writeEffectivePrompt } from "./prompts/effective-prompt.js";
 import type { MessageBus } from "../transport/message-bus.js";
-import type {
-  AgentConfig,
-  AgentInfo,
-  CitationMode,
-} from "../types.js";
+import type { AgentConfig, AgentInfo, CitationMode } from "../types.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { composeSystemPrompt } from "./prompts/prompt-manager.js";
@@ -140,7 +133,8 @@ export async function initSandboxAgent(
   const hasSecrets =
     ctx.config.secrets &&
     Object.keys(ctx.config.secrets).some((k) => k !== "MODEL_API_KEY");
-  let est = 19 + (hasSecrets ? 1 : 0) + (ctx.config.onDemandSkills !== false ? 1 : 0);
+  let est =
+    19 + (hasSecrets ? 1 : 0) + (ctx.config.onDemandSkills !== false ? 1 : 0);
   const policy = ctx.config.permissions?.tools;
   if (policy?.allow) est = Math.min(est, policy.allow.length);
   else if (policy?.deny) est = Math.max(0, est - policy.deny.length);
@@ -237,10 +231,11 @@ export async function initInProcessAgent(
       skills.length > 0 ? formatSkillsForPrompt(skills) : undefined;
   }
 
-  const { allowed: tools, denied, warnings } = applyToolPolicy(
-    allTools,
-    ctx.config.permissions,
-  );
+  const {
+    allowed: tools,
+    denied,
+    warnings,
+  } = applyToolPolicy(allTools, ctx.config.permissions);
   if (denied.length > 0)
     console.log(`[agent:${ctx.name}] Denied tools: ${denied.join(", ")}`);
   for (const w of warnings) console.warn(`[agent:${ctx.name}] ${w}`);

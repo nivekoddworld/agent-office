@@ -66,7 +66,7 @@ agents:
     description: "Token launcher — launches tokens via the OpenServ Launch API"
     permissions:
       tools:
-        deny: [cron_add]  # launcher should not create cron jobs
+        deny: [cron_add] # launcher should not create cron jobs
     skills:
       - openserv-labs/skills
     prompt_inline: |

@@ -20,16 +20,27 @@ function isPascalCase(name: string): boolean {
 
 function getExportedComponentNames(filePath: string): string[] {
   const source = readFileSync(filePath, "utf-8");
-  const sf = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const sf = ts.createSourceFile(
+    filePath,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
   const names: string[] = [];
 
   for (const stmt of sf.statements) {
     const isExported =
-      stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+      stmt.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ??
+      false;
     if (!isExported) continue;
 
     // export function Foo() { ... }
-    if (ts.isFunctionDeclaration(stmt) && stmt.name && isPascalCase(stmt.name.text)) {
+    if (
+      ts.isFunctionDeclaration(stmt) &&
+      stmt.name &&
+      isPascalCase(stmt.name.text)
+    ) {
       names.push(stmt.name.text);
     }
 
@@ -73,5 +84,7 @@ if (violations > 0) {
   console.error(`\n${violations} file(s) with multiple component exports.`);
   process.exit(1);
 } else {
-  console.log(`Checked ${files.length} component files — all OK (≤1 export each).`);
+  console.log(
+    `Checked ${files.length} component files — all OK (≤1 export each).`,
+  );
 }

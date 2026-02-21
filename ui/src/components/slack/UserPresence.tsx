@@ -1,6 +1,9 @@
 import { Box, Tooltip } from "@mantine/core";
 import { slack } from "../../theme/slack-theme.js";
-import { useAgentActivityFor, type AgentActivity } from "../../store/agent-activity-store.js";
+import {
+  useAgentActivityFor,
+  type AgentActivity,
+} from "../../store/agent-activity-store.js";
 
 interface UserPresenceProps {
   status: "idle" | "running" | "dead";
@@ -21,7 +24,11 @@ const STATUS_COLORS: Record<string, string> = {
   dead: slack.textMuted,
 };
 
-export function UserPresence({ status, agentName, size = 8 }: UserPresenceProps) {
+export function UserPresence({
+  status,
+  agentName,
+  size = 8,
+}: UserPresenceProps) {
   const activity = useAgentActivityFor(agentName ?? "");
   const isOnline = status === "idle" || status === "running";
 

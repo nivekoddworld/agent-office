@@ -49,7 +49,10 @@ describe("loadBootstrapFiles", () => {
   });
 
   it("truncates oversized files to per-file limit", () => {
-    writeFileSync(join(TEST_DIR, "SOUL.md"), "X".repeat(MAX_BOOTSTRAP_FILE + 100));
+    writeFileSync(
+      join(TEST_DIR, "SOUL.md"),
+      "X".repeat(MAX_BOOTSTRAP_FILE + 100),
+    );
 
     const files = loadBootstrapFiles(TEST_DIR);
     expect(files[0]!.content.length).toBe(MAX_BOOTSTRAP_FILE);

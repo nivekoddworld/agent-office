@@ -1,5 +1,12 @@
 import { useState, useMemo } from "react";
-import { Box, Stack, Text, Group, Button, SegmentedControl } from "@mantine/core";
+import {
+  Box,
+  Stack,
+  Text,
+  Group,
+  Button,
+  SegmentedControl,
+} from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import type { CronJobEntry } from "../../api/types.js";
 import { CronJobRow } from "./CronJobRow.js";
@@ -22,7 +29,9 @@ export function CronDashboard({ cronJobs, agentNames }: CronDashboardProps) {
   return (
     <Box p="md" style={{ height: "100%", overflow: "auto" }}>
       <Group justify="space-between" mb="md">
-        <Text size="lg" fw={600}>Cron Jobs</Text>
+        <Text size="lg" fw={600}>
+          Cron Jobs
+        </Text>
         <Group gap="xs">
           <SegmentedControl
             size="xs"
@@ -46,7 +55,9 @@ export function CronDashboard({ cronJobs, agentNames }: CronDashboardProps) {
       </Group>
 
       {filtered.length === 0 ? (
-        <Text c="dimmed" size="sm">No cron jobs configured</Text>
+        <Text c="dimmed" size="sm">
+          No cron jobs configured
+        </Text>
       ) : (
         <Stack gap={0}>
           {filtered.map((job) => (

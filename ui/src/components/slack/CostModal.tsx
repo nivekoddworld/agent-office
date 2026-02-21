@@ -91,7 +91,12 @@ export function CostModal({ opened, onClose }: CostModalProps) {
             </Group>
 
             <div>
-              <Text size="sm" fw={600} mb="sm" style={{ color: slack.textPrimary }}>
+              <Text
+                size="sm"
+                fw={600}
+                mb="sm"
+                style={{ color: slack.textPrimary }}
+              >
                 Per Agent
               </Text>
               <CostChart byAgent={data.byAgent} />

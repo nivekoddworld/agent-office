@@ -167,7 +167,7 @@ describe("DockerProvider", () => {
         systemPrompt: "test",
         modelName: "test",
         workspacePath: "/tmp/ws",
-        }),
+      }),
     ).rejects.toThrow("failed health check");
 
     // Should have called docker rm -f for cleanup

@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { Text, Group, Badge, Select, Button, Stack } from "@mantine/core";
-import { IconArrowUp, IconArrowsHorizontal, IconArrowDown } from "@tabler/icons-react";
+import {
+  IconArrowUp,
+  IconArrowsHorizontal,
+  IconArrowDown,
+} from "@tabler/icons-react";
 import { useCommand } from "../../api/use-command.js";
 import { slack } from "../../theme/slack-theme.js";
 import type { AgentDetail } from "../../api/types.js";
@@ -10,7 +14,10 @@ interface AgentHierarchySectionProps {
   agentNames: string[];
 }
 
-export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySectionProps) {
+export function AgentHierarchySection({
+  agent,
+  agentNames,
+}: AgentHierarchySectionProps) {
   const hierarchy = agent.hierarchy;
   const command = useCommand();
   const [editing, setEditing] = useState(false);
@@ -26,9 +33,10 @@ export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySecti
   ];
 
   const saveManager = () => {
-    const target = selectedManager === "__clear__" || !selectedManager
-      ? "__clear__"
-      : selectedManager;
+    const target =
+      selectedManager === "__clear__" || !selectedManager
+        ? "__clear__"
+        : selectedManager;
     command.mutate(
       { command: `agent-set-manager ${agent.name} ${target}` },
       { onSettled: () => setEditing(false) },
@@ -43,35 +51,53 @@ export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySecti
     <Stack gap="sm">
       <Group gap="xs" align="center">
         <IconArrowUp size={14} color={slack.textMuted} />
-        <Text size="xs" style={{ color: slack.textMuted }}>Manager:</Text>
+        <Text size="xs" style={{ color: slack.textMuted }}>
+          Manager:
+        </Text>
         {managerDisplay ? (
-          <Badge size="sm" variant="light" color="violet">{managerDisplay}</Badge>
+          <Badge size="sm" variant="light" color="violet">
+            {managerDisplay}
+          </Badge>
         ) : (
-          <Text size="xs" style={{ color: slack.textMuted }}>None</Text>
+          <Text size="xs" style={{ color: slack.textMuted }}>
+            None
+          </Text>
         )}
       </Group>
 
       <Group gap="xs" align="center">
         <IconArrowsHorizontal size={14} color={slack.textMuted} />
-        <Text size="xs" style={{ color: slack.textMuted }}>Peers:</Text>
+        <Text size="xs" style={{ color: slack.textMuted }}>
+          Peers:
+        </Text>
         {peers.length > 0 ? (
           peers.map((p) => (
-            <Badge key={p} size="sm" variant="light" color="blue">{p}</Badge>
+            <Badge key={p} size="sm" variant="light" color="blue">
+              {p}
+            </Badge>
           ))
         ) : (
-          <Text size="xs" style={{ color: slack.textMuted }}>None</Text>
+          <Text size="xs" style={{ color: slack.textMuted }}>
+            None
+          </Text>
         )}
       </Group>
 
       <Group gap="xs" align="center">
         <IconArrowDown size={14} color={slack.textMuted} />
-        <Text size="xs" style={{ color: slack.textMuted }}>Reports:</Text>
+        <Text size="xs" style={{ color: slack.textMuted }}>
+          Reports:
+        </Text>
         {reports.length > 0 ? (
           reports.map((r) => (
-            <Badge key={r} size="sm" variant="light" color="cyan">{r}</Badge>
+            <Badge key={r} size="sm" variant="light" color="cyan">
+              {r}
+            </Badge>
           ))
         ) : (
-          <Text size="xs" style={{ color: slack.textMuted }}>None</Text>
+          <Text size="xs" style={{ color: slack.textMuted }}>
+            None
+          </Text>
         )}
       </Group>
 
@@ -84,10 +110,20 @@ export function AgentHierarchySection({ agent, agentNames }: AgentHierarchySecti
             onChange={setSelectedManager}
             style={{ flex: 1 }}
           />
-          <Button size="xs" variant="light" onClick={saveManager} loading={command.isPending}>
+          <Button
+            size="xs"
+            variant="light"
+            onClick={saveManager}
+            loading={command.isPending}
+          >
             Save
           </Button>
-          <Button size="xs" variant="subtle" color="gray" onClick={() => setEditing(false)}>
+          <Button
+            size="xs"
+            variant="subtle"
+            color="gray"
+            onClick={() => setEditing(false)}
+          >
             Cancel
           </Button>
         </Group>

@@ -237,14 +237,7 @@ export const TASK_UPDATE = {
     status: Type.Optional(
       Type.Unsafe<string>({
         type: "string",
-        enum: [
-          "backlog",
-          "todo",
-          "in_progress",
-          "review",
-          "done",
-          "cancelled",
-        ],
+        enum: ["backlog", "todo", "in_progress", "review", "done", "cancelled"],
         description: "New status",
       }),
     ),
@@ -278,14 +271,7 @@ export const TASK_LIST = {
     status: Type.Optional(
       Type.Unsafe<string>({
         type: "string",
-        enum: [
-          "backlog",
-          "todo",
-          "in_progress",
-          "review",
-          "done",
-          "cancelled",
-        ],
+        enum: ["backlog", "todo", "in_progress", "review", "done", "cancelled"],
         description: "Filter by status",
       }),
     ),

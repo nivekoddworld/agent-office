@@ -1,11 +1,9 @@
 import { describe, it, expect } from "vitest";
-import {
-  applyToolPolicy,
-  isToolDenied,
-} from "../src/agent/tools/policy.js";
+import { applyToolPolicy, isToolDenied } from "../src/agent/tools/policy.js";
 import type { AgentPermissions } from "../src/types.js";
 
-const fakeTool = (name: string) => ({ name, description: "", schema: {} }) as any;
+const fakeTool = (name: string) =>
+  ({ name, description: "", schema: {} }) as any;
 
 const tools = [fakeTool("bash"), fakeTool("read"), fakeTool("cron_add")];
 

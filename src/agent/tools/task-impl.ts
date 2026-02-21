@@ -92,7 +92,12 @@ export function taskUpdateImpl(
   if (!deps.taskService) return "Error: task service not initialized";
 
   if (!params.id) return "Error: task id is required";
-  if (!params.status && !params.result && !params.assignee && !params.priority) {
+  if (
+    !params.status &&
+    !params.result &&
+    !params.assignee &&
+    !params.priority
+  ) {
     return "Error: at least one field (status, result, assignee, priority) must be provided";
   }
 
@@ -138,8 +143,10 @@ export function taskListImpl(
 
   return tasks
     .map((t: Task) => {
-      const taskDeps = t.dependsOn.length > 0 ? ` deps:[${t.dependsOn.join(",")}]` : "";
-      const pTag = t.priority !== Priority.NORMAL ? ` [${priorityLabel(t.priority)}]` : "";
+      const taskDeps =
+        t.dependsOn.length > 0 ? ` deps:[${t.dependsOn.join(",")}]` : "";
+      const pTag =
+        t.priority !== Priority.NORMAL ? ` [${priorityLabel(t.priority)}]` : "";
       return `#${t.id} [${t.status}]${pTag} → ${t.assignee}: ${t.title}${taskDeps}`;
     })
     .join("\n");
@@ -151,10 +158,7 @@ interface TaskGetParams {
   id: string;
 }
 
-export function taskGetImpl(
-  deps: TaskToolDeps,
-  params: TaskGetParams,
-): string {
+export function taskGetImpl(deps: TaskToolDeps, params: TaskGetParams): string {
   if (!deps.taskService) return "Error: task service not initialized";
   if (!params.id) return "Error: task id is required";
 
@@ -173,10 +177,15 @@ export function taskGetImpl(
   ];
 
   if (task.description) lines.push(`\nDescription:\n${task.description}`);
-  if (task.dependsOn.length > 0) lines.push(`Depends on: ${task.dependsOn.map((id) => `#${id}`).join(", ")}`);
+  if (task.dependsOn.length > 0)
+    lines.push(
+      `Depends on: ${task.dependsOn.map((id) => `#${id}`).join(", ")}`,
+    );
   if (task.parentId) lines.push(`Parent: #${task.parentId}`);
-  if (task.startedAt) lines.push(`Started: ${new Date(task.startedAt).toISOString()}`);
-  if (task.completedAt) lines.push(`Completed: ${new Date(task.completedAt).toISOString()}`);
+  if (task.startedAt)
+    lines.push(`Started: ${new Date(task.startedAt).toISOString()}`);
+  if (task.completedAt)
+    lines.push(`Completed: ${new Date(task.completedAt).toISOString()}`);
   if (task.result) lines.push(`\nResult:\n${task.result}`);
 
   return lines.join("\n");

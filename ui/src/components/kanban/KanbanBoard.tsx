@@ -65,10 +65,19 @@ export function KanbanBoard({ tasks, agentNames }: KanbanBoardProps) {
         description="Task board — Kanban view of all tasks"
       />
 
-      <Box px="md" py="xs" style={{ borderBottom: `1px solid ${slack.borderColor}`, flexShrink: 0 }}>
+      <Box
+        px="md"
+        py="xs"
+        style={{
+          borderBottom: `1px solid ${slack.borderColor}`,
+          flexShrink: 0,
+        }}
+      >
         <Group justify="space-between">
           <Group gap="sm">
-            <Text size="xs" c="dimmed">Filter:</Text>
+            <Text size="xs" c="dimmed">
+              Filter:
+            </Text>
             <SegmentedControl
               size="xs"
               value={filter}

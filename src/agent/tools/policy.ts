@@ -24,7 +24,9 @@ export function applyToolPolicy(
         warnings.push(`Tool "${name}" in allow list not found`);
     }
     const allowSet = new Set(policy.allow);
-    const denied = tools.filter((t) => !allowSet.has(t.name)).map((t) => t.name);
+    const denied = tools
+      .filter((t) => !allowSet.has(t.name))
+      .map((t) => t.name);
     return {
       allowed: tools.filter((t) => allowSet.has(t.name)),
       denied,

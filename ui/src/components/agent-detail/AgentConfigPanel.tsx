@@ -1,4 +1,12 @@
-import { Box, Text, Group, Badge, Loader, Paper, SimpleGrid } from "@mantine/core";
+import {
+  Box,
+  Text,
+  Group,
+  Badge,
+  Loader,
+  Paper,
+  SimpleGrid,
+} from "@mantine/core";
 import {
   IconSettings,
   IconShield,
@@ -85,10 +93,7 @@ export function AgentConfigPanel({
   }
 
   return (
-    <Box
-      style={{ overflow: "auto", flex: 1 }}
-      p="md"
-    >
+    <Box style={{ overflow: "auto", flex: 1 }} p="md">
       {/* Agent header */}
       <Paper
         p="lg"
@@ -120,7 +125,11 @@ export function AgentConfigPanel({
               <Text fw={700} size="lg" style={{ color: "#fff" }}>
                 {agent.name}
               </Text>
-              <UserPresence status={agent.status} agentName={agent.name} size={10} />
+              <UserPresence
+                status={agent.status}
+                agentName={agent.name}
+                size={10}
+              />
               <Text size="sm" style={{ color: slack.textSecondary }}>
                 {activity.kind === "tool"
                   ? `Running: ${activity.toolName}`
@@ -139,10 +148,16 @@ export function AgentConfigPanel({
               </Text>
             )}
             <Group gap="xs" mt="sm">
-              <Badge variant="light" color="blue" size="sm">{agent.model}</Badge>
-              <Badge variant="light" color="gray" size="sm">Priority: {agent.priority}</Badge>
+              <Badge variant="light" color="blue" size="sm">
+                {agent.model}
+              </Badge>
+              <Badge variant="light" color="gray" size="sm">
+                Priority: {agent.priority}
+              </Badge>
               {agent.sandbox && (
-                <Badge variant="light" color="orange" size="sm">Sandbox: {agent.sandbox}</Badge>
+                <Badge variant="light" color="orange" size="sm">
+                  Sandbox: {agent.sandbox}
+                </Badge>
               )}
             </Group>
           </div>

@@ -22,11 +22,18 @@ interface MessageInputProps {
   onMessageSent?: (agentName: string, text: string, requestId: string) => void;
 }
 
-export function MessageInput({ agentNames, targetAgent, channelName, onMessageSent }: MessageInputProps) {
+export function MessageInput({
+  agentNames,
+  targetAgent,
+  channelName,
+  onMessageSent,
+}: MessageInputProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [showMention, setShowMention] = useState(false);
-  const [selectedTarget, setSelectedTarget] = useState<string | null>(targetAgent);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(
+    targetAgent,
+  );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -129,7 +136,12 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
                     color="gray"
                     onClick={() => setShowMention((v) => !v)}
                   >
-                    <IconAt size={16} color={selectedTarget ? slack.accentBlue : slack.textSecondary} />
+                    <IconAt
+                      size={16}
+                      color={
+                        selectedTarget ? slack.accentBlue : slack.textSecondary
+                      }
+                    />
                   </ActionIcon>
                 </Tooltip>
               </Popover.Target>
@@ -149,7 +161,8 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
                         px="sm"
                         py={6}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = slack.sidebarHover;
+                          e.currentTarget.style.backgroundColor =
+                            slack.sidebarHover;
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = "transparent";
@@ -172,7 +185,10 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
           )}
         </Group>
 
-        <Tooltip label={selectedTarget ? "Send" : "Use @ to select an agent"} withArrow>
+        <Tooltip
+          label={selectedTarget ? "Send" : "Use @ to select an agent"}
+          withArrow
+        >
           <ActionIcon
             size="md"
             variant={text.trim() && selectedTarget ? "filled" : "subtle"}

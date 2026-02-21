@@ -28,7 +28,10 @@ export interface AgentDetail {
   lastHeartbeat: number;
   sandbox: string | null;
   thinkingLevel: string | null;
-  permissions: { office_cron?: boolean; tools?: { allow?: string[]; deny?: string[] } };
+  permissions: {
+    office_cron?: boolean;
+    tools?: { allow?: string[]; deny?: string[] };
+  };
   envKeys: string[];
   secretKeys: string[];
   customPrompt: string | null;
@@ -39,7 +42,11 @@ export interface AgentDetail {
     toolCount: number;
     skills: string[];
   };
-  hierarchy: { manager: string | null; peers: string[]; reports: string[] } | null;
+  hierarchy: {
+    manager: string | null;
+    peers: string[];
+    reports: string[];
+  } | null;
 }
 
 // --- Command dispatch ---

@@ -47,7 +47,9 @@ export function AppLayout({ state }: AppLayoutProps) {
   const unreadCounts = useUnreadCounts();
 
   useEffect(() => {
-    unreadStore.setActiveAgent(channel.kind === "dm" ? channel.agentName : null);
+    unreadStore.setActiveAgent(
+      channel.kind === "dm" ? channel.agentName : null,
+    );
   }, [channel]);
 
   const command = useCommand();
@@ -75,14 +77,11 @@ export function AppLayout({ state }: AppLayoutProps) {
 
   const closeModal = useCallback(() => setModal({ kind: "none" }), []);
 
-  const handleOrgChartSelect = useCallback(
-    (name: string | null) => {
-      if (name) {
-        setModal({ kind: "profile", agentName: name });
-      }
-    },
-    [],
-  );
+  const handleOrgChartSelect = useCallback((name: string | null) => {
+    if (name) {
+      setModal({ kind: "profile", agentName: name });
+    }
+  }, []);
 
   return (
     <Box
@@ -115,15 +114,9 @@ export function AppLayout({ state }: AppLayoutProps) {
 
       <Box style={{ flex: 1, minWidth: 0 }}>
         {channel.kind === "channel" && channel.name === "cron" ? (
-          <CronChannelView
-            cronJobs={state.cronJobs}
-            agentNames={agentNames}
-          />
+          <CronChannelView cronJobs={state.cronJobs} agentNames={agentNames} />
         ) : channel.kind === "channel" && channel.name === "tasks" ? (
-          <KanbanBoard
-            tasks={state.tasks ?? []}
-            agentNames={agentNames}
-          />
+          <KanbanBoard tasks={state.tasks ?? []} agentNames={agentNames} />
         ) : (
           <ChannelView
             channel={channel}
@@ -152,10 +145,7 @@ export function AppLayout({ state }: AppLayoutProps) {
         onSelectAgent={handleOrgChartSelect}
       />
 
-      <CostModal
-        opened={modal.kind === "cost"}
-        onClose={closeModal}
-      />
+      <CostModal opened={modal.kind === "cost"} onClose={closeModal} />
 
       <OfficeSettingsModal
         opened={modal.kind === "settings"}
@@ -172,7 +162,6 @@ export function AppLayout({ state }: AppLayoutProps) {
         }
         onClickAvatar={handleClickAvatar}
       />
-
     </Box>
   );
 }
