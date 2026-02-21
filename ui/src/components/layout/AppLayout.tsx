@@ -131,6 +131,8 @@ export function AppLayout({ state }: AppLayoutProps) {
             activeCount={activeCount}
             onClickAvatar={handleClickAvatar}
             onOpenThread={handleOpenThread}
+            cronJobs={state.cronJobs}
+            tasks={state.tasks}
           />
         )}
       </Box>

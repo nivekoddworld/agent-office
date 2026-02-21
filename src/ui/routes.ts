@@ -144,6 +144,7 @@ export function getAgentDetail(handle: AgentHandle): AgentDetail {
     permissions: cfg.permissions ?? {},
     envKeys: Object.keys(cfg.env ?? {}),
     secretKeys: Object.keys(cfg.secrets ?? {}),
+    customPrompt: cfg.systemPrompt ?? null,
     promptReport: report,
     hierarchy: cfg.hierarchy ?? null,
   };

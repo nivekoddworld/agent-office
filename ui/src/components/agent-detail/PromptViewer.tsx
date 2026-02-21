@@ -64,6 +64,10 @@ export function PromptViewer({ agent }: PromptViewerProps) {
       <Text size="xs" c="dimmed">
         Total: {totalChars.toLocaleString()} chars
       </Text>
+
+      <Text size="xs" c="dimmed">
+        Edit the custom prompt in the Prompt tab.
+      </Text>
     </Stack>
   );
 }

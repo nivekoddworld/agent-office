@@ -95,6 +95,7 @@ export interface AgentDetail extends AgentInfo {
   permissions: { office_cron?: boolean; tools?: { allow?: string[]; deny?: string[] } };
   envKeys: string[];
   secretKeys: string[];
+  customPrompt: string | null;
   promptReport: PromptReport;
   hierarchy: AgentHierarchy | null;
 }

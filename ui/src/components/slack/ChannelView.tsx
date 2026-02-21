@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Box, Button, Text, Group, UnstyledButton } from "@mantine/core";
-import { IconArrowDown, IconMessage, IconMessages, IconFiles } from "@tabler/icons-react";
+import { IconArrowDown, IconMessage, IconMessages, IconFiles, IconSettings, IconFileText } from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
 import { useThreadStore, type Thread } from "../../store/thread-store.js";
 import { slack } from "../../theme/slack-theme.js";
@@ -11,10 +11,13 @@ import { DateDivider } from "./DateDivider.js";
 import { SystemMessage } from "./SystemMessage.js";
 import { MessageInput } from "./MessageInput.js";
 import { AgentFilesPanel } from "./AgentFilesPanel.js";
+import { AgentConfigPanel } from "../agent-detail/AgentConfigPanel.js";
+import { AgentPromptPanel } from "../agent-detail/AgentPromptPanel.js";
 import { eventToMessages, isSameDay, type DisplayItem } from "./channel-helpers.js";
 import type { ChannelId } from "./SlackSidebar.js";
+import type { CronJobEntry, Task } from "../../api/types.js";
 
-type DmTab = "messages" | "files";
+type DmTab = "messages" | "files" | "prompt" | "configure";
 
 interface ChannelViewProps {
   channel: ChannelId;
@@ -22,6 +25,8 @@ interface ChannelViewProps {
   activeCount?: number;
   onClickAvatar?: (agentName: string) => void;
   onOpenThread?: (thread: Thread) => void;
+  cronJobs?: CronJobEntry[];
+  tasks?: Task[];
 }
 
 function ThreadIndicator({ thread, onClick }: { thread: Thread; onClick: () => void }) {
@@ -79,6 +84,8 @@ export function ChannelView({
   activeCount,
   onClickAvatar,
   onOpenThread,
+  cronJobs = [],
+  tasks = [],
 }: ChannelViewProps) {
   const { events } = useEventStore();
   const { threads } = useThreadStore();
@@ -266,38 +273,55 @@ export function ChannelView({
       {isDm && (
         <Box style={{ borderBottom: `1px solid ${slack.borderColor}`, flexShrink: 0 }}>
           <Group gap={0} px="md">
-            {(["messages", "files"] as const).map((tab) => (
-              <UnstyledButton
-                key={tab}
-                px="sm"
-                py={8}
-                onClick={() => setDmTab(tab)}
-                style={{
-                  borderBottom: `2px solid ${dmTab === tab ? slack.accentBlue : "transparent"}`,
-                  marginBottom: -1,
-                }}
-              >
-                <Group gap={6}>
-                  {tab === "messages" ? (
-                    <IconMessages size={15} color={dmTab === tab ? slack.accentBlue : slack.textMuted} />
-                  ) : (
-                    <IconFiles size={15} color={dmTab === tab ? slack.accentBlue : slack.textMuted} />
-                  )}
-                  <Text
-                    size="sm"
-                    fw={dmTab === tab ? 600 : 400}
-                    style={{ color: dmTab === tab ? "#fff" : slack.textMuted }}
-                  >
-                    {tab === "messages" ? "Messages" : "Files"}
-                  </Text>
-                </Group>
-              </UnstyledButton>
-            ))}
+            {(["messages", "files", "prompt", "configure"] as const).map((tab) => {
+              const active = dmTab === tab;
+              const icons: Record<DmTab, React.ReactNode> = {
+                messages: <IconMessages size={15} color={active ? slack.accentBlue : slack.textMuted} />,
+                files: <IconFiles size={15} color={active ? slack.accentBlue : slack.textMuted} />,
+                prompt: <IconFileText size={15} color={active ? slack.accentBlue : slack.textMuted} />,
+                configure: <IconSettings size={15} color={active ? slack.accentBlue : slack.textMuted} />,
+              };
+              const labels: Record<DmTab, string> = { messages: "Messages", files: "Files", prompt: "Prompt", configure: "Configure" };
+              const icon = icons[tab];
+              const label = labels[tab];
+              return (
+                <UnstyledButton
+                  key={tab}
+                  px="sm"
+                  py={8}
+                  onClick={() => setDmTab(tab)}
+                  style={{
+                    borderBottom: `2px solid ${active ? slack.accentBlue : "transparent"}`,
+                    marginBottom: -1,
+                  }}
+                >
+                  <Group gap={6}>
+                    {icon}
+                    <Text
+                      size="sm"
+                      fw={active ? 600 : 400}
+                      style={{ color: active ? "#fff" : slack.textMuted }}
+                    >
+                      {label}
+                    </Text>
+                  </Group>
+                </UnstyledButton>
+              );
+            })}
           </Group>
         </Box>
       )}
 
-      {isDm && dmTab === "files" ? (
+      {isDm && dmTab === "configure" ? (
+        <AgentConfigPanel
+          agentName={channel.agentName}
+          agentNames={agentNames}
+          cronJobs={cronJobs}
+          tasks={tasks}
+        />
+      ) : isDm && dmTab === "prompt" ? (
+        <AgentPromptPanel agentName={channel.agentName} />
+      ) : isDm && dmTab === "files" ? (
         <AgentFilesPanel agentName={channel.agentName} />
       ) : (
         <>
