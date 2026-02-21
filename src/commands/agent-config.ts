@@ -195,10 +195,9 @@ export async function agentPromptSetCommand(
 ): Promise<void> {
   const yaml = loadOfficeYaml(officeId);
   if (yaml?.agents[agentName]?.prompt_file) {
-    console.error(
-      `[agent] Agent "${agentName}" uses prompt_file — edit the file directly, or clear it first with "agent prompt clear".`,
+    throw new Error(
+      `Agent "${agentName}" uses prompt_file — edit the file directly, or clear it first with "agent prompt clear".`,
     );
-    return;
   }
   await setAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Set prompt for "${agentName}"`);
@@ -211,10 +210,9 @@ export async function agentPromptAppendCommand(
 ): Promise<void> {
   const yaml = loadOfficeYaml(officeId);
   if (yaml?.agents[agentName]?.prompt_file) {
-    console.error(
-      `[agent] Agent "${agentName}" uses prompt_file — edit the file directly.`,
+    throw new Error(
+      `Agent "${agentName}" uses prompt_file — edit the file directly.`,
     );
-    return;
   }
   await appendAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Appended to prompt for "${agentName}"`);

@@ -51,6 +51,8 @@ import {
 import {
   agentConfigShowCommand,
   agentPromptShowCommand,
+  agentPromptSetCommand,
+  agentPromptAppendCommand,
   agentPermissionShowCommand,
   orgChartCommand,
   agentHierarchyShowCommand,
@@ -453,6 +455,30 @@ describe("appendAgentPrompt", () => {
     await expect(appendAgentPrompt(OFFICE_ID, "bot", "text")).rejects.toThrow(
       "not found",
     );
+  });
+});
+
+// --- Command-level prompt_file guards ---
+
+describe("agentPromptSetCommand prompt_file guard", () => {
+  it("throws when agent uses prompt_file", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
+    );
+    await expect(
+      agentPromptSetCommand(OFFICE_ID, "bot", "new text"),
+    ).rejects.toThrow("uses prompt_file");
+  });
+});
+
+describe("agentPromptAppendCommand prompt_file guard", () => {
+  it("throws when agent uses prompt_file", async () => {
+    writeYaml(
+      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
+    );
+    await expect(
+      agentPromptAppendCommand(OFFICE_ID, "bot", "extra"),
+    ).rejects.toThrow("uses prompt_file");
   });
 });
 
