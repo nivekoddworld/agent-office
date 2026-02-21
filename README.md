@@ -70,6 +70,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
 - [Commands](#commands)
   - [Hire Options](#hire-options)
   - [CLI Flags](#cli-flags)
+  - [Execution Surfaces](#execution-surfaces)
 - [Agent Collaboration](#agent-collaboration)
   - [list_agents](#list_agents)
   - [message_agent](#message_agent)
@@ -294,7 +295,7 @@ agents:
 
 Defaults: `office_cron` is **false**; tools are **all allowed** unless `allow` or `deny` is set. Setting both `allow` and `deny` is a validation error.
 
-View and edit permissions via the Web UI or API without editing YAML manually:
+View permissions in the Web UI or edit via the API without editing YAML manually:
 
 ```bash
 agent permission show bot
@@ -341,7 +342,7 @@ All writes are atomic (temp file + rename) and serialized through a two-layer lo
 ### Reload
 
 ```bash
-# Via Web UI or API:
+# API command strings (UI has equivalent controls):
 office reload              # Spawn new agents from YAML, skip already-running
 office reload --force      # Kill and re-spawn agents with changed config
 office validate            # Dry-run: parse + validate without spawning
@@ -383,7 +384,7 @@ Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 #### Cron Commands
 
 ```bash
-# Via Web UI or API:
+# API command strings (UI has equivalent controls):
 cron list                                          # List all cron jobs
 cron status [agent]                                # Detailed job status
 cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
@@ -665,7 +666,7 @@ Host Process                        Docker Container (per agent)
 # Terminal 1: Start with Docker sandbox
 pnpm dev start --office acme --sandbox docker
 
-# Via Web UI or API:
+# API command strings (UI has equivalent controls):
 hire designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
 # → [agent:designer] Started in sandbox (http://localhost:13100)
 
@@ -712,8 +713,12 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 
 ## Commands
 
-All commands are available via the web UI command palette and the REST API (`POST /api/commands/:command`).
-Unsupported or unrecognized commands return HTTP 400 with `{ "error": "unknown_command" }`.
+Runtime commands can be executed through two paths:
+
+- **`POST /api/commands/:command`** — accepts any command string from the table below. Unsupported commands return HTTP 400 with `{ "error": "unknown_command" }`.
+- **`POST /api/send`** — structured endpoint for sending messages to agents (`{ "agent": "<name>", "message": "<text>" }`).
+
+The Web UI has dedicated controls (buttons, forms, modals) for common operations — hire, fire, send, cron, reload — that call these endpoints internally. Some commands (skill management, env/secrets, prompt editing, permissions) are API-only.
 
 | Command                                               | Description                                                |
 | ----------------------------------------------------- | ---------------------------------------------------------- |
@@ -790,7 +795,18 @@ pnpm dev start
 
 Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via `TELEGRAM_ENABLED=false` in `.env`.
 
-> **Migration note:** The interactive `ao>` REPL has been removed. All runtime commands are now available through the Web UI or `POST /api/commands/:command`. Use `--no-ui` for headless operation; send `SIGINT`/`SIGTERM` to shut down.
+> **Migration note:** The interactive `ao>` REPL has been removed. All runtime commands are now available through the Web UI controls and `POST /api/commands/:command`. Use `--no-ui` for headless operation; send `SIGINT`/`SIGTERM` to shut down.
+
+### Execution Surfaces
+
+Runtime commands (everything in the table above) can be executed through two surfaces:
+
+- **Web UI** — dedicated controls (buttons, forms, modals) for common operations: hire, fire, send messages, cron management, office reload, org chart. Some data (tasks, cost, permissions, skills) is displayed read-only. There is no free-text command prompt in the UI.
+- **REST API** — `POST /api/commands/:command` for any command string, `POST /api/send` for agent messages. Callable via `curl`, scripts, or browser DevTools.
+
+One-shot CLI commands (`office create`, `office validate`, `office migrate`, `start`) are run in the terminal and are not part of the runtime API.
+
+With `--no-ui`, the dashboard and API server are not started — runtime commands are unavailable for that process.
 
 ## Agent Collaboration
 
@@ -1270,7 +1286,7 @@ In Docker sandbox mode, the workspace directory is volume-mounted into the conta
 
 Markdown files loaded from each agent's `skills/` directory and injected into the system prompt. Skills work in both in-process and Docker sandbox modes.
 
-Skills can be installed via the Web UI/API or declared in `office.yaml`:
+Skills can be installed via the API or declared in `office.yaml`:
 
 ```yaml
 # office.yaml — skills auto-install on startup
@@ -1281,7 +1297,7 @@ agents:
 ```
 
 ```bash
-# Web UI/API — installs to disk + updates office.yaml
+# API command strings — installs to disk + updates office.yaml
 skill add designer nichochar/web-skills
 skill list designer
 skill remove designer web-tools
@@ -1411,6 +1427,17 @@ The `start` command starts a web UI dashboard automatically (disable with `--no-
 ```
 
 Open the printed URL to authenticate with the one-time bootstrap token.
+
+### Dashboard API Auth
+
+The dashboard API uses a session-cookie flow with CSRF protection:
+
+1. Open the `#token=<bootstrap>` URL — the UI extracts the token from the URL fragment.
+2. `POST /api/auth` with `{ "token": "<bootstrap>" }` plus `Origin` and `X-Requested-With: XMLHttpRequest` headers.
+3. Server validates the one-time token, invalidates it, and returns a `Set-Cookie: ao_session=<id>; HttpOnly; SameSite=Strict` header.
+4. All subsequent API calls use the session cookie. Mutating endpoints require `Origin` (must match `http://127.0.0.1:<port>`) and `X-Requested-With: XMLHttpRequest` headers for CSRF protection.
+
+This is separate from the sandbox Host API auth (bearer token per agent, described in [Host API Endpoints](#host-api-endpoints)).
 
 ### Features
 
@@ -1590,7 +1617,7 @@ What happens:
 2. **coder** receives `[New Task]` notification, implements the feature, marks task `done`
 3. **TaskService** detects dependency resolved → moves review task to `todo`
 4. **reviewer** receives `[Task Ready]` notification, reviews code, marks task `done`
-5. Track progress: `task board` (Web UI command palette) or Tasks Kanban view
+5. Track progress: `task board` via API, or Tasks Kanban view in the Web UI
 
 See [`examples/feature-team/`](examples/feature-team/) for the full `office.yaml`.
 

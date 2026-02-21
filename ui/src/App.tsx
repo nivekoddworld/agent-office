@@ -74,7 +74,7 @@ export function App() {
         <Stack align="center" gap="xs">
           <Text size="lg" fw={600}>Session Expired</Text>
           <Text c="dimmed" size="sm">
-            Run the "ui" command in your REPL to get a fresh link.
+            Restart the server to get a fresh dashboard link.
           </Text>
         </Stack>
       </Center>
