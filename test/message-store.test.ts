@@ -288,4 +288,93 @@ describe("MessageStore", () => {
     db.close();
     expect(rows).toHaveLength(1);
   });
+
+  it("migrates v1 schema to v2 with deterministic ordering", () => {
+    const require = createRequire(import.meta.url);
+    const { DatabaseSync } = require("node:sqlite") as any;
+
+    const migDir = mkdtempSync(join(tmpdir(), "msgstore-mig-"));
+    const dbPath = join(migDir, "migrate.db");
+
+    // Create a v1 database manually
+    const db = new DatabaseSync(dbPath);
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec(`CREATE TABLE IF NOT EXISTS schema_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )`);
+    db.exec(
+      `INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('version', '1')`,
+    );
+    db.exec(`CREATE TABLE IF NOT EXISTS dm_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('user','assistant')),
+      text TEXT NOT NULL,
+      request_id TEXT,
+      ts_ms INTEGER NOT NULL
+    )`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts ON dm_messages(agent, ts_ms DESC)`,
+    );
+    db.exec(`CREATE TABLE IF NOT EXISTS inbox_messages (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT UNIQUE NOT NULL,
+      from_agent TEXT NOT NULL,
+      to_agent TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('prompt','steer')),
+      payload TEXT NOT NULL,
+      priority INTEGER NOT NULL,
+      request_id TEXT,
+      created_at_ms INTEGER NOT NULL
+    )`);
+
+    // Insert 3 records with identical ts_ms
+    const ins = db.prepare(
+      `INSERT INTO dm_messages (agent, role, text, ts_ms, request_id) VALUES (?, ?, ?, ?, ?)`,
+    );
+    ins.run("alice", "user", "first", 5000, null);
+    ins.run("alice", "assistant", "second", 5000, null);
+    ins.run("alice", "user", "third", 5000, null);
+    db.close();
+
+    // Reopen via createMessageStore — triggers migration
+    const migStore = createMessageStore(dbPath);
+    const dms = migStore.queryDm("alice", 10);
+
+    // Should be ordered by ts_ms DESC, id DESC — highest id first among ties
+    expect(dms).toHaveLength(3);
+    expect(dms[0]!.id).toBeGreaterThan(dms[1]!.id);
+    expect(dms[1]!.id).toBeGreaterThan(dms[2]!.id);
+    expect(dms[0]!.text).toBe("third");
+    expect(dms[1]!.text).toBe("second");
+    expect(dms[2]!.text).toBe("first");
+
+    // Verify schema version is '2'
+    const db2 = new DatabaseSync(dbPath);
+    const row = db2
+      .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+      .get() as { value: string };
+    db2.close();
+    expect(row.value).toBe("2");
+
+    // Verify old index is gone, new index exists
+    const db3 = new DatabaseSync(dbPath);
+    const oldIdx = db3
+      .prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_dm_agent_ts'`,
+      )
+      .all() as { name: string }[];
+    const newIdx = db3
+      .prepare(
+        `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_dm_agent_ts_v2'`,
+      )
+      .all() as { name: string }[];
+    db3.close();
+    expect(oldIdx).toHaveLength(0);
+    expect(newIdx).toHaveLength(1);
+
+    migStore.close();
+    rmSync(migDir, { recursive: true, force: true });
+  });
 });

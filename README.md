@@ -1341,6 +1341,22 @@ Inbox queues and DM conversation history are persisted to SQLite so they survive
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 
+#### DM Context Replay
+
+On agent startup (and watchdog restart), the last **50** DM turns are replayed
+into the agent's conversation context as a single summary preamble. This enables
+the model to reference prior turns and maintain conversational continuity across
+process restarts.
+
+| Aspect             | Behavior                                                    |
+| ------------------ | ----------------------------------------------------------- |
+| Trigger            | `init()` in `spawn()` and `handleStuck()`                  |
+| Window             | Last 50 DM records (user + assistant)                       |
+| Format             | Single `[Prior conversation context]` UserMessage preamble  |
+| Dedup              | Pending inbox user prompts excluded by requestId or text    |
+| Sandbox agents     | Not supported (sandbox manages own state lifecycle)         |
+| In-process agents  | Full support — replayed via `Agent.replaceMessages()`       |
+
 ## Prompt Inspection
 
 Inspect the composed system prompt for any running agent:

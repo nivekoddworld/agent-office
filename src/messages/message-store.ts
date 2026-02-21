@@ -39,7 +39,7 @@ export function createMessageStore(dbPath: string): MessageStore {
     value TEXT NOT NULL
   )`);
   db.exec(
-    `INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('version', '1')`,
+    `INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('version', '2')`,
   );
 
   db.exec(`CREATE TABLE IF NOT EXISTS inbox_messages (
@@ -62,8 +62,23 @@ export function createMessageStore(dbPath: string): MessageStore {
     request_id TEXT,
     ts_ms INTEGER NOT NULL
   )`);
+
+  // v1 → v2 migration: replace index with id DESC tiebreaker for deterministic
+  // ordering. Runs after table creation so it's safe even for corrupt/partial DBs.
+  const version = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+
+  if (!version || version.value === "1") {
+    db.exec(`DROP INDEX IF EXISTS idx_dm_agent_ts`);
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts_v2 ON dm_messages(agent, ts_ms DESC, id DESC)`,
+    );
+    db.exec(`UPDATE schema_meta SET value = '2' WHERE key = 'version'`);
+  }
+
   db.exec(
-    `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts ON dm_messages(agent, ts_ms DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts_v2 ON dm_messages(agent, ts_ms DESC, id DESC)`,
   );
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_inbox_to_priority_seq ON inbox_messages(to_agent, priority DESC, seq ASC)`,
@@ -84,10 +99,10 @@ export function createMessageStore(dbPath: string): MessageStore {
     `INSERT INTO dm_messages (agent, role, text, ts_ms, request_id) VALUES (?, ?, ?, ?, ?)`,
   );
   const selectDm = db.prepare(
-    `SELECT * FROM dm_messages WHERE agent = ? AND ts_ms < ? ORDER BY ts_ms DESC LIMIT ?`,
+    `SELECT * FROM dm_messages WHERE agent = ? AND ts_ms < ? ORDER BY ts_ms DESC, id DESC LIMIT ?`,
   );
   const selectDmNoTs = db.prepare(
-    `SELECT * FROM dm_messages WHERE agent = ? ORDER BY ts_ms DESC LIMIT ?`,
+    `SELECT * FROM dm_messages WHERE agent = ? ORDER BY ts_ms DESC, id DESC LIMIT ?`,
   );
   const deleteDmByAgent = db.prepare(`DELETE FROM dm_messages WHERE agent = ?`);
 
