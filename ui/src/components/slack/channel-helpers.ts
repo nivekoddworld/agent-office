@@ -1,5 +1,5 @@
 import type { FeedEvent } from "../../store/event-store.js";
-import type { SlackMessageData } from "./SlackMessage.js";
+import type { SlackMessageData } from "./types.js";
 import type { ChannelId } from "./SlackSidebar.js";
 
 export function extractText(content: unknown): string {

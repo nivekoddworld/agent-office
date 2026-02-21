@@ -5,7 +5,8 @@ import { useEventStore } from "../../store/event-store.js";
 import { useThreadStore, type Thread } from "../../store/thread-store.js";
 import { slack } from "../../theme/slack-theme.js";
 import { ChannelHeader } from "./ChannelHeader.js";
-import { SlackMessage, type SlackMessageData } from "./SlackMessage.js";
+import { SlackMessage } from "./SlackMessage.js";
+import type { SlackMessageData } from "./types.js";
 import { DateDivider } from "./DateDivider.js";
 import { SystemMessage } from "./SystemMessage.js";
 import { MessageInput } from "./MessageInput.js";
@@ -226,7 +227,7 @@ export function ChannelView({
   const { createThread } = useThreadStore();
 
   const handleMessageSent = useCallback(
-    (agentName: string, text: string) => {
+    (agentName: string, text: string, requestId: string) => {
       const userMsg: SlackMessageData = {
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         sender: "You",
@@ -234,7 +235,7 @@ export function ChannelView({
         timestamp: Date.now(),
         isBot: false,
       };
-      createThread(agentName, userMsg);
+      createThread(agentName, userMsg, requestId);
     },
     [createThread],
   );

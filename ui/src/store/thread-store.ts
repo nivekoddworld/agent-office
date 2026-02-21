@@ -1,11 +1,12 @@
 import { useMemo, useSyncExternalStore } from "react";
-import type { SlackMessageData } from "../components/slack/SlackMessage.js";
+import type { SlackMessageData } from "../components/slack/types.js";
 
 const MAX_THREADS = 200;
 
 export interface Thread {
   id: string;
   agentName: string;
+  requestId?: string;
   parentMessage: SlackMessageData;
   replies: SlackMessageData[];
   status: "open" | "completed";
@@ -16,10 +17,31 @@ interface ThreadState {
   threads: Thread[];
   /** Maps agentName → most recent open threadId for that agent */
   activeThreadByAgent: Record<string, string>;
+  /** Maps requestId → threadId (if available from client request metadata) */
+  threadByRequestId: Record<string, string>;
 }
 
-function createThreadStore() {
-  let state: ThreadState = { threads: [], activeThreadByAgent: {} };
+function pruneThreadMaps(
+  threads: Thread[],
+  activeThreadByAgent: Record<string, string>,
+  threadByRequestId: Record<string, string>,
+): Pick<ThreadState, "activeThreadByAgent" | "threadByRequestId"> {
+  const ids = new Set(threads.map((t) => t.id));
+  const active = Object.fromEntries(
+    Object.entries(activeThreadByAgent).filter(([, threadId]) => ids.has(threadId)),
+  );
+  const byRequestId = Object.fromEntries(
+    Object.entries(threadByRequestId).filter(([, threadId]) => ids.has(threadId)),
+  );
+  return { activeThreadByAgent: active, threadByRequestId: byRequestId };
+}
+
+export function createThreadStore() {
+  let state: ThreadState = {
+    threads: [],
+    activeThreadByAgent: {},
+    threadByRequestId: {},
+  };
   const listeners = new Set<() => void>();
 
   const notify = () => {
@@ -33,12 +55,28 @@ function createThreadStore() {
 
   const getSnapshot = () => state;
 
+  const resolveThreadId = (
+    agentName: string,
+    requestId?: string,
+  ): string | undefined => {
+    if (requestId) {
+      const mapped = state.threadByRequestId[requestId];
+      if (mapped) return mapped;
+    }
+    return state.activeThreadByAgent[agentName];
+  };
+
   /** User sends a message -- creates a new thread. */
-  const createThread = (agentName: string, userMessage: SlackMessageData): string => {
+  const createThread = (
+    agentName: string,
+    userMessage: SlackMessageData,
+    requestId?: string,
+  ): string => {
     const id = `thread-${Date.now()}-${agentName}-${Math.random().toString(36).slice(2, 8)}`;
     const thread: Thread = {
       id,
       agentName,
+      requestId,
       parentMessage: userMessage,
       replies: [],
       status: "open",
@@ -51,17 +89,30 @@ function createThreadStore() {
       const toRemove = new Set(completed.slice(0, evictCount).map((t) => t.id));
       threads = threads.filter((t) => !toRemove.has(t.id));
     }
+    const activeThreadByAgent = { ...state.activeThreadByAgent, [agentName]: id };
+    const threadByRequestId = requestId
+      ? { ...state.threadByRequestId, [requestId]: id }
+      : state.threadByRequestId;
+    const pruned = pruneThreadMaps(
+      threads,
+      activeThreadByAgent,
+      threadByRequestId,
+    );
     state = {
       threads,
-      activeThreadByAgent: { ...state.activeThreadByAgent, [agentName]: id },
+      ...pruned,
     };
     notify();
     return id;
   };
 
   /** Agent responds -- add reply to active thread. */
-  const addReply = (agentName: string, message: SlackMessageData) => {
-    const threadId = state.activeThreadByAgent[agentName];
+  const addReply = (
+    agentName: string,
+    message: SlackMessageData,
+    requestId?: string,
+  ) => {
+    const threadId = resolveThreadId(agentName, requestId);
     if (!threadId) return;
 
     state = {
@@ -74,36 +125,63 @@ function createThreadStore() {
   };
 
   /** Agent finishes -- mark thread completed. */
-  const completeThread = (agentName: string) => {
-    const threadId = state.activeThreadByAgent[agentName];
+  const completeThread = (agentName: string, requestId?: string) => {
+    const threadId = resolveThreadId(agentName, requestId);
     if (!threadId) return;
 
-    const { [agentName]: _removed, ...rest } = state.activeThreadByAgent;
-    void _removed;
+    const activeThreadByAgent =
+      state.activeThreadByAgent[agentName] === threadId
+        ? Object.fromEntries(
+            Object.entries(state.activeThreadByAgent).filter(
+              ([name]) => name !== agentName,
+            ),
+          )
+        : state.activeThreadByAgent;
+    const threads = state.threads.map((t) =>
+      t.id === threadId ? { ...t, status: "completed" as const } : t,
+    );
+    const pruned = pruneThreadMaps(
+      threads,
+      activeThreadByAgent,
+      state.threadByRequestId,
+    );
     state = {
-      activeThreadByAgent: rest,
-      threads: state.threads.map((t) =>
-        t.id === threadId ? { ...t, status: "completed" as const } : t,
-      ),
+      threads,
+      ...pruned,
     };
     notify();
   };
 
   /** User replies inside a thread -- reopen it and add user's reply. */
-  const replyInThread = (threadId: string, userMessage: SlackMessageData) => {
+  const replyInThread = (
+    threadId: string,
+    userMessage: SlackMessageData,
+    requestId?: string,
+  ) => {
     const thread = state.threads.find((t) => t.id === threadId);
     if (!thread) return;
 
+    const threads = state.threads.map((t) =>
+      t.id === threadId
+        ? {
+            ...t,
+            replies: [...t.replies, userMessage],
+            status: "open" as const,
+            ...(requestId ? { requestId } : {}),
+          }
+        : t,
+    );
+    const activeThreadByAgent = {
+      ...state.activeThreadByAgent,
+      [thread.agentName]: threadId,
+    };
+    const threadByRequestId = requestId
+      ? { ...state.threadByRequestId, [requestId]: threadId }
+      : state.threadByRequestId;
+    const pruned = pruneThreadMaps(threads, activeThreadByAgent, threadByRequestId);
     state = {
-      threads: state.threads.map((t) =>
-        t.id === threadId
-          ? { ...t, replies: [...t.replies, userMessage], status: "open" as const }
-          : t,
-      ),
-      activeThreadByAgent: {
-        ...state.activeThreadByAgent,
-        [thread.agentName]: threadId,
-      },
+      threads,
+      ...pruned,
     };
     notify();
   };

@@ -104,7 +104,10 @@ describe("CronService", () => {
       "bot:daily": {
         lastRunAt: new Date("2024-01-15T08:00:00Z").getTime(),
         nextRunAt: new Date("2024-01-15T09:00:00Z").getTime(),
-        runCount: 5,
+        attemptCount: 5,
+        sentCount: 5,
+        skippedBusyCount: 0,
+        skippedCapCount: 0,
         lastStatus: "ok" as const,
         lastError: null,
       },
@@ -145,7 +148,10 @@ describe("CronService", () => {
       "bot:daily": {
         lastRunAt: new Date("2024-01-15T08:00:00Z").getTime(),
         nextRunAt: new Date("2024-01-15T09:00:00Z").getTime(),
-        runCount: 5,
+        attemptCount: 5,
+        sentCount: 5,
+        skippedBusyCount: 0,
+        skippedCapCount: 0,
         lastStatus: "ok" as const,
         lastError: null,
       },
@@ -328,15 +334,18 @@ describe("CronService", () => {
     svc.trigger("bot", "hourly");
     const jobs = svc.listJobs();
     expect(jobs[0]!.state.lastStatus).toBe("ok");
-    expect(jobs[0]!.state.runCount).toBe(1);
+    expect(jobs[0]!.state.attemptCount).toBe(1);
+    expect(jobs[0]!.state.sentCount).toBe(1);
 
     // Verify persisted to store
     const loaded = store.load();
     expect(loaded["bot:hourly"]!.lastStatus).toBe("ok");
+    expect(loaded["bot:hourly"]!.attemptCount).toBe(1);
+    expect(loaded["bot:hourly"]!.sentCount).toBe(1);
     svc.stop();
   });
 
-  it("runCount only increments on actual dispatch", () => {
+  it("attempt/sent counters track skipped dispatch separately", () => {
     vi.setSystemTime(new Date("2024-01-15T14:30:00Z"));
     agents.set("bot", makeAgent("bot", "running")); // busy
     bus.register("bot");
@@ -347,7 +356,9 @@ describe("CronService", () => {
 
     vi.advanceTimersByTime(30 * 60 * 1000);
     const jobs = svc.listJobs();
-    expect(jobs[0]!.state.runCount).toBe(0); // skipped, not incremented
+    expect(jobs[0]!.state.attemptCount).toBe(1);
+    expect(jobs[0]!.state.sentCount).toBe(0);
+    expect(jobs[0]!.state.skippedBusyCount).toBe(1);
     expect(jobs[0]!.state.lastStatus).toBe("skipped_busy");
     spy.mockRestore();
     svc.stop();
@@ -361,14 +372,16 @@ describe("CronService", () => {
     const svc1 = new CronService(bus, agents, store);
     svc1.setJobs("bot", { hourly: makeConfig() });
     svc1.trigger("bot", "hourly");
-    expect(svc1.listJobs()[0]!.state.runCount).toBe(1);
+    expect(svc1.listJobs()[0]!.state.attemptCount).toBe(1);
+    expect(svc1.listJobs()[0]!.state.sentCount).toBe(1);
     svc1.stop();
 
     // New service instance, loads state from store
     const svc2 = new CronService(bus, agents, store);
     svc2.setJobs("bot", { hourly: makeConfig() });
     svc2.start();
-    expect(svc2.listJobs()[0]!.state.runCount).toBe(1);
+    expect(svc2.listJobs()[0]!.state.attemptCount).toBe(1);
+    expect(svc2.listJobs()[0]!.state.sentCount).toBe(1);
     svc2.stop();
   });
 

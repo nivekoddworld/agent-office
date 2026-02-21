@@ -28,6 +28,10 @@ export function App() {
     const d = data as Record<string, unknown>;
     const eventType = (d.type as string) ?? type;
     const agent = (d.agent as string) ?? "";
+    const requestId =
+      typeof d.requestId === "string" && d.requestId.trim()
+        ? d.requestId
+        : undefined;
 
     agentActivityStore.handleEvent(eventType, agent, d);
 
@@ -52,11 +56,11 @@ export function App() {
             isBot: true,
             eventType,
             usage,
-          });
+          }, requestId);
         }
       }
     } else if (eventType === "agent_end" && agent) {
-      threadStore.completeThread(agent);
+      threadStore.completeThread(agent, requestId);
     }
   }, []);
 

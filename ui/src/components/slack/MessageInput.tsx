@@ -13,17 +13,18 @@ import {
 import { IconAt, IconSend2 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
-import { apiFetch } from "../../api/client.js";
+import { createClientRequestId, sendMessage } from "./send-message.js";
 
 interface MessageInputProps {
   agentNames: string[];
   targetAgent: string | null;
   channelName: string;
-  onMessageSent?: (agentName: string, text: string) => void;
+  onMessageSent?: (agentName: string, text: string, requestId: string) => void;
 }
 
 export function MessageInput({ agentNames, targetAgent, channelName, onMessageSent }: MessageInputProps) {
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
   const [showMention, setShowMention] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(targetAgent);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -32,27 +33,31 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
     setSelectedTarget(targetAgent);
   }, [targetAgent]);
 
-  const send = useCallback(() => {
+  const send = useCallback(async () => {
     const content = text.trim();
-    if (!content || !selectedTarget) return;
-    apiFetch("/api/send", {
-      method: "POST",
-      body: JSON.stringify({ agent: selectedTarget, message: content }),
-    }).catch((err) => {
+    if (!content || !selectedTarget || sending) return;
+
+    setSending(true);
+    const requestId = createClientRequestId();
+    try {
+      await sendMessage({ agent: selectedTarget, message: content, requestId });
+      onMessageSent?.(selectedTarget, content, requestId);
+      setText("");
+    } catch (err) {
       notifications.show({
         title: "Message failed",
         message: err instanceof Error ? err.message : "Failed to send message",
         color: "red",
       });
-    });
-    onMessageSent?.(selectedTarget, content);
-    setText("");
-  }, [text, selectedTarget, onMessageSent]);
+    } finally {
+      setSending(false);
+    }
+  }, [text, selectedTarget, onMessageSent, sending]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send();
+      void send();
     }
     if (e.key === "@") {
       setShowMention(true);
@@ -172,8 +177,10 @@ export function MessageInput({ agentNames, targetAgent, channelName, onMessageSe
             size="md"
             variant={text.trim() && selectedTarget ? "filled" : "subtle"}
             color={text.trim() && selectedTarget ? "green" : "gray"}
-            onClick={send}
-            disabled={!text.trim() || !selectedTarget}
+            onClick={() => {
+              void send();
+            }}
+            disabled={!text.trim() || !selectedTarget || sending}
           >
             <IconSend2 size={16} />
           </ActionIcon>

@@ -16,6 +16,7 @@ function mockHandle(
     setStatus: vi.fn(function (this: any, s: string) {
       this.status = s;
     }),
+    setActiveRequestId: vi.fn(),
     prompt: vi.fn(async () => {}),
     steer: vi.fn(async () => {}),
     info: vi.fn(() => ({
@@ -72,6 +73,30 @@ describe("Scheduler", () => {
     expect(low.prompt).toHaveBeenCalledWith("lo");
     expect(high.setStatus).toHaveBeenCalledWith("running");
     expect(low.setStatus).toHaveBeenCalledWith("running");
+  });
+
+  it("passes requestId to handle context for correlation", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+
+    const target = mockHandle("target", Priority.NORMAL);
+    agents.set("target", target);
+    bus.register("target");
+    bus.send({
+      from: "__user__",
+      to: "target",
+      type: "prompt",
+      payload: "work",
+      priority: Priority.NORMAL,
+      requestId: "req-1",
+    });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    expect(target.setActiveRequestId).toHaveBeenCalledWith("req-1");
   });
 
   it("skips agents that are already running", () => {
@@ -248,6 +273,7 @@ describe("Scheduler", () => {
       setStatus: vi.fn(function (this: any, s: "idle" | "running" | "dead") {
         this.status = s;
       }),
+      setActiveRequestId: vi.fn(),
       prompt: vi.fn(async () => promptPromise),
       steer: vi.fn(async () => {}),
       info: vi.fn(() => ({

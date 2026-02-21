@@ -65,6 +65,7 @@ export interface InboxMessage {
   payload: string;
   priority: Priority;
   timestamp: number;
+  requestId?: string;
 }
 
 // --- Scheduler ---

@@ -180,17 +180,22 @@ export class Workspace {
 
     // Forward agent events to workspace listeners (telegram, etc.)
     handle.onEvent((e) => {
+      const requestId = handle.getActiveRequestId();
+      const event = requestId
+        ? ({ ...e, requestId } as unknown as AgentEvent)
+        : e;
+
       if (
-        e.type === "tool_execution_start" ||
-        e.type === "message_end" ||
-        e.type === "agent_end"
+        event.type === "tool_execution_start" ||
+        event.type === "message_end" ||
+        event.type === "agent_end"
       ) {
-        console.log(`[event] ${config.name}: ${e.type}`);
+        console.log(`[event] ${config.name}: ${event.type}`);
       }
 
       // Track usage on assistant message_end
-      if (e.type === "message_end") {
-        const msg = e.message as unknown as Record<string, unknown>;
+      if (event.type === "message_end") {
+        const msg = event.message as unknown as Record<string, unknown>;
         if (msg.role === "assistant" && msg.usage) {
           try {
             const usage = msg.usage as {
@@ -233,7 +238,7 @@ export class Workspace {
         }
       }
 
-      for (const fn of this.listeners) fn(config.name, e);
+      for (const fn of this.listeners) fn(config.name, event);
     });
 
     return handle;
@@ -253,6 +258,7 @@ export class Workspace {
     text: string,
     type: "prompt" | "steer" = "prompt",
     priority?: Priority,
+    requestId?: string,
   ): void {
     const handle = this.agents.get(agentName);
     if (!handle) throw new Error(`Agent "${agentName}" not found`);
@@ -262,6 +268,7 @@ export class Workspace {
       type,
       payload: text,
       priority: priority ?? handle.config.priority,
+      requestId,
     });
   }
 

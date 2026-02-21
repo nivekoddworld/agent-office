@@ -80,6 +80,7 @@ export class Scheduler {
       // Deliver first (highest-priority) message
       const msg = messages[0]!;
       handle.setStatus("running");
+      handle.setActiveRequestId(msg.requestId);
 
       // Re-queue remaining messages before dispatch (prevents loss on throw)
       for (let i = 1; i < messages.length; i++) {
@@ -98,6 +99,9 @@ export class Scheduler {
         .catch((err) => {
           console.error(`[scheduler] Agent "${handle.name}" error:`, err);
           if (handle.status !== "dead") handle.setStatus("idle");
+        })
+        .finally(() => {
+          handle.setActiveRequestId(undefined);
         });
     }
 

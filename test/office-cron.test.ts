@@ -122,6 +122,10 @@ describe("Office CronService", () => {
 
     expect(bus.peek("pm")).toBe(0);
     expect(bus.peek("ops")).toBe(1);
+    const state = svc.listJobs().find((j) => j.jobName === "standup")!.state;
+    expect(state.attemptCount).toBe(1);
+    expect(state.sentCount).toBe(1);
+    expect(state.skippedBusyCount).toBe(1);
     spy.mockRestore();
     svc.stop();
   });
@@ -152,6 +156,10 @@ describe("Office CronService", () => {
     // a should still be 30 (capped), b should still be 30 (capped too)
     expect(bus.peek("a")).toBe(30);
     expect(bus.peek("b")).toBe(30);
+    const state = svc.listJobs().find((j) => j.jobName === "fast")!.state;
+    expect(state.attemptCount).toBe(31);
+    expect(state.sentCount).toBe(60);
+    expect(state.skippedCapCount).toBe(2);
     spy.mockRestore();
     svc.stop();
   });
@@ -190,7 +198,8 @@ describe("Office CronService", () => {
 
     const states = store.load();
     expect(states["__office__:standup"]).toBeDefined();
-    expect(states["__office__:standup"]!.runCount).toBe(1);
+    expect(states["__office__:standup"]!.attemptCount).toBe(1);
+    expect(states["__office__:standup"]!.sentCount).toBe(1);
     svc.stop();
   });
 
@@ -231,14 +240,18 @@ describe("Office CronService", () => {
     const svc1 = new CronService(bus, agents, store);
     svc1.setOfficeJobs({ standup: makeOfficeConfig() });
     svc1.triggerOffice("standup");
-    expect(svc1.listJobs()[0]!.state.runCount).toBe(1);
+    expect(svc1.listJobs()[0]!.state.attemptCount).toBe(1);
+    expect(svc1.listJobs()[0]!.state.sentCount).toBe(1);
     svc1.stop();
 
     const svc2 = new CronService(bus, agents, store);
     svc2.setOfficeJobs({ standup: makeOfficeConfig() });
     svc2.start();
     expect(
-      svc2.listJobs().filter((j) => j.scope === "office")[0]!.state.runCount,
+      svc2.listJobs().filter((j) => j.scope === "office")[0]!.state.attemptCount,
+    ).toBe(1);
+    expect(
+      svc2.listJobs().filter((j) => j.scope === "office")[0]!.state.sentCount,
     ).toBe(1);
     svc2.stop();
   });

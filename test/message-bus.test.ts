@@ -95,6 +95,57 @@ describe("MessageBus", () => {
     expect(bus.peek("target")).toBe(15);
   });
 
+  it("applies a higher rate limit for __task__ notifications", () => {
+    const bus = new MessageBus();
+    bus.register("target");
+
+    for (let i = 0; i < 30; i++) {
+      bus.send({
+        from: "__task__",
+        to: "target",
+        type: "prompt",
+        payload: `task-${i}`,
+        priority: Priority.NORMAL,
+      });
+    }
+
+    expect(bus.peek("target")).toBe(30);
+  });
+
+  it("still caps __task__ bursts at the dedicated threshold", () => {
+    const bus = new MessageBus();
+    bus.register("target");
+
+    for (let i = 0; i < 45; i++) {
+      bus.send({
+        from: "__task__",
+        to: "target",
+        type: "prompt",
+        payload: `task-${i}`,
+        priority: Priority.NORMAL,
+      });
+    }
+
+    expect(bus.peek("target")).toBe(40);
+  });
+
+  it("preserves requestId metadata", () => {
+    const bus = new MessageBus();
+    bus.register("target");
+
+    bus.send({
+      from: "__user__",
+      to: "target",
+      type: "prompt",
+      payload: "hello",
+      priority: Priority.NORMAL,
+      requestId: "req-123",
+    });
+
+    const [msg] = bus.drain("target");
+    expect(msg?.requestId).toBe("req-123");
+  });
+
   it("unregisters agents", () => {
     const bus = new MessageBus();
     bus.register("agent-a");

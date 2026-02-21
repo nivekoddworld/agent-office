@@ -11,7 +11,10 @@ export interface CronJobConfig {
 export interface CronJobState {
   lastRunAt: number | null;
   nextRunAt: number;
-  runCount: number;
+  attemptCount: number;
+  sentCount: number;
+  skippedBusyCount: number;
+  skippedCapCount: number;
   lastStatus: "ok" | "skipped_busy" | "skipped_cap" | "error" | null;
   lastError: string | null;
 }

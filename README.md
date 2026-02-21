@@ -507,6 +507,7 @@ backlog → todo → in_progress → review → done
 **Dependency behavior:** Tasks created with `dependsOn` start in `backlog` regardless of the requested status. When all dependencies reach `done`, the `TaskService` auto-transitions the blocked task to `todo` and sends a `[Task Ready]` notification to the assignee.
 
 **Notifications:** New task assignments dispatch `[New Task]` messages. Dependency resolution dispatches `[Task Ready]` messages. Both are sent from `__task__` via the message bus.
+The message bus applies a dedicated higher limit for `__task__` notifications (`40` messages / `30s`) so task events are less likely to be dropped under bursty updates.
 
 **Audit trail:** All task mutations are logged to `<officeDir>/logs/task-audit.jsonl`.
 

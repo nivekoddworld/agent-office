@@ -12,9 +12,10 @@ import {
 import { IconX, IconHash, IconSend2 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
-import { SlackMessage, type SlackMessageData } from "./SlackMessage.js";
-import { apiFetch } from "../../api/client.js";
+import { SlackMessage } from "./SlackMessage.js";
+import type { SlackMessageData } from "./types.js";
 import { threadStore, useThreadStore } from "../../store/thread-store.js";
+import { createClientRequestId, sendMessage } from "./send-message.js";
 
 interface ThreadDrawerProps {
   opened: boolean;
@@ -32,6 +33,7 @@ export function ThreadDrawer({
   onClickAvatar,
 }: ThreadDrawerProps) {
   const [reply, setReply] = useState("");
+  const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { threads } = useThreadStore();
 
@@ -47,20 +49,23 @@ export function ThreadDrawer({
     }
   }, [thread?.replies.length]);
 
-  const send = () => {
+  const send = async () => {
     const content = reply.trim();
-    if (!content || !thread) return;
+    if (!content || !thread || sending) return;
 
-    apiFetch("/api/send", {
-      method: "POST",
-      body: JSON.stringify({ agent: thread.agentName, message: content }),
-    }).catch((err) => {
+    setSending(true);
+    const requestId = createClientRequestId();
+    try {
+      await sendMessage({ agent: thread.agentName, message: content, requestId });
+    } catch (err) {
       notifications.show({
         title: "Message failed",
         message: err instanceof Error ? err.message : "Failed to send message",
         color: "red",
       });
-    });
+      setSending(false);
+      return;
+    }
 
     const userReply: SlackMessageData = {
       id: `user-reply-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -69,15 +74,16 @@ export function ThreadDrawer({
       timestamp: Date.now(),
       isBot: false,
     };
-    threadStore.replyInThread(thread.id, userReply);
+    threadStore.replyInThread(thread.id, userReply, requestId);
 
     setReply("");
+    setSending(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      send();
+      void send();
     }
   };
 
@@ -211,8 +217,10 @@ export function ThreadDrawer({
                 size="md"
                 variant={reply.trim() ? "filled" : "subtle"}
                 color={reply.trim() ? "green" : "gray"}
-                onClick={send}
-                disabled={!reply.trim()}
+                onClick={() => {
+                  void send();
+                }}
+                disabled={!reply.trim() || sending}
               >
                 <IconSend2 size={16} />
               </ActionIcon>

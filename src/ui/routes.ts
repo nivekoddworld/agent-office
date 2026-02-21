@@ -251,12 +251,12 @@ export function executeSend(
   agent: string,
   message: string,
   priority?: Priority,
+  requestId?: string,
 ): { ok: boolean; error?: string } {
   try {
-    workspace.send(agent, message, "prompt", priority);
+    workspace.send(agent, message, "prompt", priority, requestId);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
-

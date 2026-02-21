@@ -123,6 +123,16 @@ describe("TaskService", () => {
     expect(result).toContain("not found");
   });
 
+  it("rejects create with invalid priority at service layer", () => {
+    const result = service.create("pm", {
+      title: "Invalid priority",
+      assignee: "coder",
+      priority: 99 as any,
+    });
+    expect(typeof result).toBe("string");
+    expect(result).toContain("invalid priority");
+  });
+
   // --- update / transitions ---
 
   it("transitions todo → in_progress", () => {
@@ -174,6 +184,18 @@ describe("TaskService", () => {
     const result = service.update("coder", "T-unknown", { status: "done" });
     expect(typeof result).toBe("string");
     expect(result).toContain("not found");
+  });
+
+  it("rejects update with invalid priority at service layer", () => {
+    const t = service.create("pm", {
+      title: "Work",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    const result = service.update("coder", t.id, { priority: -1 as any });
+    expect(typeof result).toBe("string");
+    expect(result).toContain("invalid priority");
   });
 
   // --- dependency resolution ---

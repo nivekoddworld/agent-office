@@ -17,6 +17,15 @@ function shortId(): string {
   return ID_PREFIX + "-" + randomUUID().slice(0, 8);
 }
 
+function isValidPriority(value: unknown): value is Priority {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= Priority.IDLE &&
+    value <= Priority.CRITICAL
+  );
+}
+
 export interface CreateTaskParams {
   title: string;
   description?: string;
@@ -68,6 +77,9 @@ export class TaskService {
   create(createdBy: string, params: CreateTaskParams): Task | string {
     if (!params.title?.trim()) return "Error: title is required";
     if (!params.assignee?.trim()) return "Error: assignee is required";
+    if (!isValidPriority(params.priority)) {
+      return 'Error: invalid priority. Use numeric enum 0-4 ("idle"..."critical")';
+    }
     if (!this.agentExists(params.assignee)) {
       return `Error: agent "${params.assignee}" not found`;
     }
@@ -154,6 +166,12 @@ export class TaskService {
 
     if (params.assignee && !this.agentExists(params.assignee)) {
       return `Error: agent "${params.assignee}" not found`;
+    }
+    if (
+      params.priority !== undefined &&
+      !isValidPriority(params.priority)
+    ) {
+      return 'Error: invalid priority. Use numeric enum 0-4 ("idle"..."critical")';
     }
 
     const oldStatus = task.status;

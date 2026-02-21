@@ -40,7 +40,13 @@ function createMockWorkspace() {
     },
     bus: { peekMessages: vi.fn(() => []) },
     cron: { listJobs: vi.fn(() => []) },
-    tasks: { list: vi.fn(() => []) },
+    tasks: {
+      list: vi.fn(() => []),
+      board: vi.fn(() => ({})),
+      get: vi.fn(() => undefined),
+      create: vi.fn(() => ({ id: "T-test", title: "x" })),
+      update: vi.fn(() => ({ id: "T-test", title: "x" })),
+    },
     office: { id: "test-office", name: "Test Office", dir: "/tmp/test" },
     getAgent: vi.fn(() => undefined),
     onAgentEvent: vi.fn(() => vi.fn()),
@@ -50,6 +56,16 @@ function createMockWorkspace() {
 
 let sessionCookie = "";
 let origin = "";
+
+function authHeaders(extra?: HeadersInit): HeadersInit {
+  return {
+    Cookie: sessionCookie,
+    Origin: origin,
+    "X-Requested-With": "XMLHttpRequest",
+    "Content-Type": "application/json",
+    ...(extra ?? {}),
+  };
+}
 
 // --- Tests ---
 
@@ -162,5 +178,67 @@ describe("UI server", () => {
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body).toEqual({ ok: false, output: [], error: "unknown_command" });
+  });
+
+  it("POST /api/tasks invalid priority returns 400", async () => {
+    const res = await fetch(`${origin}/api/tasks`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        title: "Task",
+        assignee: "agent-a",
+        priority: "urgent",
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("priority");
+  });
+
+  it("POST /api/tasks rejects invalid priority type", async () => {
+    const res = await fetch(`${origin}/api/tasks`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        title: "Task",
+        assignee: "agent-a",
+        priority: {},
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("priority");
+  });
+
+  it("PATCH /api/tasks/:id rejects empty body", async () => {
+    const res = await fetch(`${origin}/api/tasks/T-test`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("at least one field");
+  });
+
+  it("PATCH /api/tasks/:id rejects invalid status", async () => {
+    const res = await fetch(`${origin}/api/tasks/T-test`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ status: "paused" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("status");
+  });
+
+  it("POST /api/send rejects invalid requestId type", async () => {
+    const res = await fetch(`${origin}/api/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ agent: "a", message: "hello", requestId: 42 }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_request_id" });
   });
 });

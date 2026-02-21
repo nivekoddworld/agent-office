@@ -73,8 +73,13 @@ export function CronJobRow({ job }: CronJobRowProps) {
               {job.state.lastStatus}
             </Badge>
           )}
-          <Text size="xs" c="dimmed">×{job.state.runCount}</Text>
+          <Text size="xs" c="dimmed">
+            {job.state.sentCount}/{job.state.attemptCount}
+          </Text>
         </Group>
+        <Text size="xs" c="dimmed">
+          skip b:{job.state.skippedBusyCount} c:{job.state.skippedCapCount}
+        </Text>
       </div>
 
       {job.scope === "agent" && (

@@ -59,7 +59,9 @@ export function cronStatusCommand(
     console.log(
       `    last run:  ${j.state.lastRunAt ? new Date(j.state.lastRunAt).toISOString() : "never"}`,
     );
-    console.log(`    run count: ${j.state.runCount}`);
+    console.log(`    attempts: ${j.state.attemptCount}`);
+    console.log(`    sent:     ${j.state.sentCount}`);
+    console.log(`    skipped:  busy=${j.state.skippedBusyCount}, cap=${j.state.skippedCapCount}`);
     console.log(`    status:    ${j.state.lastStatus ?? "pending"}`);
     if (j.state.lastError) console.log(`    error:     ${j.state.lastError}`);
   }

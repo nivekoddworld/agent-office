@@ -15,7 +15,10 @@ function makeState(overrides?: Partial<CronJobState>): CronJobState {
   return {
     lastRunAt: null,
     nextRunAt: Date.now() + 60_000,
-    runCount: 0,
+    attemptCount: 0,
+    sentCount: 0,
+    skippedBusyCount: 0,
+    skippedCapCount: 0,
     lastStatus: null,
     lastError: null,
     ...overrides,
@@ -41,7 +44,11 @@ describe("CronStore", () => {
 
   it("save and load round-trip", () => {
     const states: Record<string, CronJobState> = {
-      "bot:daily": makeState({ runCount: 5, lastStatus: "ok" }),
+      "bot:daily": makeState({
+        attemptCount: 5,
+        sentCount: 5,
+        lastStatus: "ok",
+      }),
       "bot:hourly": makeState({ lastRunAt: 1000 }),
     };
     store.save(states);
@@ -50,10 +57,11 @@ describe("CronStore", () => {
 
   it("overwrites previous state", () => {
     store.save({ "a:job": makeState() });
-    store.save({ "b:job": makeState({ runCount: 10 }) });
+    store.save({ "b:job": makeState({ attemptCount: 10, sentCount: 10 }) });
     const loaded = store.load();
     expect(loaded["a:job"]).toBeUndefined();
-    expect(loaded["b:job"]?.runCount).toBe(10);
+    expect(loaded["b:job"]?.attemptCount).toBe(10);
+    expect(loaded["b:job"]?.sentCount).toBe(10);
   });
 
   it("clear removes state file", () => {
@@ -84,5 +92,33 @@ describe("CronStore", () => {
   it("handles corrupt state file gracefully", () => {
     writeFileSync(join(dir, "state.json"), "not json!!!");
     expect(store.load()).toEqual({});
+  });
+
+  it("normalizes legacy runCount state on load", () => {
+    writeFileSync(
+      join(dir, "state.json"),
+      JSON.stringify({
+        "bot:legacy": {
+          lastRunAt: 123,
+          nextRunAt: 456,
+          runCount: 7,
+          lastStatus: "ok",
+          lastError: null,
+        },
+      }),
+    );
+
+    expect(store.load()).toEqual({
+      "bot:legacy": {
+        lastRunAt: 123,
+        nextRunAt: 456,
+        attemptCount: 7,
+        sentCount: 7,
+        skippedBusyCount: 0,
+        skippedCapCount: 0,
+        lastStatus: "ok",
+        lastError: null,
+      },
+    });
   });
 });

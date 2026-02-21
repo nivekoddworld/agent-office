@@ -71,6 +71,7 @@ export class AgentHandle {
   private _toolCount = 0;
   private _lastHeartbeat = Date.now();
   private listeners: Array<(e: AgentEvent) => void> = [];
+  private _activeRequestId: string | undefined;
   private baseDir: string;
   private officeId: string;
   private officeName: string;
@@ -123,6 +124,14 @@ export class AgentHandle {
       this.config.cwd ??
       join(this.baseDir, "agents", this.config.name, "workspace")
     );
+  }
+
+  setActiveRequestId(requestId: string | undefined): void {
+    this._activeRequestId = requestId;
+  }
+
+  getActiveRequestId(): string | undefined {
+    return this._activeRequestId;
   }
 
   private get agentDir(): string {
@@ -323,6 +332,7 @@ export class AgentHandle {
       this.agent?.abort();
       this.agent = null;
     }
+    this._activeRequestId = undefined;
     this.listeners = [];
   }
 }

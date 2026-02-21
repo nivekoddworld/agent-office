@@ -4,21 +4,8 @@ import { IconMessage, IconCopy, IconArrowForwardUp, IconRobot, IconUser } from "
 import { slack } from "../../theme/slack-theme.js";
 import { MarkdownContent } from "./MarkdownContent.js";
 import { formatTime, agentHue } from "./channel-helpers.js";
-
-export interface MessageUsage {
-  totalTokens: number;
-  totalCost: number;
-}
-
-export interface SlackMessageData {
-  id: string;
-  sender: string;
-  text: string;
-  timestamp: number;
-  isBot: boolean;
-  eventType?: string;
-  usage?: MessageUsage;
-}
+import type { SlackMessageData } from "./types.js";
+export type { MessageUsage, SlackMessageData } from "./types.js";
 
 interface SlackMessageProps {
   message: SlackMessageData;
@@ -230,4 +217,3 @@ export function SlackMessage({
     </Box>
   );
 }
-

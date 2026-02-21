@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, extname, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Priority } from "../types.js";
+import { TASK_STATUSES, type TaskStatus } from "../tasks/types.js";
 import type { Workspace } from "../workspace.js";
 import { EventBuffer } from "./event-buffer.js";
 import {
@@ -33,6 +35,33 @@ const MIME: Record<string, string> = {
   ".png": "image/png",
   ".ico": "image/x-icon",
 };
+
+const TASK_PRIORITY_MAP: Record<string, Priority> = {
+  idle: Priority.IDLE,
+  low: Priority.LOW,
+  normal: Priority.NORMAL,
+  high: Priority.HIGH,
+  critical: Priority.CRITICAL,
+};
+const TASK_PRIORITY_VALUES = Object.keys(TASK_PRIORITY_MAP).join(", ");
+
+type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
+
+interface TaskCreateBody {
+  title: string;
+  description?: string;
+  assignee: string;
+  dependsOn?: string[];
+  parentId?: string;
+  priority: Priority;
+}
+
+interface TaskUpdateBody {
+  status?: TaskStatus;
+  result?: string;
+  assignee?: string;
+  priority?: Priority;
+}
 
 // --- Singleton state ---
 
@@ -92,6 +121,134 @@ function readBody(req: IncomingMessage): Promise<string> {
     req.on("end", () => resolve(Buffer.concat(chunks).toString()));
     req.on("error", reject);
   });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parsePriority(value: unknown): ValidationResult<Priority | undefined> {
+  if (value === undefined) return { ok: true, value: undefined };
+  if (typeof value !== "string") {
+    return {
+      ok: false,
+      error: `priority must be a string (${TASK_PRIORITY_VALUES})`,
+    };
+  }
+  const priority = TASK_PRIORITY_MAP[value.toLowerCase()];
+  if (priority === undefined) {
+    return {
+      ok: false,
+      error: `priority must be one of: ${TASK_PRIORITY_VALUES}`,
+    };
+  }
+  return { ok: true, value: priority };
+}
+
+function parseTaskCreateBody(value: unknown): ValidationResult<TaskCreateBody> {
+  if (!isRecord(value)) {
+    return { ok: false, error: "task body must be an object" };
+  }
+
+  const title = value["title"];
+  if (typeof title !== "string" || !title.trim()) {
+    return {
+      ok: false,
+      error: "title is required and must be a non-empty string",
+    };
+  }
+
+  const assignee = value["assignee"];
+  if (typeof assignee !== "string" || !assignee.trim()) {
+    return {
+      ok: false,
+      error: "assignee is required and must be a non-empty string",
+    };
+  }
+
+  const description = value["description"];
+  if (description !== undefined && typeof description !== "string") {
+    return { ok: false, error: "description must be a string" };
+  }
+
+  const parentId = value["parentId"];
+  if (parentId !== undefined && typeof parentId !== "string") {
+    return { ok: false, error: "parentId must be a string" };
+  }
+
+  const dependsOn = value["dependsOn"];
+  if (
+    dependsOn !== undefined &&
+    (!Array.isArray(dependsOn) ||
+      dependsOn.some((id) => typeof id !== "string" || !id.trim()))
+  ) {
+    return { ok: false, error: "dependsOn must be an array of non-empty strings" };
+  }
+
+  const priorityResult = parsePriority(value["priority"]);
+  if (!priorityResult.ok) return priorityResult;
+
+  return {
+    ok: true,
+    value: {
+      title: title.trim(),
+      assignee: assignee.trim(),
+      ...(description !== undefined ? { description } : {}),
+      ...(parentId !== undefined ? { parentId } : {}),
+      ...(dependsOn !== undefined ? { dependsOn } : {}),
+      priority: priorityResult.value ?? Priority.NORMAL,
+    },
+  };
+}
+
+function parseTaskUpdateBody(value: unknown): ValidationResult<TaskUpdateBody> {
+  if (!isRecord(value)) {
+    return { ok: false, error: "task body must be an object" };
+  }
+
+  const hasAnyField =
+    value["status"] !== undefined ||
+    value["result"] !== undefined ||
+    value["assignee"] !== undefined ||
+    value["priority"] !== undefined;
+  if (!hasAnyField) {
+    return {
+      ok: false,
+      error: "at least one field must be provided: status, result, assignee, priority",
+    };
+  }
+
+  const status = value["status"];
+  if (status !== undefined) {
+    if (typeof status !== "string" || !TASK_STATUSES.includes(status as TaskStatus)) {
+      return { ok: false, error: `status must be one of: ${TASK_STATUSES.join(", ")}` };
+    }
+  }
+
+  const result = value["result"];
+  if (result !== undefined && typeof result !== "string") {
+    return { ok: false, error: "result must be a string" };
+  }
+
+  const assignee = value["assignee"];
+  if (assignee !== undefined && (typeof assignee !== "string" || !assignee.trim())) {
+    return { ok: false, error: "assignee must be a non-empty string" };
+  }
+
+  const priorityResult = parsePriority(value["priority"]);
+  if (!priorityResult.ok) return priorityResult;
+
+  return {
+    ok: true,
+    value: {
+      ...(status !== undefined ? { status: status as TaskStatus } : {}),
+      ...(result !== undefined ? { result } : {}),
+      ...(assignee !== undefined ? { assignee: assignee.trim() } : {}),
+      ...(priorityResult.value !== undefined
+        ? { priority: priorityResult.value }
+        : {}),
+    },
+  };
 }
 
 // --- Server ---
@@ -281,9 +438,11 @@ export async function startUiServer(
       const xrw = req.headers["x-requested-with"];
       if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
       const body = await readBody(req);
-      let parsed: Record<string, unknown>;
+      let parsed: unknown;
       try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
-      const result = workspace.tasks.create("__user__", parsed as any);
+      const validated = parseTaskCreateBody(parsed);
+      if (!validated.ok) return json(res, 400, { ok: false, error: validated.error });
+      const result = workspace.tasks.create("__user__", validated.value);
       if (typeof result === "string") return json(res, 400, { ok: false, error: result });
       broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, 201, result);
@@ -296,9 +455,11 @@ export async function startUiServer(
       const xrw = req.headers["x-requested-with"];
       if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
       const body = await readBody(req);
-      let parsed: Record<string, unknown>;
+      let parsed: unknown;
       try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
-      const result = workspace.tasks.update("__user__", taskPatchMatch[1]!, parsed as any);
+      const validated = parseTaskUpdateBody(parsed);
+      if (!validated.ok) return json(res, 400, { ok: false, error: validated.error });
+      const result = workspace.tasks.update("__user__", taskPatchMatch[1]!, validated.value);
       if (typeof result === "string") return json(res, 400, { ok: false, error: result });
       broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, 200, result);
@@ -327,10 +488,27 @@ export async function startUiServer(
       const xrw = req.headers["x-requested-with"];
       if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
       const body = await readBody(req);
-      let parsed: { agent?: string; message?: string; priority?: number };
+      let parsed: {
+        agent?: string;
+        message?: string;
+        priority?: number;
+        requestId?: string;
+      };
       try { parsed = JSON.parse(body); } catch { return json(res, 400, { error: "invalid_body" }); }
       if (!parsed.agent || !parsed.message) return json(res, 400, { error: "missing_agent_or_message" });
-      const result = executeSend(workspace, parsed.agent, parsed.message, parsed.priority);
+      if (
+        parsed.requestId !== undefined &&
+        (typeof parsed.requestId !== "string" || !parsed.requestId.trim())
+      ) {
+        return json(res, 400, { error: "invalid_request_id" });
+      }
+      const result = executeSend(
+        workspace,
+        parsed.agent,
+        parsed.message,
+        parsed.priority,
+        parsed.requestId,
+      );
       if (result.ok) broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, result.ok ? 200 : 400, result);
     }

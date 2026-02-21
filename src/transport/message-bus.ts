@@ -5,8 +5,15 @@ import type { InboxMessage, Priority } from "../types.js";
  * Message bus — thin wrapper over transport with convenience helpers.
  * Each agent gets an isolated priority queue.
  */
-const RATE_LIMIT = 10;
+const DEFAULT_RATE_LIMIT = 10;
+const TASK_RATE_LIMIT = 40;
 const RATE_WINDOW_MS = 30_000;
+
+function resolveRateLimit(source: string): number | null {
+  if (source === "__user__" || source === "__cron__") return null;
+  if (source === "__task__") return TASK_RATE_LIMIT;
+  return DEFAULT_RATE_LIMIT;
+}
 
 export class MessageBus {
   private transport = new LocalTransport();
@@ -30,9 +37,11 @@ export class MessageBus {
     type: "prompt" | "steer";
     payload: string;
     priority: Priority;
+    requestId?: string;
   }): void {
-    // Rate-limit inter-agent messages (skip user messages)
-    if (opts.from !== "__user__" && opts.from !== "__cron__") {
+    // Rate-limit non-user/system sources to protect inbox health.
+    const limit = resolveRateLimit(opts.from);
+    if (limit !== null) {
       const now = Date.now();
       let entry = this.sendCounts.get(opts.from);
       if (!entry || now - entry.windowStart > RATE_WINDOW_MS) {
@@ -40,9 +49,9 @@ export class MessageBus {
         this.sendCounts.set(opts.from, entry);
       }
       entry.count++;
-      if (entry.count > RATE_LIMIT) {
+      if (entry.count > limit) {
         console.warn(
-          `[bus] Rate limit: agent "${opts.from}" exceeded ${RATE_LIMIT} messages/${RATE_WINDOW_MS / 1000}s — dropping`,
+          `[bus] Rate limit drop: source="${opts.from}" to="${opts.to}" exceeded ${limit} messages/${RATE_WINDOW_MS / 1000}s`,
         );
         return;
       }

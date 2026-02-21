@@ -31,7 +31,10 @@ export interface CronJobEntry {
   state: {
     lastRunAt: number | null;
     nextRunAt: number;
-    runCount: number;
+    attemptCount: number;
+    sentCount: number;
+    skippedBusyCount: number;
+    skippedCapCount: number;
     lastStatus: string | null;
   };
   scope: "agent" | "office";
@@ -104,6 +107,7 @@ export interface InboxMessage {
   payload: string;
   priority: number;
   timestamp: number;
+  requestId?: string;
 }
 
 export interface InboxResponse {

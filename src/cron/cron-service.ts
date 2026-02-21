@@ -101,7 +101,10 @@ export class CronService {
       const state: CronJobState = saved ?? {
         lastRunAt: null,
         nextRunAt: nextFireTime(config.schedule, config.timezone).getTime(),
-        runCount: 0,
+        attemptCount: 0,
+        sentCount: 0,
+        skippedBusyCount: 0,
+        skippedCapCount: 0,
         lastStatus: null,
         lastError: null,
       };
@@ -189,7 +192,10 @@ export class CronService {
       const state: CronJobState = saved ?? {
         lastRunAt: null,
         nextRunAt: nextFireTime(config.schedule, config.timezone).getTime(),
-        runCount: 0,
+        attemptCount: 0,
+        sentCount: 0,
+        skippedBusyCount: 0,
+        skippedCapCount: 0,
         lastStatus: null,
         lastError: null,
       };
@@ -261,6 +267,7 @@ export class CronService {
     const resolved = this.resolveTargets(job.config.targets);
     let sent = 0;
     let skippedCap = 0;
+    let skippedBusy = 0;
 
     for (const target of resolved) {
       // Global dispatch cap
@@ -281,6 +288,7 @@ export class CronService {
         console.warn(
           `[cron] Agent "${target}" busy — skipping office:${job.jobName}`,
         );
+        skippedBusy++;
         continue;
       }
 
@@ -300,9 +308,18 @@ export class CronService {
     }
 
     job.state.lastRunAt = now;
-    job.state.runCount++;
+    job.state.attemptCount++;
+    job.state.sentCount += sent;
+    job.state.skippedCapCount += skippedCap;
+    job.state.skippedBusyCount += skippedBusy;
     job.state.lastStatus =
-      sent > 0 ? "ok" : skippedCap > 0 ? "skipped_cap" : "skipped_busy";
+      sent > 0
+        ? "ok"
+        : skippedCap > 0
+          ? "skipped_cap"
+          : skippedBusy > 0
+            ? "skipped_busy"
+            : "error";
     job.state.lastError = null;
     this.persistState();
   }
@@ -338,6 +355,8 @@ export class CronService {
 
   private fireJob(job: ActiveJob): void {
     const now = Date.now();
+    job.state.lastRunAt = now;
+    job.state.attemptCount++;
 
     // Global dispatch cap
     this.dispatchLog = this.dispatchLog.filter(
@@ -347,7 +366,7 @@ export class CronService {
       console.warn(
         `[cron] Global dispatch cap reached (${DISPATCH_CAP}/min) — skipping ${job.agentName}:${job.jobName}`,
       );
-      job.state.lastRunAt = now;
+      job.state.skippedCapCount++;
       job.state.lastStatus = "skipped_cap";
       this.persistState();
       return;
@@ -359,7 +378,7 @@ export class CronService {
       console.warn(
         `[cron] Agent "${job.agentName}" busy — skipping ${job.jobName}`,
       );
-      job.state.lastRunAt = now;
+      job.state.skippedBusyCount++;
       job.state.lastStatus = "skipped_busy";
       this.persistState();
       return;
@@ -375,12 +394,10 @@ export class CronService {
         priority: Priority.NORMAL,
       });
       this.dispatchLog.push(now);
-      job.state.lastRunAt = now;
-      job.state.runCount++;
+      job.state.sentCount++;
       job.state.lastStatus = "ok";
       job.state.lastError = null;
     } catch (err) {
-      job.state.lastRunAt = now;
       job.state.lastStatus = "error";
       job.state.lastError = err instanceof Error ? err.message : String(err);
     }
