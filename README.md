@@ -68,7 +68,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [In-Process Mode](#in-process-mode-default)
   - [Docker Sandbox Mode](#docker-sandbox-mode)
 - [Commands](#commands)
-  - [Spawn Options](#spawn-options)
+  - [Hire Options](#hire-options)
   - [CLI Flags](#cli-flags)
 - [Agent Collaboration](#agent-collaboration)
   - [list_agents](#list_agents)
@@ -342,10 +342,10 @@ All writes are atomic (temp file + rename) and serialized through a two-layer lo
 
 ```bash
 # Via Web UI or API:
-ao> office reload              # Spawn new agents from YAML, skip already-running
-ao> office reload --force      # Kill and re-spawn agents with changed config
-ao> office validate            # Dry-run: parse + validate without spawning
-ao> office path                # Print path to office.yaml
+office reload              # Spawn new agents from YAML, skip already-running
+office reload --force      # Kill and re-spawn agents with changed config
+office validate            # Dry-run: parse + validate without spawning
+office path                # Print path to office.yaml
 ```
 
 ### Cron Jobs
@@ -380,17 +380,17 @@ Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 
 **Safety guards:** Busy agents (status `running`) are skipped. A global dispatch cap of 60 cron messages per minute prevents misconfigured schedules from flooding the bus.
 
-#### Cron CLI Commands
+#### Cron Commands
 
 ```bash
 # Via Web UI or API:
-ao> cron list                                          # List all cron jobs
-ao> cron status [agent]                                # Detailed job status
-ao> cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
-ao> cron remove <agent> <job> [--apply]                # Remove a job
-ao> cron trigger <agent> <job>                         # Fire immediately
-ao> cron enable <agent> <job> [--apply]                # Re-enable a paused job
-ao> cron disable <agent> <job> [--apply]               # Pause a job
+cron list                                          # List all cron jobs
+cron status [agent]                                # Detailed job status
+cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
+cron remove <agent> <job> [--apply]                # Remove a job
+cron trigger <agent> <job>                         # Fire immediately
+cron enable <agent> <job> [--apply]                # Re-enable a paused job
+cron disable <agent> <job> [--apply]               # Pause a job
 ```
 
 Without `--apply`, commands write to `office.yaml` only — run `office reload` to activate. With `--apply`, changes take effect immediately if the agent is running.
@@ -431,14 +431,14 @@ Target agent names are validated at parse time. Typos fail fast:
 [office] office.cron.standup: unknown target agent "codre"
 ```
 
-**Activation:** YAML edits require `office reload` to take effect. CLI commands always apply immediately.
+**Activation:** YAML edits require `office reload` to take effect. Commands with `--apply` take effect immediately.
 
-Office cron CLI commands:
+Office cron commands:
 
 ```bash
-ao> cron add office <job> "<schedule>" <message> --targets pm,coder
-ao> cron remove office <job>
-ao> cron trigger office <job>                    # fire immediately
+cron add office <job> "<schedule>" <message> --targets pm,coder
+cron remove office <job>
+cron trigger office <job>                    # fire immediately
 ```
 
 Office jobs appear in `cron list` with an `[office]` scope tag. The same safety guards apply: busy agents are skipped, and the global 60/minute dispatch cap counts each target dispatch.
@@ -553,12 +553,12 @@ agent calls task_get:
 -> Returns full task details (title, description, status, assignee, dependencies, timestamps)
 ```
 
-#### Task CLI Commands
+#### Task Commands
 
 ```bash
-ao> task list [--assignee <agent>] [--status <status>]   # List/filter tasks
-ao> task board                                            # Kanban board view
-ao> task get <id>                                         # Show task details
+task list [--assignee <agent>] [--status <status>]   # List/filter tasks
+task board                                            # Kanban board view
+task get <id>                                         # Show task details
 ```
 
 #### Kanban Board
@@ -666,17 +666,17 @@ Host Process                        Docker Container (per agent)
 pnpm dev start --office acme --sandbox docker
 
 # Via Web UI or API:
-ao> hire designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
+hire designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
 # → [agent:designer] Started in sandbox (http://localhost:13100)
 
-ao> hire reviewer --model openai:gpt-4.1 --desc "Code reviewer"
+hire reviewer --model openai:gpt-4.1 --desc "Code reviewer"
 # → [agent:reviewer] Started in sandbox (http://localhost:13101)
 
-ao> send designer "Create a responsive landing page with hero section"
+send designer "Create a responsive landing page with hero section"
 # → designer works inside its Docker container, edits files in /workspace
 # → Files persist at ~/.agent-office/offices/acme/agents/designer/workspace/ on the host
 
-ao> send reviewer "Review designer's index.html and send feedback"
+send reviewer "Review designer's index.html and send feedback"
 # → reviewer uses read_agent_file (proxied via Host API) to read designer's files
 # → reviewer uses message_agent (proxied via Host API) to send feedback to designer
 ```
@@ -713,6 +713,7 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 ## Commands
 
 All commands are available via the web UI command palette and the REST API (`POST /api/commands/:command`).
+Unsupported or unrecognized commands return HTTP 400 with `{ "error": "unknown_command" }`.
 
 | Command                                               | Description                                                |
 | ----------------------------------------------------- | ---------------------------------------------------------- |
@@ -1281,9 +1282,9 @@ agents:
 
 ```bash
 # Web UI/API — installs to disk + updates office.yaml
-ao> skill add designer nichochar/web-skills
-ao> skill list designer
-ao> skill remove designer web-tools
+skill add designer nichochar/web-skills
+skill list designer
+skill remove designer web-tools
 ```
 
 A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `office.yaml` entries when the last skill from a source is removed.
@@ -1352,7 +1353,7 @@ release();
 Inspect the composed system prompt for any running agent:
 
 ```
-ao> prompt report bot
+prompt report bot
 
 === Prompt Report: bot ===
 
@@ -1383,16 +1384,16 @@ A full `.effective-prompt.md` snapshot is also generated per agent on every spaw
 Agent-office tracks per-agent token usage and cost from model responses.
 
 ```
-ao> cost status
+cost status
 === Cost Status (session) ===
 Total tokens: 12,450   Cost: $0.0832
   bot:    8,200 tokens  $0.0614
   helper: 4,250 tokens  $0.0218
 
-ao> cost today
-ao> cost today --agent bot
-ao> cost report --days 7
-ao> cost report --days 30 --agent bot
+cost today
+cost today --agent bot
+cost report --days 7
+cost report --days 30 --agent bot
 ```
 
 - **`cost status`** — in-memory session totals. Resets on gateway restart.
@@ -1447,9 +1448,9 @@ The frontend lives in `ui/` (Vite + React 19 + Mantine 7). During dev, `pnpm -C 
 Three agents collaborate on a landing page, all running in-process:
 
 ```
-ao> hire designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
-ao> hire copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marketing copy"
-ao> hire reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
+hire designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
+hire copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marketing copy"
+hire reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
 ```
 
 Via Telegram:
@@ -1479,12 +1480,12 @@ pnpm dev start --office my-team --sandbox docker
 ```
 
 ```
-ao> hire backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
+hire backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
 # → Container started with --cap-drop=ALL, --user 1000:1000
 
-ao> hire tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
+hire tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
 
-ao> send backend "Build a REST API for a todo app with CRUD endpoints using Express"
+send backend "Build a REST API for a todo app with CRUD endpoints using Express"
 ```
 
 What happens behind the scenes:
@@ -1515,11 +1516,11 @@ export MY_GH_TOKEN="ghp_..."
 **Option A: Via Web UI/API**
 
 ```
-ao> hire github-bot --model anthropic:claude-sonnet-4-20250514 \
+hire github-bot --model anthropic:claude-sonnet-4-20250514 \
     --desc "GitHub integration bot" \
     --secret-ref GITHUB_TOKEN=MY_GH_TOKEN
 
-ao> send github-bot "List my GitHub repos using authenticated_fetch with secretName GITHUB_TOKEN"
+send github-bot "List my GitHub repos using authenticated_fetch with secretName GITHUB_TOKEN"
 ```
 
 **Option B: Via office.yaml**
@@ -1539,8 +1540,8 @@ agents:
 ```
 
 ```
-ao> office reload
-ao> send github-bot "List my GitHub repos"
+office reload
+send github-bot "List my GitHub repos"
 ```
 
 What happens:
@@ -1578,7 +1579,7 @@ TELEGRAM_BOT_TOKEN=xxx pnpm dev start --office my-team --sandbox docker
 Three agents collaborate with Kanban-style task management:
 
 ```
-ao> send task-manager "Build a login page with email/password auth"
+send task-manager "Build a login page with email/password auth"
 ```
 
 What happens:
@@ -1589,7 +1590,7 @@ What happens:
 2. **coder** receives `[New Task]` notification, implements the feature, marks task `done`
 3. **TaskService** detects dependency resolved → moves review task to `todo`
 4. **reviewer** receives `[Task Ready]` notification, reviews code, marks task `done`
-5. Track progress: `task board` (CLI) or Tasks view in Web UI
+5. Track progress: `task board` (Web UI command palette) or Tasks Kanban view
 
 See [`examples/feature-team/`](examples/feature-team/) for the full `office.yaml`.
 
