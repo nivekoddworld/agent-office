@@ -230,26 +230,26 @@ Office-level `env` and `secrets` are inherited by all agents. Agent-level values
 
 All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.
 
-| Field              | Type             | Default                                                | Description                                                          |
-| ------------------ | ---------------- | ------------------------------------------------------ | -------------------------------------------------------------------- |
-| `model`            | string           | `anthropic:claude-sonnet-4-20250514`                   | `provider:model-id`                                                  |
-| `priority`         | string \| number | `normal`                                               | Priority name or 0-4                                                 |
-| `thinking`         | string           | `low`                                                  | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`              |
-| `description`      | string           | `""`                                                   | Visible to other agents                                              |
-| `prompt_inline`    | string           | _(none)_                                               | Custom instructions (inline text, appended to base prompt)           |
-| `prompt_file`      | string           | _(none)_                                               | Path to `.md` file with custom instructions (relative to office dir) |
-| `bootstrap_dir`    | string           | `agents/<name>/bootstrap/`                             | Bootstrap file source directory (relative to office dir)             |
-| `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                    |
-| `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                        |
-| `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                  |
-| `env`              | map              | `{}`                                                   | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)      |
-| `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`) |
-| `disclose_secrets` | boolean          | `false`                                                | Show secret names in system prompt                                   |
-| `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                        |
-| `reports_to`       | string           | _(none — reports to user)_                             | Name of manager agent (see [Hierarchy](#hierarchy))                  |
+| Field              | Type             | Default                                                | Description                                                                      |
+| ------------------ | ---------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| `model`            | string           | `anthropic:claude-sonnet-4-20250514`                   | `provider:model-id`                                                              |
+| `priority`         | string \| number | `normal`                                               | Priority name or 0-4                                                             |
+| `thinking`         | string           | `low`                                                  | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`                          |
+| `description`      | string           | `""`                                                   | Visible to other agents                                                          |
+| `prompt_inline`    | string           | _(none)_                                               | Custom instructions (inline text, appended to base prompt)                       |
+| `prompt_file`      | string           | _(none)_                                               | Path to `.md` file with custom instructions (relative to office dir)             |
+| `bootstrap_dir`    | string           | `agents/<name>/bootstrap/`                             | Bootstrap file source directory (relative to office dir)                         |
+| `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                                |
+| `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                                    |
+| `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                              |
+| `env`              | map              | `{}`                                                   | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)                  |
+| `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`)             |
+| `disclose_secrets` | boolean          | `false`                                                | Show secret names in system prompt                                               |
+| `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                                    |
+| `reports_to`       | string           | _(none — reports to user)_                             | Name of manager agent (see [Hierarchy](#hierarchy))                              |
 | `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
-| `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)     |
-| `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill` |
+| `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)                 |
+| `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill`          |
 
 **Task tools** (`task_create`, `task_update`, `task_list`, `task_get`) are available to all in-process agents by default. Restrict access via `permissions.tools.deny`. See [Task Management](#task-management).
 
@@ -257,9 +257,9 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 
 The `permissions` field controls which privileged operations an agent may perform:
 
-| Permission     | Type    | Default | Description                                          |
-| -------------- | ------- | ------- | ---------------------------------------------------- |
-| `office_cron`  | boolean | `false` | Allow managing office-level cron jobs via `cron_add`/`cron_remove` |
+| Permission    | Type    | Default | Description                                                        |
+| ------------- | ------- | ------- | ------------------------------------------------------------------ |
+| `office_cron` | boolean | `false` | Allow managing office-level cron jobs via `cron_add`/`cron_remove` |
 
 Permissions are validated at config parse time. Unknown keys or non-boolean values are rejected.
 
@@ -272,7 +272,7 @@ agents:
   restricted-bot:
     permissions:
       tools:
-        deny: [cron_add, cron_remove]   # blacklist — all except these
+        deny: [cron_add, cron_remove] # blacklist — all except these
         # OR
         # allow: [message_agent, list_agents]  # whitelist — only these
 ```
@@ -314,6 +314,7 @@ agents:
 ```
 
 Validation rules:
+
 - Must reference a valid agent name (same `[a-zA-Z0-9_-]+` format)
 - Self-reference is rejected
 - Cycles are detected and rejected (e.g. A reports to B, B reports to A)
@@ -488,14 +489,14 @@ backlog → todo → in_progress → review → done
                               cancelled
 ```
 
-| Status        | Allowed transitions                     |
-| ------------- | --------------------------------------- |
-| `backlog`     | `todo`, `cancelled`                     |
-| `todo`        | `in_progress`, `cancelled`              |
-| `in_progress` | `review`, `done`, `cancelled`           |
-| `review`      | `in_progress`, `done`, `cancelled`      |
-| `done`        | _(terminal)_                            |
-| `cancelled`   | `backlog`                               |
+| Status        | Allowed transitions                |
+| ------------- | ---------------------------------- |
+| `backlog`     | `todo`, `cancelled`                |
+| `todo`        | `in_progress`, `cancelled`         |
+| `in_progress` | `review`, `done`, `cancelled`      |
+| `review`      | `in_progress`, `done`, `cancelled` |
+| `done`        | _(terminal)_                       |
+| `cancelled`   | `backlog`                          |
 
 **Dependency behavior:** Tasks created with `dependsOn` start in `backlog` regardless of the requested status. When all dependencies reach `done`, the `TaskService` auto-transitions the blocked task to `todo` and sends a `[Task Ready]` notification to the assignee.
 
@@ -649,7 +650,7 @@ Host Process                        Docker Container (per agent)
 | Authentication          | Unique per-agent Bearer token on all endpoints (except `/health`)                                     |
 | Message integrity       | Server derives sender identity from token, never trusts body                                          |
 | Idempotency             | `messageId`-based deduplication with 5-minute TTL                                                     |
-| Request limits          | 64 KB message-agent body, 1 MB general body, 1 MB file response                                          |
+| Request limits          | 64 KB message-agent body, 1 MB general body, 1 MB file response                                       |
 | Prompt timeout          | 5-minute timeout on prompt completion                                                                 |
 
 #### Docker Sandbox Example
@@ -688,7 +689,7 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | Method | Path                             | Purpose                                                        |
 | ------ | -------------------------------- | -------------------------------------------------------------- |
 | `GET`  | `/api/secrets`                   | Fetch secrets (model API key + tool secrets) at container boot |
-| `POST` | `/api/message-agent`              | Forward message to another agent's inbox                       |
+| `POST` | `/api/message-agent`             | Forward message to another agent's inbox                       |
 | `GET`  | `/api/agents`                    | List all agents (name, status, description)                    |
 | `GET`  | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace                       |
 | `POST` | `/api/authenticated-fetch`       | Host-proxied HTTP request with secret injection                |
@@ -755,7 +756,7 @@ The Web UI has dedicated controls (buttons, forms, modals) for common operations
 | `task board`                                          | Show Kanban board view                                     |
 | `task get <id>`                                       | Show task details                                          |
 | `prompt report <agent>`                               | Show prompt composition (block sizes, tool count, mode)    |
-| `cost status`                                         | Session token and cost totals (resets on restart)           |
+| `cost status`                                         | Session token and cost totals (resets on restart)          |
 | `cost today [--agent <name>]`                         | Persistent token and cost totals for today                 |
 | `cost report --days <n> [--agent <name>]`             | Historical usage over last N days                          |
 
@@ -808,12 +809,12 @@ The task system automatically notifies the task creator when a task's status cha
 
 **Automatic notifications are sent for these transitions:**
 
-| Status | Notification |
-|---|---|
-| `in_progress` | `[Task Started]` — creator knows work has begun |
-| `review` | `[Task In Review]` — creator knows review is pending |
-| `done` | `[Task Completed]` — creator receives result summary |
-| `cancelled` | `[Task Cancelled]` — creator is informed |
+| Status        | Notification                                         |
+| ------------- | ---------------------------------------------------- |
+| `in_progress` | `[Task Started]` — creator knows work has begun      |
+| `review`      | `[Task In Review]` — creator knows review is pending |
+| `done`        | `[Task Completed]` — creator receives result summary |
+| `cancelled`   | `[Task Cancelled]` — creator is informed             |
 
 Notifications are skipped when the creator is a system address (`__user__`, `__cron__`, etc.) or when the creator and assignee are the same agent.
 
@@ -1306,12 +1307,12 @@ For Docker-sandboxed agents, heartbeats are received via `POST /api/heartbeat` f
 
 Watchdog behavior is configurable via `WorkspaceConfig.watchdog` (all fields optional):
 
-| Parameter          | Default  | Description                                        |
-| ------------------ | -------- | -------------------------------------------------- |
-| `checkIntervalMs`  | `10000`  | How often the watchdog checks heartbeats           |
+| Parameter          | Default  | Description                                         |
+| ------------------ | -------- | --------------------------------------------------- |
+| `checkIntervalMs`  | `10000`  | How often the watchdog checks heartbeats            |
 | `stuckThresholdMs` | `120000` | Time without heartbeat before declaring agent stuck |
-| `maxRestarts`      | `5`      | Max restarts before marking agent as dead          |
-| `healthyResetMs`   | `600000` | Time healthy before resetting restart counter      |
+| `maxRestarts`      | `5`      | Max restarts before marking agent as dead           |
+| `healthyResetMs`   | `600000` | Time healthy before resetting restart counter       |
 
 ### Resource Guards
 
@@ -1416,9 +1417,9 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 
 ### Configuration
 
-| Env var   | Default | Description          |
-|-----------|---------|----------------------|
-| `UI_PORT` | `3847`  | Dashboard HTTP port  |
+| Env var   | Default | Description         |
+| --------- | ------- | ------------------- |
+| `UI_PORT` | `3847`  | Dashboard HTTP port |
 
 The server binds to `127.0.0.1` only (never exposed to the network). Auth uses HttpOnly session cookies with CSRF protection.
 
@@ -1664,9 +1665,13 @@ src/
     scheduler.ts              Tick-based priority scheduler
     watchdog.ts               Heartbeat monitor + stuck detection
 
+  messages/
+    types.ts                  PersistedInbox, DmRecord interfaces
+    message-store.ts          SQLite-backed inbox + DM persistence (node:sqlite, Node 22+)
+
   transport/
-    local.ts                  In-process priority inbox queues
-    message-bus.ts            Bus wrapper over transport
+    local.ts                  In-process priority inbox queues (with SQLite persist hooks)
+    message-bus.ts            Bus wrapper over transport (store integration, pop, purge)
 
   commands/
     office-apply.ts           Apply office.yaml + reload/validate/path commands
@@ -1701,6 +1706,9 @@ test/
   scheduler.test.ts           Tick loop, priority ordering
   watchdog.test.ts            Heartbeat, stuck detection, restart
   message-bus.test.ts         Inbox routing, rate limiting
+  message-bus-persistence.test.ts  SQLite persist/restore, pop, purge
+  message-store.test.ts       MessageStore CRUD, ordering, pagination
+  dm-hydration.test.ts        Baseline/live merge dedup (requestId, fingerprint)
   local-transport.test.ts     Priority queue ordering
   handle-skills.test.ts       Skill paths for in-process + sandbox agents
   cron-parser.test.ts         Cron expression parsing, timezone, describeCron
@@ -1740,9 +1748,9 @@ test/
 | `commander`                     | CLI argument parsing                                            |
 | `dotenv`                        | Load `.env` into `process.env`                                  |
 
-| `cron-parser`                   | Cron expression parsing (next/prev fire times)                  |
-| `yaml`                          | YAML parsing with comment-preserving Document API               |
-| `proper-lockfile`               | Cross-process file locking for per-office config safety         |
+| `cron-parser` | Cron expression parsing (next/prev fire times) |
+| `yaml` | YAML parsing with comment-preserving Document API |
+| `proper-lockfile` | Cross-process file locking for per-office config safety |
 
 ## Development
 

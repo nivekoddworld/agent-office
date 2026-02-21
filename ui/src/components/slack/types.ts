@@ -11,4 +11,5 @@ export interface SlackMessageData {
   isBot: boolean;
   eventType?: string;
   usage?: MessageUsage;
+  requestId?: string;
 }

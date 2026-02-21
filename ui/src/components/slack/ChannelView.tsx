@@ -1,6 +1,13 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Box, Button, Text, Group, UnstyledButton } from "@mantine/core";
-import { IconArrowDown, IconMessage, IconMessages, IconFiles, IconSettings, IconFileText } from "@tabler/icons-react";
+import {
+  IconArrowDown,
+  IconMessage,
+  IconMessages,
+  IconFiles,
+  IconSettings,
+  IconFileText,
+} from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
 import { useThreadStore, type Thread } from "../../store/thread-store.js";
 import { slack } from "../../theme/slack-theme.js";
@@ -13,9 +20,15 @@ import { MessageInput } from "./MessageInput.js";
 import { AgentFilesPanel } from "./AgentFilesPanel.js";
 import { AgentConfigPanel } from "../agent-detail/AgentConfigPanel.js";
 import { AgentPromptPanel } from "../agent-detail/AgentPromptPanel.js";
-import { eventToMessages, isSameDay, type DisplayItem } from "./channel-helpers.js";
+import {
+  eventToMessages,
+  mergeBaselineWithLive,
+  isSameDay,
+  type DisplayItem,
+} from "./channel-helpers.js";
 import type { ChannelId } from "./SlackSidebar.js";
-import type { CronJobEntry, Task } from "../../api/types.js";
+import type { CronJobEntry, Task, DmMessage } from "../../api/types.js";
+import { useAgentMessages } from "../../api/use-agent-messages.js";
 
 type DmTab = "messages" | "files" | "prompt" | "configure";
 
@@ -29,7 +42,13 @@ interface ChannelViewProps {
   tasks?: Task[];
 }
 
-function ThreadIndicator({ thread, onClick }: { thread: Thread; onClick: () => void }) {
+function ThreadIndicator({
+  thread,
+  onClick,
+}: {
+  thread: Thread;
+  onClick: () => void;
+}) {
   const replyCount = thread.replies.length;
   if (replyCount === 0) return null;
 
@@ -96,7 +115,8 @@ export function ChannelView({
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [dmTab, setDmTab] = useState<DmTab>("messages");
 
-  const channelKey = channel.kind === "dm" ? `dm:${channel.agentName}` : `ch:${channel.name}`;
+  const channelKey =
+    channel.kind === "dm" ? `dm:${channel.agentName}` : `ch:${channel.name}`;
 
   useEffect(() => {
     setDmTab("messages");
@@ -105,10 +125,33 @@ export function ChannelView({
     lastCountRef.current = 0;
   }, [channelKey]);
 
-  const messages = useMemo(
+  const dmAgent = channel.kind === "dm" ? channel.agentName : null;
+  const { data: baseline } = useAgentMessages(dmAgent);
+
+  const baselineMessages = useMemo((): SlackMessageData[] => {
+    if (!baseline?.messages?.length) return [];
+    return baseline.messages.map((m: DmMessage) => ({
+      id: `dm-${m.id}`,
+      sender: m.role === "user" ? "You" : m.agent,
+      text: m.text,
+      timestamp: m.ts_ms,
+      isBot: m.role === "assistant",
+      requestId: m.request_id ?? undefined,
+    }));
+  }, [baseline]);
+
+  const liveMessages = useMemo(
     () => eventToMessages(events, channel),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [events, channelKey],
+  );
+
+  const messages = useMemo(
+    () =>
+      dmAgent
+        ? mergeBaselineWithLive(baselineMessages, liveMessages)
+        : liveMessages,
+    [dmAgent, baselineMessages, liveMessages],
   );
 
   const agentThreads = useMemo(() => {
@@ -124,13 +167,17 @@ export function ChannelView({
 
     // Build time ranges owned by threads so we can filter out
     // SSE messages that are already captured as thread replies.
-    const threadRanges: { agentName: string; start: number; end: number }[] = [];
+    const threadRanges: { agentName: string; start: number; end: number }[] =
+      [];
     for (const thread of agentThreads) {
       const lastReply = thread.replies[thread.replies.length - 1];
       threadRanges.push({
         agentName: thread.agentName,
         start: thread.createdAt,
-        end: thread.status === "open" ? Infinity : (lastReply?.timestamp ?? thread.createdAt) + 1000,
+        end:
+          thread.status === "open"
+            ? Infinity
+            : (lastReply?.timestamp ?? thread.createdAt) + 1000,
       });
     }
 
@@ -138,11 +185,17 @@ export function ChannelView({
       if (msg.sender === "system") return false;
       // User messages from SSE (echoed back) that match a thread's time window
       if (!msg.isBot && msg.sender === "You") {
-        return threadRanges.some((r) => msg.timestamp >= r.start - 2000 && msg.timestamp <= r.start + 2000);
+        return threadRanges.some(
+          (r) =>
+            msg.timestamp >= r.start - 2000 && msg.timestamp <= r.start + 2000,
+        );
       }
       // Agent responses within a thread's active window
       return threadRanges.some(
-        (r) => msg.sender === r.agentName && msg.timestamp >= r.start && msg.timestamp <= r.end,
+        (r) =>
+          msg.sender === r.agentName &&
+          msg.timestamp >= r.start &&
+          msg.timestamp <= r.end,
       );
     };
 
@@ -156,14 +209,17 @@ export function ChannelView({
     }
     allMessages.sort((a, b) => a.timestamp - b.timestamp);
 
-    const threadParentIds = new Set(agentThreads.map((t) => t.parentMessage.id));
+    const threadParentIds = new Set(
+      agentThreads.map((t) => t.parentMessage.id),
+    );
 
     let prevSender: string | null = null;
     let prevTime = 0;
     let prevTimestamp = 0;
 
     for (const msg of allMessages) {
-      const showDate = items.length === 0 || !isSameDay(prevTimestamp, msg.timestamp);
+      const showDate =
+        items.length === 0 || !isSameDay(prevTimestamp, msg.timestamp);
       if (showDate) {
         items.push({ kind: "date", timestamp: msg.timestamp });
         prevSender = null;
@@ -181,7 +237,9 @@ export function ChannelView({
           msg.timestamp - prevTime < 5 * 60 * 1000;
 
         if (threadParentIds.has(msg.id)) {
-          const thread = agentThreads.find((t) => t.parentMessage.id === msg.id)!;
+          const thread = agentThreads.find(
+            (t) => t.parentMessage.id === msg.id,
+          )!;
           items.push({ kind: "thread", thread });
         } else {
           items.push({ kind: "message", data: msg, compact });
@@ -228,8 +286,7 @@ export function ChannelView({
     lastCountRef.current = totalCount;
   };
 
-  const targetAgent =
-    channel.kind === "dm" ? channel.agentName : null;
+  const targetAgent = channel.kind === "dm" ? channel.agentName : null;
 
   const { createThread } = useThreadStore();
 
@@ -262,7 +319,11 @@ export function ChannelView({
         channel={channel}
         agentCount={channel.kind === "channel" ? agentNames.length : undefined}
         activeCount={activeCount}
-        showSystemMessages={channel.kind === "channel" && channel.name === "general" ? showSystemMessages : undefined}
+        showSystemMessages={
+          channel.kind === "channel" && channel.name === "general"
+            ? showSystemMessages
+            : undefined
+        }
         onToggleSystemMessages={
           channel.kind === "channel" && channel.name === "general"
             ? () => setShowSystemMessages((v) => !v)
@@ -271,43 +332,75 @@ export function ChannelView({
       />
 
       {isDm && (
-        <Box style={{ borderBottom: `1px solid ${slack.borderColor}`, flexShrink: 0 }}>
+        <Box
+          style={{
+            borderBottom: `1px solid ${slack.borderColor}`,
+            flexShrink: 0,
+          }}
+        >
           <Group gap={0} px="md">
-            {(["messages", "files", "prompt", "configure"] as const).map((tab) => {
-              const active = dmTab === tab;
-              const icons: Record<DmTab, React.ReactNode> = {
-                messages: <IconMessages size={15} color={active ? slack.accentBlue : slack.textMuted} />,
-                files: <IconFiles size={15} color={active ? slack.accentBlue : slack.textMuted} />,
-                prompt: <IconFileText size={15} color={active ? slack.accentBlue : slack.textMuted} />,
-                configure: <IconSettings size={15} color={active ? slack.accentBlue : slack.textMuted} />,
-              };
-              const labels: Record<DmTab, string> = { messages: "Messages", files: "Files", prompt: "Prompt", configure: "Configure" };
-              const icon = icons[tab];
-              const label = labels[tab];
-              return (
-                <UnstyledButton
-                  key={tab}
-                  px="sm"
-                  py={8}
-                  onClick={() => setDmTab(tab)}
-                  style={{
-                    borderBottom: `2px solid ${active ? slack.accentBlue : "transparent"}`,
-                    marginBottom: -1,
-                  }}
-                >
-                  <Group gap={6}>
-                    {icon}
-                    <Text
-                      size="sm"
-                      fw={active ? 600 : 400}
-                      style={{ color: active ? "#fff" : slack.textMuted }}
-                    >
-                      {label}
-                    </Text>
-                  </Group>
-                </UnstyledButton>
-              );
-            })}
+            {(["messages", "files", "prompt", "configure"] as const).map(
+              (tab) => {
+                const active = dmTab === tab;
+                const icons: Record<DmTab, React.ReactNode> = {
+                  messages: (
+                    <IconMessages
+                      size={15}
+                      color={active ? slack.accentBlue : slack.textMuted}
+                    />
+                  ),
+                  files: (
+                    <IconFiles
+                      size={15}
+                      color={active ? slack.accentBlue : slack.textMuted}
+                    />
+                  ),
+                  prompt: (
+                    <IconFileText
+                      size={15}
+                      color={active ? slack.accentBlue : slack.textMuted}
+                    />
+                  ),
+                  configure: (
+                    <IconSettings
+                      size={15}
+                      color={active ? slack.accentBlue : slack.textMuted}
+                    />
+                  ),
+                };
+                const labels: Record<DmTab, string> = {
+                  messages: "Messages",
+                  files: "Files",
+                  prompt: "Prompt",
+                  configure: "Configure",
+                };
+                const icon = icons[tab];
+                const label = labels[tab];
+                return (
+                  <UnstyledButton
+                    key={tab}
+                    px="sm"
+                    py={8}
+                    onClick={() => setDmTab(tab)}
+                    style={{
+                      borderBottom: `2px solid ${active ? slack.accentBlue : "transparent"}`,
+                      marginBottom: -1,
+                    }}
+                  >
+                    <Group gap={6}>
+                      {icon}
+                      <Text
+                        size="sm"
+                        fw={active ? 600 : 400}
+                        style={{ color: active ? "#fff" : slack.textMuted }}
+                      >
+                        {label}
+                      </Text>
+                    </Group>
+                  </UnstyledButton>
+                );
+              },
+            )}
           </Group>
         </Box>
       )}
@@ -347,7 +440,12 @@ export function ChannelView({
               <Box py="xs">
                 {displayItems.map((item, i) => {
                   if (item.kind === "date") {
-                    return <DateDivider key={`date-${i}`} timestamp={item.timestamp} />;
+                    return (
+                      <DateDivider
+                        key={`date-${i}`}
+                        timestamp={item.timestamp}
+                      />
+                    );
                   }
                   if (item.kind === "system") {
                     if (!showSystemMessages) return null;
@@ -410,7 +508,9 @@ export function ChannelView({
             agentNames={agentNames}
             targetAgent={targetAgent}
             channelName={
-              channel.kind === "channel" ? `#${channel.name}` : channel.agentName
+              channel.kind === "channel"
+                ? `#${channel.name}`
+                : channel.agentName
             }
             onMessageSent={handleMessageSent}
           />

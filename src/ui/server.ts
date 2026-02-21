@@ -456,6 +456,38 @@ export async function startUiServer(
       });
     }
 
+    // --- GET /api/agents/:name/messages ---
+    const dmMatch = path.match(/^\/api\/agents\/([^/]+)\/messages$/);
+    if (dmMatch && method === "GET") {
+      const name = dmMatch[1]!;
+      if (!workspace.store)
+        return json(res, 200, { agent: name, messages: [] });
+
+      const rawLimit = parseInt(url.searchParams.get("limit") ?? "50", 10);
+      if (isNaN(rawLimit)) return json(res, 400, { error: "invalid_limit" });
+      const limit = Math.max(1, Math.min(200, rawLimit));
+
+      const rawBeforeTs = url.searchParams.get("beforeTs");
+      let beforeTs: number | undefined;
+      if (rawBeforeTs !== null) {
+        beforeTs = parseInt(rawBeforeTs, 10);
+        if (isNaN(beforeTs))
+          return json(res, 400, { error: "invalid_before_ts" });
+      }
+
+      const rows = workspace.store.queryDm(name, limit, beforeTs);
+      return json(res, 200, {
+        agent: name,
+        messages: rows.map((r) => ({
+          id: r.id,
+          role: r.role,
+          text: r.text,
+          ts: r.ts_ms,
+          requestId: r.request_id,
+        })),
+      });
+    }
+
     // --- GET /api/agents/:name/files ---
     const filesMatch = path.match(/^\/api\/agents\/([^/]+)\/files$/);
     if (filesMatch && method === "GET") {
@@ -612,8 +644,22 @@ export async function startUiServer(
         parsed.priority,
         parsed.requestId,
       );
-      if (result.ok)
+      if (result.ok) {
         broadcast("state_changed", getBootstrapState(workspace, officeId));
+        if (workspace.store) {
+          try {
+            workspace.store.saveDm({
+              agent: parsed.agent!,
+              role: "user",
+              text: parsed.message!,
+              ts_ms: Date.now(),
+              request_id: parsed.requestId ?? null,
+            });
+          } catch (err) {
+            console.error("[ui] Failed to persist user DM:", err);
+          }
+        }
+      }
       return json(res, result.ok ? 200 : 400, result);
     }
 

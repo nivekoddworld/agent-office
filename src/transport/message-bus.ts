@@ -1,5 +1,6 @@
 import { LocalTransport } from "./local.js";
 import type { InboxMessage, Priority } from "../types.js";
+import type { MessageStore } from "../messages/message-store.js";
 
 /**
  * Message bus — thin wrapper over transport with convenience helpers.
@@ -21,9 +22,42 @@ export class MessageBus {
     string,
     { count: number; windowStart: number }
   >();
+  private store: MessageStore | null = null;
+
+  setStore(store: MessageStore): void {
+    this.store = store;
+    this.transport.onBeforeEnqueue = (msg) => {
+      this.store!.saveInbox({
+        id: msg.id,
+        from_agent: msg.from,
+        to_agent: msg.to,
+        type: msg.type,
+        payload: msg.payload,
+        priority: msg.priority,
+        created_at_ms: msg.timestamp,
+        request_id: msg.requestId ?? null,
+      });
+    };
+  }
 
   register(name: string): void {
-    this.transport.register(name);
+    const isNew = this.transport.register(name);
+    if (isNew && this.store) {
+      const persisted = this.store.loadInbox(name);
+      if (persisted.length > 0) {
+        const msgs: InboxMessage[] = persisted.map((p) => ({
+          id: p.id,
+          from: p.from_agent,
+          to: p.to_agent,
+          type: p.type,
+          payload: p.payload,
+          priority: p.priority,
+          timestamp: p.created_at_ms,
+          requestId: p.request_id ?? undefined,
+        }));
+        this.transport.restore(name, msgs);
+      }
+    }
   }
 
   unregister(name: string): void {
@@ -59,6 +93,15 @@ export class MessageBus {
     this.transport.send(opts);
   }
 
+  /** Pop the highest-priority message, removing it from inbox and store. */
+  pop(name: string): InboxMessage | undefined {
+    const msg = this.transport.pop(name);
+    if (msg && this.store) {
+      this.store.deleteInbox(msg.id);
+    }
+    return msg;
+  }
+
   drain(name: string): InboxMessage[] {
     return this.transport.drain(name);
   }
@@ -75,5 +118,15 @@ export class MessageBus {
   /** Non-destructive read of pending messages. */
   peekMessages(name: string): InboxMessage[] {
     return this.transport.peekMessages(name);
+  }
+
+  /** Permanently remove an agent's inbox, rate-limit state, and persisted data. */
+  purge(name: string): void {
+    this.transport.purge(name);
+    this.sendCounts.delete(name);
+    if (this.store) {
+      this.store.deleteAllInbox(name);
+      this.store.deleteDm(name);
+    }
   }
 }

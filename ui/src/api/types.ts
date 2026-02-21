@@ -27,7 +27,12 @@ export interface AgentHierarchy {
 export interface CronJobEntry {
   agentName: string;
   jobName: string;
-  config: { schedule: string; message: string; timezone?: string; enabled?: boolean };
+  config: {
+    schedule: string;
+    message: string;
+    timezone?: string;
+    enabled?: boolean;
+  };
   state: {
     lastRunAt: number | null;
     nextRunAt: number;
@@ -92,7 +97,10 @@ export interface PromptReport {
 export interface AgentDetail extends AgentInfo {
   sandbox: string | null;
   thinkingLevel: string | null;
-  permissions: { office_cron?: boolean; tools?: { allow?: string[]; deny?: string[] } };
+  permissions: {
+    office_cron?: boolean;
+    tools?: { allow?: string[]; deny?: string[] };
+  };
   envKeys: string[];
   secretKeys: string[];
   customPrompt: string | null;
@@ -157,4 +165,18 @@ export interface CommandEntry {
   category: CommandCategory;
   args?: string;
   hidden?: boolean;
+}
+
+export interface DmMessage {
+  id: number;
+  agent: string;
+  role: "user" | "assistant";
+  text: string;
+  ts_ms: number;
+  request_id: string | null;
+}
+
+export interface DmHistoryResponse {
+  agent: string;
+  messages: DmMessage[];
 }

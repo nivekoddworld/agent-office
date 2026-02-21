@@ -74,18 +74,11 @@ export class Scheduler {
     for (const handle of sorted) {
       if (handle.status === "running") continue;
 
-      const messages = this.bus.drain(handle.name);
-      if (messages.length === 0) continue;
+      const msg = this.bus.pop(handle.name);
+      if (!msg) continue;
 
-      // Deliver first (highest-priority) message
-      const msg = messages[0]!;
       handle.setStatus("running");
       handle.setActiveRequestId(msg.requestId);
-
-      // Re-queue remaining messages before dispatch (prevents loss on throw)
-      for (let i = 1; i < messages.length; i++) {
-        this.bus.requeue(handle.name, messages[i]!);
-      }
 
       const payload = formatMessagePayload(msg);
       const dispatch =

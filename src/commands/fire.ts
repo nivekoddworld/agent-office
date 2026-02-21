@@ -6,6 +6,7 @@ export async function fireCommand(
   name: string,
 ): Promise<void> {
   await workspace.kill(name);
+  workspace.bus.purge(name);
 
   const officeId = workspace.office?.id;
   if (officeId) {

@@ -23,6 +23,10 @@ import { CronService } from "./cron/cron-service.js";
 import { CronStore } from "./cron/cron-store.js";
 import { TaskService } from "./tasks/task-service.js";
 import { TaskStore } from "./tasks/task-store.js";
+import {
+  createMessageStore,
+  type MessageStore,
+} from "./messages/message-store.js";
 
 const DEFAULT_HOST_PORT = 13000;
 
@@ -42,6 +46,7 @@ export class Workspace {
   private sandboxProvider: SandboxProvider | null = null;
   private sandboxMode: string;
   private hostApiPort: number;
+  private messageStore: MessageStore | null = null;
 
   constructor(config: WorkspaceConfig) {
     this.office = config.office;
@@ -80,7 +85,15 @@ export class Workspace {
     }
   }
 
+  get store(): MessageStore | null {
+    return this.messageStore;
+  }
+
   async start(): Promise<void> {
+    const dbPath = join(this.office.dir, "messages", "messages.sqlite");
+    this.messageStore = createMessageStore(dbPath);
+    this.bus.setStore(this.messageStore);
+
     if (this.hostApi && this.sandboxMode === "docker") {
       await this.hostApi.start(this.hostApiPort);
     }
@@ -98,6 +111,8 @@ export class Workspace {
     for (const handle of this.agents.values()) await handle.destroy();
     this.agents.clear();
     if (this.hostApi) await this.hostApi.stop();
+    this.messageStore?.close();
+    this.messageStore = null;
   }
 
   async spawn(config: AgentConfig): Promise<AgentHandle> {
@@ -231,9 +246,31 @@ export class Workspace {
               totalCost: usage.cost?.total ?? 0,
             };
             recordUsage(this.office.dir, record);
-            accumulateSession(config.name, record.totalTokens, record.totalCost);
+            accumulateSession(
+              config.name,
+              record.totalTokens,
+              record.totalCost,
+            );
           } catch {
             // Best-effort: never fail agent flow
+          }
+        }
+
+        // Persist assistant DM text (independent of usage tracking)
+        if (msg.role === "assistant" && this.messageStore) {
+          const text = extractDmText(msg.content);
+          if (text) {
+            try {
+              this.messageStore.saveDm({
+                agent: config.name,
+                role: "assistant",
+                text,
+                ts_ms: Date.now(),
+                request_id: requestId ?? null,
+              });
+            } catch (err) {
+              console.error("[workspace] Failed to persist assistant DM:", err);
+            }
           }
         }
       }
@@ -308,6 +345,14 @@ export class Workspace {
       handle.setStatus("dead");
     }
   }
+}
+
+function extractDmText(content: unknown): string {
+  if (!Array.isArray(content)) return "";
+  return (content as { type: string; text?: string }[])
+    .filter((c) => c.type === "text" && c.text)
+    .map((c) => c.text!)
+    .join("");
 }
 
 const PROVIDER_ENV_KEYS: Record<string, string> = {

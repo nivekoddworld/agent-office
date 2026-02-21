@@ -56,6 +56,10 @@ function createMockWorkspace() {
     getAgent: vi.fn(() => undefined),
     onAgentEvent: vi.fn(() => vi.fn()),
     list: vi.fn(() => []),
+    store: {
+      queryDm: vi.fn(() => []),
+      saveDm: vi.fn(),
+    },
   } as any;
 }
 
@@ -394,5 +398,41 @@ describe("UI server", () => {
       "test-office",
       "agent-set-manager alice bob",
     );
+  });
+
+  // --- GET /api/agents/:name/messages ---
+
+  it("GET /api/agents/:name/messages returns empty array", async () => {
+    const res = await fetch(`${origin}/api/agents/alice/messages`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ agent: "alice", messages: [] });
+  });
+
+  it("GET /api/agents/:name/messages rejects NaN beforeTs", async () => {
+    const res = await fetch(
+      `${origin}/api/agents/alice/messages?beforeTs=abc`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("invalid_before_ts");
+  });
+
+  it("GET /api/agents/:name/messages caps limit at 200", async () => {
+    const res = await fetch(`${origin}/api/agents/alice/messages?limit=999`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("GET /api/agents/:name/messages returns correct shape", async () => {
+    const res = await fetch(`${origin}/api/agents/bob/messages?limit=10`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveProperty("agent", "bob");
   });
 });

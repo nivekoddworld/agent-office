@@ -11,7 +11,10 @@ export function extractText(content: unknown): string {
 }
 
 export function formatTime(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(ts).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function agentHue(name: string): number {
@@ -28,7 +31,10 @@ export type DisplayItem =
   | { kind: "thread"; thread: import("../../store/thread-store.js").Thread }
   | { kind: "date"; timestamp: number };
 
-export function eventToMessages(events: FeedEvent[], channel: ChannelId): SlackMessageData[] {
+export function eventToMessages(
+  events: FeedEvent[],
+  channel: ChannelId,
+): SlackMessageData[] {
   const msgs: SlackMessageData[] = [];
 
   for (const event of events) {
@@ -43,7 +49,9 @@ export function eventToMessages(events: FeedEvent[], channel: ChannelId): SlackM
     }
 
     if (type === "message_end") {
-      const msg = d.message as { role?: string; content?: unknown; usage?: unknown } | undefined;
+      const msg = d.message as
+        | { role?: string; content?: unknown; usage?: unknown }
+        | undefined;
       if (!msg) continue;
 
       // Only show assistant responses. "user"-role messages are internal
@@ -56,7 +64,10 @@ export function eventToMessages(events: FeedEvent[], channel: ChannelId): SlackM
 
       let usage: { totalTokens: number; totalCost: number } | undefined;
       if (msg.usage) {
-        const u = msg.usage as { totalTokens?: number; cost?: { total?: number } };
+        const u = msg.usage as {
+          totalTokens?: number;
+          cost?: { total?: number };
+        };
         if (u.totalTokens) {
           usage = {
             totalTokens: u.totalTokens,
@@ -64,6 +75,7 @@ export function eventToMessages(events: FeedEvent[], channel: ChannelId): SlackM
           };
         }
       }
+      const requestId = (d.requestId as string) ?? undefined;
       msgs.push({
         id: `${event.id}`,
         sender: agent,
@@ -72,6 +84,7 @@ export function eventToMessages(events: FeedEvent[], channel: ChannelId): SlackM
         isBot: true,
         eventType: type,
         usage,
+        requestId,
       });
     } else if (channel.kind === "channel" && channel.name === "general") {
       let systemText = "";
@@ -102,4 +115,37 @@ export function eventToMessages(events: FeedEvent[], channel: ChannelId): SlackM
   }
 
   return msgs;
+}
+
+const DEDUP_WINDOW_MS = 3000;
+
+/**
+ * Merge baseline (SQLite) messages with live SSE messages, deduplicating
+ * by requestId first, then by fingerprint (role+text) within a time window.
+ */
+export function mergeBaselineWithLive(
+  baseline: SlackMessageData[],
+  live: SlackMessageData[],
+): SlackMessageData[] {
+  const liveByRequestId = new Set<string>();
+  for (const m of live) {
+    if (m.requestId) liveByRequestId.add(m.requestId);
+  }
+
+  const liveFingerprints: { key: string; ts: number }[] = live.map((m) => ({
+    key: `${m.isBot ? "assistant" : "user"}:${m.text}`,
+    ts: m.timestamp,
+  }));
+
+  const filtered = baseline.filter((b) => {
+    // Dedup by requestId
+    if (b.requestId && liveByRequestId.has(b.requestId)) return false;
+    // Dedup by fingerprint + time window
+    const fp = `${b.isBot ? "assistant" : "user"}:${b.text}`;
+    return !liveFingerprints.some(
+      (l) => l.key === fp && Math.abs(l.ts - b.timestamp) < DEDUP_WINDOW_MS,
+    );
+  });
+
+  return [...filtered, ...live].sort((a, b) => a.timestamp - b.timestamp);
 }
