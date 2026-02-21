@@ -67,7 +67,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
 - [Sandbox Modes](#sandbox-modes)
   - [In-Process Mode](#in-process-mode-default)
   - [Docker Sandbox Mode](#docker-sandbox-mode)
-- [REPL Commands](#repl-commands)
+- [Commands](#commands)
   - [Spawn Options](#spawn-options)
   - [CLI Flags](#cli-flags)
 - [Agent Collaboration](#agent-collaboration)
@@ -111,7 +111,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
 ```mermaid
 graph TD
     YAML[office.yaml] --> WS
-    CLI[CLI REPL] --> WS[Workspace]
+    CLI[CLI + Web UI] --> WS[Workspace]
     TG[Telegram / grammY] --> WS
 
     WS --> SCH[Scheduler\ntick loop]
@@ -149,7 +149,7 @@ cp .env.example .env   # then fill in your keys
 # Create an office
 pnpm dev office create my-team
 
-# Start the REPL (in-process agents, Telegram auto-connects if token set)
+# Start (Web UI auto-starts, Telegram auto-connects if token set)
 pnpm dev start --office my-team
 
 # Start with Docker sandbox isolation
@@ -294,7 +294,7 @@ agents:
 
 Defaults: `office_cron` is **false**; tools are **all allowed** unless `allow` or `deny` is set. Setting both `allow` and `deny` is a validation error.
 
-View and edit permissions from the REPL without editing YAML manually:
+View and edit permissions via the Web UI or API without editing YAML manually:
 
 ```bash
 agent permission show bot
@@ -330,7 +330,7 @@ Hierarchy changes trigger agent restarts (prompts are recomposed with updated co
 
 ### Auto-Sync
 
-REPL commands automatically keep `office.yaml` in sync:
+Commands automatically keep `office.yaml` in sync:
 
 - **`hire`** persists the agent to YAML (use `--ephemeral` to skip)
 - **`fire`** removes the agent from YAML
@@ -341,7 +341,7 @@ All writes are atomic (temp file + rename) and serialized through a two-layer lo
 ### Reload
 
 ```bash
-# In the REPL:
+# Via Web UI or API:
 ao> office reload              # Spawn new agents from YAML, skip already-running
 ao> office reload --force      # Kill and re-spawn agents with changed config
 ao> office validate            # Dry-run: parse + validate without spawning
@@ -383,7 +383,7 @@ Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 #### Cron CLI Commands
 
 ```bash
-# In the REPL:
+# Via Web UI or API:
 ao> cron list                                          # List all cron jobs
 ao> cron status [agent]                                # Detailed job status
 ao> cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
@@ -445,7 +445,7 @@ Office jobs appear in `cron list` with an `[office]` scope tag. The same safety 
 
 #### Agent Cron Tools
 
-In addition to operator-managed cron (REPL/CLI), agents can self-manage cron jobs via three built-in tools: `cron_add`, `cron_remove`, and `cron_list`. `cron_trigger` remains operator-only.
+In addition to operator-managed cron (Web UI/API), agents can self-manage cron jobs via three built-in tools: `cron_add`, `cron_remove`, and `cron_list`. `cron_trigger` remains operator-only.
 
 **Agent scope** (default) — agents manage their own jobs with no special permission. Max 10 jobs per agent.
 
@@ -664,7 +664,7 @@ Host Process                        Docker Container (per agent)
 # Terminal 1: Start with Docker sandbox
 pnpm dev start --office acme --sandbox docker
 
-# In the REPL:
+# Via Web UI or API:
 ao> hire designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
 # → [agent:designer] Started in sandbox (http://localhost:13100)
 
@@ -709,7 +709,9 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 
 All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable. Model API keys are never passed as Docker env vars — they are fetched via `GET /api/secrets` at boot and stored in memory only.
 
-## REPL Commands
+## Commands
+
+All commands are available via the web UI command palette and the REST API (`POST /api/commands/:command`).
 
 | Command                                               | Description                                                |
 | ----------------------------------------------------- | ---------------------------------------------------------- |
@@ -757,8 +759,6 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 | `cost status`                                         | Session token and cost totals (resets on restart)           |
 | `cost today [--agent <name>]`                         | Persistent token and cost totals for today                 |
 | `cost report --days <n> [--agent <name>]`             | Historical usage over last N days                          |
-| `help`                                                | Show available commands                                    |
-| `exit` / `quit`                                       | Shutdown                                                   |
 
 ### Hire Options
 
@@ -783,9 +783,12 @@ pnpm dev start
   --office <name>           Office to load (required)
   --tick-interval <ms>      Scheduler tick interval (default: 2000)
   --sandbox <mode>          Sandbox mode: none | docker (default: none)
+  --no-ui                   Run headless without the web UI
 ```
 
 Telegram is enabled automatically when `TELEGRAM_BOT_TOKEN` is set. Disable via `TELEGRAM_ENABLED=false` in `.env`.
+
+> **Migration note:** The interactive `ao>` REPL has been removed. All runtime commands are now available through the Web UI or `POST /api/commands/:command`. Use `--no-ui` for headless operation; send `SIGINT`/`SIGTERM` to shut down.
 
 ## Agent Collaboration
 
@@ -1265,7 +1268,7 @@ In Docker sandbox mode, the workspace directory is volume-mounted into the conta
 
 Markdown files loaded from each agent's `skills/` directory and injected into the system prompt. Skills work in both in-process and Docker sandbox modes.
 
-Skills can be installed via REPL or declared in `office.yaml`:
+Skills can be installed via the Web UI/API or declared in `office.yaml`:
 
 ```yaml
 # office.yaml — skills auto-install on startup
@@ -1276,7 +1279,7 @@ agents:
 ```
 
 ```bash
-# REPL — installs to disk + updates office.yaml
+# Web UI/API — installs to disk + updates office.yaml
 ao> skill add designer nichochar/web-skills
 ao> skill list designer
 ao> skill remove designer web-tools
@@ -1399,14 +1402,13 @@ ao> cost report --days 30 --agent bot
 
 ## Web UI
 
-Launch a browser-based dashboard with broad REPL command coverage:
+The `start` command starts a web UI dashboard automatically (disable with `--no-ui`):
 
 ```
-ao> ui
 [ui] Dashboard: http://127.0.0.1:3847/#token=<bootstrap>
 ```
 
-The UI opens automatically in your default browser with a one-time bootstrap token for auth.
+Open the printed URL to authenticate with the one-time bootstrap token.
 
 ### Features
 
@@ -1509,7 +1511,7 @@ An agent uses pre-configured secrets to interact with the GitHub API — the sec
 export MY_GH_TOKEN="ghp_..."
 ```
 
-**Option A: Via REPL**
+**Option A: Via Web UI/API**
 
 ```
 ao> hire github-bot --model anthropic:claude-sonnet-4-20250514 \
@@ -1594,7 +1596,7 @@ See [`examples/feature-team/`](examples/feature-team/) for the full `office.yaml
 
 ```
 src/
-  index.ts                    CLI entry + REPL
+  index.ts                    CLI entry + startup
   workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox)
   types.ts                    Shared types (Priority, AgentConfig, OfficeYaml, OfficeContext, etc.)
   constants.ts                Shared constants, office path helpers, officeId validation

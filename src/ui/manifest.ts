@@ -1,8 +1,8 @@
 import type { CommandEntry, CommandCategory } from "./types.js";
 
 /**
- * Single source of truth for all REPL commands.
- * Drives both printHelp() output and UI command palette.
+ * Single source of truth for all commands.
+ * Drives the UI command palette.
  */
 export const COMMAND_MANIFEST: CommandEntry[] = [
   // --- Agent lifecycle ---
@@ -273,52 +273,4 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
     args: "--days <n> [--agent <name>]",
   },
 
-  // --- UI ---
-  {
-    name: "ui",
-    description: "Open the web UI dashboard",
-    category: "ui",
-    hidden: true,
-  },
-
-  // --- General ---
-  {
-    name: "help",
-    description: "Show available commands",
-    category: "general",
-    hidden: true,
-  },
-  {
-    name: "exit",
-    description: "Stop the office and exit",
-    category: "general",
-    hidden: true,
-  },
-  {
-    name: "quit",
-    description: "Stop the office and exit",
-    category: "general",
-    hidden: true,
-  },
 ];
-
-/** Format manifest as help text. Shows ALL commands (including hidden — REPL shows everything). */
-export function formatHelpText(): string {
-  const groups = new Map<string, CommandEntry[]>();
-  for (const c of COMMAND_MANIFEST) {
-    const list = groups.get(c.category) ?? [];
-    list.push(c);
-    groups.set(c.category, list);
-  }
-  const order = ["agent", "office", "cron", "task", "cost", "ui", "general"];
-  const lines: string[] = ["Commands:"];
-  for (const cat of order) {
-    const entries = groups.get(cat);
-    if (!entries) continue;
-    for (const e of entries) {
-      const suffix = e.args ? ` ${e.args}` : "";
-      lines.push(`  ${e.name}${suffix}`);
-    }
-  }
-  return lines.join("\n");
-}

@@ -111,12 +111,12 @@ describe("UI parity — structural", () => {
     expect(COMMAND_MANIFEST.find((c) => c.name === "agent-set-manager")).toBeDefined();
   });
 
-  it("REPL-only commands are marked hidden", () => {
+  it("removed REPL-only commands are absent from manifest", () => {
     for (const name of ["ui", "help", "exit", "quit"]) {
       expect(
-        COMMAND_MANIFEST.find((c) => c.name === name)?.hidden,
-        `Expected "${name}" to be hidden`,
-      ).toBe(true);
+        COMMAND_MANIFEST.find((c) => c.name === name),
+        `Expected "${name}" to be absent`,
+      ).toBeUndefined();
     }
   });
 });
@@ -191,19 +191,19 @@ describe("UI parity — dispatch", () => {
     expect(result).toBe("unknown");
   });
 
-  it("returns 'repl_only' for help command", async () => {
+  it("returns 'unknown' for help command", async () => {
     const result = await dispatchCommand(mockWorkspace, officeId, "help");
-    expect(result).toBe("repl_only");
+    expect(result).toBe("unknown");
   });
 
-  it("returns 'repl_only' for exit command", async () => {
+  it("returns 'unknown' for exit command", async () => {
     const result = await dispatchCommand(mockWorkspace, officeId, "exit");
-    expect(result).toBe("repl_only");
+    expect(result).toBe("unknown");
   });
 
-  it("returns 'repl_only' for ui command", async () => {
+  it("returns 'unknown' for ui command", async () => {
     const result = await dispatchCommand(mockWorkspace, officeId, "ui");
-    expect(result).toBe("repl_only");
+    expect(result).toBe("unknown");
   });
 
   it("send with short agent name 'e' parses correctly", async () => {
@@ -321,5 +321,23 @@ describe("UI parity — agent permission noop", () => {
     expect(
       await dispatchCommand(mockWorkspace, officeId, "agent permission set alice tools allow ,,"),
     ).toBe("noop");
+  });
+});
+
+// --- Non-REPL regression ---
+
+describe("UI parity — no REPL remnants", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("former REPL-only commands dispatch as unknown", async () => {
+    for (const cmd of ["help", "exit", "quit", "ui"]) {
+      expect(await dispatchCommand(mockWorkspace, officeId, cmd)).toBe("unknown");
+    }
+  });
+
+  it("removed REPL commands are absent from manifest", () => {
+    for (const name of ["ui", "help", "exit", "quit"]) {
+      expect(COMMAND_MANIFEST.find((c) => c.name === name)).toBeUndefined();
+    }
   });
 });

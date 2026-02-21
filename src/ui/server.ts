@@ -351,7 +351,7 @@ export async function startUiServer(
         async () => {
           dispatch.result = await dispatchCommand(workspace, officeId, command);
           if (dispatch.result !== "handled" && dispatch.result !== "noop") {
-            throw new Error(dispatch.result === "repl_only" ? "repl_only_command" : "unknown_command");
+            throw new Error("unknown_command");
           }
         },
         noWait,
@@ -371,7 +371,7 @@ export async function startUiServer(
       }
       if (result.error === "queue_full") return json(res, 429, result);
       if (result.error === "timeout") return json(res, 504, result);
-      if (result.error === "repl_only_command" || result.error === "unknown_command") {
+      if (result.error === "unknown_command") {
         return json(res, 400, { ok: false, output: result.output, error: result.error });
       }
       return json(res, result.ok ? 200 : 500, result);

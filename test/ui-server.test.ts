@@ -144,4 +144,23 @@ describe("UI server", () => {
 
     expect(sseData).toContain("event: state_changed");
   });
+
+  it("returns 400 with unknown_command for unrecognized command", async () => {
+    mockDispatchCommand.mockResolvedValueOnce("unknown" as any);
+
+    const res = await fetch(
+      `${origin}/api/commands/${encodeURIComponent("nosuchcommand")}`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: sessionCookie,
+          Origin: origin,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      },
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body).toEqual({ ok: false, output: [], error: "unknown_command" });
+  });
 });

@@ -1,5 +1,4 @@
 import "dotenv/config";
-import { createInterface } from "node:readline";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { Command, Option } from "commander";
@@ -15,9 +14,7 @@ import {
   createOffice,
 } from "./config/office-yaml.js";
 import { migrateCommand } from "./commands/migrate.js";
-import { startUiServer } from "./ui/server.js";
-import { formatHelpText } from "./ui/manifest.js";
-import { dispatchCommand, parseReplInput } from "./ui/command-parser.js";
+import { startUiServer, stopUiServer } from "./ui/server.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[error]", err instanceof Error ? err.message : err);
@@ -98,7 +95,7 @@ officeCmd
 
 program
   .command("start")
-  .description("Start the scheduler and enter REPL mode")
+  .description("Start the scheduler and web UI")
   .requiredOption("--office <id>", "Office to start")
   .option("--tick-interval <ms>", "Scheduler tick interval in ms", "2000")
   .addOption(
@@ -106,8 +103,9 @@ program
       .choices(["none", "docker"])
       .default("none"),
   )
+  .option("--no-ui", "Run headless without the web UI")
   .action(
-    async (opts: { office: string; tickInterval: string; sandbox: string }) => {
+    async (opts: { office: string; tickInterval: string; sandbox: string; ui: boolean }) => {
       // Validate office id
       try {
         validateOfficeId(opts.office);
@@ -189,78 +187,43 @@ program
       // Apply office.yaml agents
       await applyOfficeYaml(workspace, opts.office);
 
-      // REPL
-      const rl = createInterface({
-        input: process.stdin,
-        output: process.stdout,
-        prompt: "\nao> ",
-      });
-      rl.prompt();
-
-      rl.on("line", async (line) => {
-        const input = line.trim();
-        if (!input) {
-          rl.prompt();
-          return;
-        }
-
+      // Web UI
+      if (opts.ui !== false) {
         try {
-          await handleRepl(workspace, opts.office, input);
-        } catch (err: unknown) {
-          console.error(`Error: ${err instanceof Error ? err.message : err}`);
+          await startUiServer(workspace, opts.office);
+        } catch (err) {
+          console.error(
+            `[ui] Failed to start: ${err instanceof Error ? err.message : err}`,
+          );
+          try {
+            await workspace.stop();
+          } catch {}
+          process.exit(1);
         }
-        rl.prompt();
-      });
+      }
 
-      rl.on("close", () => {
+      // Graceful shutdown on signal
+      let stopping = false;
+      const shutdown = async () => {
+        if (stopping) return;
+        stopping = true;
         console.log("\n[shutdown] Stopping...");
-        workspace
-          .stop()
-          .then(() => process.exit(0))
-          .catch(() => process.exit(1));
-      });
+        let failed = false;
+        try {
+          await stopUiServer();
+        } catch {
+          failed = true;
+        }
+        try {
+          await workspace.stop();
+        } catch {
+          failed = true;
+        }
+        process.exit(failed ? 1 : 0);
+      };
+      process.on("SIGINT", shutdown);
+      process.on("SIGTERM", shutdown);
     },
   );
 
 program.parse();
-
-// --- REPL handler ---
-
-async function handleRepl(
-  workspace: Workspace,
-  officeId: string,
-  input: string,
-): Promise<void> {
-  const result = await dispatchCommand(workspace, officeId, input);
-  if (result === "handled" || result === "noop") return;
-
-  // REPL-only commands
-  const parts = parseReplInput(input);
-  const cmd = parts[0];
-
-  if (cmd === "ui") {
-    const { url } = await startUiServer(workspace, officeId);
-    const open =
-      process.platform === "darwin"
-        ? `open "${url}"`
-        : process.platform === "win32"
-          ? `start "" "${url}"`
-          : `xdg-open "${url}"`;
-    import("node:child_process").then(({ exec }) => exec(open));
-  } else if (cmd === "help") {
-    printHelp();
-  } else if (cmd === "exit" || cmd === "quit") {
-    console.log("[shutdown] Stopping...");
-    await workspace.stop();
-    process.exit(0);
-  } else {
-    console.log(
-      `Unknown command: ${cmd}. Type "help" for available commands.`,
-    );
-  }
-}
-
-
-function printHelp(): void {
-  console.log(formatHelpText());
-}

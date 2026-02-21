@@ -117,9 +117,7 @@ export function parseCronAddOpts(flags: string[]): {
 
 // --- Shared command dispatch ---
 
-export type DispatchResult = "handled" | "noop" | "repl_only" | "unknown";
-
-const REPL_ONLY = new Set(["ui", "exit", "quit", "help"]);
+export type DispatchResult = "handled" | "noop" | "unknown";
 
 export async function dispatchCommand(
   workspace: Workspace,
@@ -129,8 +127,6 @@ export async function dispatchCommand(
   const parts = parseReplInput(input);
   const cmd = parts[0];
   if (!cmd) return "unknown";
-
-  if (REPL_ONLY.has(cmd)) return "repl_only";
 
   switch (cmd) {
     case "hire": {
