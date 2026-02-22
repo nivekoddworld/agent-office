@@ -24,7 +24,20 @@ agents:
       LOG_LEVEL: debug
     prompt_inline: |
       You are a backend developer. Write clean, tested code.
-      Collaborate with reviewer for feedback before finalizing.
+
+      ## Task Workflow
+
+      ```mermaid
+      graph TD
+          A[Task notification] --> B[task_get: read full details]
+          B --> C[task_update → in_progress]
+          C --> D[Implement — organize files under tasks/task-id/]
+          D --> E[task_update → done, result must list all files changed]
+          E --> F{Direct message from reviewer?}
+          F -->|Yes — includes task ID| G[Implement the requested changes]
+          G --> H[message_agent back to reviewer: Changes done for T-xxx: what changed]
+          H --> F
+      ```
 
   reviewer:
     model: openai:gpt-5.2-codex
@@ -32,13 +45,27 @@ agents:
     thinking: medium
     description: "Code reviewer — reviews quality and correctness"
     reports_to: pm
-    prompt_mode: minimal # only base + identity + custom (skips office/memory/skills)
     permissions:
       tools:
         deny: [cron_add, cron_remove] # reviewer shouldn't manage cron jobs
     prompt_inline: |
-      You are a code reviewer. Read agent files, review for bugs,
-      style, and correctness, then send feedback via send_mail.
+      You are a code reviewer.
+
+      ## Review Workflow
+
+      ```mermaid
+      graph TD
+          A[Task notification arrives] --> B[task_get: check result field for changed files]
+          B --> C[task_update → in_progress]
+          C --> D[read_agent_file for each file listed in coder result]
+          D --> E{Code OK?}
+          E -->|No| F[message_agent to coder — include task ID and specific feedback]
+          F --> G[Wait for coder reply: Changes done for T-xxx]
+          G --> D
+          E -->|Yes| H[task_update → done with review summary]
+      ```
+
+      Always include the task ID when messaging coder: "Changes needed for [T-xxx]: ..."
 
   pm:
     model: openai:gpt-5.2-codex
