@@ -11,6 +11,8 @@ import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
 import { OrgChartModal } from "../slack/OrgChartModal.js";
 import { CostModal } from "../slack/CostModal.js";
 import { OfficeSettingsModal } from "../slack/OfficeSettingsModal.js";
+import { ThreadDrawer } from "../slack/ThreadDrawer.js";
+import type { Thread } from "../../store/thread-store.js";
 import type { BootstrapState } from "../../api/types.js";
 
 type ModalState =
@@ -18,17 +20,21 @@ type ModalState =
   | { kind: "profile"; agentName: string }
   | { kind: "orgChart" }
   | { kind: "cost" }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "thread"; threadId: string };
 
 interface AppLayoutProps {
   state: BootstrapState;
 }
 
 export function AppLayout({ state }: AppLayoutProps) {
-  const [channel, setChannel] = useState<ChannelId>({
-    kind: "channel",
-    name: "general",
-  });
+  const channelKeys = Object.keys(state.channels ?? {});
+  const defaultChannel = state.defaultConversationChannel ?? channelKeys[0];
+  const [channel, setChannel] = useState<ChannelId>(
+    defaultChannel
+      ? { kind: "conversation", name: defaultChannel }
+      : { kind: "system", name: "tasks" },
+  );
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
 
   const agentNames = useMemo(
@@ -66,6 +72,10 @@ export function AppLayout({ state }: AppLayoutProps) {
 
   const handleSendMessage = useCallback((agentName: string) => {
     setChannel({ kind: "dm", agentName });
+  }, []);
+
+  const handleOpenThread = useCallback((thread: Thread) => {
+    setModal({ kind: "thread", threadId: thread.id });
   }, []);
 
   const closeModal = useCallback(() => setModal({ kind: "none" }), []);
@@ -107,9 +117,9 @@ export function AppLayout({ state }: AppLayoutProps) {
       </Box>
 
       <Box style={{ flex: 1, minWidth: 0 }}>
-        {channel.kind === "channel" && channel.name === "cron" ? (
+        {channel.kind === "system" && channel.name === "cron" ? (
           <CronChannelView cronJobs={state.cronJobs} agentNames={agentNames} />
-        ) : channel.kind === "channel" && channel.name === "tasks" ? (
+        ) : channel.kind === "system" && channel.name === "tasks" ? (
           <KanbanBoard tasks={state.tasks ?? []} agentNames={agentNames} />
         ) : (
           <ChannelView
@@ -117,8 +127,11 @@ export function AppLayout({ state }: AppLayoutProps) {
             agentNames={agentNames}
             activeCount={activeCount}
             onClickAvatar={handleClickAvatar}
+            onOpenThread={handleOpenThread}
             cronJobs={state.cronJobs}
             tasks={state.tasks}
+            defaultConversationChannel={defaultChannel}
+            channels={state.channels}
           />
         )}
       </Box>
@@ -144,6 +157,14 @@ export function AppLayout({ state }: AppLayoutProps) {
         opened={modal.kind === "settings"}
         onClose={closeModal}
         state={state}
+      />
+
+      <ThreadDrawer
+        opened={modal.kind === "thread"}
+        onClose={closeModal}
+        threadId={modal.kind === "thread" ? modal.threadId : null}
+        channelName={channel.kind === "dm" ? channel.agentName : channel.name}
+        onClickAvatar={handleClickAvatar}
       />
     </Box>
   );

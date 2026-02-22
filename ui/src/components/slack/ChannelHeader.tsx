@@ -1,7 +1,7 @@
 import { Group, Text, Box, Tooltip, ActionIcon } from "@mantine/core";
 import { IconHash, IconUsers, IconEye, IconEyeOff } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
-import type { ChannelId } from "./SlackSidebar.js";
+import type { ChannelId } from "./channel-types.js";
 
 interface ChannelHeaderProps {
   channel: ChannelId;
@@ -12,11 +12,6 @@ interface ChannelHeaderProps {
   onToggleSystemMessages?: () => void;
 }
 
-const CHANNEL_DESCRIPTIONS: Record<string, string> = {
-  general: "All agent activity and events",
-  cron: "Scheduled jobs and cron tasks",
-};
-
 export function ChannelHeader({
   channel,
   agentCount,
@@ -25,12 +20,8 @@ export function ChannelHeader({
   showSystemMessages,
   onToggleSystemMessages,
 }: ChannelHeaderProps) {
-  const name = channel.kind === "channel" ? channel.name : channel.agentName;
-  const desc =
-    description ??
-    (channel.kind === "channel"
-      ? (CHANNEL_DESCRIPTIONS[channel.name] ?? "")
-      : "");
+  const name = channel.kind === "dm" ? channel.agentName : channel.name;
+  const desc = description ?? "";
 
   return (
     <Box
@@ -43,7 +34,7 @@ export function ChannelHeader({
     >
       <Group justify="space-between" wrap="nowrap">
         <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-          {channel.kind === "channel" && (
+          {channel.kind === "conversation" && (
             <IconHash size={18} color={slack.textSecondary} />
           )}
           <Text fw={700} size="md" style={{ color: "#fff" }} truncate>

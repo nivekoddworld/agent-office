@@ -832,8 +832,7 @@ export async function startUiServer(
     if (path === "/api/sessions" && method === "GET") {
       if (!workspace.store) return json(res, 200, { sessions: [] });
       const agentParam = url.searchParams.get("agent");
-      if (!agentParam)
-        return json(res, 400, { error: "missing_agent_param" });
+      if (!agentParam) return json(res, 400, { error: "missing_agent_param" });
       const keys = workspace.store.listSessionKeys(
         agentParam,
         workspace.office.channels,
@@ -847,8 +846,7 @@ export async function startUiServer(
       if (!workspace.store) return json(res, 200, { summaries: [] });
       const sk = decodeURIComponent(summariesMatch[1]!);
       const agentParam = url.searchParams.get("agent");
-      if (!agentParam)
-        return json(res, 400, { error: "missing_agent_param" });
+      if (!agentParam) return json(res, 400, { error: "missing_agent_param" });
       if (!canAccessSession(agentParam, sk, workspace.office.channels)) {
         console.warn(
           `[session-acl] forbidden_session_access agent=${agentParam} key=${sk}`,
@@ -865,8 +863,7 @@ export async function startUiServer(
       if (!workspace.store) return json(res, 200, { messages: [] });
       const sk = decodeURIComponent(sessionMsgMatch[1]!);
       const agentParam = url.searchParams.get("agent");
-      if (!agentParam)
-        return json(res, 400, { error: "missing_agent_param" });
+      if (!agentParam) return json(res, 400, { error: "missing_agent_param" });
       if (!canAccessSession(agentParam, sk, workspace.office.channels)) {
         console.warn(
           `[session-acl] forbidden_session_access agent=${agentParam} key=${sk}`,

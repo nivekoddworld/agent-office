@@ -33,6 +33,7 @@ export type DisplayItem =
 export function eventToMessages(
   events: FeedEvent[],
   channel: ChannelId,
+  isDefaultChannel = false,
 ): SlackMessageData[] {
   const msgs: SlackMessageData[] = [];
 
@@ -85,7 +86,7 @@ export function eventToMessages(
         usage,
         requestId,
       });
-    } else if (channel.kind === "channel" && channel.name === "general") {
+    } else if (isDefaultChannel) {
       let systemText = "";
       if (type === "tool_execution_start") {
         systemText = `${agent} started tool: ${d.toolName as string}`;

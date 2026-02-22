@@ -84,9 +84,7 @@ function createMockWorkspace() {
       id: "test-office",
       name: "Test Office",
       dir: "/tmp/test",
-      channels: new Map([
-        ["general", { members: ["alice", "bob"] }],
-      ]),
+      channels: new Map([["general", { members: ["alice", "bob"] }]]),
     },
     getAgent: vi.fn(() => undefined),
     onAgentEvent: vi.fn(() => vi.fn()),
@@ -704,5 +702,115 @@ describe("UI server", () => {
       { headers: { Cookie: sessionCookie } },
     );
     expect(res.status).toBe(200);
+  });
+
+  // --- GET /api/state — bootstrap defaultConversationChannel ---
+
+  it("GET /api/state includes defaultConversationChannel", async () => {
+    const res = await fetch(`${origin}/api/state`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.defaultConversationChannel).toBe("general");
+    expect(body.channels).toBeDefined();
+    expect(body.channels.general).toBeDefined();
+  });
+
+  it("GET /api/state falls back to first channel when general absent", async () => {
+    const original = mockWs.office.channels;
+    mockWs.office.channels = new Map([["engineering", { members: ["alice"] }]]);
+    const res = await fetch(`${origin}/api/state`, {
+      headers: { Cookie: sessionCookie },
+    });
+    const body = await res.json();
+    expect(body.defaultConversationChannel).toBe("engineering");
+    mockWs.office.channels = original;
+  });
+
+  it("GET /api/state prefers general among multiple channels", async () => {
+    const original = mockWs.office.channels;
+    mockWs.office.channels = new Map([
+      ["alpha", { members: ["alice"] }],
+      ["general", { members: ["alice", "bob"] }],
+    ]);
+    const res = await fetch(`${origin}/api/state`, {
+      headers: { Cookie: sessionCookie },
+    });
+    const body = await res.json();
+    expect(body.defaultConversationChannel).toBe("general");
+    mockWs.office.channels = original;
+  });
+
+  // --- eventToMessages routing semantics ---
+
+  it("eventToMessages shows system events only when isDefaultChannel is true", async () => {
+    const { eventToMessages } =
+      await import("../ui/src/components/slack/channel-helpers.js");
+    const event = {
+      id: 1,
+      type: "agent_end",
+      timestamp: Date.now(),
+      data: { type: "agent_end", agent: "alice" },
+    };
+    const channel = { kind: "conversation" as const, name: "eng" };
+    const withDefault = eventToMessages([event], channel, true);
+    const withoutDefault = eventToMessages([event], channel, false);
+    expect(withDefault.some((m: any) => m.sender === "system")).toBe(true);
+    expect(withoutDefault.some((m: any) => m.sender === "system")).toBe(false);
+  });
+
+  it("eventToMessages filters non-default conversation channels from system events", async () => {
+    const { eventToMessages } =
+      await import("../ui/src/components/slack/channel-helpers.js");
+    const event = {
+      id: 2,
+      type: "tool_execution_start",
+      timestamp: Date.now(),
+      data: { type: "tool_execution_start", agent: "bob", toolName: "bash" },
+    };
+    const nonDefault = { kind: "conversation" as const, name: "engineering" };
+    const msgs = eventToMessages([event], nonDefault, false);
+    expect(msgs).toHaveLength(0);
+  });
+
+  // --- Client-side initial selection algorithm ---
+
+  it("initial selection uses defaultConversationChannel from bootstrap", () => {
+    const state = {
+      channels: { eng: {}, general: {} },
+      defaultConversationChannel: "general",
+    } as any;
+    const channelKeys = Object.keys(state.channels ?? {});
+    const defaultChannel: string | undefined =
+      state.defaultConversationChannel ?? channelKeys[0];
+    const initial = defaultChannel
+      ? { kind: "conversation" as const, name: defaultChannel }
+      : { kind: "system" as const, name: "tasks" as const };
+    expect(initial).toEqual({ kind: "conversation", name: "general" });
+  });
+
+  it("initial selection falls back to first channel key when server field absent", () => {
+    const state = {
+      channels: { engineering: { members: ["alice"] } },
+    } as any;
+    const channelKeys = Object.keys(state.channels ?? {});
+    const defaultChannel: string | undefined =
+      state.defaultConversationChannel ?? channelKeys[0];
+    const initial = defaultChannel
+      ? { kind: "conversation" as const, name: defaultChannel }
+      : { kind: "system" as const, name: "tasks" as const };
+    expect(initial).toEqual({ kind: "conversation", name: "engineering" });
+  });
+
+  it("initial selection falls back to system/tasks when no channels exist", () => {
+    const state = { channels: {} } as any;
+    const channelKeys = Object.keys(state.channels ?? {});
+    const defaultChannel: string | undefined =
+      state.defaultConversationChannel ?? channelKeys[0];
+    const initial = defaultChannel
+      ? { kind: "conversation" as const, name: defaultChannel }
+      : { kind: "system" as const, name: "tasks" as const };
+    expect(initial).toEqual({ kind: "system", name: "tasks" });
   });
 });

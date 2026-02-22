@@ -61,7 +61,7 @@ export function KanbanBoard({ tasks, agentNames }: KanbanBoardProps) {
       }}
     >
       <ChannelHeader
-        channel={{ kind: "channel", name: "tasks" }}
+        channel={{ kind: "system", name: "tasks" }}
         description="Task board — Kanban view of all tasks"
       />
 

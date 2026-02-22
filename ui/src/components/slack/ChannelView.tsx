@@ -26,7 +26,12 @@ import {
   type DisplayItem,
 } from "./channel-helpers.js";
 import type { ChannelId } from "./channel-types.js";
-import type { CronJobEntry, Task, DmMessage } from "../../api/types.js";
+import type {
+  ChannelConfig,
+  CronJobEntry,
+  Task,
+  DmMessage,
+} from "../../api/types.js";
 import { useAgentMessages } from "../../api/use-agent-messages.js";
 
 type DmTab = "messages" | "files" | "prompt" | "configure";
@@ -38,6 +43,8 @@ interface ChannelViewProps {
   onClickAvatar?: (agentName: string) => void;
   cronJobs?: CronJobEntry[];
   tasks?: Task[];
+  defaultConversationChannel?: string;
+  channels?: Record<string, ChannelConfig>;
 }
 
 export function ChannelView({
@@ -47,6 +54,8 @@ export function ChannelView({
   onClickAvatar,
   cronJobs = [],
   tasks = [],
+  defaultConversationChannel,
+  channels,
 }: ChannelViewProps) {
   const queryClient = useQueryClient();
   const { events } = useEventStore();
@@ -57,8 +66,17 @@ export function ChannelView({
   const [showSystemMessages, setShowSystemMessages] = useState(true);
   const [dmTab, setDmTab] = useState<DmTab>("messages");
 
+  const isDefaultChannel =
+    defaultConversationChannel != null &&
+    channel.kind === "conversation" &&
+    channel.name === defaultConversationChannel;
+
   const channelKey =
-    channel.kind === "dm" ? `dm:${channel.agentName}` : `ch:${channel.name}`;
+    channel.kind === "dm"
+      ? `dm:${channel.agentName}`
+      : channel.kind === "conversation"
+        ? `ch:${channel.name}`
+        : `sys:${channel.name}`;
 
   useEffect(() => {
     setDmTab("messages");
@@ -83,9 +101,9 @@ export function ChannelView({
   }, [baseline, dmAgent]);
 
   const liveMessages = useMemo(
-    () => eventToMessages(events, channel),
+    () => eventToMessages(events, channel, isDefaultChannel),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events, channelKey],
+    [events, channelKey, isDefaultChannel],
   );
 
   const messages = useMemo(() => {
@@ -185,17 +203,18 @@ export function ChannelView({
     >
       <ChannelHeader
         channel={channel}
-        agentCount={channel.kind === "channel" ? agentNames.length : undefined}
+        agentCount={
+          channel.kind === "conversation" ? agentNames.length : undefined
+        }
         activeCount={activeCount}
-        showSystemMessages={
-          channel.kind === "channel" && channel.name === "general"
-            ? showSystemMessages
+        description={
+          channel.kind === "conversation"
+            ? channels?.[channel.name]?.description
             : undefined
         }
+        showSystemMessages={isDefaultChannel ? showSystemMessages : undefined}
         onToggleSystemMessages={
-          channel.kind === "channel" && channel.name === "general"
-            ? () => setShowSystemMessages((v) => !v)
-            : undefined
+          isDefaultChannel ? () => setShowSystemMessages((v) => !v) : undefined
         }
       />
 
@@ -294,12 +313,14 @@ export function ChannelView({
             {displayItems.length === 0 ? (
               <Box p="xl" style={{ textAlign: "center" }}>
                 <Text size="lg" fw={700} style={{ color: "#fff" }} mb={4}>
-                  {channel.kind === "channel"
+                  {channel.kind === "conversation"
                     ? `Welcome to #${channel.name}`
-                    : `Conversation with ${channel.agentName}`}
+                    : channel.kind === "dm"
+                      ? `Conversation with ${channel.agentName}`
+                      : channel.name}
                 </Text>
                 <Text size="sm" style={{ color: slack.textMuted }}>
-                  {channel.kind === "channel"
+                  {channel.kind === "conversation"
                     ? "This is the start of the channel. Activity will appear here in real time."
                     : "Send a message to start the conversation."}
                 </Text>
@@ -361,9 +382,11 @@ export function ChannelView({
             agentNames={agentNames}
             targetAgent={targetAgent}
             channelName={
-              channel.kind === "channel"
+              channel.kind === "conversation"
                 ? `#${channel.name}`
-                : channel.agentName
+                : channel.kind === "dm"
+                  ? channel.agentName
+                  : channel.name
             }
             onMessageSent={handleMessageSent}
           />

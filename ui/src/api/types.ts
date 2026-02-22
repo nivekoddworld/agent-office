@@ -85,6 +85,7 @@ export interface BootstrapState {
   officeId: string;
   officeName: string;
   channels?: Record<string, ChannelConfig>;
+  defaultConversationChannel?: string;
 }
 
 export interface BlockMeta {

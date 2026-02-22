@@ -41,8 +41,10 @@ interface SlackSidebarProps {
 
 function isActive(a: ChannelId, b: ChannelId): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === "channel" && b.kind === "channel") return a.name === b.name;
+  if (a.kind === "conversation" && b.kind === "conversation")
+    return a.name === b.name;
   if (a.kind === "dm" && b.kind === "dm") return a.agentName === b.agentName;
+  if (a.kind === "system" && b.kind === "system") return a.name === b.name;
   return false;
 }
 
@@ -180,28 +182,28 @@ export function SlackSidebar({
               icon={<IconLayoutKanban size={15} color={slack.accentBlue} />}
               label="Tasks"
               active={isActive(activeChannel, {
-                kind: "channel",
+                kind: "system",
                 name: "tasks",
               })}
-              onClick={() =>
-                onSelectChannel({ kind: "channel", name: "tasks" })
-              }
+              onClick={() => onSelectChannel({ kind: "system", name: "tasks" })}
             />
           </Box>
 
           {/* Channels — driven from office config + cron */}
           <SidebarSection label="Channels">
-            {/* Config-defined channels (general fallback always present) */}
+            {/* Config-defined conversation channels */}
             {Object.keys(channels).map((ch) => (
               <SidebarItem
                 key={ch}
                 icon={<IconHash size={15} color={slack.channelHashColor} />}
                 label={ch}
                 active={isActive(activeChannel, {
-                  kind: "channel",
+                  kind: "conversation",
                   name: ch,
                 })}
-                onClick={() => onSelectChannel({ kind: "channel", name: ch })}
+                onClick={() =>
+                  onSelectChannel({ kind: "conversation", name: ch })
+                }
               />
             ))}
             {/* Cron is always shown as a built-in channel */}
@@ -209,10 +211,10 @@ export function SlackSidebar({
               icon={<IconHash size={15} color={slack.channelHashColor} />}
               label="cron"
               active={isActive(activeChannel, {
-                kind: "channel",
+                kind: "system",
                 name: "cron",
               })}
-              onClick={() => onSelectChannel({ kind: "channel", name: "cron" })}
+              onClick={() => onSelectChannel({ kind: "system", name: "cron" })}
             />
           </SidebarSection>
 

@@ -41,7 +41,7 @@ export function CronChannelView({
       }}
     >
       <ChannelHeader
-        channel={{ kind: "channel", name: "cron" }}
+        channel={{ kind: "system", name: "cron" }}
         description="Scheduled jobs and cron tasks"
       />
 

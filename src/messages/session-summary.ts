@@ -18,11 +18,7 @@ export async function maybeTriggerSummary(
   const latest = store.latestSummary(sessionKey);
   const afterSeq = latest?.to_seq ?? 0;
 
-  const tail = store.querySessionTail(
-    sessionKey,
-    afterSeq,
-    SUMMARY_THRESHOLD,
-  );
+  const tail = store.querySessionTail(sessionKey, afterSeq, SUMMARY_THRESHOLD);
   if (tail.length < SUMMARY_THRESHOLD) return;
 
   const window = tail.slice(0, SUMMARY_WINDOW);

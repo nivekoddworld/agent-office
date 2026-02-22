@@ -116,6 +116,10 @@ export function getBootstrapState(
   const yaml = loadOfficeYaml(officeId);
   const agentDefs = yaml?.agents ?? {};
   const hierarchy = buildHierarchyMap(agentDefs);
+  const channelsObj = Object.fromEntries(workspace.office.channels ?? []);
+  const channelKeys = Object.keys(channelsObj);
+  const defaultConversationChannel =
+    "general" in channelsObj ? "general" : (channelKeys[0] ?? "general");
   return {
     agents: workspace.list(),
     scheduler: workspace.scheduler.state(),
@@ -124,7 +128,8 @@ export function getBootstrapState(
     tasks: workspace.tasks.list(),
     officeId,
     officeName: workspace.office.name,
-    channels: Object.fromEntries(workspace.office.channels ?? []),
+    channels: channelsObj,
+    defaultConversationChannel,
   };
 }
 
