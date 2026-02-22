@@ -1,5 +1,6 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Box, Button, Text, Group, UnstyledButton } from "@mantine/core";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   IconArrowDown,
   IconMessage,
@@ -117,6 +118,7 @@ export function ChannelView({
   defaultConversationChannel,
   channels,
 }: ChannelViewProps) {
+  const queryClient = useQueryClient();
   const { events } = useEventStore();
   const { threads } = useThreadStore();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -326,8 +328,18 @@ export function ChannelView({
 
   const handleMessageSent = useCallback(
     (agentName: string, text: string, requestId: string) => {
-      // Broadcast sends should not create DM-style thread placeholders.
-      if (channel.kind === "conversation" && agentName === channel.name) return;
+      if (channel.kind === "dm") {
+        void queryClient.invalidateQueries({
+          queryKey: ["agent-messages", channel.agentName],
+        });
+      } else if (channel.kind === "conversation") {
+        void queryClient.invalidateQueries({
+          queryKey: ["channel-messages", channel.name],
+        });
+        // Broadcast sends should not create DM-style thread placeholders.
+        if (agentName === channel.name) return;
+      }
+
       const userMsg: SlackMessageData = {
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         sender: "You",
@@ -338,7 +350,7 @@ export function ChannelView({
       };
       createThread(agentName, userMsg, requestId, channelKey);
     },
-    [createThread, channel, channelKey],
+    [createThread, channel, channelKey, queryClient],
   );
 
   const isDm = channel.kind === "dm";
