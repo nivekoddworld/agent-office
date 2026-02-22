@@ -27,6 +27,7 @@ export interface MessageStore {
     text: string;
     ts_ms: number;
     request_id: string | null;
+    agent_name: string | null;
   }): void;
   nextSessionSeq(sessionKey: string): number;
   querySession(sessionKey: string, limit: number): SessionMessage[];
@@ -92,7 +93,7 @@ export function createMessageStore(dbPath: string): MessageStore {
     value TEXT NOT NULL
   )`);
   db.exec(
-    `INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('version', '4')`,
+    `INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('version', '5')`,
   );
 
   db.exec(`CREATE TABLE IF NOT EXISTS inbox_messages (
@@ -228,6 +229,19 @@ export function createMessageStore(dbPath: string): MessageStore {
     db.exec(`UPDATE schema_meta SET value = '4' WHERE key = 'version'`);
   }
 
+  // v4 → v5 migration: add agent_name to session_messages
+  const v5Check = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+  if (v5Check && parseInt(v5Check.value) < 5) {
+    try {
+      db.exec(`ALTER TABLE session_messages ADD COLUMN agent_name TEXT`);
+    } catch {
+      /* already exists */
+    }
+    db.exec(`UPDATE schema_meta SET value = '5' WHERE key = 'version'`);
+  }
+
   // Ensure session tables exist on fresh v3 DBs
   db.exec(`CREATE TABLE IF NOT EXISTS session_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -237,8 +251,14 @@ export function createMessageStore(dbPath: string): MessageStore {
     text TEXT NOT NULL,
     ts_ms INTEGER NOT NULL,
     request_id TEXT,
+    agent_name TEXT,
     UNIQUE(session_key, session_seq)
   )`);
+  try {
+    db.exec(`ALTER TABLE session_messages ADD COLUMN agent_name TEXT`);
+  } catch {
+    /* already exists */
+  }
   db.exec(`CREATE TABLE IF NOT EXISTS session_summaries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_key TEXT NOT NULL,
@@ -307,7 +327,7 @@ export function createMessageStore(dbPath: string): MessageStore {
 
   // Session prepared statements
   const insertSession = db.prepare(
-    `INSERT INTO session_messages (session_key, session_seq, role, text, ts_ms, request_id) VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO session_messages (session_key, session_seq, role, text, ts_ms, request_id, agent_name) VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   const selectSession = db.prepare(
     `SELECT * FROM session_messages WHERE session_key = ? ORDER BY session_seq DESC LIMIT ?`,
@@ -387,6 +407,7 @@ export function createMessageStore(dbPath: string): MessageStore {
         msg.text,
         msg.ts_ms,
         msg.request_id,
+        msg.agent_name,
       );
     },
     nextSessionSeq(sessionKey) {

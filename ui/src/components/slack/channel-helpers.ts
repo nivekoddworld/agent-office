@@ -34,6 +34,7 @@ export function eventToMessages(
   events: FeedEvent[],
   channel: ChannelId,
   isDefaultChannel = false,
+  allowedRequestIds?: Set<string>,
 ): SlackMessageData[] {
   const msgs: SlackMessageData[] = [];
 
@@ -76,6 +77,10 @@ export function eventToMessages(
         }
       }
       const requestId = (d.requestId as string) ?? undefined;
+      if (channel.kind === "conversation") {
+        if (!requestId) continue;
+        if (allowedRequestIds && !allowedRequestIds.has(requestId)) continue;
+      }
       msgs.push({
         id: `${event.id}`,
         sender: agent,

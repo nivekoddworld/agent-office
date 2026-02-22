@@ -129,6 +129,9 @@ export function AppLayout({ state }: AppLayoutProps) {
           onToggleScheduler={handleToggleScheduler}
           unreadCounts={unreadCounts}
           channels={state.channels}
+          onChannelCreated={(name) =>
+            setChannel({ kind: "conversation", name })
+          }
         />
       </Box>
 

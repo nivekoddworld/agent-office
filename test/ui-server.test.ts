@@ -652,6 +652,23 @@ describe("UI server", () => {
     expect(body.targets).toEqual(["alice", "bob"]);
   });
 
+  it("POST /api/channels/:name/send persists channel user turn with agent_name", async () => {
+    mockWs.store.saveSession.mockClear();
+    const res = await fetch(`${origin}/api/channels/general/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ message: "persist me" }),
+    });
+    expect(res.status).toBe(200);
+    expect(mockWs.store.saveSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        role: "user",
+        text: "persist me",
+        agent_name: "__user__",
+      }),
+    );
+  });
+
   it("POST /api/channels/:name/send returns 400 for malformed encoding", async () => {
     const res = await fetch(`${origin}/api/channels/%ZZbad/send`, {
       method: "POST",
@@ -660,6 +677,68 @@ describe("UI server", () => {
     });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_channel_encoding" });
+  });
+
+  it("GET /api/channels/:name/messages returns channel session history", async () => {
+    mockWs.store.querySession.mockReturnValueOnce([
+      {
+        session_seq: 1,
+        role: "user",
+        text: "hello",
+        ts_ms: 1000,
+        request_id: "r-1",
+        agent_name: "__user__",
+      },
+      {
+        session_seq: 2,
+        role: "assistant",
+        text: "hi",
+        ts_ms: 2000,
+        request_id: "r-1",
+        agent_name: "alice",
+      },
+    ]);
+    const res = await fetch(`${origin}/api/channels/general/messages?limit=20`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.channel).toBe("general");
+    expect(body.session_key).toBe("ch:general");
+    expect(body.messages).toEqual([
+      {
+        seq: 1,
+        role: "user",
+        text: "hello",
+        ts: 1000,
+        requestId: "r-1",
+        agentName: "__user__",
+      },
+      {
+        seq: 2,
+        role: "assistant",
+        text: "hi",
+        ts: 2000,
+        requestId: "r-1",
+        agentName: "alice",
+      },
+    ]);
+  });
+
+  it("GET /api/channels/:name/messages returns 404 for unknown channel", async () => {
+    const res = await fetch(`${origin}/api/channels/nope/messages`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "channel_not_found" });
+  });
+
+  it("GET /api/channels/:name/messages validates limit", async () => {
+    const res = await fetch(`${origin}/api/channels/general/messages?limit=abc`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_limit" });
   });
 
   // --- Channel CRUD API ---

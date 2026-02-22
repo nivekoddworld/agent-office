@@ -226,3 +226,18 @@ export interface DmHistoryResponse {
   agent: string;
   messages: DmMessage[];
 }
+
+export interface ChannelMessage {
+  seq: number;
+  role: "user" | "assistant";
+  text: string;
+  ts: number;
+  requestId: string | null;
+  agentName?: string;
+}
+
+export interface ChannelHistoryResponse {
+  channel: string;
+  session_key: string;
+  messages: ChannelMessage[];
+}

@@ -820,6 +820,7 @@ export async function startUiServer(
             text: parsed.message,
             ts_ms: Date.now(),
             request_id: reqId ?? null,
+            agent_name: "__user__",
           });
           workspace.triggerSummaryCheck(sk);
         } catch (err) {
@@ -847,6 +848,44 @@ export async function startUiServer(
       }
       broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, 200, { ok: true, targets });
+    }
+
+    // --- GET /api/channels/:name/messages ---
+    const chMessagesMatch = path.match(/^\/api\/channels\/([^/]+)\/messages$/);
+    if (chMessagesMatch && method === "GET") {
+      let channelName: string;
+      try {
+        channelName = decodeURIComponent(chMessagesMatch[1]!).replace(/^#/, "");
+      } catch {
+        return json(res, 400, { error: "invalid_channel_encoding" });
+      }
+      if (!workspace.office.channels.has(channelName)) {
+        return json(res, 404, { error: "channel_not_found" });
+      }
+      if (!workspace.store) {
+        return json(res, 200, {
+          channel: channelName,
+          session_key: sessionKey("channel", channelName),
+          messages: [],
+        });
+      }
+      const rawLimit = parseInt(url.searchParams.get("limit") ?? "50", 10);
+      if (isNaN(rawLimit)) return json(res, 400, { error: "invalid_limit" });
+      const limit = Math.max(1, Math.min(200, rawLimit));
+      const sk = sessionKey("channel", channelName);
+      const msgs = workspace.store.querySession(sk, limit);
+      return json(res, 200, {
+        channel: channelName,
+        session_key: sk,
+        messages: msgs.map((m) => ({
+          seq: m.session_seq,
+          role: m.role,
+          text: m.text,
+          ts: m.ts_ms,
+          requestId: m.request_id,
+          agentName: m.agent_name ?? undefined,
+        })),
+      });
     }
 
     // --- POST /api/channels (create) ---

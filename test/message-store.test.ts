@@ -350,13 +350,13 @@ describe("MessageStore", () => {
     expect(dms[1]!.text).toBe("second");
     expect(dms[2]!.text).toBe("first");
 
-    // Verify schema version is '4' (v1→v2→v3→v4 migration chain)
+    // Verify schema version is '5' (v1→v2→v3→v4→v5 migration chain)
     const db2 = new DatabaseSync(dbPath);
     const row = db2
       .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
       .get() as { value: string };
     db2.close();
-    expect(row.value).toBe("4");
+    expect(row.value).toBe("5");
 
     // Verify old index is gone, new index exists
     const db3 = new DatabaseSync(dbPath);
@@ -370,9 +370,13 @@ describe("MessageStore", () => {
         `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_dm_agent_ts_v2'`,
       )
       .all() as { name: string }[];
+    const sessionColumns = db3
+      .prepare(`PRAGMA table_info(session_messages)`)
+      .all() as { name: string }[];
     db3.close();
     expect(oldIdx).toHaveLength(0);
     expect(newIdx).toHaveLength(1);
+    expect(sessionColumns.some((c) => c.name === "agent_name")).toBe(true);
 
     migStore.close();
     rmSync(migDir, { recursive: true, force: true });

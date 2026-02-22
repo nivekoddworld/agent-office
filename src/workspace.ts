@@ -110,6 +110,7 @@ export class Workspace {
           text: msg.payload,
           ts_ms: msg.timestamp,
           request_id: msg.requestId ?? null,
+          agent_name: "__user__",
         });
         this.triggerSummaryCheck(msg.sessionKey);
       } catch (err) {
@@ -311,6 +312,7 @@ export class Workspace {
                   text,
                   ts_ms: Date.now(),
                   request_id: requestId ?? null,
+                  agent_name: config.name,
                 });
                 // Async summary checkpoint (fire-and-forget)
                 maybeTriggerSummary(

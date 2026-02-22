@@ -30,6 +30,7 @@ export interface SessionMessage {
   text: string;
   ts_ms: number;
   request_id: string | null;
+  agent_name: string | null;
 }
 
 export interface SessionSummary {

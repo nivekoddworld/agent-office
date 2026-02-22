@@ -7,6 +7,11 @@ import {
   Badge,
   Tooltip,
   ActionIcon,
+  Modal,
+  Stack,
+  TextInput,
+  MultiSelect,
+  Button,
 } from "@mantine/core";
 import {
   IconHash,
@@ -16,10 +21,15 @@ import {
   IconPlayerPlay,
   IconPlayerPause,
   IconLayoutKanban,
+  IconPlus,
 } from "@tabler/icons-react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
 import { SidebarSection } from "./SidebarSection.js";
 import { UserPresence } from "./UserPresence.js";
+import { apiFetch, ApiError } from "../../api/client.js";
 import type { AgentInfo } from "../../api/types.js";
 import type { ChannelId } from "./channel-types.js";
 
@@ -37,6 +47,7 @@ interface SlackSidebarProps {
   onToggleScheduler?: () => void;
   unreadCounts?: Record<string, number>;
   channels?: Record<string, { members: string[]; description?: string }>;
+  onChannelCreated?: (name: string) => void;
 }
 
 function isActive(a: ChannelId, b: ChannelId): boolean {
@@ -112,8 +123,45 @@ export function SlackSidebar({
   onToggleScheduler,
   unreadCounts = {},
   channels = {},
+  onChannelCreated,
 }: SlackSidebarProps) {
+  const queryClient = useQueryClient();
   const runningCount = agents.filter((a) => a.status === "running").length;
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newMembers, setNewMembers] = useState<string[]>([]);
+  const [newDescription, setNewDescription] = useState("");
+  const [creating, setCreating] = useState(false);
+  const memberOptions = agents.map((a) => ({ value: a.name, label: a.name }));
+
+  const handleCreateChannel = async () => {
+    setCreating(true);
+    try {
+      await apiFetch("/api/channels", {
+        method: "POST",
+        body: JSON.stringify({
+          name: newName,
+          members: newMembers,
+          description: newDescription || undefined,
+        }),
+      });
+      const createdName = newName;
+      setCreateOpen(false);
+      setNewName("");
+      setNewMembers([]);
+      setNewDescription("");
+      await queryClient.invalidateQueries({ queryKey: ["state"] });
+      onChannelCreated?.(createdName);
+    } catch (err) {
+      notifications.show({
+        title: "Create failed",
+        message: err instanceof ApiError ? err.message : "Unknown error",
+        color: "red",
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <Box
@@ -190,7 +238,25 @@ export function SlackSidebar({
           </Box>
 
           {/* Channels — driven from office config + cron */}
-          <SidebarSection label="Channels">
+          <SidebarSection
+            label="Channels"
+            rightSection={
+              <Tooltip label="Add channel" withArrow>
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  color="gray"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCreateOpen(true);
+                  }}
+                >
+                  <IconPlus size={13} />
+                </ActionIcon>
+              </Tooltip>
+            }
+          >
             {/* Config-defined conversation channels */}
             {Object.keys(channels).map((ch) => (
               <SidebarItem
@@ -316,6 +382,61 @@ export function SlackSidebar({
           </SidebarSection>
         </Box>
       </ScrollArea>
+
+      <Modal
+        opened={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Create Channel"
+        centered
+        styles={{
+          content: { backgroundColor: slack.mainBg },
+          header: {
+            backgroundColor: slack.mainBg,
+            borderBottom: `1px solid ${slack.borderColor}`,
+          },
+          title: { color: "#fff", fontWeight: 700 },
+        }}
+      >
+        <Stack gap="xs" py="xs">
+          <TextInput
+            size="xs"
+            label="Channel name"
+            placeholder="e.g. engineering"
+            value={newName}
+            onChange={(e) => setNewName(e.currentTarget.value)}
+            disabled={creating}
+          />
+          <MultiSelect
+            size="xs"
+            label="Members"
+            data={memberOptions}
+            value={newMembers}
+            onChange={setNewMembers}
+            disabled={creating}
+          />
+          <TextInput
+            size="xs"
+            label="Description (optional)"
+            value={newDescription}
+            onChange={(e) => setNewDescription(e.currentTarget.value)}
+            disabled={creating}
+          />
+          <Group justify="flex-end" gap="xs" mt={4}>
+            <Button
+              size="xs"
+              variant="subtle"
+              color="gray"
+              onClick={() => setCreateOpen(false)}
+              disabled={creating}
+            >
+              Cancel
+            </Button>
+            <Button size="xs" loading={creating} onClick={handleCreateChannel}>
+              Create
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Box>
   );
 }

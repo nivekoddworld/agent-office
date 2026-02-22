@@ -72,6 +72,7 @@ describe("MessageStore sessions", () => {
       text: "hello",
       ts_ms: 1000,
       request_id: null,
+      agent_name: "__user__",
     });
     store.saveSession({
       session_key: "dm:alice",
@@ -80,11 +81,14 @@ describe("MessageStore sessions", () => {
       text: "hi there",
       ts_ms: 2000,
       request_id: null,
+      agent_name: "alice",
     });
     const msgs = store.querySession("dm:alice", 10);
     expect(msgs).toHaveLength(2);
     expect(msgs[0]!.role).toBe("user");
     expect(msgs[1]!.role).toBe("assistant");
+    expect(msgs[0]!.agent_name).toBe("__user__");
+    expect(msgs[1]!.agent_name).toBe("alice");
   });
 
   it("nextSessionSeq returns correct value", () => {
@@ -96,6 +100,7 @@ describe("MessageStore sessions", () => {
       text: "test",
       ts_ms: 1000,
       request_id: null,
+      agent_name: null,
     });
     expect(store.nextSessionSeq("dm:bob")).toBe(2);
   });
@@ -109,6 +114,7 @@ describe("MessageStore sessions", () => {
         text: `msg${i}`,
         ts_ms: i * 1000,
         request_id: null,
+      agent_name: null,
       });
     }
     const tail = store.querySessionTail("ch:gen", 3, 10);
@@ -146,6 +152,7 @@ describe("MessageStore sessions", () => {
       text: "deploy the application",
       ts_ms: 1000,
       request_id: null,
+      agent_name: null,
     });
     store.saveSummary({
       session_key: "dm:alice",
@@ -180,6 +187,7 @@ describe("MessageStore sessions", () => {
       text: "test",
       ts_ms: 1000,
       request_id: null,
+      agent_name: null,
     });
     store.saveSession({
       session_key: "ch:general",
@@ -188,6 +196,7 @@ describe("MessageStore sessions", () => {
       text: "test",
       ts_ms: 1000,
       request_id: null,
+      agent_name: null,
     });
     const keys = store.listAllSessionKeys();
     expect(keys).toContain("dm:alice");
@@ -202,6 +211,7 @@ describe("MessageStore sessions", () => {
       text: "persist me",
       ts_ms: 1000,
       request_id: null,
+      agent_name: null,
     });
     store.close();
     store = createMessageStore(join(dir, "test.db"));
@@ -218,6 +228,7 @@ describe("MessageStore sessions", () => {
       text: "dm msg",
       ts_ms: 1000,
       request_id: null,
+      agent_name: null,
     });
     store.saveSession({
       session_key: "ch:general",
@@ -226,6 +237,7 @@ describe("MessageStore sessions", () => {
       text: "channel msg",
       ts_ms: 2000,
       request_id: null,
+      agent_name: null,
     });
     store.saveSession({
       session_key: "internal:alice",
@@ -234,6 +246,7 @@ describe("MessageStore sessions", () => {
       text: "internal msg",
       ts_ms: 3000,
       request_id: null,
+      agent_name: null,
     });
     expect(store.querySession("dm:alice", 10)).toHaveLength(1);
     expect(store.querySession("ch:general", 10)).toHaveLength(1);
@@ -255,6 +268,7 @@ describe("MessageStore sessions", () => {
         text: `turn ${i}`,
         ts_ms: i * 100,
         request_id: null,
+      agent_name: null,
       });
     }
     // Verify tail query works for summary threshold check
