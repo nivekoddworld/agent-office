@@ -227,9 +227,20 @@ export class Workspace {
     // Forward agent events to workspace listeners
     handle.onEvent((e) => {
       const requestId = handle.getActiveRequestId();
-      const event = requestId
-        ? ({ ...e, requestId } as unknown as AgentEvent)
-        : e;
+      const sk = handle.getActiveSessionKey();
+      const sourceKind = sk?.startsWith("dm:")
+        ? "dm"
+        : sk?.startsWith("ch:")
+          ? "channel"
+          : sk?.startsWith("internal:")
+            ? "internal"
+            : undefined;
+      const event = {
+        ...e,
+        ...(requestId ? { requestId } : {}),
+        ...(sk ? { sessionKey: sk } : {}),
+        ...(sourceKind ? { sourceKind } : {}),
+      } as unknown as AgentEvent;
 
       if (
         event.type === "tool_execution_start" ||

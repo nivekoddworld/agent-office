@@ -5,12 +5,13 @@ import {
   ActionIcon,
   Tooltip,
   Text,
+  Badge,
   Popover,
   UnstyledButton,
   Stack,
   ScrollArea,
 } from "@mantine/core";
-import { IconAt, IconSend2 } from "@tabler/icons-react";
+import { IconAt, IconSend2, IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
 import {
@@ -210,8 +211,32 @@ export function MessageInput({
             </Popover>
           )}
           {selectedTarget && !isDm && (
-            <Text size="xs" style={{ color: slack.accentBlue }}>
-              @{selectedTarget}
+            <Group gap={6}>
+              <Badge
+                size="xs"
+                variant="light"
+                color="blue"
+                rightSection={
+                  <ActionIcon
+                    size={12}
+                    variant="transparent"
+                    color="blue"
+                    onClick={() => setSelectedTarget(null)}
+                  >
+                    <IconX size={10} />
+                  </ActionIcon>
+                }
+              >
+                @{selectedTarget}
+              </Badge>
+              <Text size="xs" style={{ color: slack.textMuted }}>
+                Sending to @{selectedTarget}
+              </Text>
+            </Group>
+          )}
+          {!selectedTarget && !isDm && (
+            <Text size="xs" style={{ color: slack.textMuted }}>
+              Broadcast to channel
             </Text>
           )}
         </Group>

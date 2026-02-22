@@ -25,6 +25,13 @@ export function isSameDay(a: number, b: number): boolean {
   return new Date(a).toDateString() === new Date(b).toDateString();
 }
 
+export function isDmSessionForAgent(
+  sessionKey: unknown,
+  agentName: string,
+): boolean {
+  return sessionKey === `dm:${agentName}`;
+}
+
 export type DisplayItem =
   | { kind: "message"; data: SlackMessageData; compact: boolean }
   | { kind: "system"; data: SlackMessageData }
@@ -35,6 +42,7 @@ export function eventToMessages(
   channel: ChannelId,
   isDefaultChannel = false,
   allowedRequestIds?: Set<string>,
+  excludedRequestIds?: Set<string>,
 ): SlackMessageData[] {
   const msgs: SlackMessageData[] = [];
 
@@ -47,6 +55,7 @@ export function eventToMessages(
 
     if (channel.kind === "dm") {
       if (agent !== channel.agentName) continue;
+      if (!isDmSessionForAgent(d.sessionKey, channel.agentName)) continue;
     }
 
     if (type === "message_end") {
@@ -79,6 +88,7 @@ export function eventToMessages(
       const requestId = (d.requestId as string) ?? undefined;
       if (channel.kind === "conversation") {
         if (!requestId) continue;
+        if (excludedRequestIds?.has(requestId)) continue;
         if (allowedRequestIds && !allowedRequestIds.has(requestId)) continue;
       }
       msgs.push({

@@ -66,6 +66,7 @@ import { startUiServer, stopUiServer } from "../src/ui/server.js";
 // --- Helpers ---
 
 const HOST = "127.0.0.1";
+let agentEventListener: ((name: string, event: any) => void) | null = null;
 
 function createMockWorkspace() {
   return {
@@ -96,7 +97,10 @@ function createMockWorkspace() {
     },
     updateChannels: vi.fn(),
     getAgent: vi.fn(() => undefined),
-    onAgentEvent: vi.fn(() => vi.fn()),
+    onAgentEvent: vi.fn((fn: (name: string, event: any) => void) => {
+      agentEventListener = fn;
+      return vi.fn();
+    }),
     list: vi.fn(() => []),
     triggerSummaryCheck: vi.fn(),
     store: {
@@ -231,6 +235,48 @@ describe("UI server", () => {
     });
 
     expect(sseData).toContain("event: state_changed");
+  });
+
+  it("SSE agent_event preserves sessionKey/sourceKind fields", async () => {
+    const sseData = await new Promise<string>((resolve, reject) => {
+      let collected = "";
+      const req = http.get(
+        `${origin}/api/events`,
+        { headers: { Cookie: sessionCookie } },
+        (res) => {
+          res.setEncoding("utf-8");
+          res.on("data", (chunk: string) => {
+            collected += chunk;
+          });
+        },
+      );
+      req.on("error", reject);
+
+      setTimeout(() => {
+        try {
+          agentEventListener?.("coder", {
+            type: "message_end",
+            requestId: "r-1",
+            sessionKey: "ch:general",
+            sourceKind: "channel",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "hello" }],
+            },
+          });
+        } catch (err) {
+          reject(err);
+        }
+        setTimeout(() => {
+          req.destroy();
+          resolve(collected);
+        }, 200);
+      }, 100);
+    });
+
+    expect(sseData).toContain("event: agent_event");
+    expect(sseData).toContain('"sessionKey":"ch:general"');
+    expect(sseData).toContain('"sourceKind":"channel"');
   });
 
   it("returns 400 with unknown_command for unrecognized command", async () => {
@@ -1029,6 +1075,45 @@ describe("UI server", () => {
     const nonDefault = { kind: "conversation" as const, name: "engineering" };
     const msgs = eventToMessages([event], nonDefault, false);
     expect(msgs).toHaveLength(0);
+  });
+
+  it("eventToMessages in DM mode requires matching dm session key", async () => {
+    const { eventToMessages } =
+      await import("../ui/src/components/slack/channel-helpers.js");
+    const dmChannel = { kind: "dm" as const, agentName: "coder" };
+    const events = [
+      {
+        id: 1,
+        type: "agent_event",
+        timestamp: Date.now(),
+        data: {
+          type: "message_end",
+          agent: "coder",
+          sessionKey: "ch:general",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "channel reply" }],
+          },
+        },
+      },
+      {
+        id: 2,
+        type: "agent_event",
+        timestamp: Date.now() + 1,
+        data: {
+          type: "message_end",
+          agent: "coder",
+          sessionKey: "dm:coder",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "dm reply" }],
+          },
+        },
+      },
+    ] as any;
+    const msgs = eventToMessages(events, dmChannel, false);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]!.text).toBe("dm reply");
   });
 
   // --- Client-side initial selection algorithm ---

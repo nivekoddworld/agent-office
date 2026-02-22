@@ -333,24 +333,6 @@ export function SlackSidebar({
                       >
                         {unread}
                       </Badge>
-                    ) : agent.queueDepth > 0 ? (
-                      <Tooltip
-                        label={`${agent.queueDepth} pending`}
-                        withArrow
-                        position="right"
-                      >
-                        <Badge
-                          size="xs"
-                          variant="filled"
-                          style={{
-                            backgroundColor: slack.accentYellow,
-                            color: "#000",
-                            minWidth: 18,
-                          }}
-                        >
-                          {agent.queueDepth}
-                        </Badge>
-                      </Tooltip>
                     ) : undefined
                   }
                 />

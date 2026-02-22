@@ -12,6 +12,7 @@ import {
   IconArrowForwardUp,
   IconRobot,
   IconUser,
+  IconBolt,
 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { MarkdownContent } from "./MarkdownContent.js";
@@ -63,9 +64,11 @@ function AgentAvatar({
 function HoverActions({
   onCopy,
   onResend,
+  usage,
 }: {
   onCopy?: () => void;
   onResend?: () => void;
+  usage?: SlackMessageData["usage"];
 }) {
   return (
     <Group
@@ -96,6 +99,17 @@ function HoverActions({
             onClick={onResend}
           >
             <IconArrowForwardUp size={16} color={slack.textSecondary} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {usage && (
+        <Tooltip
+          label={`${usage.totalTokens.toLocaleString()} tokens / $${usage.totalCost.toFixed(4)}`}
+          position="top"
+          withArrow
+        >
+          <ActionIcon size="sm" variant="subtle" color="gray">
+            <IconBolt size={14} color={slack.textSecondary} />
           </ActionIcon>
         </Tooltip>
       )}
@@ -133,6 +147,7 @@ export function SlackMessage({
           onResend={
             onResend && isOperator ? () => onResend(message) : undefined
           }
+          usage={message.usage}
         />
       )}
 
@@ -207,25 +222,6 @@ export function SlackMessage({
             >
               {message.text}
             </Text>
-          )}
-          {message.usage && (
-            <Tooltip
-              label={`${message.usage.totalTokens.toLocaleString()} tokens / $${message.usage.totalCost.toFixed(4)}`}
-              withArrow
-              position="bottom-start"
-            >
-              <Text
-                component="span"
-                size="xs"
-                style={{
-                  color: slack.textMuted,
-                  cursor: "default",
-                  fontSize: 10,
-                }}
-              >
-                {message.usage.totalTokens.toLocaleString()} tok
-              </Text>
-            </Tooltip>
           )}
         </Box>
       </Group>

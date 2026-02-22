@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mergeBaselineWithLive } from "../ui/src/components/slack/channel-helpers.js";
+import {
+  eventToMessages,
+  isDmSessionForAgent,
+  mergeBaselineWithLive,
+} from "../ui/src/components/slack/channel-helpers.js";
 import type { SlackMessageData } from "../ui/src/components/slack/types.js";
 import { formatDmHistory } from "../src/agent/handle.js";
 import { filterDmForHydration } from "../src/workspace.js";
@@ -194,6 +198,96 @@ describe("mergeBaselineWithLive", () => {
 
   it("handles empty inputs", () => {
     expect(mergeBaselineWithLive([], [])).toEqual([]);
+  });
+});
+
+describe("eventToMessages", () => {
+  it("isDmSessionForAgent matches exact dm key only", () => {
+    expect(isDmSessionForAgent("dm:coder", "coder")).toBe(true);
+    expect(isDmSessionForAgent("ch:general", "coder")).toBe(false);
+    expect(isDmSessionForAgent("dm:reviewer", "coder")).toBe(false);
+    expect(isDmSessionForAgent(undefined, "coder")).toBe(false);
+  });
+
+  it("filters excluded requestIds in conversation channels", () => {
+    const events = [
+      {
+        id: 1,
+        type: "agent_event",
+        timestamp: 1000,
+        data: {
+          type: "message_end",
+          agent: "coder",
+          requestId: "r-thread",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "thread reply" }],
+          },
+        },
+      },
+      {
+        id: 2,
+        type: "agent_event",
+        timestamp: 2000,
+        data: {
+          type: "message_end",
+          agent: "coder",
+          requestId: "r-normal",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "normal reply" }],
+          },
+        },
+      },
+    ] as any;
+
+    const msgs = eventToMessages(
+      events,
+      { kind: "conversation", name: "general" },
+      false,
+      new Set(["r-thread", "r-normal"]),
+      new Set(["r-thread"]),
+    );
+
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]!.text).toBe("normal reply");
+  });
+
+  it("DM channel ignores assistant message_end from non-dm sessions", () => {
+    const events = [
+      {
+        id: 1,
+        type: "agent_event",
+        timestamp: 1000,
+        data: {
+          type: "message_end",
+          agent: "coder",
+          sessionKey: "ch:general",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "from channel" }],
+          },
+        },
+      },
+      {
+        id: 2,
+        type: "agent_event",
+        timestamp: 2000,
+        data: {
+          type: "message_end",
+          agent: "coder",
+          sessionKey: "dm:coder",
+          message: {
+            role: "assistant",
+            content: [{ type: "text", text: "from dm" }],
+          },
+        },
+      },
+    ] as any;
+
+    const msgs = eventToMessages(events, { kind: "dm", agentName: "coder" });
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0]!.text).toBe("from dm");
   });
 });
 

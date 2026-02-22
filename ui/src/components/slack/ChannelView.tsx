@@ -183,10 +183,7 @@ export function ChannelView({
   }, [baseline, channelBaseline, dmAgent, conversationChannel]);
 
   const agentThreads = useMemo(() => {
-    if (channel.kind === "dm") {
-      return threads.filter((t) => t.agentName === channel.agentName);
-    }
-    return threads;
+    return threads.filter((t) => t.contextKey === channelKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threads, channelKey]);
 
@@ -205,6 +202,19 @@ export function ChannelView({
     return ids;
   }, [conversationChannel, baselineMessages, agentThreads]);
 
+  const threadedRequestIds = useMemo(() => {
+    if (!conversationChannel) return undefined;
+    const ids = new Set<string>();
+    for (const thread of agentThreads) {
+      if (thread.requestId) ids.add(thread.requestId);
+      if (thread.parentMessage.requestId) ids.add(thread.parentMessage.requestId);
+      for (const reply of thread.replies) {
+        if (reply.requestId) ids.add(reply.requestId);
+      }
+    }
+    return ids;
+  }, [conversationChannel, agentThreads]);
+
   const liveMessages = useMemo(
     () =>
       eventToMessages(
@@ -212,9 +222,10 @@ export function ChannelView({
         channel,
         isDefaultChannel,
         conversationRequestIds,
+        threadedRequestIds,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events, channelKey, isDefaultChannel, conversationRequestIds],
+    [events, channelKey, isDefaultChannel, conversationRequestIds, threadedRequestIds],
   );
 
   const messages = useMemo(() => {
@@ -225,46 +236,8 @@ export function ChannelView({
 
   const displayItems = useMemo((): DisplayItem[] => {
     const items: DisplayItem[] = [];
-
-    // Build time ranges owned by threads so we can filter out
-    // SSE messages that are already captured as thread replies.
-    const threadRanges: { agentName: string; start: number; end: number }[] =
-      [];
-    for (const thread of agentThreads) {
-      const lastReply = thread.replies[thread.replies.length - 1];
-      threadRanges.push({
-        agentName: thread.agentName,
-        start: thread.createdAt,
-        end:
-          thread.status === "open"
-            ? Infinity
-            : (lastReply?.timestamp ?? thread.createdAt) + 1000,
-      });
-    }
-
-    const isOwnedByThread = (msg: SlackMessageData): boolean => {
-      if (msg.sender === "system") return false;
-      // User messages from SSE (echoed back) that match a thread's time window
-      if (!msg.isBot && msg.sender === "You") {
-        return threadRanges.some(
-          (r) =>
-            msg.timestamp >= r.start - 2000 && msg.timestamp <= r.start + 2000,
-        );
-      }
-      // Agent responses within a thread's active window
-      return threadRanges.some(
-        (r) =>
-          msg.sender === r.agentName &&
-          msg.timestamp >= r.start &&
-          msg.timestamp <= r.end,
-      );
-    };
-
-    // Start with SSE messages, filtered to exclude thread-owned ones
-    const filteredMessages = messages.filter((m) => !isOwnedByThread(m));
-
-    // Merge thread parents into the timeline
-    const allMessages = [...filteredMessages];
+    // Merge thread parents into the timeline (replies stay in drawer only).
+    const allMessages = [...messages];
     for (const thread of agentThreads) {
       allMessages.push(thread.parentMessage);
     }
@@ -353,6 +326,8 @@ export function ChannelView({
 
   const handleMessageSent = useCallback(
     (agentName: string, text: string, requestId: string) => {
+      // Broadcast sends should not create DM-style thread placeholders.
+      if (channel.kind === "conversation" && agentName === channel.name) return;
       const userMsg: SlackMessageData = {
         id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         sender: "You",
@@ -361,9 +336,9 @@ export function ChannelView({
         isBot: false,
         requestId,
       };
-      createThread(agentName, userMsg, requestId);
+      createThread(agentName, userMsg, requestId, channelKey);
     },
-    [createThread],
+    [createThread, channel, channelKey],
   );
 
   const isDm = channel.kind === "dm";
@@ -502,7 +477,7 @@ export function ChannelView({
                 </Text>
               </Box>
             ) : (
-              <Box py="xs">
+              <Box pt={4} pb="xs">
                 {displayItems.map((item, i) => {
                   if (item.kind === "date") {
                     return (
