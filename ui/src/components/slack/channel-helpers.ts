@@ -35,6 +35,7 @@ export function isDmSessionForAgent(
 export type DisplayItem =
   | { kind: "message"; data: SlackMessageData; compact: boolean }
   | { kind: "system"; data: SlackMessageData }
+  | { kind: "thread"; thread: import("../../store/thread-store.js").Thread }
   | { kind: "date"; timestamp: number };
 
 export function eventToMessages(
@@ -66,7 +67,7 @@ export function eventToMessages(
 
       // Only show assistant responses. "user"-role messages are internal
       // agent prompts (tool results, inter-agent forwards, etc.) — not
-      // from the human user. Human user messages come from persisted DM history.
+      // from the human user. The user's own messages appear via threads.
       if (msg.role !== "assistant") continue;
 
       const text = extractText(msg.content);
@@ -138,21 +139,23 @@ const DEDUP_WINDOW_MS = 3000;
  * Merge baseline (SQLite) messages with live SSE messages, deduplicating
  * by requestId first, then by fingerprint (role+text) within a time window
  * only for messages that have no requestId at all.
+ *
+ * threadParents contribute to dedup indexes (their requestIds filter out
+ * matching baseline rows) but are NOT added to the output array.
  */
 export function mergeBaselineWithLive(
   baseline: SlackMessageData[],
   live: SlackMessageData[],
+  threadParents: SlackMessageData[] = [],
 ): SlackMessageData[] {
-  const liveByRoleAndRequestId = new Set<string>();
-  for (const m of live) {
-    if (m.requestId) {
-      liveByRoleAndRequestId.add(
-        `${m.isBot ? "assistant" : "user"}:${m.requestId}`,
-      );
-    }
+  const allLive = [...live, ...threadParents];
+
+  const liveByRequestId = new Set<string>();
+  for (const m of allLive) {
+    if (m.requestId) liveByRequestId.add(m.requestId);
   }
 
-  const liveFingerprints: { key: string; ts: number }[] = live
+  const liveFingerprints: { key: string; ts: number }[] = allLive
     .filter((m) => !m.requestId)
     .map((m) => ({
       key: `${m.isBot ? "assistant" : "user"}:${m.text}`,
@@ -160,13 +163,8 @@ export function mergeBaselineWithLive(
     }));
 
   const filtered = baseline.filter((b) => {
-    // Dedup by requestId+role — user and assistant may share requestId
-    if (
-      b.requestId &&
-      liveByRoleAndRequestId.has(`${b.isBot ? "assistant" : "user"}:${b.requestId}`)
-    ) {
-      return false;
-    }
+    // Dedup by requestId — exact match against live or thread parent
+    if (b.requestId && liveByRequestId.has(b.requestId)) return false;
     // Fingerprint fallback — only for messages with NO requestId
     if (!b.requestId) {
       const fp = `${b.isBot ? "assistant" : "user"}:${b.text}`;

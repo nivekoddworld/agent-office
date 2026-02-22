@@ -8,6 +8,7 @@ import {
   Tooltip,
 } from "@mantine/core";
 import {
+  IconMessage,
   IconCopy,
   IconArrowForwardUp,
   IconRobot,
@@ -23,6 +24,7 @@ export type { MessageUsage, SlackMessageData } from "./types.js";
 interface SlackMessageProps {
   message: SlackMessageData;
   onClickAvatar?: (agentName: string) => void;
+  onReply?: (message: SlackMessageData) => void;
   onResend?: (message: SlackMessageData) => void;
   compact?: boolean;
 }
@@ -62,10 +64,12 @@ function AgentAvatar({
 }
 
 function HoverActions({
+  onReply,
   onCopy,
   onResend,
   usage,
 }: {
+  onReply?: () => void;
   onCopy?: () => void;
   onResend?: () => void;
   usage?: SlackMessageData["usage"];
@@ -87,6 +91,13 @@ function HoverActions({
         <Tooltip label="Copy" position="top" withArrow>
           <ActionIcon size="sm" variant="subtle" color="gray" onClick={onCopy}>
             <IconCopy size={16} color={slack.textSecondary} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+      {onReply && (
+        <Tooltip label="Reply in thread" position="top" withArrow>
+          <ActionIcon size="sm" variant="subtle" color="gray" onClick={onReply}>
+            <IconMessage size={16} color={slack.textSecondary} />
           </ActionIcon>
         </Tooltip>
       )}
@@ -120,6 +131,7 @@ function HoverActions({
 export function SlackMessage({
   message,
   onClickAvatar,
+  onReply,
   onResend,
   compact,
 }: SlackMessageProps) {
@@ -144,6 +156,7 @@ export function SlackMessage({
       {hovered && (
         <HoverActions
           onCopy={handleCopy}
+          onReply={onReply ? () => onReply(message) : undefined}
           onResend={
             onResend && isOperator ? () => onResend(message) : undefined
           }
