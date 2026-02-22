@@ -22,3 +22,5 @@ export { createTaskCreateProxy } from "./task-create.js";
 export { createTaskUpdateProxy } from "./task-update.js";
 export { createTaskListProxy } from "./task-list.js";
 export { createTaskGetProxy } from "./task-get.js";
+export { createSessionSearchProxy } from "./session-search.js";
+export { createSessionReadRangeProxy } from "./session-read-range.js";

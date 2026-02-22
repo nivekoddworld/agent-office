@@ -1361,14 +1361,55 @@ into the agent's conversation context as a single summary preamble. This enables
 the model to reference prior turns and maintain conversational continuity across
 process restarts.
 
-| Aspect             | Behavior                                                    |
-| ------------------ | ----------------------------------------------------------- |
-| Trigger            | `init()` in `spawn()` and `handleStuck()`                  |
-| Window             | Last 50 DM records (user + assistant)                       |
-| Format             | Single `[Prior conversation context]` UserMessage preamble  |
-| Dedup              | Pending inbox user prompts excluded by requestId or text    |
-| Sandbox agents     | Not supported (sandbox manages own state lifecycle)         |
-| In-process agents  | Full support — replayed via `Agent.replaceMessages()`       |
+| Aspect            | Behavior                                                   |
+| ----------------- | ---------------------------------------------------------- |
+| Trigger           | `init()` in `spawn()` and `handleStuck()`                  |
+| Window            | Last 50 DM records (user + assistant)                      |
+| Format            | Single `[Prior conversation context]` UserMessage preamble |
+| Dedup             | Pending inbox user prompts excluded by requestId or text   |
+| Sandbox agents    | Not supported (sandbox manages own state lifecycle)        |
+| In-process agents | Full support — replayed via `Agent.replaceMessages()`      |
+
+#### Session Memory
+
+Channel-scoped shared session memory persists conversation turns across three session types:
+
+| Session key format | Scope                     | Access control                 |
+| ------------------ | ------------------------- | ------------------------------ |
+| `dm:<agent>`       | Private DM with one agent | Only the named agent           |
+| `ch:<channel>`     | Shared channel session    | Current members of the channel |
+| `internal:<agent>` | Inter-agent / cron / task | Only the named agent           |
+
+**Channels** are defined in `office.yaml` under `office.channels`:
+
+```yaml
+office:
+  name: my-team
+  channels:
+    general:
+      members: [pm, coder, reviewer]
+      description: Main discussion channel
+    design:
+      members: [pm, designer]
+```
+
+If no `general` channel is defined, a fallback is created with all agents as members. Channel membership is refreshed on `office reload`.
+
+**Access control** is enforced at read time (current-members-only). If an agent is removed from a channel and the office is reloaded, that agent immediately loses access to the channel's session history. Denied reads return `forbidden_session_access` with an audit log entry.
+
+**Summary checkpoints** are generated every 50 messages per session. Summaries are stored idempotently with `UNIQUE(session_key, to_seq)`. The `session_search` tool returns summary hits first, then message hits (summary-first retrieval).
+
+**Session tools** available to agents:
+
+- `session_search(query, sessionHint?, limit?)` — FTS search across accessible sessions
+- `session_read_range(sessionKey, fromSeq, toSeq)` — read exact turns from a session
+
+**Session APIs** (all require `?agent=` for ACL enforcement):
+
+- `GET /api/sessions?agent=<name>` — list session keys accessible to the agent
+- `GET /api/sessions/:key/messages?agent=<name>` — read session messages (403 if agent lacks access)
+- `GET /api/sessions/:key/summaries?agent=<name>` — read session summaries (403 if agent lacks access)
+- `POST /api/channels/:name/send` — broadcast or mention-targeted channel send
 
 ## Prompt Inspection
 

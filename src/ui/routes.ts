@@ -124,6 +124,7 @@ export function getBootstrapState(
     tasks: workspace.tasks.list(),
     officeId,
     officeName: workspace.office.name,
+    channels: Object.fromEntries(workspace.office.channels ?? []),
   };
 }
 

@@ -90,6 +90,8 @@ describe("createMessageAgentTool", () => {
       type: "prompt",
       payload: "hello",
       priority: Priority.NORMAL,
+      sessionKey: "internal:designer",
+      sourceKind: "internal",
     });
     expect(getText(result)).toContain("designer");
   });

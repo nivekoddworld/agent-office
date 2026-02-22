@@ -36,6 +36,7 @@ interface SlackSidebarProps {
   schedulerRunning: boolean;
   onToggleScheduler?: () => void;
   unreadCounts?: Record<string, number>;
+  channels?: Record<string, { members: string[]; description?: string }>;
 }
 
 function isActive(a: ChannelId, b: ChannelId): boolean {
@@ -108,6 +109,7 @@ export function SlackSidebar({
   schedulerRunning,
   onToggleScheduler,
   unreadCounts = {},
+  channels = {},
 }: SlackSidebarProps) {
   const runningCount = agents.filter((a) => a.status === "running").length;
 
@@ -187,19 +189,22 @@ export function SlackSidebar({
             />
           </Box>
 
-          {/* Channels */}
+          {/* Channels — driven from office config + cron */}
           <SidebarSection label="Channels">
-            <SidebarItem
-              icon={<IconHash size={15} color={slack.channelHashColor} />}
-              label="general"
-              active={isActive(activeChannel, {
-                kind: "channel",
-                name: "general",
-              })}
-              onClick={() =>
-                onSelectChannel({ kind: "channel", name: "general" })
-              }
-            />
+            {/* Config-defined channels (general fallback always present) */}
+            {Object.keys(channels).map((ch) => (
+              <SidebarItem
+                key={ch}
+                icon={<IconHash size={15} color={slack.channelHashColor} />}
+                label={ch}
+                active={isActive(activeChannel, {
+                  kind: "channel",
+                  name: ch,
+                })}
+                onClick={() => onSelectChannel({ kind: "channel", name: ch })}
+              />
+            ))}
+            {/* Cron is always shown as a built-in channel */}
             <SidebarItem
               icon={<IconHash size={15} color={slack.channelHashColor} />}
               label="cron"

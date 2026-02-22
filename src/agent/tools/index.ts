@@ -16,3 +16,5 @@ export { createTaskCreateTool } from "./task-create.js";
 export { createTaskUpdateTool } from "./task-update.js";
 export { createTaskListTool } from "./task-list.js";
 export { createTaskGetTool } from "./task-get.js";
+export { createSessionSearchTool } from "./session-search.js";
+export { createSessionReadRangeTool } from "./session-read-range.js";

@@ -13,7 +13,11 @@ import {
 import { IconAt, IconSend2 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
-import { createClientRequestId, sendMessage } from "./send-message.js";
+import {
+  createClientRequestId,
+  sendMessage,
+  sendChannelMessage,
+} from "./send-message.js";
 
 interface MessageInputProps {
   agentNames: string[];
@@ -40,15 +44,33 @@ export function MessageInput({
     setSelectedTarget(targetAgent);
   }, [targetAgent]);
 
+  const isDm = targetAgent != null;
+
   const send = useCallback(async () => {
     const content = text.trim();
-    if (!content || !selectedTarget || sending) return;
+    if (!content || sending) return;
+    // DM mode requires a target; channel mode can broadcast
+    if (isDm && !selectedTarget) return;
 
     setSending(true);
     const requestId = createClientRequestId();
     try {
-      await sendMessage({ agent: selectedTarget, message: content, requestId });
-      onMessageSent?.(selectedTarget, content, requestId);
+      if (isDm) {
+        await sendMessage({
+          agent: selectedTarget!,
+          message: content,
+          requestId,
+        });
+        onMessageSent?.(selectedTarget!, content, requestId);
+      } else {
+        await sendChannelMessage({
+          channel: channelName,
+          message: content,
+          mentions: selectedTarget ? [selectedTarget] : undefined,
+          requestId,
+        });
+        onMessageSent?.(selectedTarget ?? channelName, content, requestId);
+      }
       setText("");
     } catch (err) {
       notifications.show({
@@ -59,7 +81,7 @@ export function MessageInput({
     } finally {
       setSending(false);
     }
-  }, [text, selectedTarget, onMessageSent, sending]);
+  }, [text, selectedTarget, onMessageSent, sending, isDm, channelName]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -78,12 +100,12 @@ export function MessageInput({
     textareaRef.current?.focus();
   };
 
-  const isDm = targetAgent != null;
+  const canSend = isDm ? !!selectedTarget : true;
   const placeholder = isDm
     ? `Message ${channelName}`
     : selectedTarget
-      ? `Message @${selectedTarget} in ${channelName}`
-      : `Message ${channelName} (use @ to select agent)`;
+      ? `Message @${selectedTarget} in #${channelName}`
+      : `Message #${channelName} (broadcast, or @ to mention)`;
 
   return (
     <Box
@@ -186,17 +208,17 @@ export function MessageInput({
         </Group>
 
         <Tooltip
-          label={selectedTarget ? "Send" : "Use @ to select an agent"}
+          label={canSend ? "Send" : "Use @ to select an agent"}
           withArrow
         >
           <ActionIcon
             size="md"
-            variant={text.trim() && selectedTarget ? "filled" : "subtle"}
-            color={text.trim() && selectedTarget ? "green" : "gray"}
+            variant={text.trim() && canSend ? "filled" : "subtle"}
+            color={text.trim() && canSend ? "green" : "gray"}
             onClick={() => {
               void send();
             }}
-            disabled={!text.trim() || !selectedTarget || sending}
+            disabled={!text.trim() || !canSend || sending}
           >
             <IconSend2 size={16} />
           </ActionIcon>

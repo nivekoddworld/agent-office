@@ -173,6 +173,70 @@ describe("MessageBus persistence", () => {
     expect(store.loadInbox("bob")).toHaveLength(1);
   });
 
+  it("broadcast assigns per-recipient session keys", () => {
+    const bus = new MessageBus();
+    bus.setStore(store);
+    bus.register("alice");
+    bus.register("bob");
+    bus.send({
+      from: "__cron__",
+      to: "__broadcast__",
+      type: "prompt",
+      payload: "trigger",
+      priority: Priority.NORMAL,
+      sessionKey: "internal:__broadcast__",
+    });
+    const aliceMsg = bus.pop("alice");
+    const bobMsg = bus.pop("bob");
+    expect(aliceMsg?.sessionKey).toBe("internal:alice");
+    expect(bobMsg?.sessionKey).toBe("internal:bob");
+  });
+
+  it("preserves channel through persist+restore cycle", () => {
+    const bus1 = new MessageBus();
+    bus1.setStore(store);
+    bus1.register("alice");
+    bus1.send({
+      from: "__user__",
+      to: "alice",
+      type: "prompt",
+      payload: "ch-test",
+      priority: Priority.NORMAL,
+      sessionKey: "ch:general",
+      sourceKind: "channel",
+      channel: "general",
+    });
+    bus1.unregister("alice");
+
+    const bus2 = new MessageBus();
+    bus2.setStore(store);
+    bus2.register("alice");
+    const msg = bus2.pop("alice");
+    expect(msg?.channel).toBe("general");
+    expect(msg?.sourceKind).toBe("channel");
+    expect(msg?.sessionKey).toBe("ch:general");
+  });
+
+  it("preserves channel=undefined when not set", () => {
+    const bus1 = new MessageBus();
+    bus1.setStore(store);
+    bus1.register("bob");
+    bus1.send({
+      from: "__user__",
+      to: "bob",
+      type: "prompt",
+      payload: "no-ch",
+      priority: Priority.NORMAL,
+    });
+    bus1.unregister("bob");
+
+    const bus2 = new MessageBus();
+    bus2.setStore(store);
+    bus2.register("bob");
+    const msg = bus2.pop("bob");
+    expect(msg?.channel).toBeUndefined();
+  });
+
   it("works without store (no-op persistence)", () => {
     const bus = new MessageBus();
     bus.register("alice");

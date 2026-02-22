@@ -76,6 +76,7 @@ import {
 } from "../src/config/office-yaml.js";
 import { withOfficeLock } from "../src/config/lock.js";
 import { buildYamlEntry } from "../src/config/yaml-utils.js";
+import { validateChannelEntry } from "../src/config/yaml-validation.js";
 
 function writeOfficeYaml(id: string, content: string): void {
   const dir = officeDir(id);
@@ -886,5 +887,55 @@ describe("buildYamlEntry", () => {
   it("omits reports_to when unset", () => {
     const out = buildYamlEntry({});
     expect(out.reports_to).toBeUndefined();
+  });
+});
+
+// --- Channel validation ---
+
+describe("validateChannelEntry", () => {
+  const agents = ["alice", "bob", "carol"];
+
+  it("accepts valid channel", () => {
+    const errors = validateChannelEntry(
+      "general",
+      { members: ["alice", "bob"] },
+      agents,
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects duplicate members", () => {
+    const errors = validateChannelEntry(
+      "general",
+      { members: ["alice", "alice", "bob"] },
+      agents,
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("duplicate member");
+    expect(errors[0]).toContain("alice");
+    expect(errors[0]).toMatch(/^office\.channels\./);
+  });
+
+  it("rejects unknown agent in members", () => {
+    const errors = validateChannelEntry(
+      "general",
+      { members: ["alice", "unknown"] },
+      agents,
+    );
+    expect(errors.some((e) => e.includes("unknown agent"))).toBe(true);
+  });
+
+  it("rejects reserved channel name", () => {
+    const errors = validateChannelEntry(
+      "system",
+      { members: ["alice"] },
+      agents,
+    );
+    expect(errors.some((e) => e.includes("reserved"))).toBe(true);
+  });
+
+  it("rejects empty members", () => {
+    const errors = validateChannelEntry("general", { members: [] }, agents);
+    expect(errors.some((e) => e.includes("non-empty"))).toBe(true);
   });
 });

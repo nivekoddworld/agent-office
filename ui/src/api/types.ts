@@ -71,6 +71,11 @@ export interface Task {
   result?: string;
 }
 
+export interface ChannelConfig {
+  members: string[];
+  description?: string;
+}
+
 export interface BootstrapState {
   agents: AgentInfo[];
   scheduler: SchedulerState;
@@ -79,6 +84,7 @@ export interface BootstrapState {
   tasks: Task[];
   officeId: string;
   officeName: string;
+  channels?: Record<string, ChannelConfig>;
 }
 
 export interface BlockMeta {

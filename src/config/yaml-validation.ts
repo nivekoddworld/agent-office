@@ -16,6 +16,8 @@ const VALID_PRIORITY_NAMES = ["idle", "low", "normal", "high", "critical"];
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const CRON_JOB_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const VALID_CATCH_UP = ["skip", "once"];
+const CHANNEL_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const RESERVED_CHANNEL_NAMES = new Set(["tasks", "system", "__broadcast__"]);
 
 export function isValidTimezone(tz: string): boolean {
   try {
@@ -292,5 +294,41 @@ export function validateOfficeCronEntry(
     }
   }
 
+  return errors;
+}
+
+export function validateChannelEntry(
+  name: string,
+  entry: { members?: unknown; description?: unknown },
+  agentNames: string[],
+): string[] {
+  const errors: string[] = [];
+  const p = `office.channels.${name}`;
+  if (!CHANNEL_NAME_RE.test(name))
+    errors.push(`${p}: invalid channel name — must match [a-zA-Z0-9_-]+`);
+  if (RESERVED_CHANNEL_NAMES.has(name))
+    errors.push(`${p}: "${name}" is a reserved channel name`);
+  if (
+    !entry.members ||
+    !Array.isArray(entry.members) ||
+    entry.members.length === 0
+  ) {
+    errors.push(`${p}: members is required and must be a non-empty array`);
+  } else {
+    const seen = new Set<string>();
+    for (const m of entry.members) {
+      if (typeof m !== "string") {
+        errors.push(`${p}: member names must be strings`);
+      } else if (!agentNames.includes(m)) {
+        errors.push(`${p}: unknown agent "${m}"`);
+      } else if (seen.has(m)) {
+        errors.push(`${p}: duplicate member "${m}"`);
+      } else {
+        seen.add(m);
+      }
+    }
+  }
+  if (entry.description !== undefined && typeof entry.description !== "string")
+    errors.push(`${p}: description must be a string`);
   return errors;
 }

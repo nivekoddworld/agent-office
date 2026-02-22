@@ -250,6 +250,41 @@ export const CRON_LIST = {
   }),
 };
 
+// --- Session tools ---
+
+export const SESSION_SEARCH = {
+  name: "session_search" as const,
+  label: "Session Search",
+  description:
+    "Search conversation history across your accessible sessions. Returns matching snippets from summaries and messages.",
+  parameters: Type.Object({
+    query: Type.String({ description: "Search query" }),
+    sessionHint: Type.Optional(
+      Type.String({
+        description:
+          "Optional session key to narrow search (e.g. dm:alice, ch:general)",
+      }),
+    ),
+    limit: Type.Optional(
+      Type.Number({ description: "Max results (default: 20)" }),
+    ),
+  }),
+};
+
+export const SESSION_READ_RANGE = {
+  name: "session_read_range" as const,
+  label: "Session Read Range",
+  description:
+    "Read a range of messages from a session by sequence numbers. Use session_search first to discover sessions.",
+  parameters: Type.Object({
+    sessionKey: Type.String({
+      description: "Session key (e.g. dm:alice, ch:general, internal:bob)",
+    }),
+    fromSeq: Type.Number({ description: "Start sequence number (inclusive)" }),
+    toSeq: Type.Number({ description: "End sequence number (inclusive)" }),
+  }),
+};
+
 // --- Task tools ---
 
 export const TASK_CREATE = {

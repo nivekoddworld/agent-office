@@ -3,6 +3,7 @@ import { readFile, realpath } from "node:fs/promises";
 import { join, sep } from "node:path";
 import type { MessageBus } from "../transport/message-bus.js";
 import { Priority } from "../types.js";
+import { sessionKey } from "../messages/session-key.js";
 
 const MAX_BODY = 1_048_576; // 1 MB
 const MAX_SEND_BODY = 65_536; // 64 KB
@@ -97,6 +98,8 @@ export async function handleMessageAgent(
       type: "prompt",
       payload,
       priority: priority ?? Priority.NORMAL,
+      sessionKey: sessionKey("internal", to),
+      sourceKind: "internal",
     });
   } catch (err) {
     seenMessages.delete(messageId);

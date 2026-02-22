@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { MessageBus } from "../transport/message-bus.js";
 import { Priority } from "../types.js";
+import { sessionKey } from "../messages/session-key.js";
 import type { TaskStore } from "./task-store.js";
 import type { Task, TaskStatus, TaskFilter } from "./types.js";
 import { STATUS_TRANSITIONS, TASK_STATUSES } from "./types.js";
@@ -321,6 +322,8 @@ export class TaskService {
         type: "prompt",
         payload,
         priority: task.priority,
+        sessionKey: sessionKey("internal", task.createdBy),
+        sourceKind: "internal",
       });
     } catch {
       // Best-effort: creator agent might not be registered
@@ -347,6 +350,8 @@ export class TaskService {
         type: "prompt",
         payload,
         priority: task.priority,
+        sessionKey: sessionKey("internal", task.assignee),
+        sourceKind: "internal",
       });
     } catch {
       // Best-effort: agent might not be registered yet

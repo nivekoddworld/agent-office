@@ -12,6 +12,15 @@ export enum Priority {
   CRITICAL = 4,
 }
 
+// --- Session ---
+
+export type SourceKind = "dm" | "channel" | "internal";
+
+export interface ChannelConfig {
+  members: string[];
+  description?: string;
+}
+
 // --- Agent ---
 
 export type AgentStatus = "idle" | "running" | "dead";
@@ -66,6 +75,9 @@ export interface InboxMessage {
   priority: Priority;
   timestamp: number;
   requestId?: string;
+  sessionKey?: string;
+  sourceKind?: SourceKind;
+  channel?: string;
 }
 
 // --- Scheduler ---
@@ -105,6 +117,7 @@ export interface OfficeYaml {
     secrets?: Record<string, string>;
     cron?: Record<string, OfficeCronYamlEntry>;
     memory?: { citations?: "on" | "off" | "auto" };
+    channels?: Record<string, { members: string[]; description?: string }>;
   };
   agents: Record<string, import("./config/yaml-utils.js").AgentYamlEntry>;
 }
@@ -119,6 +132,7 @@ export interface OfficeContext {
   secrets: Record<string, string>;
   dir: string;
   citationMode: CitationMode;
+  channels: Map<string, ChannelConfig>;
 }
 
 // --- Workspace ---

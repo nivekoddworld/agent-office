@@ -1,7 +1,13 @@
 import { mkdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname } from "node:path";
-import type { PersistedInbox, DmRecord } from "./types.js";
+import type {
+  PersistedInbox,
+  DmRecord,
+  SessionMessage,
+  SessionSummary,
+  SessionSearchResult,
+} from "./types.js";
 
 export interface MessageStore {
   saveInbox(msg: Omit<PersistedInbox, "seq">): void;
@@ -12,6 +18,53 @@ export interface MessageStore {
   queryDm(agent: string, limit: number, beforeTs?: number): DmRecord[];
   deleteDm(agent: string): void;
   close(): void;
+
+  // Session
+  saveSession(msg: {
+    session_key: string;
+    session_seq: number;
+    role: string;
+    text: string;
+    ts_ms: number;
+    request_id: string | null;
+  }): void;
+  nextSessionSeq(sessionKey: string): number;
+  querySession(sessionKey: string, limit: number): SessionMessage[];
+  querySessionTail(
+    sessionKey: string,
+    afterSeq: number,
+    limit: number,
+  ): SessionMessage[];
+  saveSummary(summary: {
+    session_key: string;
+    from_seq: number;
+    to_seq: number;
+    summary: string;
+    model: string;
+  }): void;
+  latestSummary(sessionKey: string): SessionSummary | undefined;
+  querySummaries(sessionKey: string): SessionSummary[];
+  searchSessions(
+    query: string,
+    agentName: string,
+    channels: Map<string, { members: string[] }>,
+  ): SessionSearchResult[];
+  listSessionKeys(
+    agentName: string,
+    channels: Map<string, { members: string[] }>,
+  ): string[];
+  listAllSessionKeys(): string[];
+}
+
+function accessibleKeys(
+  agentName: string,
+  channels: Map<string, { members: string[] }>,
+): string[] {
+  const keys: string[] = [`dm:${agentName}`, `internal:${agentName}`];
+  for (const [ch, cfg] of channels) {
+    if (cfg.members.includes(agentName)) keys.push(`ch:${ch}`);
+  }
+  return keys;
 }
 
 export function createMessageStore(dbPath: string): MessageStore {
@@ -39,7 +92,7 @@ export function createMessageStore(dbPath: string): MessageStore {
     value TEXT NOT NULL
   )`);
   db.exec(
-    `INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('version', '2')`,
+    `INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('version', '4')`,
   );
 
   db.exec(`CREATE TABLE IF NOT EXISTS inbox_messages (
@@ -51,7 +104,10 @@ export function createMessageStore(dbPath: string): MessageStore {
     payload TEXT NOT NULL,
     priority INTEGER NOT NULL,
     request_id TEXT,
-    created_at_ms INTEGER NOT NULL
+    created_at_ms INTEGER NOT NULL,
+    session_key TEXT,
+    source_kind TEXT,
+    channel TEXT
   )`);
 
   db.exec(`CREATE TABLE IF NOT EXISTS dm_messages (
@@ -63,8 +119,7 @@ export function createMessageStore(dbPath: string): MessageStore {
     ts_ms INTEGER NOT NULL
   )`);
 
-  // v1 → v2 migration: replace index with id DESC tiebreaker for deterministic
-  // ordering. Runs after table creation so it's safe even for corrupt/partial DBs.
+  // v1 → v2 migration
   const version = db
     .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
     .get() as { value: string } | undefined;
@@ -77,16 +132,160 @@ export function createMessageStore(dbPath: string): MessageStore {
     db.exec(`UPDATE schema_meta SET value = '2' WHERE key = 'version'`);
   }
 
+  // v2 → v3 migration: session tables + FTS + DM backfill
+  const currentVersion = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+
+  if (!currentVersion || parseInt(currentVersion.value) < 3) {
+    db.exec(`BEGIN TRANSACTION`);
+    try {
+      db.exec(`CREATE TABLE IF NOT EXISTS session_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_key TEXT NOT NULL,
+        session_seq INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        text TEXT NOT NULL,
+        ts_ms INTEGER NOT NULL,
+        request_id TEXT,
+        UNIQUE(session_key, session_seq)
+      )`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_session_key_seq ON session_messages(session_key, session_seq DESC)`,
+      );
+
+      db.exec(`CREATE TABLE IF NOT EXISTS session_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_key TEXT NOT NULL,
+        from_seq INTEGER NOT NULL,
+        to_seq INTEGER NOT NULL,
+        summary TEXT NOT NULL,
+        model TEXT NOT NULL,
+        created_at_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+        UNIQUE(session_key, to_seq)
+      )`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_summary_key_seq ON session_summaries(session_key, to_seq DESC)`,
+      );
+
+      db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS session_messages_fts
+        USING fts5(session_key, text, content=session_messages, content_rowid=id)`);
+      db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS session_summaries_fts
+        USING fts5(session_key, summary, content=session_summaries, content_rowid=id)`);
+
+      db.exec(`CREATE TRIGGER IF NOT EXISTS session_messages_ai AFTER INSERT ON session_messages BEGIN
+        INSERT INTO session_messages_fts(rowid, session_key, text) VALUES (new.id, new.session_key, new.text);
+      END`);
+      db.exec(`CREATE TRIGGER IF NOT EXISTS session_summaries_ai AFTER INSERT ON session_summaries BEGIN
+        INSERT INTO session_summaries_fts(rowid, session_key, summary) VALUES (new.id, new.session_key, new.summary);
+      END`);
+
+      // Add session columns to inbox_messages (idempotent)
+      try {
+        db.exec(`ALTER TABLE inbox_messages ADD COLUMN session_key TEXT`);
+      } catch {
+        /* already exists */
+      }
+      try {
+        db.exec(`ALTER TABLE inbox_messages ADD COLUMN source_kind TEXT`);
+      } catch {
+        /* already exists */
+      }
+
+      // Backfill DMs into session_messages
+      const dms = db
+        .prepare(`SELECT * FROM dm_messages ORDER BY ts_ms ASC, id ASC`)
+        .all() as DmRecord[];
+      const seqCounters = new Map<string, number>();
+      const insertSess = db.prepare(
+        `INSERT INTO session_messages (session_key, session_seq, role, text, ts_ms, request_id) VALUES (?, ?, ?, ?, ?, ?)`,
+      );
+      for (const dm of dms) {
+        const key = `dm:${dm.agent}`;
+        const seq = (seqCounters.get(key) ?? 0) + 1;
+        seqCounters.set(key, seq);
+        insertSess.run(key, seq, dm.role, dm.text, dm.ts_ms, dm.request_id);
+      }
+
+      db.exec(`UPDATE schema_meta SET value = '3' WHERE key = 'version'`);
+      db.exec(`COMMIT`);
+    } catch (err) {
+      db.exec(`ROLLBACK`);
+      throw err;
+    }
+  }
+
+  // v3 → v4 migration: add channel column to inbox_messages
+  const v4Check = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+  if (v4Check && parseInt(v4Check.value) < 4) {
+    try {
+      db.exec(`ALTER TABLE inbox_messages ADD COLUMN channel TEXT`);
+    } catch {
+      /* already exists */
+    }
+    db.exec(`UPDATE schema_meta SET value = '4' WHERE key = 'version'`);
+  }
+
+  // Ensure session tables exist on fresh v3 DBs
+  db.exec(`CREATE TABLE IF NOT EXISTS session_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_key TEXT NOT NULL,
+    session_seq INTEGER NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    ts_ms INTEGER NOT NULL,
+    request_id TEXT,
+    UNIQUE(session_key, session_seq)
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS session_summaries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_key TEXT NOT NULL,
+    from_seq INTEGER NOT NULL,
+    to_seq INTEGER NOT NULL,
+    summary TEXT NOT NULL,
+    model TEXT NOT NULL,
+    created_at_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
+    UNIQUE(session_key, to_seq)
+  )`);
+
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts_v2 ON dm_messages(agent, ts_ms DESC, id DESC)`,
   );
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_inbox_to_priority_seq ON inbox_messages(to_agent, priority DESC, seq ASC)`,
   );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_session_key_seq ON session_messages(session_key, session_seq DESC)`,
+  );
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_summary_key_seq ON session_summaries(session_key, to_seq DESC)`,
+  );
+
+  // FTS tables (safe to CREATE IF NOT EXISTS on virtual tables)
+  try {
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS session_messages_fts
+      USING fts5(session_key, text, content=session_messages, content_rowid=id)`);
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS session_summaries_fts
+      USING fts5(session_key, summary, content=session_summaries, content_rowid=id)`);
+  } catch {
+    /* already exist */
+  }
+  try {
+    db.exec(`CREATE TRIGGER IF NOT EXISTS session_messages_ai AFTER INSERT ON session_messages BEGIN
+      INSERT INTO session_messages_fts(rowid, session_key, text) VALUES (new.id, new.session_key, new.text);
+    END`);
+    db.exec(`CREATE TRIGGER IF NOT EXISTS session_summaries_ai AFTER INSERT ON session_summaries BEGIN
+      INSERT INTO session_summaries_fts(rowid, session_key, summary) VALUES (new.id, new.session_key, new.summary);
+    END`);
+  } catch {
+    /* already exist */
+  }
 
   const insertInbox = db.prepare(
-    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms, session_key, source_kind, channel)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const selectInbox = db.prepare(
     `SELECT * FROM inbox_messages WHERE to_agent = ? ORDER BY priority DESC, seq ASC`,
@@ -106,6 +305,32 @@ export function createMessageStore(dbPath: string): MessageStore {
   );
   const deleteDmByAgent = db.prepare(`DELETE FROM dm_messages WHERE agent = ?`);
 
+  // Session prepared statements
+  const insertSession = db.prepare(
+    `INSERT INTO session_messages (session_key, session_seq, role, text, ts_ms, request_id) VALUES (?, ?, ?, ?, ?, ?)`,
+  );
+  const selectSession = db.prepare(
+    `SELECT * FROM session_messages WHERE session_key = ? ORDER BY session_seq DESC LIMIT ?`,
+  );
+  const selectSessionTail = db.prepare(
+    `SELECT * FROM session_messages WHERE session_key = ? AND session_seq > ? ORDER BY session_seq ASC LIMIT ?`,
+  );
+  const maxSeq = db.prepare(
+    `SELECT MAX(session_seq) AS m FROM session_messages WHERE session_key = ?`,
+  );
+  const insertSummary = db.prepare(
+    `INSERT OR IGNORE INTO session_summaries (session_key, from_seq, to_seq, summary, model) VALUES (?, ?, ?, ?, ?)`,
+  );
+  const selectLatestSummary = db.prepare(
+    `SELECT * FROM session_summaries WHERE session_key = ? ORDER BY to_seq DESC LIMIT 1`,
+  );
+  const selectAllSummaries = db.prepare(
+    `SELECT * FROM session_summaries WHERE session_key = ? ORDER BY to_seq ASC`,
+  );
+  const selectAllSessionKeys = db.prepare(
+    `SELECT DISTINCT session_key FROM session_messages`,
+  );
+
   return {
     saveInbox(msg) {
       insertInbox.run(
@@ -117,6 +342,9 @@ export function createMessageStore(dbPath: string): MessageStore {
         msg.priority,
         msg.request_id,
         msg.created_at_ms,
+        msg.session_key ?? null,
+        msg.source_kind ?? null,
+        msg.channel ?? null,
       );
     },
     loadInbox(agent) {
@@ -148,6 +376,100 @@ export function createMessageStore(dbPath: string): MessageStore {
     },
     close() {
       db.close();
+    },
+
+    // --- Session ---
+    saveSession(msg) {
+      insertSession.run(
+        msg.session_key,
+        msg.session_seq,
+        msg.role,
+        msg.text,
+        msg.ts_ms,
+        msg.request_id,
+      );
+    },
+    nextSessionSeq(sessionKey) {
+      const row = maxSeq.get(sessionKey) as { m: number | null } | undefined;
+      return (row?.m ?? 0) + 1;
+    },
+    querySession(sessionKey, limit) {
+      return (
+        selectSession.all(sessionKey, limit) as SessionMessage[]
+      ).reverse();
+    },
+    querySessionTail(sessionKey, afterSeq, limit) {
+      return selectSessionTail.all(
+        sessionKey,
+        afterSeq,
+        limit,
+      ) as SessionMessage[];
+    },
+    saveSummary(summary) {
+      insertSummary.run(
+        summary.session_key,
+        summary.from_seq,
+        summary.to_seq,
+        summary.summary,
+        summary.model,
+      );
+    },
+    latestSummary(sessionKey) {
+      return selectLatestSummary.get(sessionKey) as SessionSummary | undefined;
+    },
+    querySummaries(sessionKey) {
+      return selectAllSummaries.all(sessionKey) as SessionSummary[];
+    },
+    searchSessions(query, agentName, channels) {
+      const keys = accessibleKeys(agentName, channels);
+      if (keys.length === 0) return [];
+      const ph = keys.map(() => "?").join(",");
+
+      const summaryHits = db
+        .prepare(
+          `SELECT s.session_key, s.summary AS snippet, s.created_at_ms AS ts_ms, rank
+           FROM session_summaries_fts f
+           JOIN session_summaries s ON f.rowid = s.id
+           WHERE f.session_summaries_fts MATCH ?
+             AND s.session_key IN (${ph})
+           ORDER BY rank LIMIT 20`,
+        )
+        .all(query, ...keys) as Array<{
+        session_key: string;
+        snippet: string;
+        ts_ms: number;
+        rank: number;
+      }>;
+
+      const messageHits = db
+        .prepare(
+          `SELECT m.session_key, m.text AS snippet, m.ts_ms, rank
+           FROM session_messages_fts f
+           JOIN session_messages m ON f.rowid = m.id
+           WHERE f.session_messages_fts MATCH ?
+             AND m.session_key IN (${ph})
+           ORDER BY rank LIMIT 20`,
+        )
+        .all(query, ...keys) as Array<{
+        session_key: string;
+        snippet: string;
+        ts_ms: number;
+        rank: number;
+      }>;
+
+      return [
+        ...summaryHits.map((r) => ({ ...r, kind: "summary" as const })),
+        ...messageHits.map((r) => ({ ...r, kind: "message" as const })),
+      ];
+    },
+    listSessionKeys(agentName, channels) {
+      return accessibleKeys(agentName, channels);
+    },
+    listAllSessionKeys() {
+      const rows = selectAllSessionKeys.all() as Array<{
+        session_key: string;
+      }>;
+      return rows.map((r) => r.session_key);
     },
   };
 }

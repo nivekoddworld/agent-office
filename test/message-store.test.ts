@@ -350,13 +350,13 @@ describe("MessageStore", () => {
     expect(dms[1]!.text).toBe("second");
     expect(dms[2]!.text).toBe("first");
 
-    // Verify schema version is '2'
+    // Verify schema version is '4' (v1→v2→v3→v4 migration chain)
     const db2 = new DatabaseSync(dbPath);
     const row = db2
       .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
       .get() as { value: string };
     db2.close();
-    expect(row.value).toBe("2");
+    expect(row.value).toBe("4");
 
     // Verify old index is gone, new index exists
     const db3 = new DatabaseSync(dbPath);

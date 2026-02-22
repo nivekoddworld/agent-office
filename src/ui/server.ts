@@ -10,6 +10,8 @@ import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, extname, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Priority } from "../types.js";
+import { sessionKey } from "../messages/session-key.js";
+import { canAccessSession } from "../messages/session-acl.js";
 import { TASK_STATUSES, type TaskStatus } from "../tasks/types.js";
 import type { Workspace } from "../workspace.js";
 import { EventBuffer } from "./event-buffer.js";
@@ -744,6 +746,146 @@ export async function startUiServer(
     // --- GET /api/cron ---
     if (path === "/api/cron" && method === "GET") {
       return json(res, 200, workspace.cron.listJobs());
+    }
+
+    // --- POST /api/channels/:name/send ---
+    const chSendMatch = path.match(/^\/api\/channels\/([^/]+)\/send$/);
+    if (chSendMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const channelName = chSendMatch[1]!;
+      const cfg = workspace.office.channels.get(channelName);
+      if (!cfg) return json(res, 404, { error: "channel_not_found" });
+      const body = await readBody(req);
+      let parsed: {
+        message?: string;
+        mentions?: string[];
+        priority?: string;
+        requestId?: string;
+      };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.message) return json(res, 400, { error: "missing_message" });
+      if (parsed.mentions?.length) {
+        const invalid = parsed.mentions.filter((m) => !cfg.members.includes(m));
+        if (invalid.length > 0) {
+          return json(res, 400, {
+            error: `unknown mentions: ${invalid.join(", ")}`,
+          });
+        }
+      }
+      const priorityResult = parsed.priority
+        ? parsePriority(parsed.priority)
+        : { ok: true as const, value: Priority.NORMAL };
+      if (!priorityResult.ok)
+        return json(res, 400, { error: priorityResult.error });
+      const pri = priorityResult.value ?? Priority.NORMAL;
+      const targets = parsed.mentions?.length ? parsed.mentions : cfg.members;
+      const sk = sessionKey("channel", channelName);
+      const reqId = parsed.requestId ?? undefined;
+
+      // Persist exactly one user turn to session_messages
+      if (workspace.store) {
+        try {
+          const seq = workspace.store.nextSessionSeq(sk);
+          workspace.store.saveSession({
+            session_key: sk,
+            session_seq: seq,
+            role: "user",
+            text: parsed.message,
+            ts_ms: Date.now(),
+            request_id: reqId ?? null,
+          });
+          workspace.triggerSummaryCheck(sk);
+        } catch (err) {
+          console.error("[ui] Failed to persist channel user turn:", err);
+        }
+      }
+
+      // Fan out to targets (no afterEnqueue session persistence for channel)
+      for (const target of targets) {
+        try {
+          workspace.bus.send({
+            from: "__user__",
+            to: target,
+            type: "prompt",
+            payload: parsed.message,
+            priority: pri,
+            requestId: reqId,
+            sessionKey: sk,
+            sourceKind: "channel",
+            channel: channelName,
+          });
+        } catch {
+          // best-effort per target
+        }
+      }
+      broadcast("state_changed", getBootstrapState(workspace, officeId));
+      return json(res, 200, { ok: true, targets });
+    }
+
+    // --- GET /api/sessions ---
+    if (path === "/api/sessions" && method === "GET") {
+      if (!workspace.store) return json(res, 200, { sessions: [] });
+      const agentParam = url.searchParams.get("agent");
+      if (!agentParam)
+        return json(res, 400, { error: "missing_agent_param" });
+      const keys = workspace.store.listSessionKeys(
+        agentParam,
+        workspace.office.channels,
+      );
+      return json(res, 200, { sessions: keys });
+    }
+
+    // --- GET /api/sessions/:key/summaries ---
+    const summariesMatch = path.match(/^\/api\/sessions\/(.+)\/summaries$/);
+    if (summariesMatch && method === "GET") {
+      if (!workspace.store) return json(res, 200, { summaries: [] });
+      const sk = decodeURIComponent(summariesMatch[1]!);
+      const agentParam = url.searchParams.get("agent");
+      if (!agentParam)
+        return json(res, 400, { error: "missing_agent_param" });
+      if (!canAccessSession(agentParam, sk, workspace.office.channels)) {
+        console.warn(
+          `[session-acl] forbidden_session_access agent=${agentParam} key=${sk}`,
+        );
+        return json(res, 403, { error: "forbidden_session_access" });
+      }
+      const summaries = workspace.store.querySummaries(sk);
+      return json(res, 200, { session_key: sk, summaries });
+    }
+
+    // --- GET /api/sessions/:key/messages ---
+    const sessionMsgMatch = path.match(/^\/api\/sessions\/(.+)\/messages$/);
+    if (sessionMsgMatch && method === "GET") {
+      if (!workspace.store) return json(res, 200, { messages: [] });
+      const sk = decodeURIComponent(sessionMsgMatch[1]!);
+      const agentParam = url.searchParams.get("agent");
+      if (!agentParam)
+        return json(res, 400, { error: "missing_agent_param" });
+      if (!canAccessSession(agentParam, sk, workspace.office.channels)) {
+        console.warn(
+          `[session-acl] forbidden_session_access agent=${agentParam} key=${sk}`,
+        );
+        return json(res, 403, { error: "forbidden_session_access" });
+      }
+      const rawLimit = parseInt(url.searchParams.get("limit") ?? "50", 10);
+      const limit = Math.max(1, Math.min(200, isNaN(rawLimit) ? 50 : rawLimit));
+      const msgs = workspace.store.querySession(sk, limit);
+      return json(res, 200, {
+        session_key: sk,
+        messages: msgs.map((m) => ({
+          seq: m.session_seq,
+          role: m.role,
+          text: m.text,
+          ts: m.ts_ms,
+          requestId: m.request_id,
+        })),
+      });
     }
 
     // --- GET /api/cost ---

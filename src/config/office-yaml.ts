@@ -8,13 +8,19 @@ import {
   officeAgentsDir,
   validateOfficeId,
 } from "../constants.js";
-import type { OfficeYaml, OfficeContext, CitationMode } from "../types.js";
+import type {
+  OfficeYaml,
+  OfficeContext,
+  CitationMode,
+  ChannelConfig,
+} from "../types.js";
 import type { AgentYamlEntry } from "./yaml-utils.js";
 import { resolveEnvRefs } from "./env-substitution.js";
 import { withOfficeLock } from "./lock.js";
 import {
   validateAgentEntry,
   validateOfficeCronEntry,
+  validateChannelEntry,
   atomicWriteYaml,
 } from "./yaml-utils.js";
 import type { OfficeCronYamlEntry } from "../types.js";
@@ -147,6 +153,9 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       memory: office.memory as
         | { citations?: "on" | "off" | "auto" }
         | undefined,
+      channels: office.channels as
+        | Record<string, { members: string[]; description?: string }>
+        | undefined,
     },
     agents: result,
   };
@@ -196,6 +205,12 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
     }
   }
 
+  if (config.office.channels) {
+    for (const [name, entry] of Object.entries(config.office.channels)) {
+      errors.push(...validateChannelEntry(name, entry, agentNames));
+    }
+  }
+
   if (config.office.memory) {
     const c = config.office.memory.citations;
     if (c !== undefined && c !== "on" && c !== "off" && c !== "auto") {
@@ -214,6 +229,21 @@ export function buildOfficeContext(
   id: string,
   yaml: OfficeYaml,
 ): OfficeContext {
+  const channels = new Map<string, ChannelConfig>();
+  if (yaml.office.channels) {
+    for (const [name, cfg] of Object.entries(yaml.office.channels)) {
+      channels.set(name, {
+        members: cfg.members,
+        description: cfg.description,
+      });
+    }
+  }
+  // Deterministic fallback: add "general" with all agents if not defined
+  if (!channels.has("general")) {
+    channels.set("general", {
+      members: Object.keys(yaml.agents),
+    });
+  }
   return {
     id,
     name: yaml.office.name,
@@ -222,6 +252,7 @@ export function buildOfficeContext(
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),
     citationMode: (yaml.office.memory?.citations as CitationMode) ?? "auto",
+    channels,
   };
 }
 

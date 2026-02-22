@@ -1,5 +1,5 @@
 import { LocalTransport } from "./local.js";
-import type { InboxMessage, Priority } from "../types.js";
+import type { InboxMessage, Priority, SourceKind } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 
 /**
@@ -36,6 +36,9 @@ export class MessageBus {
         priority: msg.priority,
         created_at_ms: msg.timestamp,
         request_id: msg.requestId ?? null,
+        session_key: msg.sessionKey ?? null,
+        source_kind: msg.sourceKind ?? null,
+        channel: msg.channel ?? null,
       });
     };
   }
@@ -54,6 +57,9 @@ export class MessageBus {
           priority: p.priority,
           timestamp: p.created_at_ms,
           requestId: p.request_id ?? undefined,
+          sessionKey: p.session_key ?? undefined,
+          sourceKind: (p.source_kind as SourceKind) ?? undefined,
+          channel: p.channel ?? undefined,
         }));
         this.transport.restore(name, msgs);
       }
@@ -65,6 +71,10 @@ export class MessageBus {
     this.sendCounts.delete(name);
   }
 
+  setAfterEnqueueHook(fn: (msg: InboxMessage) => void): void {
+    this.transport.onAfterEnqueue = fn;
+  }
+
   send(opts: {
     from: string;
     to: string;
@@ -72,6 +82,9 @@ export class MessageBus {
     payload: string;
     priority: Priority;
     requestId?: string;
+    sessionKey?: string;
+    sourceKind?: SourceKind;
+    channel?: string;
   }): void {
     // Rate-limit non-user/system sources to protect inbox health.
     const limit = resolveRateLimit(opts.from);

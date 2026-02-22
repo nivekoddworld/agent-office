@@ -76,6 +76,7 @@ const PRIORITY_NUM_TO_NAME: Record<number, string> = {
 export {
   validateAgentEntry,
   validateOfficeCronEntry,
+  validateChannelEntry,
   isValidTimezone,
 } from "./yaml-validation.js";
 

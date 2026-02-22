@@ -17,6 +17,7 @@ function mockHandle(
       this.status = s;
     }),
     setActiveRequestId: vi.fn(),
+    setActiveSessionKey: vi.fn(),
     prompt: vi.fn(async () => {}),
     steer: vi.fn(async () => {}),
     info: vi.fn(() => ({
@@ -274,6 +275,7 @@ describe("Scheduler", () => {
         this.status = s;
       }),
       setActiveRequestId: vi.fn(),
+      setActiveSessionKey: vi.fn(),
       prompt: vi.fn(async () => promptPromise),
       steer: vi.fn(async () => {}),
       info: vi.fn(() => ({

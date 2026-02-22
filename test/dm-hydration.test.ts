@@ -228,7 +228,9 @@ function inbox(
 
 describe("formatDmHistory", () => {
   it("formats single user record", () => {
-    const result = formatDmHistory([dm({ id: 1, role: "user", text: "hello" })]);
+    const result = formatDmHistory([
+      dm({ id: 1, role: "user", text: "hello" }),
+    ]);
     expect(result).toBe("--- user ---\nhello");
   });
 
@@ -295,9 +297,7 @@ describe("filterDmForHydration", () => {
     const records = [
       dm({ id: 1, role: "user", text: "trigger", request_id: null }),
     ];
-    const pending = [
-      inbox({ id: "m1", from: "__cron__", payload: "trigger" }),
-    ];
+    const pending = [inbox({ id: "m1", from: "__cron__", payload: "trigger" })];
     const result = filterDmForHydration(records, pending);
     expect(result).toHaveLength(1);
   });
@@ -402,11 +402,41 @@ describe("hydration pipeline integration", () => {
   });
 
   it("multi-turn continuity: hydrated context includes all persisted turns", async () => {
-    store.saveDm({ agent: "test-agent", role: "user", text: "hello", ts_ms: 100, request_id: "r1" });
-    store.saveDm({ agent: "test-agent", role: "assistant", text: "hi there", ts_ms: 200, request_id: "r1" });
-    store.saveDm({ agent: "test-agent", role: "user", text: "write code", ts_ms: 300, request_id: "r2" });
-    store.saveDm({ agent: "test-agent", role: "assistant", text: "done", ts_ms: 400, request_id: "r2" });
-    store.saveDm({ agent: "test-agent", role: "user", text: "thanks", ts_ms: 500, request_id: "r3" });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "hello",
+      ts_ms: 100,
+      request_id: "r1",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "assistant",
+      text: "hi there",
+      ts_ms: 200,
+      request_id: "r1",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "write code",
+      ts_ms: 300,
+      request_id: "r2",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "assistant",
+      text: "done",
+      ts_ms: 400,
+      request_id: "r2",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "thanks",
+      ts_ms: 500,
+      request_id: "r3",
+    });
 
     const records = store.queryDm("test-agent", 50);
     expect(records).toHaveLength(5);
@@ -452,9 +482,27 @@ describe("hydration pipeline integration", () => {
   });
 
   it("no-duplicate-after-pending-inbox: pending user prompt filtered from replay", () => {
-    store.saveDm({ agent: "test-agent", role: "user", text: "first", ts_ms: 100, request_id: "r1" });
-    store.saveDm({ agent: "test-agent", role: "assistant", text: "response", ts_ms: 200, request_id: "r1" });
-    store.saveDm({ agent: "test-agent", role: "user", text: "second", ts_ms: 300, request_id: "r2" });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "first",
+      ts_ms: 100,
+      request_id: "r1",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "assistant",
+      text: "response",
+      ts_ms: 200,
+      request_id: "r1",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "second",
+      ts_ms: 300,
+      request_id: "r2",
+    });
 
     bus.send({
       from: "__user__",
@@ -475,9 +523,27 @@ describe("hydration pipeline integration", () => {
   });
 
   it("counted dedup: only drops one record per pending fingerprint match", () => {
-    store.saveDm({ agent: "test-agent", role: "user", text: "ok", ts_ms: 100, request_id: null });
-    store.saveDm({ agent: "test-agent", role: "user", text: "ok", ts_ms: 200, request_id: null });
-    store.saveDm({ agent: "test-agent", role: "user", text: "ok", ts_ms: 300, request_id: null });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "ok",
+      ts_ms: 100,
+      request_id: null,
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "ok",
+      ts_ms: 200,
+      request_id: null,
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "ok",
+      ts_ms: 300,
+      request_id: null,
+    });
 
     bus.send({
       from: "__user__",
@@ -497,9 +563,27 @@ describe("hydration pipeline integration", () => {
   });
 
   it("restart replay: simulates watchdog restart hydration", async () => {
-    store.saveDm({ agent: "test-agent", role: "user", text: "start task", ts_ms: 100, request_id: "r1" });
-    store.saveDm({ agent: "test-agent", role: "assistant", text: "working on it", ts_ms: 200, request_id: "r1" });
-    store.saveDm({ agent: "test-agent", role: "user", text: "status?", ts_ms: 300, request_id: "r2" });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "start task",
+      ts_ms: 100,
+      request_id: "r1",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "assistant",
+      text: "working on it",
+      ts_ms: 200,
+      request_id: "r1",
+    });
+    store.saveDm({
+      agent: "test-agent",
+      role: "user",
+      text: "status?",
+      ts_ms: 300,
+      request_id: "r2",
+    });
 
     // Simulate restart: re-query store, filter, seed
     const records = store.queryDm("test-agent", 50);

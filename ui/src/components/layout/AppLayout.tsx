@@ -102,6 +102,7 @@ export function AppLayout({ state }: AppLayoutProps) {
           schedulerRunning={state.scheduler.running}
           onToggleScheduler={handleToggleScheduler}
           unreadCounts={unreadCounts}
+          channels={state.channels}
         />
       </Box>
 

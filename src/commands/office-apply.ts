@@ -5,7 +5,11 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { Workspace } from "../workspace.js";
 import { officeYamlPath, officeDir } from "../constants.js";
-import { loadOfficeYaml, validateOfficeConfig } from "../config/office-yaml.js";
+import {
+  loadOfficeYaml,
+  validateOfficeConfig,
+  buildOfficeContext,
+} from "../config/office-yaml.js";
 import type { AgentYamlEntry } from "../config/yaml-utils.js";
 import { withOfficeLock } from "../config/lock.js";
 import {
@@ -165,6 +169,10 @@ export async function applyOfficeYaml(
   }
 
   const baseDir = officeDir(officeId);
+
+  // Refresh channel membership from latest YAML
+  const freshContext = buildOfficeContext(officeId, yaml);
+  workspace.updateChannels(freshContext.channels);
 
   const hierarchyMap = buildHierarchyMap(yaml.agents);
   const entries = Object.entries(yaml.agents);

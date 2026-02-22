@@ -12,8 +12,10 @@ import type {
   AgentConfig,
   AgentInfo,
   AgentStatus,
+  ChannelConfig,
   CitationMode,
 } from "../types.js";
+import type { MessageStore } from "../messages/message-store.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { composeSystemPrompt } from "./prompts/prompt-manager.js";
@@ -54,6 +56,8 @@ export interface AgentHandleDeps {
   citationMode?: CitationMode;
   cronService?: CronService;
   taskService?: TaskService;
+  messageStore?: MessageStore;
+  channels?: Map<string, ChannelConfig>;
 }
 
 export class AgentHandle {
@@ -71,6 +75,7 @@ export class AgentHandle {
   private _lastHeartbeat = Date.now();
   private listeners: Array<(e: AgentEvent) => void> = [];
   private _activeRequestId: string | undefined;
+  private _activeSessionKey: string | undefined;
   private baseDir: string;
   private officeId: string;
   private officeName: string;
@@ -78,6 +83,8 @@ export class AgentHandle {
   private citationMode: CitationMode;
   private cronService?: CronService;
   private taskService?: TaskService;
+  private _messageStore?: MessageStore;
+  private _channels?: Map<string, ChannelConfig>;
   private _bootstrapDir: string;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
@@ -94,6 +101,8 @@ export class AgentHandle {
     this.citationMode = deps.citationMode ?? "auto";
     this.cronService = deps.cronService;
     this.taskService = deps.taskService;
+    this._messageStore = deps.messageStore;
+    this._channels = deps.channels;
     this._bootstrapDir =
       config.bootstrapDir ??
       join(deps.baseDir, "agents", config.name, "bootstrap");
@@ -131,6 +140,14 @@ export class AgentHandle {
 
   getActiveRequestId(): string | undefined {
     return this._activeRequestId;
+  }
+
+  setActiveSessionKey(key: string | undefined): void {
+    this._activeSessionKey = key;
+  }
+
+  getActiveSessionKey(): string | undefined {
+    return this._activeSessionKey;
   }
 
   private get agentDir(): string {
@@ -210,6 +227,9 @@ export class AgentHandle {
       this.listAgentsFn,
       this.cronService,
       this.taskService,
+      this._messageStore && this._channels
+        ? { store: this._messageStore, channels: this._channels }
+        : undefined,
     );
     this.agent = result.agent;
     this._toolCount = result.toolCount;
@@ -350,6 +370,50 @@ export class AgentHandle {
           `The following is the conversation history from a previous session. ` +
           `Each turn is prefixed with the speaker role.\n\n${history}`,
         timestamp: records[records.length - 1]!.ts_ms,
+      },
+    ]);
+  }
+
+  /**
+   * Seed the agent's message history from session summary + tail.
+   * Called by the scheduler before dispatch when a session key is active.
+   */
+  seedSessionContext(sk: string, currentPayload?: string): void {
+    if (!this.agent || !this._messageStore) return;
+    const MAX_TAIL = 30;
+    const summary = this._messageStore.latestSummary(sk);
+    const afterSeq = summary?.to_seq ?? 0;
+    const tail = this._messageStore.querySessionTail(sk, afterSeq, MAX_TAIL);
+
+    // Exclude the in-flight user turn — it will be sent as the actual prompt
+    if (currentPayload && tail.length > 0) {
+      const last = tail[tail.length - 1]!;
+      if (last.role === "user" && last.text === currentPayload) {
+        tail.pop();
+      }
+    }
+
+    if (!summary && tail.length === 0) return;
+
+    const parts: string[] = [];
+    if (summary) {
+      parts.push(
+        `[Session summary up to seq ${summary.to_seq}]\n${summary.summary}`,
+      );
+    }
+    if (tail.length > 0) {
+      const history = tail
+        .map((m) => `[seq=${m.session_seq} ${m.role}] ${m.text}`)
+        .join("\n\n");
+      parts.push(`[Recent turns]\n${history}`);
+    }
+
+    const ts = tail.length > 0 ? tail[tail.length - 1]!.ts_ms : Date.now();
+    this.agent.replaceMessages([
+      {
+        role: "user" as const,
+        content: `[Session context for ${sk}]\n` + parts.join("\n\n"),
+        timestamp: ts,
       },
     ]);
   }

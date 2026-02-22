@@ -7,6 +7,8 @@ export class LocalTransport {
 
   /** Called before a message is pushed into the queue. Throwing blocks enqueue. */
   onBeforeEnqueue?: (msg: InboxMessage) => void;
+  /** Called after a message has been pushed into the queue. */
+  onAfterEnqueue?: (msg: InboxMessage) => void;
 
   /** Returns true if a new inbox was created, false if it already existed. */
   register(name: string): boolean {
@@ -30,9 +32,11 @@ export class LocalTransport {
           id: randomUUID(),
           to: name,
           timestamp: Date.now(),
+          sessionKey: `internal:${name}`,
         };
         this.onBeforeEnqueue?.(copy);
         queue.push(copy);
+        this.onAfterEnqueue?.(copy);
       }
       return;
     }
@@ -46,6 +50,7 @@ export class LocalTransport {
     };
     this.onBeforeEnqueue?.(full);
     queue.push(full);
+    this.onAfterEnqueue?.(full);
   }
 
   /** Push a full message back into the queue (preserves original id/timestamp). */

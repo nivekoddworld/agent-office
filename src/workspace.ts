@@ -16,6 +16,8 @@ import type {
   Priority,
   WorkspaceConfig,
 } from "./types.js";
+import { sessionKey } from "./messages/session-key.js";
+import { maybeTriggerSummary } from "./messages/session-summary.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
@@ -95,8 +97,31 @@ export class Workspace {
     const dbPath = join(this.office.dir, "messages", "messages.sqlite");
     this.messageStore = createMessageStore(dbPath);
     this.bus.setStore(this.messageStore);
+    this.bus.setAfterEnqueueHook((msg) => {
+      if (!msg.sessionKey || !this.messageStore) return;
+      // Channel user turns are persisted once at send time; skip fanout duplicates
+      if (msg.sourceKind === "channel") return;
+      try {
+        const seq = this.messageStore.nextSessionSeq(msg.sessionKey);
+        this.messageStore.saveSession({
+          session_key: msg.sessionKey,
+          session_seq: seq,
+          role: "user",
+          text: msg.payload,
+          ts_ms: msg.timestamp,
+          request_id: msg.requestId ?? null,
+        });
+        this.triggerSummaryCheck(msg.sessionKey);
+      } catch (err) {
+        console.error("[workspace] Failed to persist user session turn:", err);
+      }
+    });
 
     if (this.hostApi && this.sandboxMode === "docker") {
+      this.hostApi.setSessionDeps({
+        store: this.messageStore,
+        channels: this.office.channels,
+      });
       await this.hostApi.start(this.hostApiPort);
     }
     this.scheduler.start();
@@ -181,6 +206,8 @@ export class Workspace {
       citationMode: this.office.citationMode,
       cronService: this.cron,
       taskService: this.tasks,
+      messageStore: this.messageStore ?? undefined,
+      channels: this.office.channels,
     });
     try {
       await handle.init();
@@ -259,20 +286,47 @@ export class Workspace {
           }
         }
 
-        // Persist assistant DM text (independent of usage tracking)
+        // Persist assistant text to session_messages (+ dm_messages for DM sessions)
         if (msg.role === "assistant" && this.messageStore) {
           const text = extractDmText(msg.content);
           if (text) {
+            const sk = handle.getActiveSessionKey();
             try {
-              this.messageStore.saveDm({
-                agent: config.name,
-                role: "assistant",
-                text,
-                ts_ms: Date.now(),
-                request_id: requestId ?? null,
-              });
+              // Legacy DM dual-write only for dm:* sessions
+              if (!sk || sk.startsWith("dm:")) {
+                this.messageStore.saveDm({
+                  agent: config.name,
+                  role: "assistant",
+                  text,
+                  ts_ms: Date.now(),
+                  request_id: requestId ?? null,
+                });
+              }
+              if (sk) {
+                const seq = this.messageStore.nextSessionSeq(sk);
+                this.messageStore.saveSession({
+                  session_key: sk,
+                  session_seq: seq,
+                  role: "assistant",
+                  text,
+                  ts_ms: Date.now(),
+                  request_id: requestId ?? null,
+                });
+                // Async summary checkpoint (fire-and-forget)
+                maybeTriggerSummary(
+                  this.messageStore!,
+                  sk,
+                  config.model,
+                  resolveModelKey(config),
+                ).catch(() => {
+                  /* best-effort */
+                });
+              }
             } catch (err) {
-              console.error("[workspace] Failed to persist assistant DM:", err);
+              console.error(
+                "[workspace] Failed to persist assistant turn:",
+                err,
+              );
             }
           }
         }
@@ -309,6 +363,8 @@ export class Workspace {
       payload: text,
       priority: priority ?? handle.config.priority,
       requestId,
+      sessionKey: sessionKey("dm", agentName),
+      sourceKind: "dm",
     });
   }
 
@@ -316,8 +372,33 @@ export class Workspace {
     return this.agents.get(name);
   }
 
+  /** Refresh channel membership map (e.g. after office reload). */
+  updateChannels(
+    channels: Map<string, import("./types.js").ChannelConfig>,
+  ): void {
+    this.office.channels.clear();
+    for (const [name, cfg] of channels) {
+      this.office.channels.set(name, cfg);
+    }
+  }
+
   list(): AgentInfo[] {
     return [...this.agents.values()].map((h) => h.info());
+  }
+
+  /** Fire-and-forget summary checkpoint evaluation for a session. */
+  triggerSummaryCheck(sk: string): void {
+    if (!this.messageStore) return;
+    const first = this.agents.values().next().value;
+    if (!first) return;
+    maybeTriggerSummary(
+      this.messageStore,
+      sk,
+      first.config.model,
+      resolveModelKey(first.config),
+    ).catch(() => {
+      /* best-effort */
+    });
   }
 
   // --- Events ---

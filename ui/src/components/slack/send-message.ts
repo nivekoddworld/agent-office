@@ -26,3 +26,23 @@ export async function sendMessage(input: SendMessageInput): Promise<void> {
     }),
   });
 }
+
+export interface ChannelSendInput {
+  channel: string;
+  message: string;
+  mentions?: string[];
+  requestId?: string;
+}
+
+export async function sendChannelMessage(
+  input: ChannelSendInput,
+): Promise<void> {
+  await apiFetch(`/api/channels/${encodeURIComponent(input.channel)}/send`, {
+    method: "POST",
+    body: JSON.stringify({
+      message: input.message,
+      ...(input.mentions?.length ? { mentions: input.mentions } : {}),
+      ...(input.requestId ? { requestId: input.requestId } : {}),
+    }),
+  });
+}

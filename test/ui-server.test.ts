@@ -71,7 +71,7 @@ function createMockWorkspace() {
       })),
       intervalMs: 2000,
     },
-    bus: { peekMessages: vi.fn(() => []) },
+    bus: { peekMessages: vi.fn(() => []), send: vi.fn() },
     cron: { listJobs: vi.fn(() => []) },
     tasks: {
       list: vi.fn(() => []),
@@ -80,13 +80,26 @@ function createMockWorkspace() {
       create: vi.fn(() => ({ id: "T-test", title: "x" })),
       update: vi.fn(() => ({ id: "T-test", title: "x" })),
     },
-    office: { id: "test-office", name: "Test Office", dir: "/tmp/test" },
+    office: {
+      id: "test-office",
+      name: "Test Office",
+      dir: "/tmp/test",
+      channels: new Map([
+        ["general", { members: ["alice", "bob"] }],
+      ]),
+    },
     getAgent: vi.fn(() => undefined),
     onAgentEvent: vi.fn(() => vi.fn()),
     list: vi.fn(() => []),
+    triggerSummaryCheck: vi.fn(),
     store: {
       queryDm: vi.fn(() => []),
       saveDm: vi.fn(),
+      nextSessionSeq: vi.fn(() => 1),
+      saveSession: vi.fn(),
+      querySession: vi.fn(() => []),
+      querySummaries: vi.fn(() => []),
+      listSessionKeys: vi.fn(() => ["dm:alice", "ch:general"]),
     },
   } as any;
 }
@@ -568,5 +581,128 @@ describe("UI server", () => {
       "legacy-skill",
       mockWs,
     );
+  });
+
+  // --- POST /api/channels/:name/send ---
+
+  it("POST /api/channels/:name/send broadcasts to all members", async () => {
+    const res = await fetch(`${origin}/api/channels/general/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ message: "hello team" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.targets).toEqual(["alice", "bob"]);
+    expect(mockWs.store.saveSession).toHaveBeenCalled();
+    expect(mockWs.bus.send).toHaveBeenCalledTimes(2);
+  });
+
+  it("POST /api/channels/:name/send targets only mentioned members", async () => {
+    mockWs.bus.send.mockClear();
+    const res = await fetch(`${origin}/api/channels/general/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ message: "hey alice", mentions: ["alice"] }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.targets).toEqual(["alice"]);
+    expect(mockWs.bus.send).toHaveBeenCalledTimes(1);
+  });
+
+  it("POST /api/channels/:name/send rejects invalid mention", async () => {
+    const res = await fetch(`${origin}/api/channels/general/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ message: "hey", mentions: ["unknown-agent"] }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("unknown mentions");
+  });
+
+  it("POST /api/channels/:name/send returns 404 for unknown channel", async () => {
+    const res = await fetch(`${origin}/api/channels/nope/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ message: "hello" }),
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "channel_not_found" });
+  });
+
+  // --- Session API ACL ---
+
+  it("GET /api/sessions requires agent param", async () => {
+    const res = await fetch(`${origin}/api/sessions`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "missing_agent_param" });
+  });
+
+  it("GET /api/sessions returns keys for valid agent", async () => {
+    const res = await fetch(`${origin}/api/sessions?agent=alice`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.sessions).toBeDefined();
+  });
+
+  it("GET /api/sessions/:key/messages requires agent param", async () => {
+    const res = await fetch(
+      `${origin}/api/sessions/${encodeURIComponent("dm:alice")}/messages`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "missing_agent_param" });
+  });
+
+  it("GET /api/sessions/:key/messages allows owner", async () => {
+    mockWs.store.querySession.mockReturnValueOnce([]);
+    const res = await fetch(
+      `${origin}/api/sessions/${encodeURIComponent("dm:alice")}/messages?agent=alice`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("GET /api/sessions/:key/messages denies non-owner", async () => {
+    const res = await fetch(
+      `${origin}/api/sessions/${encodeURIComponent("dm:alice")}/messages?agent=bob`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "forbidden_session_access" });
+  });
+
+  it("GET /api/sessions/:key/summaries requires agent param", async () => {
+    const res = await fetch(
+      `${origin}/api/sessions/${encodeURIComponent("dm:alice")}/summaries`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "missing_agent_param" });
+  });
+
+  it("GET /api/sessions/:key/summaries denies non-member", async () => {
+    const res = await fetch(
+      `${origin}/api/sessions/${encodeURIComponent("ch:general")}/summaries?agent=carol`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "forbidden_session_access" });
+  });
+
+  it("GET /api/sessions/:key/summaries allows channel member", async () => {
+    mockWs.store.querySummaries.mockReturnValueOnce([]);
+    const res = await fetch(
+      `${origin}/api/sessions/${encodeURIComponent("ch:general")}/summaries?agent=alice`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(200);
   });
 });

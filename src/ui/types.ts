@@ -1,4 +1,4 @@
-import type { AgentInfo, SchedulerState } from "../types.js";
+import type { AgentInfo, ChannelConfig, SchedulerState } from "../types.js";
 import type { CronJobEntry } from "../cron/types.js";
 import type { Task } from "../tasks/types.js";
 import type { AgentHierarchy } from "../config/hierarchy.js";
@@ -13,6 +13,7 @@ export interface BootstrapState {
   tasks: Task[];
   officeId: string;
   officeName: string;
+  channels: Record<string, ChannelConfig>;
 }
 
 // --- Agent detail ---

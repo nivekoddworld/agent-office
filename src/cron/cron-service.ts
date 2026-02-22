@@ -1,5 +1,6 @@
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
+import { sessionKey } from "../messages/session-key.js";
 import type {
   CronJobConfig,
   CronJobState,
@@ -299,6 +300,8 @@ export class CronService {
           type: "prompt",
           payload: job.config.message,
           priority: Priority.NORMAL,
+          sessionKey: sessionKey("internal", target),
+          sourceKind: "internal",
         });
         this.dispatchLog.push(now);
         sent++;
@@ -392,6 +395,8 @@ export class CronService {
         type: "prompt",
         payload: job.config.message,
         priority: Priority.NORMAL,
+        sessionKey: sessionKey("internal", job.agentName),
+        sourceKind: "internal",
       });
       this.dispatchLog.push(now);
       job.state.sentCount++;
