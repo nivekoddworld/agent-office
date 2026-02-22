@@ -87,6 +87,15 @@ function makeProvider(): SandboxProvider {
   };
 }
 
+function makeHostApi() {
+  return {
+    getHeartbeat: vi.fn(),
+    onAgentEvent: vi.fn(),
+    offAgentEvent: vi.fn(),
+    setAgentSkillResolver: vi.fn(),
+  } as any;
+}
+
 function makeConfig(overrides?: Partial<AgentConfig>): AgentConfig {
   return {
     name: "test-agent",
@@ -108,15 +117,12 @@ describe("AgentHandle sandbox skills", () => {
 
   it("does not pass skillsPaths to sandbox provider (host-resolved)", async () => {
     const config = makeConfig();
+    const hostApi = makeHostApi();
     const deps: AgentHandleDeps = {
       bus,
       listAgentsFn: () => [],
       provider,
-      hostApi: {
-        getHeartbeat: vi.fn(),
-        onAgentEvent: vi.fn(),
-        offAgentEvent: vi.fn(),
-      } as any,
+      hostApi,
       sandboxToken: "tok-1",
       baseDir: AGENT_OFFICE_DIR,
       officeId: "test",
@@ -133,15 +139,12 @@ describe("AgentHandle sandbox skills", () => {
 
   it("sandbox opts include systemPrompt with skills composed host-side", async () => {
     const config = makeConfig();
+    const hostApi = makeHostApi();
     const deps: AgentHandleDeps = {
       bus,
       listAgentsFn: () => [],
       provider,
-      hostApi: {
-        getHeartbeat: vi.fn(),
-        onAgentEvent: vi.fn(),
-        offAgentEvent: vi.fn(),
-      } as any,
+      hostApi,
       sandboxToken: "tok-1",
       baseDir: AGENT_OFFICE_DIR,
       officeId: "test",
@@ -158,15 +161,12 @@ describe("AgentHandle sandbox skills", () => {
 
   it("unset onDemandSkills defaults to on-demand mode (ON_DEMAND_SKILLS=1)", async () => {
     const config = makeConfig(); // onDemandSkills not set
+    const hostApi = makeHostApi();
     const deps: AgentHandleDeps = {
       bus,
       listAgentsFn: () => [],
       provider,
-      hostApi: {
-        getHeartbeat: vi.fn(),
-        onAgentEvent: vi.fn(),
-        offAgentEvent: vi.fn(),
-      } as any,
+      hostApi,
       sandboxToken: "tok-1",
       baseDir: AGENT_OFFICE_DIR,
       officeId: "test",
@@ -182,15 +182,12 @@ describe("AgentHandle sandbox skills", () => {
 
   it("explicit onDemandSkills=false omits ON_DEMAND_SKILLS env", async () => {
     const config = makeConfig({ onDemandSkills: false });
+    const hostApi = makeHostApi();
     const deps: AgentHandleDeps = {
       bus,
       listAgentsFn: () => [],
       provider,
-      hostApi: {
-        getHeartbeat: vi.fn(),
-        onAgentEvent: vi.fn(),
-        offAgentEvent: vi.fn(),
-      } as any,
+      hostApi,
       sandboxToken: "tok-1",
       baseDir: AGENT_OFFICE_DIR,
       officeId: "test",
@@ -202,6 +199,52 @@ describe("AgentHandle sandbox skills", () => {
 
     const opts = (provider.start as any).mock.calls[0][1] as SandboxStartOpts;
     expect(opts.env).not.toHaveProperty("ON_DEMAND_SKILLS");
+    expect(hostApi.setAgentSkillResolver).not.toHaveBeenCalled();
+  });
+
+  it("registers sandbox read_skill resolver and includes custom skillDirs", async () => {
+    const { loadSkills } = await import("@mariozechner/pi-coding-agent");
+    (loadSkills as any).mockReturnValue({
+      skills: [
+        { name: "base-skill", source: "Base skill content" },
+        { name: "custom-skill", source: "Custom dir skill content" },
+      ],
+      diagnostics: [],
+    });
+
+    const hostApi = makeHostApi();
+    const config = makeConfig({ skillDirs: ["/tmp/custom-skills"] });
+    const deps: AgentHandleDeps = {
+      bus,
+      listAgentsFn: () => [],
+      provider,
+      hostApi,
+      sandboxToken: "tok-1",
+      baseDir: AGENT_OFFICE_DIR,
+      officeId: "test",
+      officeName: "Test",
+    };
+
+    const handle = new AgentHandle(config, deps);
+    await handle.init();
+
+    expect(hostApi.setAgentSkillResolver).toHaveBeenCalledOnce();
+    const resolver = hostApi.setAgentSkillResolver.mock.calls[0]?.[1] as
+      | (() => Map<string, string>)
+      | undefined;
+    expect(typeof resolver).toBe("function");
+
+    const resolved = resolver!();
+    expect(resolved.get("base-skill")).toBe("Base skill content");
+    expect(resolved.get("custom-skill")).toBe("Custom dir skill content");
+    expect(loadSkills).toHaveBeenLastCalledWith({
+      cwd: expect.stringContaining("workspace"),
+      agentDir: expect.stringContaining("test-agent"),
+      skillPaths: [
+        join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills"),
+        "/tmp/custom-skills",
+      ],
+    });
   });
 
   it("does not pass skillsPaths for in-process agents", async () => {

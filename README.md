@@ -329,7 +329,9 @@ Commands automatically keep `office.yaml` in sync:
 
 - **`hire`** persists the agent to YAML (use `--ephemeral` to skip)
 - **`fire`** removes the agent from YAML
-- **`skill add/remove`** updates the agent's `skills` array in YAML
+- **`skill add/remove`** updates the agent's `skills` array in YAML (GitHub source model)
+
+`skills.sh` package installs (`skill_search` / `skill_install` tools or UI install) write files under `agents/<agent>/skills` but do not auto-edit `office.yaml`.
 
 All writes are atomic (temp file + rename) and serialized through a two-layer lock (in-process queue + cross-process file lock) per office.
 
@@ -721,9 +723,9 @@ The Web UI has dedicated controls (buttons, forms, modals) for common operations
 | `send <agent> <message>`                              | Queue a message for an agent                               |
 | `fire <agent>`                                        | Stop and remove an agent (removes from YAML)               |
 | `status`                                              | Show scheduler, watchdog, and resource state               |
-| `skill add <agent> <source>`                          | Install skills from GitHub (`owner/repo`)                  |
+| `skill add <agent> <source>`                          | Install skills from GitHub source (`owner/repo`, legacy flow) |
 | `skill list <agent>`                                  | List installed skills                                      |
-| `skill remove <agent> <name>`                         | Remove an installed skill                                  |
+| `skill remove <agent> <name>`                         | Remove a legacy GitHub-source skill                        |
 | `agent env set <agent> <KEY> <VALUE>`                 | Set env var in `office.yaml`                               |
 | `agent env unset <agent> <KEY>`                       | Remove env var from `office.yaml`                          |
 | `agent secret-ref set <agent> <KEY> <ENV>`            | Set secret ref in `office.yaml`                            |
@@ -1252,7 +1254,16 @@ In Docker sandbox mode, the workspace directory is volume-mounted into the conta
 
 Markdown files loaded from each agent's `skills/` directory and injected into the system prompt. Skills work in both in-process and Docker sandbox modes.
 
-Skills can be installed via the API or declared in `office.yaml`:
+There are two skill models:
+
+1. GitHub source (legacy + `office.yaml` sync):
+   - `skill add <agent> <owner/repo>`
+   - `skill remove <agent> <name>`
+2. skills.sh package (project-local install):
+   - `skill_search` / `skill_install` tools
+   - Web UI Skills Manager install field (`owner/repo@skill-name`)
+
+GitHub source model can be declared in `office.yaml`:
 
 ```yaml
 # office.yaml — skills auto-install on startup
@@ -1263,13 +1274,15 @@ agents:
 ```
 
 ```bash
-# API command strings — installs to disk + updates office.yaml
+# API command strings — GitHub source model (updates office.yaml)
 skill add designer nichochar/web-skills
 skill list designer
 skill remove designer web-tools
 ```
 
-A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `office.yaml` entries when the last skill from a source is removed.
+A `.sources.json` file in each agent's skills directory maps installed skill folders back to their GitHub source, so `skill remove` can clean up `office.yaml` entries when the last skill from a source is removed. Registry installs track package mapping in `.registry-map.json`.
+
+`skill_remove` tool is project-skill only. If a skill is legacy GitHub-sourced, remove it through CLI `skill remove <agent> <name>`.
 
 **On-demand loading (default):** Skill summaries (name + description) are included in the prompt and agents call [`read_skill`](#read_skill) to fetch full content when needed. This reduces prompt size for agents with many or large skills. Set `on_demand_skills: false` to inject full skill content into the system prompt (eager mode).
 

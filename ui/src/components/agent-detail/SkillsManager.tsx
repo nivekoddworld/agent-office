@@ -265,6 +265,9 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
           Install Package
         </Button>
       </Group>
+      <Text size="xs" c="dimmed">
+        skills.sh package format: owner/repo@skill-name
+      </Text>
     </Stack>
   );
 }

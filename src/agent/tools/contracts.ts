@@ -210,7 +210,8 @@ export const SKILL_INSTALL = {
 export const SKILL_REMOVE = {
   name: "skill_remove" as const,
   label: "Skill Remove",
-  description: "Remove a project skill from agents/<agent>/skills by name.",
+  description:
+    "Remove a project skill from agents/<agent>/skills by name. Legacy GitHub skills must be removed via CLI skill remove.",
   parameters: Type.Object({
     name: Type.String({ description: "Installed skill name" }),
   }),

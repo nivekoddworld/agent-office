@@ -365,15 +365,20 @@ export async function handleReadSkill(
     res.end(JSON.stringify({ error: "Missing required field: name" }));
     return;
   }
-  ensureAgentSkillLayout(deps.baseDir, deps.agentName);
-  const agentDir = join(deps.baseDir, "agents", deps.agentName);
-  const { skills } = loadSkills({
-    cwd: join(agentDir, "workspace"),
-    agentDir,
-    skillPaths: [join(agentDir, "skills")],
-  });
-  const skillsMap = new Map<string, string>();
-  for (const skill of skills) skillsMap.set(skill.name, skill.source);
+  let skillsMap: Map<string, string> | undefined;
+  if (deps.getSkillsMap) {
+    skillsMap = deps.getSkillsMap();
+  } else {
+    ensureAgentSkillLayout(deps.baseDir, deps.agentName);
+    const agentDir = join(deps.baseDir, "agents", deps.agentName);
+    const { skills } = loadSkills({
+      cwd: join(agentDir, "workspace"),
+      agentDir,
+      skillPaths: [join(agentDir, "skills")],
+    });
+    skillsMap = new Map<string, string>();
+    for (const skill of skills) skillsMap.set(skill.name, skill.source);
+  }
 
   const content = skillsMap.get(params.name);
   if (!content) {

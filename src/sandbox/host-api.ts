@@ -57,7 +57,7 @@ export class HostApi {
   private citationModes = new Map<string, CitationMode>();
   private eventListeners = new Map<string, (event: unknown) => void>();
   private agentPermissions = new Map<string, AgentPermissions>();
-  private agentSkills = new Map<string, Map<string, string>>();
+  private skillResolvers = new Map<string, () => Map<string, string>>();
   private agentToolCounts = new Map<string, number>();
   private cronDeps: {
     officeId: string;
@@ -104,13 +104,16 @@ export class HostApi {
     if (name) {
       this.citationModes.delete(name);
       this.agentPermissions.delete(name);
-      this.agentSkills.delete(name);
+      this.skillResolvers.delete(name);
       this.agentToolCounts.delete(name);
     }
   }
 
-  setAgentSkills(agentName: string, skills: Map<string, string>): void {
-    this.agentSkills.set(agentName, skills);
+  setAgentSkillResolver(
+    agentName: string,
+    resolver: () => Map<string, string>,
+  ): void {
+    this.skillResolvers.set(agentName, resolver);
   }
 
   setAgentToolCount(agentName: string, count: number): void {
@@ -352,8 +355,13 @@ export class HostApi {
   private buildSkillDeps(agentName: string): {
     agentName: string;
     baseDir: string;
+    getSkillsMap?: () => Map<string, string>;
   } {
-    return { agentName, baseDir: this.baseDir };
+    return {
+      agentName,
+      baseDir: this.baseDir,
+      getSkillsMap: this.skillResolvers.get(agentName),
+    };
   }
 
   private sweepDedup(): void {

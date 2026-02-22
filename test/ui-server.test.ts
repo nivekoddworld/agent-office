@@ -1,14 +1,42 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import http from "node:http";
 
 // --- Mocks (hoisted) ---
 
-const { mockDispatchCommand } = vi.hoisted(() => ({
+const {
+  mockDispatchCommand,
+  mockSearchRegistrySkills,
+  mockInstallRegistrySkillForAgent,
+  mockListInstalledAgentSkills,
+  mockRemoveProjectSkillForAgent,
+  mockSkillRemoveCommand,
+} = vi.hoisted(() => ({
   mockDispatchCommand: vi.fn(async () => "handled" as const),
+  mockSearchRegistrySkills: vi.fn(async () => []),
+  mockInstallRegistrySkillForAgent: vi.fn(async () => ({
+    installed: [],
+    output: [],
+  })),
+  mockListInstalledAgentSkills: vi.fn(() => []),
+  mockRemoveProjectSkillForAgent: vi.fn(
+    (): { removed: boolean; reason?: "not_found" | "legacy" } => ({
+      removed: true,
+    }),
+  ),
+  mockSkillRemoveCommand: vi.fn(async () => undefined),
 }));
 
 vi.mock("../src/ui/command-parser.js", () => ({
   dispatchCommand: mockDispatchCommand,
+}));
+vi.mock("../src/skills/registry.js", () => ({
+  searchRegistrySkills: mockSearchRegistrySkills,
+  installRegistrySkillForAgent: mockInstallRegistrySkillForAgent,
+  listInstalledAgentSkills: mockListInstalledAgentSkills,
+  removeProjectSkillForAgent: mockRemoveProjectSkillForAgent,
+}));
+vi.mock("../src/commands/skill.js", () => ({
+  skillRemoveCommand: mockSkillRemoveCommand,
 }));
 vi.mock("../src/config/office-yaml.js", () => ({
   loadOfficeYaml: vi.fn(() => ({ agents: {} })),
@@ -80,6 +108,20 @@ function authHeaders(extra?: HeadersInit): HeadersInit {
 // --- Tests ---
 
 describe("UI server", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockDispatchCommand.mockResolvedValue("handled");
+    mockSearchRegistrySkills.mockResolvedValue([]);
+    mockInstallRegistrySkillForAgent.mockResolvedValue({
+      installed: [],
+      output: [],
+    });
+    mockListInstalledAgentSkills.mockReturnValue([]);
+    mockRemoveProjectSkillForAgent.mockReturnValue({ removed: true });
+    mockSkillRemoveCommand.mockResolvedValue(undefined);
+    mockWs.getAgent.mockReturnValue(undefined);
+  });
+
   beforeAll(async () => {
     process.env["UI_PORT"] = "0";
     mockWs = createMockWorkspace();
@@ -486,5 +528,45 @@ describe("UI server", () => {
       headers: { Cookie: sessionCookie },
     });
     expect(mockWs.store.queryDm).toHaveBeenLastCalledWith("alice", 50, 12345);
+  });
+
+  it("DELETE /api/agents/:name/skills/:skill removes project skills directly", async () => {
+    mockWs.getAgent.mockReturnValueOnce({ name: "alice" });
+    mockRemoveProjectSkillForAgent.mockReturnValueOnce({ removed: true });
+
+    const res = await fetch(`${origin}/api/agents/alice/skills/project-skill`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, source: "project" });
+    expect(mockRemoveProjectSkillForAgent).toHaveBeenCalledWith(
+      "/tmp/test",
+      "alice",
+      "project-skill",
+    );
+    expect(mockSkillRemoveCommand).not.toHaveBeenCalled();
+  });
+
+  it("DELETE /api/agents/:name/skills/:skill falls back for legacy skills", async () => {
+    mockWs.getAgent.mockReturnValueOnce({ name: "alice" });
+    mockRemoveProjectSkillForAgent.mockReturnValueOnce({
+      removed: false,
+      reason: "legacy",
+    });
+
+    const res = await fetch(`${origin}/api/agents/alice/skills/legacy-skill`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, source: "legacy" });
+    expect(mockSkillRemoveCommand).toHaveBeenCalledWith(
+      "alice",
+      "legacy-skill",
+      mockWs,
+    );
   });
 });

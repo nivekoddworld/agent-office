@@ -8,6 +8,7 @@ import {
 export interface SkillToolDeps {
   agentName: string;
   baseDir: string;
+  getSkillsMap?: () => Map<string, string>;
 }
 
 interface SkillSearchParams {
@@ -92,7 +93,10 @@ export function skillRemoveImpl(
 
   try {
     const removed = removeProjectSkillForAgent(deps.baseDir, deps.agentName, name);
-    if (!removed) {
+    if (!removed.removed && removed.reason === "legacy") {
+      return `Error: skill "${name}" is legacy (GitHub source). Use CLI "skill remove ${deps.agentName} ${name}" to remove it safely.`;
+    }
+    if (!removed.removed) {
       return `Error: skill "${name}" not found in agents/${deps.agentName}/skills.`;
     }
     return `Removed skill "${name}" from agents/${deps.agentName}/skills.`;

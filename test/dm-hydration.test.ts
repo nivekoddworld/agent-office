@@ -42,7 +42,7 @@ describe("mergeBaselineWithLive", () => {
     expect(result[0]!.id).toBe("l1");
   });
 
-  it("deduplicates by requestId", () => {
+  it("deduplicates by requestId when role also matches", () => {
     const baseline = [msg({ id: "b1", timestamp: 100, requestId: "r1" })];
     const live = [msg({ id: "l1", timestamp: 100, requestId: "r1" })];
     const result = mergeBaselineWithLive(baseline, live);
@@ -166,7 +166,7 @@ describe("mergeBaselineWithLive", () => {
     expect(result).toHaveLength(2);
   });
 
-  it("dedupes baseline against thread parent by requestId", () => {
+  it("keeps both records when requestId matches but roles differ", () => {
     const baseline = [
       msg({
         id: "b1",
@@ -177,30 +177,19 @@ describe("mergeBaselineWithLive", () => {
         requestId: "r1",
       }),
     ];
-    const live: SlackMessageData[] = [];
-    const threadParents = [
+    const live = [
       msg({
-        id: "tp1",
-        sender: "You",
-        text: "fix bug",
-        timestamp: 5010,
-        isBot: false,
+        id: "l1",
+        sender: "bot",
+        text: "done",
+        timestamp: 5100,
+        isBot: true,
         requestId: "r1",
       }),
     ];
-    const result = mergeBaselineWithLive(baseline, live, threadParents);
-    expect(result).toHaveLength(0);
-  });
-
-  it("thread parents do not appear in merge output", () => {
-    const baseline = [msg({ id: "b1", text: "old", timestamp: 100 })];
-    const live = [msg({ id: "l1", text: "new", timestamp: 200 })];
-    const threadParents = [
-      msg({ id: "tp1", text: "parent", timestamp: 150, requestId: "r99" }),
-    ];
-    const result = mergeBaselineWithLive(baseline, live, threadParents);
-    expect(result.find((m) => m.id === "tp1")).toBeUndefined();
+    const result = mergeBaselineWithLive(baseline, live);
     expect(result).toHaveLength(2);
+    expect(result.map((m) => m.id)).toEqual(["b1", "l1"]);
   });
 
   it("handles empty inputs", () => {

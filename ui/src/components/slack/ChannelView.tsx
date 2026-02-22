@@ -1,15 +1,14 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Box, Button, Text, Group, UnstyledButton } from "@mantine/core";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   IconArrowDown,
-  IconMessage,
   IconMessages,
   IconFiles,
   IconSettings,
   IconFileText,
 } from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
-import { useThreadStore, type Thread } from "../../store/thread-store.js";
 import { slack } from "../../theme/slack-theme.js";
 import { ChannelHeader } from "./ChannelHeader.js";
 import { SlackMessage } from "./SlackMessage.js";
@@ -37,64 +36,8 @@ interface ChannelViewProps {
   agentNames: string[];
   activeCount?: number;
   onClickAvatar?: (agentName: string) => void;
-  onOpenThread?: (thread: Thread) => void;
   cronJobs?: CronJobEntry[];
   tasks?: Task[];
-}
-
-function ThreadIndicator({
-  thread,
-  onClick,
-}: {
-  thread: Thread;
-  onClick: () => void;
-}) {
-  const replyCount = thread.replies.length;
-  if (replyCount === 0) return null;
-
-  const lastReply = thread.replies[replyCount - 1]!;
-  const lastTime = new Date(lastReply.timestamp).toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  return (
-    <UnstyledButton
-      onClick={onClick}
-      ml={48}
-      mt={2}
-      mb={4}
-      px={6}
-      py={4}
-      style={{ borderRadius: 6 }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = slack.sidebarHover;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = "transparent";
-      }}
-    >
-      <Group gap={6}>
-        <IconMessage size={14} color={slack.accentBlue} />
-        <Text size="xs" fw={600} style={{ color: slack.accentBlue }}>
-          {replyCount} {replyCount === 1 ? "reply" : "replies"}
-        </Text>
-        <Text size="xs" style={{ color: slack.textMuted }}>
-          Last reply {lastTime}
-        </Text>
-        {thread.status === "open" && (
-          <Box
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              backgroundColor: slack.onlineGreen,
-            }}
-          />
-        )}
-      </Group>
-    </UnstyledButton>
-  );
 }
 
 export function ChannelView({
@@ -102,12 +45,11 @@ export function ChannelView({
   agentNames,
   activeCount,
   onClickAvatar,
-  onOpenThread,
   cronJobs = [],
   tasks = [],
 }: ChannelViewProps) {
+  const queryClient = useQueryClient();
   const { events } = useEventStore();
-  const { threads } = useThreadStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stickToBottom, setStickToBottom] = useState(true);
   const lastCountRef = useRef(0);
@@ -146,76 +88,19 @@ export function ChannelView({
     [events, channelKey],
   );
 
-  const agentThreads = useMemo(() => {
-    if (channel.kind === "dm") {
-      return threads.filter((t) => t.agentName === channel.agentName);
-    }
-    return threads;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [threads, channelKey]);
-
   const messages = useMemo(() => {
     if (!dmAgent) return liveMessages;
-    const parents = agentThreads.map((t) => t.parentMessage);
-    return mergeBaselineWithLive(baselineMessages, liveMessages, parents);
-  }, [dmAgent, baselineMessages, liveMessages, agentThreads]);
+    return mergeBaselineWithLive(baselineMessages, liveMessages);
+  }, [dmAgent, baselineMessages, liveMessages]);
 
   const displayItems = useMemo((): DisplayItem[] => {
     const items: DisplayItem[] = [];
-
-    // Build time ranges owned by threads so we can filter out
-    // SSE messages that are already captured as thread replies.
-    const threadRanges: { agentName: string; start: number; end: number }[] =
-      [];
-    for (const thread of agentThreads) {
-      const lastReply = thread.replies[thread.replies.length - 1];
-      threadRanges.push({
-        agentName: thread.agentName,
-        start: thread.createdAt,
-        end:
-          thread.status === "open"
-            ? Infinity
-            : (lastReply?.timestamp ?? thread.createdAt) + 1000,
-      });
-    }
-
-    const isOwnedByThread = (msg: SlackMessageData): boolean => {
-      if (msg.sender === "system") return false;
-      // User messages from SSE (echoed back) that match a thread's time window
-      if (!msg.isBot && msg.sender === "You") {
-        return threadRanges.some(
-          (r) =>
-            msg.timestamp >= r.start - 2000 && msg.timestamp <= r.start + 2000,
-        );
-      }
-      // Agent responses within a thread's active window
-      return threadRanges.some(
-        (r) =>
-          msg.sender === r.agentName &&
-          msg.timestamp >= r.start &&
-          msg.timestamp <= r.end,
-      );
-    };
-
-    // Start with SSE messages, filtered to exclude thread-owned ones
-    const filteredMessages = messages.filter((m) => !isOwnedByThread(m));
-
-    // Merge thread parents into the timeline
-    const allMessages = [...filteredMessages];
-    for (const thread of agentThreads) {
-      allMessages.push(thread.parentMessage);
-    }
-    allMessages.sort((a, b) => a.timestamp - b.timestamp);
-
-    const threadParentIds = new Set(
-      agentThreads.map((t) => t.parentMessage.id),
-    );
 
     let prevSender: string | null = null;
     let prevTime = 0;
     let prevTimestamp = 0;
 
-    for (const msg of allMessages) {
+    for (const msg of messages) {
       const showDate =
         items.length === 0 || !isSameDay(prevTimestamp, msg.timestamp);
       if (showDate) {
@@ -234,14 +119,7 @@ export function ChannelView({
           prevSender === msg.sender &&
           msg.timestamp - prevTime < 5 * 60 * 1000;
 
-        if (threadParentIds.has(msg.id)) {
-          const thread = agentThreads.find(
-            (t) => t.parentMessage.id === msg.id,
-          )!;
-          items.push({ kind: "thread", thread });
-        } else {
-          items.push({ kind: "message", data: msg, compact });
-        }
+        items.push({ kind: "message", data: msg, compact });
 
         prevSender = msg.sender;
         prevTime = msg.timestamp;
@@ -250,7 +128,7 @@ export function ChannelView({
     }
 
     return items;
-  }, [messages, agentThreads]);
+  }, [messages]);
 
   const totalCount = displayItems.length;
 
@@ -285,22 +163,13 @@ export function ChannelView({
   };
 
   const targetAgent = channel.kind === "dm" ? channel.agentName : null;
-
-  const { createThread } = useThreadStore();
-
   const handleMessageSent = useCallback(
-    (agentName: string, text: string, requestId: string) => {
-      const userMsg: SlackMessageData = {
-        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        sender: "You",
-        text,
-        timestamp: Date.now(),
-        isBot: false,
-        requestId,
-      };
-      createThread(agentName, userMsg, requestId);
+    (agentName: string, _text: string, _requestId: string) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["agent-messages", agentName],
+      });
     },
-    [createThread],
+    [queryClient],
   );
 
   const isDm = channel.kind === "dm";
@@ -454,21 +323,6 @@ export function ChannelView({
                         text={item.data.text}
                         timestamp={item.data.timestamp}
                       />
-                    );
-                  }
-                  if (item.kind === "thread") {
-                    return (
-                      <Box key={item.thread.id}>
-                        <SlackMessage
-                          message={item.thread.parentMessage}
-                          onClickAvatar={onClickAvatar}
-                          onReply={() => onOpenThread?.(item.thread)}
-                        />
-                        <ThreadIndicator
-                          thread={item.thread}
-                          onClick={() => onOpenThread?.(item.thread)}
-                        />
-                      </Box>
                     );
                   }
                   return (

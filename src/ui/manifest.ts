@@ -124,7 +124,7 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
   // --- Skills ---
   {
     name: "skill add",
-    description: "Install a skill on an agent",
+    description: "Install GitHub source skills (legacy office.yaml flow)",
     category: "agent",
     args: "<agent> <owner/repo>",
   },
@@ -136,7 +136,7 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
   },
   {
     name: "skill remove",
-    description: "Remove a skill from an agent",
+    description: "Remove a legacy GitHub-source skill from an agent",
     category: "agent",
     args: "<agent> <name>",
   },

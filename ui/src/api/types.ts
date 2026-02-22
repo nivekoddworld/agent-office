@@ -111,6 +111,7 @@ export interface AgentDetail extends AgentInfo {
 export interface AgentSkill {
   name: string;
   source: "project" | "legacy";
+  origin?: "registry" | "github" | "local";
   path: string;
   description?: string;
   packageName?: string;

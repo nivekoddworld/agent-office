@@ -238,7 +238,7 @@ export async function dispatchCommand(
         return "handled";
       }
       console.log(
-        "Usage: skill add <agent> <owner/repo> | skill list <agent> | skill remove <agent> <name>",
+        "Usage: skill add <agent> <owner/repo> (GitHub source) | skill list <agent> | skill remove <agent> <name>",
       );
       return "noop";
     }

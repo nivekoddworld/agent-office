@@ -157,6 +157,18 @@ export class AgentHandle {
     return [...new Set(merged.map((p) => p.trim()).filter((p) => p.length > 0))];
   }
 
+  private resolveLatestSkillsMap(): Map<string, string> {
+    ensureAgentSkillLayout(this.baseDir, this.name);
+    const { skills } = loadSkills({
+      cwd: this.cwd,
+      agentDir: this.agentDir,
+      skillPaths: this.skillPaths,
+    });
+    const skillsMap = new Map<string, string>();
+    for (const skill of skills) skillsMap.set(skill.name, skill.source);
+    return skillsMap;
+  }
+
   async init(): Promise<void> {
     await mkdir(this.cwd, { recursive: true });
     await mkdir(join(this.agentDir, "skills"), { recursive: true });
@@ -171,8 +183,12 @@ export class AgentHandle {
       );
       this.sandboxInfo = result.sandboxInfo;
       this._toolCount = result.toolCount;
-      if (result.skillsMap)
-        this.hostApi?.setAgentSkills(this.name, result.skillsMap);
+      if (this.config.onDemandSkills !== false) {
+        this.hostApi?.setAgentSkillResolver?.(
+          this.name,
+          () => this.resolveLatestSkillsMap(),
+        );
+      }
 
       if (this.hostApi) {
         this.hostApi.onAgentEvent(this.name, (event) => {

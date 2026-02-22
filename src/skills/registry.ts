@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -10,23 +11,34 @@ import {
 } from "node:fs";
 import { basename, join } from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
-import { skillsDir as legacySkillsDir } from "./fetch.js";
+import {
+  skillsDir as legacySkillsDir,
+  readSourceMap,
+  writeSourceMap,
+} from "./fetch.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const PACKAGE_RE =
   /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+@[a-zA-Z0-9._\/-]+$/;
 const ANSI_RE = /\u001b\[[0-9;]*m/g;
 const REGISTRY_MAP_FILE = ".registry-map.json";
+const SOURCE_MAP_FILE = ".sources.json";
 
 export interface SkillSearchEntry { packageName: string; repo: string; skillName: string; url?: string; }
+export type InstalledSkillOrigin = "registry" | "github" | "local";
 export interface InstalledAgentSkill {
   name: string;
   source: "project" | "legacy";
   path: string;
   description?: string;
   packageName?: string;
+  origin?: InstalledSkillOrigin;
 }
 export interface InstallRegistrySkillResult { installed: InstalledAgentSkill[]; output: string[]; }
+export interface RemoveProjectSkillResult {
+  removed: boolean;
+  reason?: "not_found" | "legacy";
+}
 export interface CreateSkillInput {
   name: string;
   description: string;
@@ -49,26 +61,40 @@ function registryMapPath(projectSkillsPath: string): string {
   return join(projectSkillsPath, REGISTRY_MAP_FILE);
 }
 
-function readRegistryMap(projectSkillsPath: string): Record<string, string> {
-  const path = registryMapPath(projectSkillsPath);
+function readMapFile(path: string): Record<string, string> {
   if (!existsSync(path)) return {};
   try {
     const parsed = JSON.parse(readFileSync(path, "utf-8"));
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return {};
     }
-    return parsed as Record<string, string>;
+    const out: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "string" && value.trim()) {
+        out[key] = value;
+      }
+    }
+    return out;
   } catch {
     return {};
   }
+}
+
+function writeMapFile(path: string, map: Record<string, string>): void {
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  writeFileSync(tmp, JSON.stringify(map, null, 2) + "\n", "utf-8");
+  renameSync(tmp, path);
+}
+
+function readRegistryMap(projectSkillsPath: string): Record<string, string> {
+  return readMapFile(registryMapPath(projectSkillsPath));
 }
 
 function writeRegistryMap(
   projectSkillsPath: string,
   map: Record<string, string>,
 ): void {
-  const path = registryMapPath(projectSkillsPath);
-  writeFileSync(path, JSON.stringify(map, null, 2) + "\n", "utf-8");
+  writeMapFile(registryMapPath(projectSkillsPath), map);
 }
 
 function readSkillDescription(skillFilePath: string): string | undefined {
@@ -101,6 +127,7 @@ function getSkillFolders(root: string): string[] {
 function collectInstalledFromDir(
   root: string,
   source: "project" | "legacy",
+  origin: InstalledSkillOrigin,
   packageMap: Record<string, string>,
 ): InstalledAgentSkill[] {
   const skills: InstalledAgentSkill[] = [];
@@ -109,6 +136,7 @@ function collectInstalledFromDir(
     skills.push({
       name,
       source,
+      origin,
       path,
       description: readSkillDescription(path),
       packageName: source === "project" ? packageMap[name] : undefined,
@@ -254,6 +282,31 @@ function fallbackSkillRoots(baseDir: string, agentName: string): string[] {
   ];
 }
 
+function mergeFallbackMapFile(
+  projectRoot: string,
+  fallbackRoot: string,
+  fileName: string,
+): void {
+  const fallbackPath = join(fallbackRoot, fileName);
+  if (!existsSync(fallbackPath)) return;
+
+  const fallbackMap = readMapFile(fallbackPath);
+  if (Object.keys(fallbackMap).length === 0) return;
+
+  const projectPath = join(projectRoot, fileName);
+  const projectMap = readMapFile(projectPath);
+  const knownSkills = new Set(getSkillFolders(projectRoot));
+
+  let changed = false;
+  for (const [name, value] of Object.entries(fallbackMap)) {
+    if (!knownSkills.has(name)) continue;
+    if (name in projectMap) continue;
+    projectMap[name] = value;
+    changed = true;
+  }
+  if (changed) writeMapFile(projectPath, projectMap);
+}
+
 function migrateFallbackSkillsToProject(
   baseDir: string,
   agentName: string,
@@ -273,6 +326,8 @@ function migrateFallbackSkillsToProject(
         }
       }
     }
+    mergeFallbackMapFile(projectRoot, fallbackRoot, REGISTRY_MAP_FILE);
+    mergeFallbackMapFile(projectRoot, fallbackRoot, SOURCE_MAP_FILE);
   }
 }
 
@@ -291,12 +346,21 @@ export function listInstalledAgentSkills(
   ensureAgentSkillLayout(baseDir, agentName);
   const projectRoot = projectSkillsDir(baseDir, agentName);
   const packageMap = readRegistryMap(projectRoot);
+  const sourceMap = readSourceMap(baseDir, agentName);
   const skills = getSkillFolders(projectRoot).map((name) => {
     const path = join(projectRoot, name, "SKILL.md");
     const packageName = packageMap[name];
+    const githubSource = sourceMap[name];
+    const origin: InstalledSkillOrigin = packageName
+      ? "registry"
+      : githubSource
+        ? "github"
+        : "local";
     return {
       name,
-      source: packageName ? ("project" as const) : ("legacy" as const),
+      source:
+        packageName || !githubSource ? ("project" as const) : ("legacy" as const),
+      origin,
       path,
       description: readSkillDescription(path),
       packageName,
@@ -425,6 +489,8 @@ export async function installRegistrySkillForAgent(
           renameSync(from, to);
         }
       }
+      mergeFallbackMapFile(projectRoot, fallbackRoot, REGISTRY_MAP_FILE);
+      mergeFallbackMapFile(projectRoot, fallbackRoot, SOURCE_MAP_FILE);
       installedNames = getSkillFolders(projectRoot).filter(
         (name) => !before.has(name),
       );
@@ -456,9 +522,12 @@ export async function installRegistrySkillForAgent(
   for (const name of installedNames) map[name] = normalizedPackage;
   writeRegistryMap(projectRoot, map);
 
-  const installed = collectInstalledFromDir(projectRoot, "project", map).filter(
-    (skill) => installedNames.includes(skill.name),
-  );
+  const installed = collectInstalledFromDir(
+    projectRoot,
+    "project",
+    "registry",
+    map,
+  ).filter((skill) => installedNames.includes(skill.name));
 
   return {
     installed,
@@ -470,7 +539,7 @@ export function removeProjectSkillForAgent(
   baseDir: string,
   agentName: string,
   skillName: string,
-): boolean {
+): RemoveProjectSkillResult {
   validateAgentName(agentName);
   const name = skillName.trim();
   if (!name) throw new Error("Skill name is required");
@@ -478,17 +547,26 @@ export function removeProjectSkillForAgent(
   const projectRoot = projectSkillsDir(baseDir, agentName);
   const skillRoot = join(projectRoot, name);
   const skillFile = join(skillRoot, "SKILL.md");
-  if (!existsSync(skillFile)) return false;
+  if (!existsSync(skillFile)) return { removed: false, reason: "not_found" };
+
+  const registryMap = readRegistryMap(projectRoot);
+  const sourceMap = readSourceMap(baseDir, agentName);
+  if (!(name in registryMap) && name in sourceMap) {
+    return { removed: false, reason: "legacy" };
+  }
 
   rmSync(skillRoot, { recursive: true, force: true });
 
-  const map = readRegistryMap(projectRoot);
-  if (name in map) {
-    delete map[name];
-    writeRegistryMap(projectRoot, map);
+  if (name in registryMap) {
+    delete registryMap[name];
+    writeRegistryMap(projectRoot, registryMap);
+  }
+  if (name in sourceMap) {
+    delete sourceMap[name];
+    writeSourceMap(baseDir, agentName, sourceMap);
   }
 
-  return true;
+  return { removed: true };
 }
 
 export function createProjectSkillForAgent(
@@ -546,6 +624,7 @@ export function createProjectSkillForAgent(
   return {
     name: normalizedName,
     source: "project",
+    origin: "local",
     path: skillFile,
     description,
   };

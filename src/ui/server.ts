@@ -638,14 +638,16 @@ export async function startUiServer(
 
       try {
         let source: "project" | "legacy" = "project";
-        const removed = removeProjectSkillForAgent(
+        const removal = removeProjectSkillForAgent(
           workspace.office.dir,
           name,
           skillName,
         );
-        if (!removed) {
+        if (!removal.removed && removal.reason === "legacy") {
           await skillRemoveCommand(name, skillName, workspace);
           source = "legacy";
+        } else if (!removal.removed) {
+          throw new Error(`Skill "${skillName}" not found for "${name}"`);
         }
         broadcast("state_changed", getBootstrapState(workspace, officeId));
         return json(res, 200, { ok: true, source });

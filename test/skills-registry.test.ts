@@ -1,8 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync } from "node:fs";
 import {
   createProjectSkillForAgent,
   listInstalledAgentSkills,
@@ -74,6 +80,7 @@ describe("project skill lifecycle", () => {
     });
 
     expect(created.name).toBe("my-new-skill");
+    expect(created.origin).toBe("local");
     expect(existsSync(created.path)).toBe(true);
 
     const content = readFileSync(created.path, "utf-8");
@@ -81,14 +88,74 @@ describe("project skill lifecycle", () => {
     expect(content).toContain("description:");
 
     const removed = removeProjectSkillForAgent(baseDir, "alice", "my-new-skill");
-    expect(removed).toBe(true);
+    expect(removed).toEqual({ removed: true });
     expect(existsSync(created.path)).toBe(false);
   });
 
-  it("lists project and legacy skills together", () => {
+  it("classifies local, legacy, and registry skills deterministically", () => {
     const baseDir = makeTempDir();
-
     const projectRoot = projectSkillsDir(baseDir, "alice");
+
+    mkdirSync(join(projectRoot, "local-skill"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, "local-skill", "SKILL.md"),
+      "---\nname: local-skill\ndescription: local\n---\n",
+    );
+
+    mkdirSync(join(projectRoot, "legacy-skill"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, "legacy-skill", "SKILL.md"),
+      "---\nname: legacy-skill\ndescription: legacy\n---\n",
+    );
+    writeFileSync(
+      join(projectRoot, ".sources.json"),
+      JSON.stringify({ "legacy-skill": "nichochar/web-skills" }),
+    );
+
+    mkdirSync(join(projectRoot, "registry-skill"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, "registry-skill", "SKILL.md"),
+      "---\nname: registry-skill\ndescription: registry\n---\n",
+    );
+    writeFileSync(
+      join(projectRoot, ".registry-map.json"),
+      JSON.stringify({ "registry-skill": "openai/skills@backend-testing" }),
+    );
+
+    const listed = listInstalledAgentSkills(baseDir, "alice");
+    expect(listed.map((s) => `${s.name}:${s.source}:${s.origin}`)).toEqual([
+      "legacy-skill:legacy:github",
+      "local-skill:project:local",
+      "registry-skill:project:registry",
+    ]);
+
+    const registry = listed.find((s) => s.name === "registry-skill");
+    expect(registry?.packageName).toBe("openai/skills@backend-testing");
+  });
+
+  it("blocks project remove for legacy skills", () => {
+    const baseDir = makeTempDir();
+    const projectRoot = projectSkillsDir(baseDir, "alice");
+
+    mkdirSync(join(projectRoot, "legacy-skill"), { recursive: true });
+    writeFileSync(
+      join(projectRoot, "legacy-skill", "SKILL.md"),
+      "---\nname: legacy-skill\ndescription: legacy\n---\n",
+    );
+    writeFileSync(
+      join(projectRoot, ".sources.json"),
+      JSON.stringify({ "legacy-skill": "nichochar/web-skills" }),
+    );
+
+    const result = removeProjectSkillForAgent(baseDir, "alice", "legacy-skill");
+    expect(result).toEqual({ removed: false, reason: "legacy" });
+    expect(existsSync(join(projectRoot, "legacy-skill", "SKILL.md"))).toBe(true);
+  });
+
+  it("defensively cleans metadata when removing project skill", () => {
+    const baseDir = makeTempDir();
+    const projectRoot = projectSkillsDir(baseDir, "alice");
+
     mkdirSync(join(projectRoot, "project-skill"), { recursive: true });
     writeFileSync(
       join(projectRoot, "project-skill", "SKILL.md"),
@@ -96,23 +163,89 @@ describe("project skill lifecycle", () => {
     );
     writeFileSync(
       join(projectRoot, ".registry-map.json"),
-      JSON.stringify({ "project-skill": "openai/skills@project-skill" }),
+      JSON.stringify({ "project-skill": "openai/skills@backend-testing" }),
+    );
+    writeFileSync(
+      join(projectRoot, ".sources.json"),
+      JSON.stringify({ "project-skill": "legacy/source" }),
     );
 
-    const legacyRoot = join(baseDir, "agents", "alice", "skills", "legacy-skill");
-    mkdirSync(legacyRoot, { recursive: true });
+    const result = removeProjectSkillForAgent(baseDir, "alice", "project-skill");
+    expect(result).toEqual({ removed: true });
+    expect(existsSync(join(projectRoot, "project-skill", "SKILL.md"))).toBe(false);
+
+    const registryMap = JSON.parse(
+      readFileSync(join(projectRoot, ".registry-map.json"), "utf-8"),
+    ) as Record<string, string>;
+    const sourcesMap = JSON.parse(
+      readFileSync(join(projectRoot, ".sources.json"), "utf-8"),
+    ) as Record<string, string>;
+    expect(registryMap["project-skill"]).toBeUndefined();
+    expect(sourcesMap["project-skill"]).toBeUndefined();
+  });
+
+  it("migrates fallback skills and merges metadata maps", () => {
+    const baseDir = makeTempDir();
+    const projectRoot = projectSkillsDir(baseDir, "alice");
+    const fallbackRoot = join(
+      baseDir,
+      "agents",
+      "alice",
+      "workspace",
+      ".agents",
+      "skills",
+    );
+
+    mkdirSync(join(fallbackRoot, "migrated-skill"), { recursive: true });
     writeFileSync(
-      join(legacyRoot, "SKILL.md"),
-      "---\nname: legacy-skill\ndescription: legacy\n---\n",
+      join(fallbackRoot, "migrated-skill", "SKILL.md"),
+      "---\nname: migrated-skill\ndescription: moved\n---\n",
+    );
+    writeFileSync(
+      join(fallbackRoot, ".registry-map.json"),
+      JSON.stringify({
+        "migrated-skill": "openai/skills@fallback-registry",
+        "missing-skill": "openai/skills@missing",
+      }),
+    );
+    writeFileSync(
+      join(fallbackRoot, ".sources.json"),
+      JSON.stringify({
+        "migrated-skill": "fallback/source",
+        "missing-skill": "missing/source",
+      }),
+    );
+
+    mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(
+      join(projectRoot, ".registry-map.json"),
+      JSON.stringify({ "migrated-skill": "openai/skills@project-preferred" }),
     );
 
     const listed = listInstalledAgentSkills(baseDir, "alice");
-    expect(listed.map((s) => `${s.name}:${s.source}`)).toEqual([
-      "legacy-skill:legacy",
-      "project-skill:project",
-    ]);
-    const project = listed.find((s) => s.name === "project-skill");
-    expect(project?.packageName).toBe("openai/skills@project-skill");
+    const migrated = listed.find((s) => s.name === "migrated-skill");
+
+    expect(migrated).toBeDefined();
+    expect(migrated?.source).toBe("project");
+    expect(migrated?.origin).toBe("registry");
+    expect(
+      existsSync(join(projectRoot, "migrated-skill", "SKILL.md")),
+    ).toBe(true);
+    expect(
+      existsSync(join(fallbackRoot, "migrated-skill", "SKILL.md")),
+    ).toBe(false);
+
+    const registryMap = JSON.parse(
+      readFileSync(join(projectRoot, ".registry-map.json"), "utf-8"),
+    ) as Record<string, string>;
+    const sourcesMap = JSON.parse(
+      readFileSync(join(projectRoot, ".sources.json"), "utf-8"),
+    ) as Record<string, string>;
+
+    expect(registryMap["migrated-skill"]).toBe("openai/skills@project-preferred");
+    expect(registryMap["missing-skill"]).toBeUndefined();
+    expect(sourcesMap["migrated-skill"]).toBe("fallback/source");
+    expect(sourcesMap["missing-skill"]).toBeUndefined();
   });
 
   it("migrates misplaced workspace .agents skills on list", () => {
@@ -126,6 +259,7 @@ describe("project skill lifecycle", () => {
       "skills",
       "misplaced-skill",
     );
+
     mkdirSync(misplacedRoot, { recursive: true });
     writeFileSync(
       join(misplacedRoot, "SKILL.md"),

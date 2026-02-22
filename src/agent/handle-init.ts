@@ -63,7 +63,6 @@ export interface InitContext {
 export interface SandboxInitResult {
   sandboxInfo: SandboxInfo;
   toolCount: number;
-  skillsMap?: Map<string, string>;
 }
 
 function resolveSkillPaths(ctx: InitContext): string[] {
@@ -74,7 +73,7 @@ function resolveSkillPaths(ctx: InitContext): string[] {
 export async function initSandboxAgent(
   ctx: InitContext,
   provider: SandboxProvider,
-  hostApi: HostApi,
+  _hostApi: HostApi,
   sandboxToken: string,
 ): Promise<SandboxInitResult> {
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
@@ -92,12 +91,9 @@ export async function initSandboxAgent(
   });
 
   let sandboxSkillsPrompt: string | undefined;
-  let skillsMap: Map<string, string> | undefined;
   if (ctx.config.onDemandSkills !== false && sandboxSkills.length > 0) {
     const summaries = extractSkillSummaries(sandboxSkills);
     sandboxSkillsPrompt = formatSkillSummariesForPrompt(summaries);
-    skillsMap = new Map<string, string>();
-    for (const s of sandboxSkills) skillsMap.set(s.name, s.source);
   } else {
     sandboxSkillsPrompt =
       sandboxSkills.length > 0
@@ -153,7 +149,7 @@ export async function initSandboxAgent(
   if (policy?.allow) est = Math.min(est, policy.allow.length);
   else if (policy?.deny) est = Math.max(0, est - policy.deny.length);
 
-  return { sandboxInfo, toolCount: est, skillsMap };
+  return { sandboxInfo, toolCount: est };
 }
 
 export interface InProcessInitResult {
