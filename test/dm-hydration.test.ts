@@ -218,6 +218,7 @@ describe("eventToMessages", () => {
         data: {
           type: "message_end",
           agent: "coder",
+          sessionKey: "ch:general",
           requestId: "r-thread",
           message: {
             role: "assistant",
@@ -232,6 +233,7 @@ describe("eventToMessages", () => {
         data: {
           type: "message_end",
           agent: "coder",
+          sessionKey: "ch:general",
           requestId: "r-normal",
           message: {
             role: "assistant",

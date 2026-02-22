@@ -32,10 +32,16 @@ export function isDmSessionForAgent(
   return sessionKey === `dm:${agentName}`;
 }
 
+export function isChannelSession(
+  sessionKey: unknown,
+  channelName: string,
+): boolean {
+  return sessionKey === `ch:${channelName}`;
+}
+
 export type DisplayItem =
   | { kind: "message"; data: SlackMessageData; compact: boolean }
   | { kind: "system"; data: SlackMessageData }
-  | { kind: "thread"; thread: import("../../store/thread-store.js").Thread }
   | { kind: "date"; timestamp: number };
 
 export function eventToMessages(
@@ -58,6 +64,9 @@ export function eventToMessages(
       if (agent !== channel.agentName) continue;
       if (!isDmSessionForAgent(d.sessionKey, channel.agentName)) continue;
     }
+    if (channel.kind === "conversation") {
+      if (!isChannelSession(d.sessionKey, channel.name)) continue;
+    }
 
     if (type === "message_end") {
       const msg = d.message as
@@ -67,7 +76,7 @@ export function eventToMessages(
 
       // Only show assistant responses. "user"-role messages are internal
       // agent prompts (tool results, inter-agent forwards, etc.) — not
-      // from the human user. The user's own messages appear via threads.
+      // from the human user.
       if (msg.role !== "assistant") continue;
 
       const text = extractText(msg.content);
@@ -139,19 +148,13 @@ const DEDUP_WINDOW_MS = 3000;
  * Merge baseline (SQLite) messages with live SSE messages, deduplicating
  * by requestId first, then by fingerprint (role+text) within a time window
  * only for messages that have no requestId at all.
- *
- * threadParents contribute to dedup indexes (their requestIds filter out
- * matching baseline rows) but are NOT added to the output array.
  */
 export function mergeBaselineWithLive(
   baseline: SlackMessageData[],
   live: SlackMessageData[],
-  threadParents: SlackMessageData[] = [],
 ): SlackMessageData[] {
-  const allLive = [...live, ...threadParents];
-
   const liveByRoleAndRequestId = new Set<string>();
-  for (const m of allLive) {
+  for (const m of live) {
     if (m.requestId) {
       liveByRoleAndRequestId.add(
         `${m.isBot ? "assistant" : "user"}:${m.requestId}`,
@@ -159,7 +162,7 @@ export function mergeBaselineWithLive(
     }
   }
 
-  const liveFingerprints: { key: string; ts: number }[] = allLive
+  const liveFingerprints: { key: string; ts: number }[] = live
     .filter((m) => !m.requestId)
     .map((m) => ({
       key: `${m.isBot ? "assistant" : "user"}:${m.text}`,

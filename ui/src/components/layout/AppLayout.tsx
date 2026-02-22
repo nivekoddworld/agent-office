@@ -11,8 +11,6 @@ import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
 import { OrgChartModal } from "../slack/OrgChartModal.js";
 import { CostModal } from "../slack/CostModal.js";
 import { OfficeSettingsModal } from "../slack/OfficeSettingsModal.js";
-import { ThreadDrawer } from "../slack/ThreadDrawer.js";
-import type { Thread } from "../../store/thread-store.js";
 import type { BootstrapState } from "../../api/types.js";
 
 type ModalState =
@@ -20,8 +18,7 @@ type ModalState =
   | { kind: "profile"; agentName: string }
   | { kind: "orgChart" }
   | { kind: "cost" }
-  | { kind: "settings" }
-  | { kind: "thread"; threadId: string };
+  | { kind: "settings" };
 
 interface AppLayoutProps {
   state: BootstrapState;
@@ -90,10 +87,6 @@ export function AppLayout({ state }: AppLayoutProps) {
     setChannel({ kind: "dm", agentName });
   }, []);
 
-  const handleOpenThread = useCallback((thread: Thread) => {
-    setModal({ kind: "thread", threadId: thread.id });
-  }, []);
-
   const closeModal = useCallback(() => setModal({ kind: "none" }), []);
 
   const handleOrgChartSelect = useCallback((name: string | null) => {
@@ -146,7 +139,6 @@ export function AppLayout({ state }: AppLayoutProps) {
             agentNames={agentNames}
             activeCount={activeCount}
             onClickAvatar={handleClickAvatar}
-            onOpenThread={handleOpenThread}
             cronJobs={state.cronJobs}
             tasks={state.tasks}
             defaultConversationChannel={defaultChannel}
@@ -176,14 +168,6 @@ export function AppLayout({ state }: AppLayoutProps) {
         opened={modal.kind === "settings"}
         onClose={closeModal}
         state={state}
-      />
-
-      <ThreadDrawer
-        opened={modal.kind === "thread"}
-        onClose={closeModal}
-        threadId={modal.kind === "thread" ? modal.threadId : null}
-        channelName={channel.kind === "dm" ? channel.agentName : channel.name}
-        onClickAvatar={handleClickAvatar}
       />
     </Box>
   );
