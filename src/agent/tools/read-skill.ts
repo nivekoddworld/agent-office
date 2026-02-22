@@ -6,13 +6,20 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-/** Create a read_skill tool backed by a pre-loaded skills map. */
+type SkillsSource = Map<string, string> | (() => Map<string, string>);
+
+function resolveSkillsMap(source: SkillsSource): Map<string, string> {
+  return typeof source === "function" ? source() : source;
+}
+
+/** Create a read_skill tool backed by a skills map or map loader. */
 export function createReadSkillTool(
-  skillsMap: Map<string, string>,
+  skillsSource: SkillsSource,
 ): AgentTool<any> {
   return {
     ...READ_SKILL,
     execute: async (_id, params: { name: string }) => {
+      const skillsMap = resolveSkillsMap(skillsSource);
       const content = skillsMap.get(params.name);
       if (!content) {
         const available = [...skillsMap.keys()].sort().join(", ");

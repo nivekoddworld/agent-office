@@ -26,6 +26,7 @@ import {
 import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
 import { getCronSummaries } from "../config/office-yaml.js";
+import { ensureAgentSkillLayout } from "../skills/registry.js";
 import {
   initSandboxAgent,
   initInProcessAgent,
@@ -151,9 +152,15 @@ export class AgentHandle {
     };
   }
 
+  private get skillPaths(): string[] {
+    const merged = [join(this.agentDir, "skills"), ...(this.config.skillDirs ?? [])];
+    return [...new Set(merged.map((p) => p.trim()).filter((p) => p.length > 0))];
+  }
+
   async init(): Promise<void> {
     await mkdir(this.cwd, { recursive: true });
     await mkdir(join(this.agentDir, "skills"), { recursive: true });
+    ensureAgentSkillLayout(this.baseDir, this.name);
 
     if (this.provider && this.sandboxToken) {
       const result = await initSandboxAgent(
@@ -263,10 +270,11 @@ export class AgentHandle {
   }
 
   getPromptReport(): PromptReport {
+    ensureAgentSkillLayout(this.baseDir, this.name);
     const { skills } = loadSkills({
       cwd: this.cwd,
       agentDir: this.agentDir,
-      skillPaths: this.config.skillDirs,
+      skillPaths: this.skillPaths,
     });
 
     let skillsPrompt: string | undefined;

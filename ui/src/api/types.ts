@@ -108,6 +108,45 @@ export interface AgentDetail extends AgentInfo {
   hierarchy: AgentHierarchy | null;
 }
 
+export interface AgentSkill {
+  name: string;
+  source: "project" | "legacy";
+  path: string;
+  description?: string;
+  packageName?: string;
+}
+
+export interface AgentSkillsResponse {
+  agent: string;
+  skills: AgentSkill[];
+}
+
+export interface SkillSearchResult {
+  packageName: string;
+  repo: string;
+  skillName: string;
+  url?: string;
+  installed: boolean;
+}
+
+export interface SkillSearchResponse {
+  query: string;
+  results: SkillSearchResult[];
+}
+
+export interface SkillInstallResponse {
+  ok: boolean;
+  installed: AgentSkill[];
+  output: string[];
+  error?: string;
+}
+
+export interface SkillRemoveResponse {
+  ok: boolean;
+  source: "project" | "legacy";
+  error?: string;
+}
+
 export interface InboxMessage {
   id: string;
   from: string;

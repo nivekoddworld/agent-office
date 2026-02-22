@@ -27,6 +27,10 @@ import {
   createCronRemoveProxy,
   createCronListProxy,
   createReadSkillProxy,
+  createSkillSearchProxy,
+  createSkillInstallProxy,
+  createSkillRemoveProxy,
+  createSkillCreateProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
@@ -131,6 +135,10 @@ const allTools: AgentTool<any>[] = [
   createCronAddProxy(hostFetch),
   createCronRemoveProxy(hostFetch),
   createCronListProxy(hostFetch),
+  createSkillSearchProxy(hostFetch),
+  createSkillInstallProxy(hostFetch),
+  createSkillRemoveProxy(hostFetch),
+  createSkillCreateProxy(hostFetch),
   ...(process.env["ON_DEMAND_SKILLS"] === "1"
     ? [createReadSkillProxy(hostFetch)]
     : []),

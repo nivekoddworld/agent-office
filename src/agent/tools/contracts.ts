@@ -172,9 +172,64 @@ export const READ_SKILL = {
   name: "read_skill" as const,
   label: "Read Skill",
   description:
-    "Load the full content of a skill by name. Use this to retrieve skill instructions before executing a task.",
+    "Load the full content of a skill by name. Use this instead of reading workspace files for skill instructions.",
   parameters: Type.Object({
     name: Type.String({ description: "Skill name" }),
+  }),
+};
+
+export const SKILL_SEARCH = {
+  name: "skill_search" as const,
+  label: "Skill Search",
+  description:
+    "Search skills from skills.sh. Returns installable package names for this agent.",
+  parameters: Type.Object({
+    query: Type.String({ description: "Search query" }),
+    limit: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        maximum: 20,
+        description: "Maximum results (default: 8)",
+      }),
+    ),
+  }),
+};
+
+export const SKILL_INSTALL = {
+  name: "skill_install" as const,
+  label: "Skill Install",
+  description:
+    "Install a skills.sh package for this agent into agents/<agent>/skills.",
+  parameters: Type.Object({
+    package: Type.String({
+      description: "Package in owner/repo@skill-name format",
+    }),
+  }),
+};
+
+export const SKILL_REMOVE = {
+  name: "skill_remove" as const,
+  label: "Skill Remove",
+  description: "Remove a project skill from agents/<agent>/skills by name.",
+  parameters: Type.Object({
+    name: Type.String({ description: "Installed skill name" }),
+  }),
+};
+
+export const SKILL_CREATE = {
+  name: "skill_create" as const,
+  label: "Skill Create",
+  description:
+    "Create a new skill scaffold in agents/<agent>/skills for this agent.",
+  parameters: Type.Object({
+    name: Type.String({ description: "Skill name (will be normalized)" }),
+    description: Type.String({ description: "Short trigger description" }),
+    instructions: Type.Optional(
+      Type.String({ description: "Workflow steps for the skill" }),
+    ),
+    when_to_use: Type.Optional(
+      Type.String({ description: "When this skill should be used" }),
+    ),
   }),
 };
 

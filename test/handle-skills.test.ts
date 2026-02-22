@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { join } from "node:path";
 import { AgentHandle, type AgentHandleDeps } from "../src/agent/handle.js";
 import type { AgentConfig } from "../src/types.js";
 import { Priority } from "../src/types.js";
@@ -49,6 +50,10 @@ vi.mock("../src/agent/tools/index.js", () => ({
   createCronAddTool: () => ({ name: "cron_add", execute: vi.fn() }),
   createCronRemoveTool: () => ({ name: "cron_remove", execute: vi.fn() }),
   createCronListTool: () => ({ name: "cron_list", execute: vi.fn() }),
+  createSkillSearchTool: () => ({ name: "skill_search", execute: vi.fn() }),
+  createSkillInstallTool: () => ({ name: "skill_install", execute: vi.fn() }),
+  createSkillRemoveTool: () => ({ name: "skill_remove", execute: vi.fn() }),
+  createSkillCreateTool: () => ({ name: "skill_create", execute: vi.fn() }),
   createTaskCreateTool: () => ({ name: "task_create", execute: vi.fn() }),
   createTaskUpdateTool: () => ({ name: "task_update", execute: vi.fn() }),
   createTaskListTool: () => ({ name: "task_list", execute: vi.fn() }),
@@ -219,7 +224,7 @@ describe("AgentHandle sandbox skills", () => {
     expect(loadSkills).toHaveBeenCalledWith({
       cwd: expect.stringContaining("workspace"),
       agentDir: expect.stringContaining("test-agent"),
-      skillPaths: undefined,
+      skillPaths: [join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills")],
     });
   });
 });

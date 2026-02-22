@@ -1,4 +1,5 @@
 import { Agent, type AgentTool } from "@mariozechner/pi-agent-core";
+import { join } from "node:path";
 import {
   createCodingTools,
   loadSkills,
@@ -23,6 +24,10 @@ import {
   createCronRemoveTool,
   createCronListTool,
   createReadSkillTool,
+  createSkillSearchTool,
+  createSkillInstallTool,
+  createSkillRemoveTool,
+  createSkillCreateTool,
   createTaskCreateTool,
   createTaskUpdateTool,
   createTaskListTool,
@@ -39,6 +44,7 @@ import type { TaskToolDeps } from "./tools/task-impl.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { getCronSummaries } from "../config/office-yaml.js";
+import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { applyToolPolicy } from "./tools/policy.js";
 
 export interface InitContext {
@@ -60,21 +66,29 @@ export interface SandboxInitResult {
   skillsMap?: Map<string, string>;
 }
 
+function resolveSkillPaths(ctx: InitContext): string[] {
+  const merged = [join(ctx.agentDir, "skills"), ...(ctx.config.skillDirs ?? [])];
+  return [...new Set(merged.map((p) => p.trim()).filter((p) => p.length > 0))];
+}
+
 export async function initSandboxAgent(
   ctx: InitContext,
   provider: SandboxProvider,
   hostApi: HostApi,
   sandboxToken: string,
 ): Promise<SandboxInitResult> {
+  ensureAgentSkillLayout(ctx.baseDir, ctx.name);
+
   const model = ctx.config.model;
   const hasMemory =
     collectMemoryFiles(ctx.cwd).length > 0 ||
     collectMemoryFiles(ctx.baseDir).length > 0;
+  const skillPaths = resolveSkillPaths(ctx);
 
   const { skills: sandboxSkills } = loadSkills({
     cwd: ctx.cwd,
     agentDir: ctx.agentDir,
-    skillPaths: ctx.config.skillDirs,
+    skillPaths,
   });
 
   let sandboxSkillsPrompt: string | undefined;
@@ -134,7 +148,7 @@ export async function initSandboxAgent(
     ctx.config.secrets &&
     Object.keys(ctx.config.secrets).some((k) => k !== "MODEL_API_KEY");
   let est =
-    19 + (hasSecrets ? 1 : 0) + (ctx.config.onDemandSkills !== false ? 1 : 0);
+    23 + (hasSecrets ? 1 : 0) + (ctx.config.onDemandSkills !== false ? 1 : 0);
   const policy = ctx.config.permissions?.tools;
   if (policy?.allow) est = Math.min(est, policy.allow.length);
   else if (policy?.deny) est = Math.max(0, est - policy.deny.length);
@@ -155,6 +169,8 @@ export async function initInProcessAgent(
   cronService: CronService | undefined,
   taskService: TaskService | undefined,
 ): Promise<InProcessInitResult> {
+  ensureAgentSkillLayout(ctx.baseDir, ctx.name);
+
   let resolvedApiKey: string | undefined;
   if (ctx.config.apiKeyRef) {
     resolvedApiKey = process.env[ctx.config.apiKeyRef];
@@ -177,10 +193,11 @@ export async function initInProcessAgent(
     Object.assign(resolvedSecrets, resolved);
   }
 
+  const skillPaths = resolveSkillPaths(ctx);
   const { skills } = loadSkills({
     cwd: ctx.cwd,
     agentDir: ctx.agentDir,
-    skillPaths: ctx.config.skillDirs,
+    skillPaths,
   });
   if (skills.length > 0)
     console.log(
@@ -197,6 +214,10 @@ export async function initInProcessAgent(
   const taskDeps: TaskToolDeps = {
     agentName: ctx.name,
     taskService: taskService ?? null,
+  };
+  const skillDeps = {
+    agentName: ctx.name,
+    baseDir: ctx.baseDir,
   };
 
   let inProcSkillsPrompt: string | undefined;
@@ -217,15 +238,29 @@ export async function initInProcessAgent(
     createTaskUpdateTool(taskDeps),
     createTaskListTool(taskDeps),
     createTaskGetTool(taskDeps),
+    createSkillSearchTool(skillDeps),
+    createSkillInstallTool(skillDeps),
+    createSkillRemoveTool(skillDeps),
+    createSkillCreateTool(skillDeps),
     ...(ctx.config.tools ?? []),
   ];
 
   if (ctx.config.onDemandSkills !== false && skills.length > 0) {
     const summaries = extractSkillSummaries(skills);
     inProcSkillsPrompt = formatSkillSummariesForPrompt(summaries);
-    const skillsMap = new Map<string, string>();
-    for (const s of skills) skillsMap.set(s.name, s.source);
-    allTools.push(createReadSkillTool(skillsMap));
+    allTools.push(
+      createReadSkillTool(() => {
+        ensureAgentSkillLayout(ctx.baseDir, ctx.name);
+        const { skills: latestSkills } = loadSkills({
+          cwd: ctx.cwd,
+          agentDir: ctx.agentDir,
+          skillPaths,
+        });
+        const skillsMap = new Map<string, string>();
+        for (const s of latestSkills) skillsMap.set(s.name, s.source);
+        return skillsMap;
+      }),
+    );
   } else {
     inProcSkillsPrompt =
       skills.length > 0 ? formatSkillsForPrompt(skills) : undefined;

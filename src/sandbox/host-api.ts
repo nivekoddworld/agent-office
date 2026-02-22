@@ -27,6 +27,10 @@ import {
   handleCronRemove,
   handleCronList,
   handleReadSkill,
+  handleSkillSearch,
+  handleSkillInstall,
+  handleSkillRemove,
+  handleSkillCreate,
   type CronHandlerDeps,
 } from "./host-api-ext-handlers.js";
 
@@ -277,7 +281,19 @@ export class HostApi {
           await handleCronList(req, res, this.buildCronDeps(agentName));
       } else if (req.method === "POST" && path === "/api/read-skill") {
         if (this.checkToolPolicy(path, agentName, res))
-          await handleReadSkill(req, res, agentName, this.agentSkills);
+          await handleReadSkill(req, res, this.buildSkillDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/skill-search") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleSkillSearch(req, res, this.buildSkillDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/skill-install") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleSkillInstall(req, res, this.buildSkillDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/skill-remove") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleSkillRemove(req, res, this.buildSkillDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/skill-create") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleSkillCreate(req, res, this.buildSkillDeps(agentName));
       } else if (req.method === "POST" && path === "/api/tool-count") {
         await handleToolCount(req, res, agentName, this.agentToolCounts);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
@@ -300,6 +316,10 @@ export class HostApi {
     "/api/cron-remove": "cron_remove",
     "/api/cron-list": "cron_list",
     "/api/read-skill": "read_skill",
+    "/api/skill-search": "skill_search",
+    "/api/skill-install": "skill_install",
+    "/api/skill-remove": "skill_remove",
+    "/api/skill-create": "skill_create",
   };
 
   private checkToolPolicy(
@@ -327,6 +347,13 @@ export class HostApi {
       permissions: this.agentPermissions.get(agentName) ?? {},
       cron: this.cronDeps.cron,
     };
+  }
+
+  private buildSkillDeps(agentName: string): {
+    agentName: string;
+    baseDir: string;
+  } {
+    return { agentName, baseDir: this.baseDir };
   }
 
   private sweepDedup(): void {

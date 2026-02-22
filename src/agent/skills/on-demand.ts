@@ -20,7 +20,8 @@ export function formatSkillSummariesForPrompt(
     .join("\n");
   return (
     "## Skills (on-demand)\n" +
-    "The following skills are available. Use the `read_skill` tool to load full content before using a skill.\n\n" +
+    "The following skills are available. Use the `read_skill` tool to load full content before using a skill.\n" +
+    "Do not inspect workspace files to find skill content; skills are managed outside the workspace by the host.\n\n" +
     list
   );
 }

@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { join } from "node:path";
+import { loadSkills } from "@mariozechner/pi-coding-agent";
 import type { CitationMode, AgentPermissions } from "../types.js";
 import { redactText } from "../security/redact.js";
 import {
@@ -14,7 +16,15 @@ import {
   cronRemoveImpl,
   cronListImpl,
 } from "../agent/tools/cron-impl.js";
+import {
+  skillCreateImpl,
+  skillInstallImpl,
+  skillRemoveImpl,
+  skillSearchImpl,
+  type SkillToolDeps,
+} from "../agent/tools/skill-impl.js";
 import type { CronService } from "../cron/cron-service.js";
+import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { readBody } from "./host-api-handlers.js";
 
 export interface CronHandlerDeps {
@@ -24,6 +34,8 @@ export interface CronHandlerDeps {
   permissions: AgentPermissions;
   cron: CronService;
 }
+
+export type SkillHandlerDeps = SkillToolDeps;
 
 export async function handleAuthenticatedFetch(
   req: IncomingMessage,
@@ -259,11 +271,80 @@ export async function handleCronList(
   res.end(JSON.stringify({ result }));
 }
 
+async function parseSkillBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: SkillHandlerDeps,
+): Promise<{ params: unknown; deps: SkillHandlerDeps } | null> {
+  const body = await readBody(req);
+  if (!body) {
+    res.writeHead(413);
+    res.end();
+    return null;
+  }
+  let params: unknown;
+  try {
+    params = JSON.parse(body);
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Invalid JSON" }));
+    return null;
+  }
+  return { params, deps };
+}
+
+export async function handleSkillSearch(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: SkillHandlerDeps,
+): Promise<void> {
+  const parsed = await parseSkillBody(req, res, deps);
+  if (!parsed) return;
+  const result = await skillSearchImpl(parsed.deps, parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
+export async function handleSkillInstall(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: SkillHandlerDeps,
+): Promise<void> {
+  const parsed = await parseSkillBody(req, res, deps);
+  if (!parsed) return;
+  const result = await skillInstallImpl(parsed.deps, parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
+export async function handleSkillRemove(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: SkillHandlerDeps,
+): Promise<void> {
+  const parsed = await parseSkillBody(req, res, deps);
+  if (!parsed) return;
+  const result = skillRemoveImpl(parsed.deps, parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
+export async function handleSkillCreate(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: SkillHandlerDeps,
+): Promise<void> {
+  const parsed = await parseSkillBody(req, res, deps);
+  if (!parsed) return;
+  const result = skillCreateImpl(parsed.deps, parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
 export async function handleReadSkill(
   req: IncomingMessage,
   res: ServerResponse,
-  agentName: string,
-  agentSkills: Map<string, Map<string, string>>,
+  deps: SkillHandlerDeps,
 ): Promise<void> {
   const body = await readBody(req);
   if (!body) {
@@ -284,10 +365,19 @@ export async function handleReadSkill(
     res.end(JSON.stringify({ error: "Missing required field: name" }));
     return;
   }
-  const skills = agentSkills.get(agentName);
-  const content = skills?.get(params.name);
+  ensureAgentSkillLayout(deps.baseDir, deps.agentName);
+  const agentDir = join(deps.baseDir, "agents", deps.agentName);
+  const { skills } = loadSkills({
+    cwd: join(agentDir, "workspace"),
+    agentDir,
+    skillPaths: [join(agentDir, "skills")],
+  });
+  const skillsMap = new Map<string, string>();
+  for (const skill of skills) skillsMap.set(skill.name, skill.source);
+
+  const content = skillsMap.get(params.name);
   if (!content) {
-    const available = skills ? [...skills.keys()].sort().join(", ") : "none";
+    const available = [...skillsMap.keys()].sort().join(", ") || "none";
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({

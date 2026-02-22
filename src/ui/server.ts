@@ -26,6 +26,13 @@ import {
 } from "./routes.js";
 import { dispatchCommand, type DispatchResult } from "./command-parser.js";
 import { isMutation } from "./command-intent.js";
+import {
+  installRegistrySkillForAgent,
+  listInstalledAgentSkills,
+  removeProjectSkillForAgent,
+  searchRegistrySkills,
+} from "../skills/registry.js";
+import { skillRemoveCommand } from "../commands/skill.js";
 
 const DEFAULT_PORT = 3847;
 const HOST = "127.0.0.1";
@@ -511,6 +518,143 @@ export async function startUiServer(
       const result = await getAgentFileContent(handle, filePath);
       if ("error" in result) return json(res, 400, result);
       return json(res, 200, result);
+    }
+
+    // --- GET /api/agents/:name/skills ---
+    const skillsListMatch = path.match(/^\/api\/agents\/([^/]+)\/skills$/);
+    if (skillsListMatch && method === "GET") {
+      const name = skillsListMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+      const skills = listInstalledAgentSkills(workspace.office.dir, name);
+      return json(res, 200, { agent: name, skills });
+    }
+
+    // --- GET /api/agents/:name/skills/search?q=... ---
+    const skillsSearchMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/skills\/search$/,
+    );
+    if (skillsSearchMatch && method === "GET") {
+      const name = skillsSearchMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      const query = (url.searchParams.get("q") ?? "").trim();
+      if (!query) return json(res, 200, { query: "", results: [] });
+
+      try {
+        const [results, installed] = await Promise.all([
+          searchRegistrySkills(query, {
+            limit: 25,
+            cwd: workspace.office.dir,
+          }),
+          Promise.resolve(listInstalledAgentSkills(workspace.office.dir, name)),
+        ]);
+        const installedNames = new Set(installed.map((s) => s.name));
+        const installedPackages = new Set(
+          installed
+            .map((s) => s.packageName)
+            .filter((pkg): pkg is string => !!pkg),
+        );
+
+        return json(res, 200, {
+          query,
+          results: results.map((result) => ({
+            ...result,
+            installed:
+              installedPackages.has(result.packageName) ||
+              installedNames.has(result.skillName),
+          })),
+        });
+      } catch (err) {
+        return json(res, 502, {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- POST /api/agents/:name/skills/install ---
+    const skillsInstallMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/skills\/install$/,
+    );
+    if (skillsInstallMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const name = skillsInstallMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      const body = await readBody(req);
+      let parsed: { packageName?: string };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+
+      const packageName = parsed.packageName?.trim();
+      if (!packageName) return json(res, 400, { error: "missing_package_name" });
+
+      try {
+        const result = await installRegistrySkillForAgent(
+          workspace.office.dir,
+          name,
+          packageName,
+        );
+        if (result.installed.length > 0) {
+          void handle
+            .steer(
+              `[System] Installed skill(s) via skills.sh: ${result.installed.map((s) => s.name).join(", ")}. Skill files are under agents/${name}/skills.`,
+            )
+            .catch(() => {});
+        }
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, {
+          ok: true,
+          installed: result.installed,
+          output: result.output,
+        });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- DELETE /api/agents/:name/skills/:skill ---
+    const skillsDeleteMatch = path.match(/^\/api\/agents\/([^/]+)\/skills\/([^/]+)$/);
+    if (skillsDeleteMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const name = skillsDeleteMatch[1]!;
+      const skillName = decodeURIComponent(skillsDeleteMatch[2]!);
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      try {
+        let source: "project" | "legacy" = "project";
+        const removed = removeProjectSkillForAgent(
+          workspace.office.dir,
+          name,
+          skillName,
+        );
+        if (!removed) {
+          await skillRemoveCommand(name, skillName, workspace);
+          source = "legacy";
+        }
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true, source });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // --- GET /api/agents/:name ---

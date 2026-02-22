@@ -9,6 +9,10 @@ import {
   CRON_ADD,
   CRON_REMOVE,
   CRON_LIST,
+  SKILL_SEARCH,
+  SKILL_INSTALL,
+  SKILL_REMOVE,
+  SKILL_CREATE,
 } from "../src/agent/tools/contracts.js";
 import { createMessageAgentTool } from "../src/agent/tools/message-agent.js";
 import { createListAgentsTool } from "../src/agent/tools/list-agents.js";
@@ -19,6 +23,10 @@ import { createMemoryGetTool } from "../src/agent/tools/memory-get.js";
 import { createCronAddTool } from "../src/agent/tools/cron-add.js";
 import { createCronRemoveTool } from "../src/agent/tools/cron-remove.js";
 import { createCronListTool } from "../src/agent/tools/cron-list.js";
+import { createSkillSearchTool } from "../src/agent/tools/skill-search.js";
+import { createSkillInstallTool } from "../src/agent/tools/skill-install.js";
+import { createSkillRemoveTool } from "../src/agent/tools/skill-remove.js";
+import { createSkillCreateTool } from "../src/agent/tools/skill-create.js";
 import { createMessageAgentProxy } from "../src/agent/tools/proxy/message-agent.js";
 import { createListAgentsProxy } from "../src/agent/tools/proxy/list-agents.js";
 import { createReadAgentFileProxy } from "../src/agent/tools/proxy/read-agent-file.js";
@@ -28,6 +36,10 @@ import { createMemoryGetProxy } from "../src/agent/tools/proxy/memory-get.js";
 import { createCronAddProxy } from "../src/agent/tools/proxy/cron-add.js";
 import { createCronRemoveProxy } from "../src/agent/tools/proxy/cron-remove.js";
 import { createCronListProxy } from "../src/agent/tools/proxy/cron-list.js";
+import { createSkillSearchProxy } from "../src/agent/tools/proxy/skill-search.js";
+import { createSkillInstallProxy } from "../src/agent/tools/proxy/skill-install.js";
+import { createSkillRemoveProxy } from "../src/agent/tools/proxy/skill-remove.js";
+import { createSkillCreateProxy } from "../src/agent/tools/proxy/skill-create.js";
 import { Priority, type AgentInfo } from "../src/types.js";
 
 const noopFetch = vi.fn() as any;
@@ -95,6 +107,25 @@ describe("Tool contracts — host and proxy tools share metadata", () => {
         cron: null,
       }),
     },
+    {
+      contract: SKILL_SEARCH,
+      tool: createSkillSearchTool({ agentName: "self", baseDir: "/test/base" }),
+    },
+    {
+      contract: SKILL_INSTALL,
+      tool: createSkillInstallTool({
+        agentName: "self",
+        baseDir: "/test/base",
+      }),
+    },
+    {
+      contract: SKILL_REMOVE,
+      tool: createSkillRemoveTool({ agentName: "self", baseDir: "/test/base" }),
+    },
+    {
+      contract: SKILL_CREATE,
+      tool: createSkillCreateTool({ agentName: "self", baseDir: "/test/base" }),
+    },
   ];
 
   const proxyTools = [
@@ -110,6 +141,10 @@ describe("Tool contracts — host and proxy tools share metadata", () => {
     { contract: CRON_ADD, tool: createCronAddProxy(noopFetch) },
     { contract: CRON_REMOVE, tool: createCronRemoveProxy(noopFetch) },
     { contract: CRON_LIST, tool: createCronListProxy(noopFetch) },
+    { contract: SKILL_SEARCH, tool: createSkillSearchProxy(noopFetch) },
+    { contract: SKILL_INSTALL, tool: createSkillInstallProxy(noopFetch) },
+    { contract: SKILL_REMOVE, tool: createSkillRemoveProxy(noopFetch) },
+    { contract: SKILL_CREATE, tool: createSkillCreateProxy(noopFetch) },
   ];
 
   for (const { contract, tool } of hostTools) {
