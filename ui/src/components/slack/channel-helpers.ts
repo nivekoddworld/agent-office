@@ -150,9 +150,13 @@ export function mergeBaselineWithLive(
 ): SlackMessageData[] {
   const allLive = [...live, ...threadParents];
 
-  const liveByRequestId = new Set<string>();
+  const liveByRoleAndRequestId = new Set<string>();
   for (const m of allLive) {
-    if (m.requestId) liveByRequestId.add(m.requestId);
+    if (m.requestId) {
+      liveByRoleAndRequestId.add(
+        `${m.isBot ? "assistant" : "user"}:${m.requestId}`,
+      );
+    }
   }
 
   const liveFingerprints: { key: string; ts: number }[] = allLive
@@ -163,8 +167,15 @@ export function mergeBaselineWithLive(
     }));
 
   const filtered = baseline.filter((b) => {
-    // Dedup by requestId — exact match against live or thread parent
-    if (b.requestId && liveByRequestId.has(b.requestId)) return false;
+    // Dedup by requestId+role — user and assistant may share requestId
+    if (
+      b.requestId &&
+      liveByRoleAndRequestId.has(
+        `${b.isBot ? "assistant" : "user"}:${b.requestId}`,
+      )
+    ) {
+      return false;
+    }
     // Fingerprint fallback — only for messages with NO requestId
     if (!b.requestId) {
       const fp = `${b.isBot ? "assistant" : "user"}:${b.text}`;
