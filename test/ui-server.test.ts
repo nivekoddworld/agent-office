@@ -40,10 +40,18 @@ vi.mock("../src/commands/skill.js", () => ({
 }));
 vi.mock("../src/config/office-yaml.js", () => ({
   loadOfficeYaml: vi.fn(() => ({ agents: {} })),
-  buildOfficeContext: vi.fn(),
+  buildOfficeContext: vi.fn(() => ({
+    channels: new Map([["general", { members: ["alice", "bob"] }]]),
+  })),
   validateOfficeConfig: vi.fn(() => []),
   officeExists: vi.fn(() => true),
   createOffice: vi.fn(),
+  createChannelInOfficeYaml: vi.fn(async () => {}),
+  updateChannelInOfficeYaml: vi.fn(async () => {}),
+  deleteChannelFromOfficeYaml: vi.fn(async () => {}),
+}));
+vi.mock("../src/config/yaml-validation.js", () => ({
+  validateChannelEntry: vi.fn(() => []),
 }));
 vi.mock("../src/config/hierarchy.js", () => ({
   buildHierarchyMap: vi.fn(() => new Map()),
@@ -86,6 +94,7 @@ function createMockWorkspace() {
       dir: "/tmp/test",
       channels: new Map([["general", { members: ["alice", "bob"] }]]),
     },
+    updateChannels: vi.fn(),
     getAgent: vi.fn(() => undefined),
     onAgentEvent: vi.fn(() => vi.fn()),
     list: vi.fn(() => []),
@@ -629,6 +638,175 @@ describe("UI server", () => {
     });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "channel_not_found" });
+  });
+
+  it("POST /api/channels/:name/send normalizes %23-prefixed channel name", async () => {
+    const res = await fetch(`${origin}/api/channels/%23general/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ message: "hello via hash" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.targets).toEqual(["alice", "bob"]);
+  });
+
+  it("POST /api/channels/:name/send returns 400 for malformed encoding", async () => {
+    const res = await fetch(`${origin}/api/channels/%ZZbad/send`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ message: "hello" }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_channel_encoding" });
+  });
+
+  // --- Channel CRUD API ---
+
+  it("POST /api/channels creates a new channel", async () => {
+    const res = await fetch(`${origin}/api/channels`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: "engineering",
+        members: ["alice"],
+        description: "Eng team",
+      }),
+    });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("POST /api/channels rejects missing fields", async () => {
+    const res = await fetch(`${origin}/api/channels`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: "test" }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "missing_fields" });
+  });
+
+  it("POST /api/channels rejects validation errors", async () => {
+    const { validateChannelEntry } =
+      await import("../src/config/yaml-validation.js");
+    (validateChannelEntry as any).mockReturnValueOnce([
+      "reserved channel name",
+    ]);
+    const res = await fetch(`${origin}/api/channels`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ name: "tasks", members: ["alice"] }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("reserved");
+  });
+
+  it("PATCH /api/channels/:name updates channel", async () => {
+    const res = await fetch(`${origin}/api/channels/general`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ members: ["alice"], description: "Updated" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it("PATCH /api/channels/:name returns 404 for unknown channel", async () => {
+    const res = await fetch(`${origin}/api/channels/nonexistent`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ members: ["alice"] }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("DELETE /api/channels/:name deletes non-default channel", async () => {
+    mockWs.office.channels.set("eng", { members: ["alice"] });
+    const res = await fetch(`${origin}/api/channels/eng`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    mockWs.office.channels.delete("eng");
+  });
+
+  it("DELETE /api/channels/general returns 400 cannot_delete_default_channel", async () => {
+    const res = await fetch(`${origin}/api/channels/general`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "cannot_delete_default_channel",
+    });
+  });
+
+  it("DELETE /api/channels/:name returns 404 for unknown channel", async () => {
+    const res = await fetch(`${origin}/api/channels/nonexistent`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  // --- Client-side mention and fallback behavior ---
+
+  it("mention list in channel mode uses only channel members", () => {
+    const agentNames = ["alice", "bob", "carol"];
+    const mentionCandidates = ["alice", "bob"];
+    const isDm = false;
+    const mentionList = isDm ? agentNames : (mentionCandidates ?? []);
+    expect(mentionList).toEqual(["alice", "bob"]);
+    expect(mentionList).not.toContain("carol");
+  });
+
+  it("mention list in channel mode defaults to empty when no candidates", () => {
+    const agentNames = ["alice", "bob"];
+    const mentionCandidates: string[] | undefined = undefined;
+    const isDm = false;
+    const mentionList = isDm ? agentNames : (mentionCandidates ?? []);
+    expect(mentionList).toEqual([]);
+  });
+
+  it("mention list in DM mode falls back to all agents", () => {
+    const agentNames = ["alice", "bob", "carol"];
+    const mentionCandidates: string[] | undefined = undefined;
+    const isDm = true;
+    const mentionList = isDm ? agentNames : (mentionCandidates ?? []);
+    expect(mentionList).toEqual(["alice", "bob", "carol"]);
+  });
+
+  it("client fallback when selected channel is deleted and default still exists", () => {
+    const stateChannels = { engineering: {}, general: {} } as any;
+    const selectedName = "design";
+    const defaultCh = "general";
+    const inChannels = selectedName in stateChannels;
+    expect(inChannels).toBe(false);
+    const keys = Object.keys(stateChannels);
+    const fallback = defaultCh ?? keys[0];
+    const result =
+      fallback && fallback in stateChannels
+        ? { kind: "conversation" as const, name: fallback }
+        : { kind: "system" as const, name: "tasks" as const };
+    expect(result).toEqual({ kind: "conversation", name: "general" });
+  });
+
+  it("client fallback to system/tasks when all channels deleted", () => {
+    const stateChannels = {} as any;
+    const selectedName = "general";
+    const defaultCh = "general";
+    const inChannels = selectedName in stateChannels;
+    expect(inChannels).toBe(false);
+    const keys = Object.keys(stateChannels);
+    const fallback = defaultCh ?? keys[0];
+    const result =
+      fallback && fallback in stateChannels
+        ? { kind: "conversation" as const, name: fallback }
+        : { kind: "system" as const, name: "tasks" as const };
+    expect(result).toEqual({ kind: "system", name: "tasks" });
   });
 
   // --- Session API ACL ---

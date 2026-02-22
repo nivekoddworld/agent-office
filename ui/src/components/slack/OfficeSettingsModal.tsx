@@ -22,9 +22,11 @@ import {
   IconPlayerPlay,
   IconPlayerPause,
 } from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { slack } from "../../theme/slack-theme.js";
 import { useCommand } from "../../api/use-command.js";
 import type { BootstrapState } from "../../api/types.js";
+import { ChannelManager } from "./ChannelManager.js";
 
 interface OfficeSettingsModalProps {
   opened: boolean;
@@ -98,6 +100,7 @@ export function OfficeSettingsModal({
   state,
 }: OfficeSettingsModalProps) {
   const command = useCommand();
+  const queryClient = useQueryClient();
 
   const activeAgents = state.agents.filter(
     (a) => a.status === "running",
@@ -290,6 +293,17 @@ export function OfficeSettingsModal({
             <InfoRow label="Active" value={`${activeCronJobs}`} />
           </Box>
         </Box>
+
+        <Divider color={slack.borderColor} />
+
+        <ChannelManager
+          channels={state.channels}
+          agentNames={state.agents.map((a) => a.name)}
+          defaultChannel={state.defaultConversationChannel}
+          onMutated={() =>
+            queryClient.invalidateQueries({ queryKey: ["state"] })
+          }
+        />
 
         <Divider color={slack.borderColor} />
 

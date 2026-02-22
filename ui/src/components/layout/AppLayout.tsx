@@ -55,6 +55,22 @@ export function AppLayout({ state }: AppLayoutProps) {
     );
   }, [channel]);
 
+  useEffect(() => {
+    if (
+      channel.kind === "conversation" &&
+      state.channels &&
+      !(channel.name in state.channels)
+    ) {
+      const keys = Object.keys(state.channels);
+      const fallback = state.defaultConversationChannel ?? keys[0];
+      setChannel(
+        fallback && fallback in state.channels
+          ? { kind: "conversation", name: fallback }
+          : { kind: "system", name: "tasks" },
+      );
+    }
+  }, [channel, state.channels, state.defaultConversationChannel]);
+
   const command = useCommand();
 
   const handleToggleScheduler = useCallback(() => {

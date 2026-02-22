@@ -35,6 +35,14 @@ import {
   searchRegistrySkills,
 } from "../skills/registry.js";
 import { skillRemoveCommand } from "../commands/skill.js";
+import { validateChannelEntry } from "../config/yaml-validation.js";
+import {
+  loadOfficeYaml,
+  buildOfficeContext,
+  createChannelInOfficeYaml,
+  updateChannelInOfficeYaml,
+  deleteChannelFromOfficeYaml,
+} from "../config/office-yaml.js";
 
 const DEFAULT_PORT = 3847;
 const HOST = "127.0.0.1";
@@ -313,6 +321,14 @@ export async function startUiServer(
       client.write(payload);
     }
   };
+
+  function refreshChannels(): void {
+    const yaml = loadOfficeYaml(officeId);
+    if (yaml) {
+      const ctx = buildOfficeContext(officeId, yaml);
+      workspace.updateChannels(ctx.channels);
+    }
+  }
 
   const unsubTick = workspace.scheduler.onTick((state) =>
     broadcast("scheduler_tick", state),
@@ -754,7 +770,12 @@ export async function startUiServer(
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
       if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
-      const channelName = chSendMatch[1]!;
+      let channelName: string;
+      try {
+        channelName = decodeURIComponent(chSendMatch[1]!).replace(/^#/, "");
+      } catch {
+        return json(res, 400, { error: "invalid_channel_encoding" });
+      }
       const cfg = workspace.office.channels.get(channelName);
       if (!cfg) return json(res, 404, { error: "channel_not_found" });
       const body = await readBody(req);
@@ -826,6 +847,116 @@ export async function startUiServer(
       }
       broadcast("state_changed", getBootstrapState(workspace, officeId));
       return json(res, 200, { ok: true, targets });
+    }
+
+    // --- POST /api/channels (create) ---
+    if (path === "/api/channels" && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const body = await readBody(req);
+      let parsed: { name?: string; members?: string[]; description?: string };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.name || !parsed.members)
+        return json(res, 400, { error: "missing_fields" });
+      const agentNames = workspace.list().map((a) => a.name);
+      const errors = validateChannelEntry(
+        parsed.name,
+        { members: parsed.members, description: parsed.description },
+        agentNames,
+      );
+      if (errors.length > 0)
+        return json(res, 400, { error: errors.join("; ") });
+      try {
+        await createChannelInOfficeYaml(officeId, parsed.name, {
+          members: parsed.members,
+          description: parsed.description,
+        });
+        refreshChannels();
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 201, { ok: true });
+      } catch (err) {
+        return json(res, 409, {
+          error: err instanceof Error ? err.message : "create_failed",
+        });
+      }
+    }
+
+    // --- PATCH/DELETE /api/channels/:name ---
+    const chCrudMatch = path.match(/^\/api\/channels\/([^/]+)$/);
+    if (chCrudMatch && (method === "PATCH" || method === "DELETE")) {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      let name: string;
+      try {
+        name = decodeURIComponent(chCrudMatch[1]!).replace(/^#/, "");
+      } catch {
+        return json(res, 400, { error: "invalid_channel_encoding" });
+      }
+
+      if (method === "PATCH") {
+        if (!workspace.office.channels.has(name))
+          return json(res, 404, { error: "channel_not_found" });
+        const body = await readBody(req);
+        let parsed: { members?: string[]; description?: string };
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        const existing = workspace.office.channels.get(name)!;
+        const members = parsed.members ?? existing.members;
+        const description =
+          "description" in parsed
+            ? (parsed.description || undefined)
+            : existing.description;
+        const agentNames = workspace.list().map((a) => a.name);
+        const errors = validateChannelEntry(
+          name,
+          { members, description },
+          agentNames,
+        );
+        if (errors.length > 0)
+          return json(res, 400, { error: errors.join("; ") });
+        try {
+          await updateChannelInOfficeYaml(officeId, name, {
+            members,
+            description,
+          });
+          refreshChannels();
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
+          return json(res, 200, { ok: true });
+        } catch (err) {
+          return json(res, 409, {
+            error: err instanceof Error ? err.message : "update_failed",
+          });
+        }
+      }
+
+      // DELETE — reject default channel deletion
+      const channelNames = [...workspace.office.channels.keys()];
+      const defaultCh = workspace.office.channels.has("general")
+        ? "general"
+        : channelNames[0];
+      if (name === defaultCh)
+        return json(res, 400, { error: "cannot_delete_default_channel" });
+      if (!workspace.office.channels.has(name))
+        return json(res, 404, { error: "channel_not_found" });
+      try {
+        await deleteChannelFromOfficeYaml(officeId, name);
+        refreshChannels();
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 409, {
+          error: err instanceof Error ? err.message : "delete_failed",
+        });
+      }
     }
 
     // --- GET /api/sessions ---

@@ -393,3 +393,54 @@ export async function clearAgentPermissionTools(
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
+
+// --- Channel mutations ---
+
+export async function createChannelInOfficeYaml(
+  officeId: string,
+  name: string,
+  entry: { members: string[]; description?: string },
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (doc.getIn(["office", "channels", name]))
+      throw new Error(`Channel "${name}" already exists`);
+    const value: Record<string, unknown> = { members: entry.members };
+    if (entry.description) value.description = entry.description;
+    doc.setIn(["office", "channels", name], value);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function updateChannelInOfficeYaml(
+  officeId: string,
+  name: string,
+  entry: { members: string[]; description?: string },
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["office", "channels", name]))
+      throw new Error(`Channel "${name}" not found`);
+    doc.setIn(["office", "channels", name, "members"], entry.members);
+    if (entry.description !== undefined) {
+      doc.setIn(["office", "channels", name, "description"], entry.description);
+    } else {
+      doc.deleteIn(["office", "channels", name, "description"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function deleteChannelFromOfficeYaml(
+  officeId: string,
+  name: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["office", "channels", name]))
+      throw new Error(`Channel "${name}" not found`);
+    doc.deleteIn(["office", "channels", name]);
+    cleanupEmptyMap(doc, ["office", "channels"]);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}

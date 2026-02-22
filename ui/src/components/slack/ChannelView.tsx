@@ -381,12 +381,24 @@ export function ChannelView({
           <MessageInput
             agentNames={agentNames}
             targetAgent={targetAgent}
-            channelName={
+            channelId={
+              channel.kind === "conversation"
+                ? channel.name
+                : channel.kind === "dm"
+                  ? channel.agentName
+                  : channel.name
+            }
+            channelLabel={
               channel.kind === "conversation"
                 ? `#${channel.name}`
                 : channel.kind === "dm"
                   ? channel.agentName
                   : channel.name
+            }
+            mentionCandidates={
+              channel.kind === "conversation"
+                ? channels?.[channel.name]?.members
+                : undefined
             }
             onMessageSent={handleMessageSent}
           />

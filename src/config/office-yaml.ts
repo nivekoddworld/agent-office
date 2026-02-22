@@ -387,3 +387,11 @@ export {
   setAgentPermissionTools,
   clearAgentPermissionTools,
 } from "./office-yaml-mutations.js";
+
+// --- Re-export channel mutations from dedicated module ---
+
+export {
+  createChannelInOfficeYaml,
+  updateChannelInOfficeYaml,
+  deleteChannelFromOfficeYaml,
+} from "./office-yaml-mutations.js";

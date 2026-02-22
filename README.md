@@ -1411,6 +1411,16 @@ If no `general` channel is defined, a fallback is created with all agents as mem
 - `GET /api/sessions/:key/summaries?agent=<name>` — read session summaries (403 if agent lacks access)
 - `POST /api/channels/:name/send` — broadcast or mention-targeted channel send
 
+**Channel management API** (all require session cookie + CSRF headers):
+
+- `POST /api/channels` — create a new channel. Body: `{ name, members: string[], description?: string }`. Returns `201` on success. Validates name (not reserved, matches `[a-zA-Z0-9_-]+`), members (must be known agents, non-empty, no duplicates).
+- `PATCH /api/channels/:name` — update an existing channel. Body: `{ members?: string[], description?: string }`. Merges with existing config. Returns `200`.
+- `DELETE /api/channels/:name` — delete a channel. Returns `200`. Deleting `general` is rejected with `400 { error: "cannot_delete_default_channel" }`. If the deleted channel is currently selected in the UI, the client falls back to the default conversation channel or the Tasks system view.
+
+All channel mutations persist to `office.yaml` atomically (lock + temp file + rename) and immediately refresh the in-memory channel map with a `state_changed` SSE broadcast. No office restart is required.
+
+**Channel ID vs label:** The API uses raw channel names (e.g., `general`). The UI displays `#general` as a label but sends the raw name in API calls. The server normalizes `#`-prefixed names for backward compatibility (e.g., `%23general` → `general`).
+
 ## Prompt Inspection
 
 Inspect the composed system prompt for any running agent:
@@ -1494,7 +1504,7 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 - **Cron channel** — dedicated #cron channel view for cron job events
 - **Org chart** — interactive hierarchy modal
 - **Cost dashboard** — per-agent token usage and cost breakdown
-- **Office settings** — office configuration modal
+- **Office settings** — office configuration modal with channel management (create, edit members/description, delete), scheduler controls, config reload/validate
 - **Real-time updates** — SSE event stream with unread badges and queue depth indicators
 
 ### Configuration

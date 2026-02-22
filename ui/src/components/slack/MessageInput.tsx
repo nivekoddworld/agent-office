@@ -22,14 +22,18 @@ import {
 interface MessageInputProps {
   agentNames: string[];
   targetAgent: string | null;
-  channelName: string;
+  channelId: string;
+  channelLabel: string;
+  mentionCandidates?: string[];
   onMessageSent?: (agentName: string, text: string, requestId: string) => void;
 }
 
 export function MessageInput({
   agentNames,
   targetAgent,
-  channelName,
+  channelId,
+  channelLabel,
+  mentionCandidates,
   onMessageSent,
 }: MessageInputProps) {
   const [text, setText] = useState("");
@@ -45,6 +49,11 @@ export function MessageInput({
   }, [targetAgent]);
 
   const isDm = targetAgent != null;
+  const mentionList = isDm ? agentNames : (mentionCandidates ?? []);
+
+  useEffect(() => {
+    if (!isDm) setSelectedTarget(null);
+  }, [channelId, isDm]);
 
   const send = useCallback(async () => {
     const content = text.trim();
@@ -64,12 +73,12 @@ export function MessageInput({
         onMessageSent?.(selectedTarget!, content, requestId);
       } else {
         await sendChannelMessage({
-          channel: channelName,
+          channel: channelId,
           message: content,
           mentions: selectedTarget ? [selectedTarget] : undefined,
           requestId,
         });
-        onMessageSent?.(selectedTarget ?? channelName, content, requestId);
+        onMessageSent?.(selectedTarget ?? channelId, content, requestId);
       }
       setText("");
     } catch (err) {
@@ -81,7 +90,7 @@ export function MessageInput({
     } finally {
       setSending(false);
     }
-  }, [text, selectedTarget, onMessageSent, sending, isDm, channelName]);
+  }, [text, selectedTarget, onMessageSent, sending, isDm, channelId]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -102,10 +111,10 @@ export function MessageInput({
 
   const canSend = isDm ? !!selectedTarget : true;
   const placeholder = isDm
-    ? `Message ${channelName}`
+    ? `Message ${channelLabel}`
     : selectedTarget
-      ? `Message @${selectedTarget} in #${channelName}`
-      : `Message #${channelName} (broadcast, or @ to mention)`;
+      ? `Message @${selectedTarget} in ${channelLabel}`
+      : `Message ${channelLabel} (broadcast, or @ to mention)`;
 
   return (
     <Box
@@ -143,7 +152,7 @@ export function MessageInput({
 
       <Group gap={4} px="xs" pb="xs" justify="space-between">
         <Group gap={2}>
-          {!isDm && (
+          {!isDm && mentionList.length > 0 && (
             <Popover
               opened={showMention}
               onChange={setShowMention}
@@ -176,7 +185,7 @@ export function MessageInput({
               >
                 <ScrollArea mah={200}>
                   <Stack gap={0}>
-                    {agentNames.map((name) => (
+                    {mentionList.map((name) => (
                       <UnstyledButton
                         key={name}
                         onClick={() => insertMention(name)}

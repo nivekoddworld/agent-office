@@ -73,6 +73,9 @@ import {
   removeAgentFromOfficeYaml,
   addSkillToOfficeYaml,
   removeSkillFromOfficeYaml,
+  createChannelInOfficeYaml,
+  updateChannelInOfficeYaml,
+  deleteChannelFromOfficeYaml,
 } from "../src/config/office-yaml.js";
 import { withOfficeLock } from "../src/config/lock.js";
 import { buildYamlEntry } from "../src/config/yaml-utils.js";
@@ -937,5 +940,99 @@ describe("validateChannelEntry", () => {
   it("rejects empty members", () => {
     const errors = validateChannelEntry("general", { members: [] }, agents);
     expect(errors.some((e) => e.includes("non-empty"))).toBe(true);
+  });
+});
+
+describe("channel YAML mutations", () => {
+  const OID = "ch-mut-test";
+
+  beforeEach(() => {
+    const dir = join(TEST_DIR, "offices", OID);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "office.yaml"),
+      [
+        "office:",
+        "  name: Channel Mutation Test",
+        "  channels:",
+        "    general:",
+        "      members: [alice, bob]",
+        "      description: Main channel",
+        "agents:",
+        "  alice:",
+        '    model: "anthropic:claude-sonnet-4-20250514"',
+        "  bob:",
+        '    model: "anthropic:claude-sonnet-4-20250514"',
+      ].join("\n"),
+    );
+  });
+
+  afterEach(() => {
+    const dir = join(TEST_DIR, "offices", OID);
+    if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("creates a new channel", async () => {
+    await createChannelInOfficeYaml(OID, "engineering", {
+      members: ["alice"],
+      description: "Eng",
+    });
+    const yaml = loadOfficeYaml(OID)!;
+    const ch = yaml.office.channels?.engineering;
+    expect(ch).toBeDefined();
+    expect(ch!.members).toEqual(["alice"]);
+    expect(ch!.description).toBe("Eng");
+  });
+
+  it("rejects duplicate channel name on create", async () => {
+    await expect(
+      createChannelInOfficeYaml(OID, "general", { members: ["alice"] }),
+    ).rejects.toThrow("already exists");
+  });
+
+  it("creates channel without description", async () => {
+    await createChannelInOfficeYaml(OID, "ops", { members: ["bob"] });
+    const yaml = loadOfficeYaml(OID)!;
+    const ch = yaml.office.channels?.ops;
+    expect(ch).toBeDefined();
+    expect(ch!.description).toBeUndefined();
+  });
+
+  it("updates existing channel members", async () => {
+    await updateChannelInOfficeYaml(OID, "general", {
+      members: ["alice"],
+      description: "Updated",
+    });
+    const yaml = loadOfficeYaml(OID)!;
+    const ch = yaml.office.channels?.general;
+    expect(ch).toBeDefined();
+    expect(ch!.members).toEqual(["alice"]);
+    expect(ch!.description).toBe("Updated");
+  });
+
+  it("rejects update of non-existent channel", async () => {
+    await expect(
+      updateChannelInOfficeYaml(OID, "nope", { members: ["alice"] }),
+    ).rejects.toThrow("not found");
+  });
+
+  it("removes description when undefined on update", async () => {
+    await updateChannelInOfficeYaml(OID, "general", { members: ["alice"] });
+    const yaml = loadOfficeYaml(OID)!;
+    const ch = yaml.office.channels?.general;
+    expect(ch).toBeDefined();
+    expect(ch!.description).toBeUndefined();
+  });
+
+  it("deletes a channel", async () => {
+    await deleteChannelFromOfficeYaml(OID, "general");
+    const yaml = loadOfficeYaml(OID)!;
+    expect(yaml.office.channels?.general).toBeUndefined();
+  });
+
+  it("rejects deletion of non-existent channel", async () => {
+    await expect(deleteChannelFromOfficeYaml(OID, "nope")).rejects.toThrow(
+      "not found",
+    );
   });
 });
