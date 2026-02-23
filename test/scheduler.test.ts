@@ -18,6 +18,7 @@ function mockHandle(
     }),
     setActiveRequestId: vi.fn(),
     setActiveSessionKey: vi.fn(),
+    setActiveConversationPeer: vi.fn(),
     prompt: vi.fn(async () => {}),
     steer: vi.fn(async () => {}),
     info: vi.fn(() => ({
@@ -148,7 +149,8 @@ describe("Scheduler", () => {
     sched.stop();
 
     expect(target.prompt).toHaveBeenCalledWith(
-      "[Message from copywriter]\nhere's the copy",
+      "[Message from copywriter]\nhere's the copy\n\n" +
+        '[To reply, call message_agent with to="copywriter"]',
     );
   });
 
@@ -276,6 +278,7 @@ describe("Scheduler", () => {
       }),
       setActiveRequestId: vi.fn(),
       setActiveSessionKey: vi.fn(),
+      setActiveConversationPeer: vi.fn(),
       prompt: vi.fn(async () => promptPromise),
       steer: vi.fn(async () => {}),
       info: vi.fn(() => ({
