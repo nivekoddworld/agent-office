@@ -24,6 +24,8 @@ export class MessageBus {
     { count: number; windowStart: number }
   >();
   private store: MessageStore | null = null;
+  /** key: "${sender}:${recipient}" → session key to route reply into */
+  private replySessionMap = new Map<string, string>();
   private metrics: CollaborationMetricsCollector | null = null;
 
   setStore(store: MessageStore): void {
@@ -177,6 +179,22 @@ export class MessageBus {
   }
 
   /** Permanently remove an agent's inbox, rate-limit state, and persisted data. */
+  /** Record the session a reply should be routed to. */
+  setReplySession(from: string, to: string, sessionKey: string): void {
+    this.replySessionMap.set(`${from}:${to}`, sessionKey);
+  }
+
+  /** Consume (one-shot) the reply session for a given sender→recipient pair. */
+  getAndClearReplySession(
+    recipient: string,
+    sender: string,
+  ): string | undefined {
+    const key = `${recipient}:${sender}`;
+    const sk = this.replySessionMap.get(key);
+    if (sk) this.replySessionMap.delete(key);
+    return sk;
+  }
+
   purge(name: string): void {
     this.transport.purge(name);
     this.sendCounts.delete(name);

@@ -253,6 +253,7 @@ export class AgentHandle {
         : undefined,
       this._obligationStore,
       this._policyService,
+      this,
     );
     this.agent = result.agent;
     this._toolCount = result.toolCount;
