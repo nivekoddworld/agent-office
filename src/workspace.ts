@@ -79,6 +79,7 @@ export class Workspace {
       this.agents,
       this.bus,
       config.tickIntervalMs ?? 2000,
+      this.office.channels,
     );
     this.watchdog = new Watchdog(
       this.agents,

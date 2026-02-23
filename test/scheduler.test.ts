@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Scheduler } from "../src/scheduler/scheduler.js";
 import { MessageBus } from "../src/transport/message-bus.js";
-import { Priority } from "../src/types.js";
+import { Priority, type ChannelConfig } from "../src/types.js";
 
 /** Minimal AgentHandle mock. */
 function mockHandle(
@@ -360,5 +360,136 @@ describe("Scheduler", () => {
     expect(state.tickCount).toBe(0);
     expect(state.intervalMs).toBe(500);
     expect(state.agents).toEqual([]);
+  });
+
+  describe("channel message signatures", () => {
+    function makeChannels(
+      ...entries: [string, ChannelConfig][]
+    ): Map<string, ChannelConfig> {
+      return new Map(entries);
+    }
+
+    it("prepends channel context to user messages", () => {
+      const agents = new Map<string, any>();
+      const bus = new MessageBus();
+      const channels = makeChannels([
+        "general",
+        { members: ["coder", "designer", "pm"] },
+      ]);
+
+      const target = mockHandle("coder", Priority.NORMAL);
+      agents.set("coder", target);
+      bus.register("coder");
+      bus.send({
+        from: "__user__",
+        to: "coder",
+        type: "prompt",
+        payload: "Hello everyone",
+        priority: Priority.NORMAL,
+        sourceKind: "channel",
+        channel: "general",
+      });
+
+      const sched = new Scheduler(agents, bus, 100, channels);
+      sched.start();
+      vi.advanceTimersByTime(100);
+      sched.stop();
+
+      expect(target.prompt).toHaveBeenCalledWith(
+        "[Posted in #general. Other members: designer, pm]\nHello everyone",
+      );
+    });
+
+    it("formats agent channel messages with sender and channel context", () => {
+      const agents = new Map<string, any>();
+      const bus = new MessageBus();
+      const channels = makeChannels([
+        "general",
+        { members: ["coder", "designer", "pm"] },
+      ]);
+
+      const target = mockHandle("coder", Priority.NORMAL);
+      agents.set("coder", target);
+      bus.register("coder");
+      bus.send({
+        from: "pm",
+        to: "coder",
+        type: "prompt",
+        payload: "I think we should refactor",
+        priority: Priority.NORMAL,
+        sourceKind: "channel",
+        channel: "general",
+      });
+
+      const sched = new Scheduler(agents, bus, 100, channels);
+      sched.start();
+      vi.advanceTimersByTime(100);
+      sched.stop();
+
+      expect(target.prompt).toHaveBeenCalledWith(
+        "[Message from pm in #general. Other members: designer]\n" +
+          "I think we should refactor\n\n" +
+          "[To reply in #general, post in the channel]",
+      );
+    });
+
+    it("excludes recipient from the members list", () => {
+      const agents = new Map<string, any>();
+      const bus = new MessageBus();
+      const channels = makeChannels([
+        "dev",
+        { members: ["alice", "bob"] },
+      ]);
+
+      const target = mockHandle("alice", Priority.NORMAL);
+      agents.set("alice", target);
+      bus.register("alice");
+      bus.send({
+        from: "__user__",
+        to: "alice",
+        type: "prompt",
+        payload: "hi",
+        priority: Priority.NORMAL,
+        sourceKind: "channel",
+        channel: "dev",
+      });
+
+      const sched = new Scheduler(agents, bus, 100, channels);
+      sched.start();
+      vi.advanceTimersByTime(100);
+      sched.stop();
+
+      expect(target.prompt).toHaveBeenCalledWith(
+        "[Posted in #dev. Other members: bob]\nhi",
+      );
+    });
+
+    it("falls back gracefully when channel config is missing", () => {
+      const agents = new Map<string, any>();
+      const bus = new MessageBus();
+      const channels = new Map<string, ChannelConfig>();
+
+      const target = mockHandle("coder", Priority.NORMAL);
+      agents.set("coder", target);
+      bus.register("coder");
+      bus.send({
+        from: "__user__",
+        to: "coder",
+        type: "prompt",
+        payload: "hello",
+        priority: Priority.NORMAL,
+        sourceKind: "channel",
+        channel: "unknown",
+      });
+
+      const sched = new Scheduler(agents, bus, 100, channels);
+      sched.start();
+      vi.advanceTimersByTime(100);
+      sched.stop();
+
+      expect(target.prompt).toHaveBeenCalledWith(
+        "[Posted in #unknown]\nhello",
+      );
+    });
   });
 });

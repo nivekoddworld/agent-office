@@ -1,6 +1,6 @@
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
-import type { InboxMessage, SchedulerState } from "../types.js";
+import type { ChannelConfig, InboxMessage, SchedulerState } from "../types.js";
 import { DEFAULT_HEARTBEAT_PROMPT, isWithinActiveHours } from "./heartbeat.js";
 
 /**
@@ -14,6 +14,7 @@ export class Scheduler {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private _tickCount = 0;
   private _intervalMs: number;
+  private _channels: Map<string, ChannelConfig>;
   private listeners: Array<(state: SchedulerState) => void> = [];
   private lastHeartbeatTs = new Map<string, number>();
 
@@ -21,10 +22,12 @@ export class Scheduler {
     agents: Map<string, AgentHandle>,
     bus: MessageBus,
     intervalMs = 2000,
+    channels?: Map<string, ChannelConfig>,
   ) {
     this.agents = agents;
     this.bus = bus;
     this._intervalMs = intervalMs;
+    this._channels = channels ?? new Map();
   }
 
   get tickCount(): number {
@@ -90,7 +93,7 @@ export class Scheduler {
         msg.sourceKind === "internal" ? msg.from : undefined,
       );
 
-      const payload = formatMessagePayload(msg);
+      const payload = formatMessagePayload(msg, this._channels);
       const dispatch =
         msg.type === "steer" ? handle.steer(payload) : handle.prompt(payload);
 
@@ -140,8 +143,40 @@ export class Scheduler {
   }
 }
 
+/** Build channel context suffix like ` in #general. Other members: a, b`. */
+function channelContext(
+  msg: InboxMessage,
+  channels: Map<string, ChannelConfig>,
+): string {
+  const ch = msg.channel;
+  if (!ch) return "";
+  const cfg = channels.get(ch);
+  if (!cfg) return ` in #${ch}`;
+  const exclude = new Set([msg.to, msg.from]);
+  const others = cfg.members.filter((m) => !exclude.has(m));
+  if (others.length === 0) return ` in #${ch}`;
+  return ` in #${ch}. Other members: ${others.join(", ")}`;
+}
+
 /** Prefix inter-agent messages with sender info so the recipient knows who to reply to. */
-function formatMessagePayload(msg: InboxMessage): string {
+function formatMessagePayload(
+  msg: InboxMessage,
+  channels: Map<string, ChannelConfig>,
+): string {
+  if (msg.sourceKind === "channel" && msg.channel) {
+    const ctx = channelContext(msg, channels);
+    if (msg.from === "__user__") {
+      return `[Posted${ctx}]\n${msg.payload}`;
+    }
+    if (msg.from === "__cron__") {
+      return `[Scheduled trigger${ctx}]\n${msg.payload}`;
+    }
+    return (
+      `[Message from ${msg.from}${ctx}]\n${msg.payload}\n\n` +
+      `[To reply in #${msg.channel}, post in the channel]`
+    );
+  }
+
   if (msg.from === "__user__") return msg.payload;
   if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
   if (msg.from === "__heartbeat__") return `[Heartbeat]\n${msg.payload}`;
