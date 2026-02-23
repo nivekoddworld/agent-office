@@ -115,11 +115,11 @@ Your org relationships (manager, peers, direct reports) are listed in your `Hier
 
 ## Session History
 
-Conversation history is stored as JSONL files under `agents/<your-name>/sessions/`.
+Conversation history is stored as JSONL files in `../sessions/` (relative to your workspace).
 File naming: `user-dm.jsonl` (user DMs), `agent-<peer>.jsonl` (inter-agent), `channel-<name>.jsonl` (channels).
 Each line is `{"ts":"ISO8601","role":"user|assistant","from":"sender","text":"content"}`.
-Use `read_file`, `grep`, or `ls` to access past conversations when needed.
-These files are system-managed. Do NOT write to the `sessions/` directory.
+Use `read_file`, `grep`, or `ls` on `../sessions/` to access past conversations when needed.
+These files are system-managed. Do NOT write to the `../sessions/` directory.
 
 ## Persistence Discipline
 
