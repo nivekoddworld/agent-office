@@ -5,7 +5,7 @@ import {
   IconArrowsHorizontal,
   IconArrowDown,
 } from "@tabler/icons-react";
-import { useCommand } from "../../api/use-command.js";
+import { useSetManager } from "../../api/use-api-mutations.js";
 import { slack } from "../../theme/slack-theme.js";
 import type { AgentDetail } from "../../api/types.js";
 
@@ -19,7 +19,7 @@ export function AgentHierarchySection({
   agentNames,
 }: AgentHierarchySectionProps) {
   const hierarchy = agent.hierarchy;
-  const command = useCommand();
+  const setManager = useSetManager();
   const [editing, setEditing] = useState(false);
   const [selectedManager, setSelectedManager] = useState<string | null>(
     hierarchy?.manager ?? null,
@@ -33,12 +33,12 @@ export function AgentHierarchySection({
   ];
 
   const saveManager = () => {
-    const target =
+    const newManager =
       selectedManager === "__clear__" || !selectedManager
-        ? "__clear__"
+        ? null
         : selectedManager;
-    command.mutate(
-      { command: `agent-set-manager ${agent.name} ${target}` },
+    setManager.mutate(
+      { agentName: agent.name, manager: newManager },
       { onSettled: () => setEditing(false) },
     );
   };
@@ -114,7 +114,7 @@ export function AgentHierarchySection({
             size="xs"
             variant="light"
             onClick={saveManager}
-            loading={command.isPending}
+            loading={setManager.isPending}
           >
             Save
           </Button>

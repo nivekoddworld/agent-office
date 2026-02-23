@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   Stack,
   Text,
@@ -15,7 +14,6 @@ import {
 } from "@mantine/core";
 import { IconSearch, IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { useCommand } from "../../api/use-command.js";
 import {
   useAgentSkills,
   useInstallSkill,
@@ -29,8 +27,6 @@ interface SkillsManagerProps {
 }
 
 export function SkillsManager({ agent }: SkillsManagerProps) {
-  const queryClient = useQueryClient();
-  const command = useCommand();
   const { data: installedData, isLoading: isSkillsLoading } = useAgentSkills(
     agent.name,
   );
@@ -78,31 +74,6 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
   };
 
   const handleRemove = (skill: AgentSkill) => {
-    if (skill.source === "legacy") {
-      command.mutate(
-        { command: `skill remove ${agent.name} ${skill.name}` },
-        {
-          onSuccess: (d) => {
-            if (d.ok) {
-              notifications.show({
-                title: "Skill removed",
-                message: "Legacy skill removed",
-                color: "teal",
-              });
-              queryClient.invalidateQueries({ queryKey: ["agent-skills"] });
-              return;
-            }
-            notifyError(
-              "Remove failed",
-              (d.error ?? d.output.join("\n")) || "Unknown error",
-            );
-          },
-          onError: (err) => notifyError("Remove failed", err.message),
-        },
-      );
-      return;
-    }
-
     removeSkill.mutate(
       { name: skill.name },
       {
@@ -119,8 +90,7 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
   };
 
   const searching = search.isFetching;
-  const mutating =
-    installSkill.isPending || removeSkill.isPending || command.isPending;
+  const mutating = installSkill.isPending || removeSkill.isPending;
 
   return (
     <Stack gap="xs">

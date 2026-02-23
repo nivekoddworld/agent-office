@@ -1,6 +1,10 @@
 import { Group, Text, Badge, Switch, ActionIcon } from "@mantine/core";
 import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
-import { useCommand } from "../../api/use-command.js";
+import {
+  useCronTrigger,
+  useCronRemove,
+  useCronToggle,
+} from "../../api/use-api-mutations.js";
 import type { CronJobEntry } from "../../api/types.js";
 
 interface CronJobRowProps {
@@ -25,34 +29,33 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export function CronJobRow({ job }: CronJobRowProps) {
-  const command = useCommand();
+  const cronTrigger = useCronTrigger();
+  const cronRemove = useCronRemove();
+  const cronToggle = useCronToggle();
   const enabled = job.config.enabled !== false;
 
   const trigger = () => {
-    if (job.scope === "office") {
-      command.mutate({ command: `cron trigger office ${job.jobName}` });
-    } else {
-      command.mutate({
-        command: `cron trigger ${job.agentName} ${job.jobName}`,
-      });
-    }
+    cronTrigger.mutate({
+      scope: job.scope,
+      agentName: job.agentName,
+      jobName: job.jobName,
+    });
   };
 
   const remove = () => {
-    if (job.scope === "office") {
-      command.mutate({ command: `cron remove office ${job.jobName} --apply` });
-    } else {
-      command.mutate({
-        command: `cron remove ${job.agentName} ${job.jobName} --apply`,
-      });
-    }
+    cronRemove.mutate({
+      scope: job.scope,
+      agentName: job.agentName,
+      jobName: job.jobName,
+    });
   };
 
   const toggleEnable = () => {
-    const cmd = enabled
-      ? `cron disable ${job.agentName} ${job.jobName} --apply`
-      : `cron enable ${job.agentName} ${job.jobName} --apply`;
-    command.mutate({ command: cmd });
+    cronToggle.mutate({
+      agentName: job.agentName,
+      jobName: job.jobName,
+      enabled: !enabled,
+    });
   };
 
   return (

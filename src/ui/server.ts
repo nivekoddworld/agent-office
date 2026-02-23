@@ -36,7 +36,35 @@ import {
   searchRegistrySkills,
 } from "../skills/registry.js";
 import { skillRemoveCommand } from "../commands/skill.js";
+import { hireCommand, type HireArgs } from "../commands/hire.js";
+import { fireCommand } from "../commands/fire.js";
+import { applyOfficeYaml, officeValidateCommand } from "../commands/office-apply.js";
+import {
+  cronAddCommand,
+  cronRemoveCommand,
+  cronEnableCommand,
+  cronDisableCommand,
+  cronTriggerCommand,
+  cronAddOfficeCommand,
+  cronRemoveOfficeCommand,
+  cronTriggerOfficeCommand,
+} from "../commands/cron.js";
+import {
+  agentPromptSetCommand,
+  agentPromptAppendCommand,
+  agentPromptClearCommand,
+  agentPermissionSetToolsCommand,
+  agentPermissionSetOfficeCronCommand,
+  agentPermissionClearOfficeCronCommand,
+  agentPermissionClearToolsCommand,
+  agentEnvSetCommand,
+  agentEnvUnsetCommand,
+  agentSecretRefSetCommand,
+  agentSecretRefUnsetCommand,
+  agentSetManagerCommand,
+} from "../commands/agent-config.js";
 import { validateChannelEntry } from "../config/yaml-validation.js";
+import { officeYamlPath } from "../constants.js";
 import {
   loadOfficeYaml,
   buildOfficeContext,
@@ -1293,27 +1321,567 @@ export async function startUiServer(
       return json(res, result.ok ? 200 : 400, result);
     }
 
-    // --- POST /api/commands (body-based) ---
-    if (path === "/api/commands" && method === "POST") {
+    // --- POST /api/agents (hire) ---
+    if (path === "/api/agents" && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
       const body = await readBody(req);
-      let parsed: { command?: string; noWait?: boolean };
+      let parsed: {
+        name?: string;
+        model?: string;
+        priority?: string;
+        thinking?: string;
+        cwd?: string;
+        prompt?: string;
+        desc?: string;
+        ephemeral?: boolean;
+        api_key_ref?: string;
+        env?: Record<string, string>;
+        secret_refs?: Record<string, string>;
+      };
       try {
         parsed = JSON.parse(body);
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (!parsed.command || typeof parsed.command !== "string") {
-        return json(res, 400, { error: "missing_command" });
+      if (!parsed.name || typeof parsed.name !== "string" || !parsed.name.trim()) {
+        return json(res, 400, { error: "name is required" });
       }
-      return handleCommandDispatch(parsed.command, !!parsed.noWait, req, res);
+      const AGENT_NAME_RE = /^[a-z][a-z0-9_-]*$/;
+      if (!AGENT_NAME_RE.test(parsed.name)) {
+        return json(res, 400, { error: "name must match ^[a-z][a-z0-9_-]*$" });
+      }
+      if (workspace.getAgent(parsed.name)) {
+        return json(res, 409, { error: "agent_already_exists" });
+      }
+      const secretRefs: Record<string, string> = {};
+      if (parsed.secret_refs) {
+        for (const [key, hostEnvName] of Object.entries(parsed.secret_refs)) {
+          secretRefs[key] = hostEnvName;
+        }
+      }
+      const hireArgs: HireArgs = {
+        name: parsed.name,
+        model: parsed.model,
+        priority: parsed.priority,
+        thinking: parsed.thinking,
+        cwd: parsed.cwd,
+        prompt: parsed.prompt,
+        desc: parsed.desc,
+        ephemeral: parsed.ephemeral,
+        "api-key-ref": parsed.api_key_ref,
+        env: parsed.env,
+        ...(Object.keys(secretRefs).length > 0 ? { "secret-ref": secretRefs } : {}),
+      };
+      try {
+        await hireCommand(workspace, hireArgs);
+        const handle = workspace.getAgent(parsed.name);
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 201, { ok: true, name: parsed.name, cwd: handle?.cwd ?? null });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
-    // --- POST /api/commands/:command ---
-    const cmdMatch = path.match(/^\/api\/commands\/(.+)$/);
-    if (cmdMatch && method === "POST") {
-      const command = decodeURIComponent(cmdMatch[1]!);
-      const noWait = url.searchParams.get("noWait") === "1";
-      return handleCommandDispatch(command, noWait, req, res);
+    // --- DELETE /api/agents/:name (fire) ---
+    const agentDeleteMatch = path.match(/^\/api\/agents\/([^/]+)$/);
+    if (agentDeleteMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const name = agentDeleteMatch[1]!;
+      if (!workspace.getAgent(name)) {
+        return json(res, 404, { error: "agent_not_found" });
+      }
+      try {
+        await fireCommand(workspace, name);
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 500, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- GET /api/status ---
+    if (path === "/api/status" && method === "GET") {
+      const agents = workspace.list();
+      const stuckCount = workspace.watchdog.stuckCount();
+      return json(res, 200, {
+        scheduler: {
+          running: workspace.scheduler.running,
+          tickCount: workspace.scheduler.tickCount,
+          intervalMs: workspace.scheduler.intervalMs,
+        },
+        agents,
+        stuckCount,
+      });
+    }
+
+    // --- POST /api/office/apply ---
+    if (path === "/api/office/apply" && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const body = await readBody(req);
+      let parsed: { force?: boolean } = {};
+      if (body.trim()) {
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+      }
+      try {
+        await applyOfficeYaml(workspace, officeId, { force: !!parsed.force });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 500, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- GET /api/office/validate ---
+    if (path === "/api/office/validate" && method === "GET") {
+      const valid = officeValidateCommand(officeId);
+      return json(res, 200, { ok: valid });
+    }
+
+    // --- GET /api/office/path ---
+    if (path === "/api/office/path" && method === "GET") {
+      return json(res, 200, { path: officeYamlPath(officeId) });
+    }
+
+    // --- POST /api/scheduler/start and POST /api/scheduler/stop ---
+    const schedulerActionMatch = path.match(/^\/api\/scheduler\/(start|stop)$/);
+    if (schedulerActionMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const action = schedulerActionMatch[1]!;
+      if (action === "start") {
+        workspace.scheduler.start();
+      } else {
+        workspace.scheduler.stop();
+      }
+      broadcast("state_changed", getBootstrapState(workspace, officeId));
+      return json(res, 200, { ok: true });
+    }
+
+    // --- POST /api/agents/:name/cron ---
+    const agentCronPostMatch = path.match(/^\/api\/agents\/([^/]+)\/cron$/);
+    if (agentCronPostMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentCronPostMatch[1]!;
+      const body = await readBody(req);
+      let parsed: {
+        jobName?: string;
+        schedule?: string;
+        message?: string;
+        timezone?: string;
+        catchUp?: string;
+      };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.jobName || !parsed.schedule || !parsed.message) {
+        return json(res, 400, { error: "jobName, schedule, and message are required" });
+      }
+      const fieldCount = parsed.schedule.trim().split(/\s+/).length;
+      if (fieldCount !== 5) {
+        return json(res, 400, { error: "schedule must be a 5-field cron expression" });
+      }
+      try {
+        const ok = await cronAddCommand(
+          officeId,
+          agentName,
+          parsed.jobName,
+          parsed.schedule,
+          parsed.message,
+          { timezone: parsed.timezone, catchUp: parsed.catchUp },
+          workspace,
+        );
+        if (!ok) return json(res, 400, { ok: false, error: "cron_add_failed" });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 201, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- DELETE /api/agents/:name/cron/:job ---
+    const agentCronDeleteMatch = path.match(/^\/api\/agents\/([^/]+)\/cron\/([^/]+)$/);
+    if (agentCronDeleteMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentCronDeleteMatch[1]!;
+      const jobName = decodeURIComponent(agentCronDeleteMatch[2]!);
+      try {
+        const ok = await cronRemoveCommand(officeId, agentName, jobName, workspace);
+        if (!ok) return json(res, 404, { ok: false, error: "cron_job_not_found" });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- PATCH /api/agents/:name/cron/:job (enable/disable) ---
+    const agentCronPatchMatch = path.match(/^\/api\/agents\/([^/]+)\/cron\/([^/]+)$/);
+    if (agentCronPatchMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentCronPatchMatch[1]!;
+      const jobName = decodeURIComponent(agentCronPatchMatch[2]!);
+      const body = await readBody(req);
+      let parsed: { enabled?: boolean };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (typeof parsed.enabled !== "boolean") {
+        return json(res, 400, { error: "enabled (boolean) is required" });
+      }
+      try {
+        const ok = parsed.enabled
+          ? await cronEnableCommand(officeId, agentName, jobName, workspace)
+          : await cronDisableCommand(officeId, agentName, jobName, workspace);
+        if (!ok) return json(res, 404, { ok: false, error: "cron_job_not_found" });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- POST /api/agents/:name/cron/:job/trigger ---
+    const agentCronTriggerMatch = path.match(/^\/api\/agents\/([^/]+)\/cron\/([^/]+)\/trigger$/);
+    if (agentCronTriggerMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentCronTriggerMatch[1]!;
+      const jobName = decodeURIComponent(agentCronTriggerMatch[2]!);
+      try {
+        cronTriggerCommand(workspace, agentName, jobName);
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- POST /api/cron/office (add office-level cron) ---
+    if (path === "/api/cron/office" && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const body = await readBody(req);
+      let parsed: {
+        jobName?: string;
+        schedule?: string;
+        message?: string;
+        targets?: string[];
+        timezone?: string;
+        catchUp?: string;
+      };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.jobName || !parsed.schedule || !parsed.message || !parsed.targets?.length) {
+        return json(res, 400, { error: "jobName, schedule, message, and targets are required" });
+      }
+      const fieldCount = parsed.schedule.trim().split(/\s+/).length;
+      if (fieldCount !== 5) {
+        return json(res, 400, { error: "schedule must be a 5-field cron expression" });
+      }
+      try {
+        const ok = await cronAddOfficeCommand(
+          officeId,
+          parsed.jobName,
+          parsed.schedule,
+          parsed.message,
+          parsed.targets,
+          { timezone: parsed.timezone, catchUp: parsed.catchUp },
+          workspace,
+        );
+        if (!ok) return json(res, 400, { ok: false, error: "cron_add_failed" });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 201, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- DELETE /api/cron/office/:job ---
+    const officeCronDeleteMatch = path.match(/^\/api\/cron\/office\/([^/]+)$/);
+    if (officeCronDeleteMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const jobName = decodeURIComponent(officeCronDeleteMatch[1]!);
+      try {
+        const ok = await cronRemoveOfficeCommand(officeId, jobName, workspace);
+        if (!ok) return json(res, 404, { ok: false, error: "cron_job_not_found" });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- POST /api/cron/office/:job/trigger ---
+    const officeCronTriggerMatch = path.match(/^\/api\/cron\/office\/([^/]+)\/trigger$/);
+    if (officeCronTriggerMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const jobName = decodeURIComponent(officeCronTriggerMatch[1]!);
+      try {
+        cronTriggerOfficeCommand(workspace, jobName);
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- PATCH /api/agents/:name/prompt ---
+    const agentPromptMatch = path.match(/^\/api\/agents\/([^/]+)\/prompt$/);
+    if (agentPromptMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentPromptMatch[1]!;
+      const body = await readBody(req);
+      let parsed: { action?: string; text?: string };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.action || !["set", "append", "clear"].includes(parsed.action)) {
+        return json(res, 400, { error: "action must be 'set', 'append', or 'clear'" });
+      }
+      if ((parsed.action === "set" || parsed.action === "append") && !parsed.text) {
+        return json(res, 400, { error: "text is required for set/append" });
+      }
+      try {
+        if (parsed.action === "set") {
+          await agentPromptSetCommand(officeId, agentName, parsed.text!);
+        } else if (parsed.action === "append") {
+          await agentPromptAppendCommand(officeId, agentName, parsed.text!);
+        } else {
+          await agentPromptClearCommand(officeId, agentName);
+        }
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- PATCH /api/agents/:name/permissions ---
+    const agentPermissionsMatch = path.match(/^\/api\/agents\/([^/]+)\/permissions$/);
+    if (agentPermissionsMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentPermissionsMatch[1]!;
+      const body = await readBody(req);
+      let parsed: {
+        office_cron?: boolean;
+        tools?: { mode?: string; list?: string[]; clear?: boolean };
+      };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      try {
+        if (typeof parsed.office_cron === "boolean") {
+          if (parsed.office_cron) {
+            await agentPermissionSetOfficeCronCommand(officeId, agentName, true);
+          } else {
+            await agentPermissionClearOfficeCronCommand(officeId, agentName);
+          }
+        }
+        if (parsed.tools) {
+          if (parsed.tools.clear) {
+            await agentPermissionClearToolsCommand(officeId, agentName);
+          } else if (
+            parsed.tools.mode &&
+            (parsed.tools.mode === "allow" || parsed.tools.mode === "deny") &&
+            parsed.tools.list?.length
+          ) {
+            await agentPermissionSetToolsCommand(
+              officeId,
+              agentName,
+              parsed.tools.mode,
+              parsed.tools.list,
+            );
+          } else {
+            return json(res, 400, {
+              error: "tools requires mode ('allow'|'deny') + list, or clear:true",
+            });
+          }
+        }
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- PATCH /api/agents/:name/env ---
+    const agentEnvMatch = path.match(/^\/api\/agents\/([^/]+)\/env$/);
+    if (agentEnvMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentEnvMatch[1]!;
+      const body = await readBody(req);
+      let parsed: { action?: string; key?: string; value?: string };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.action || !["set", "unset"].includes(parsed.action)) {
+        return json(res, 400, { error: "action must be 'set' or 'unset'" });
+      }
+      if (!parsed.key) return json(res, 400, { error: "key is required" });
+      if (parsed.action === "set" && parsed.value === undefined) {
+        return json(res, 400, { error: "value is required for set" });
+      }
+      try {
+        if (parsed.action === "set") {
+          await agentEnvSetCommand(officeId, agentName, parsed.key, parsed.value!);
+        } else {
+          await agentEnvUnsetCommand(officeId, agentName, parsed.key);
+        }
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- PATCH /api/agents/:name/secret-refs ---
+    const agentSecretRefMatch = path.match(/^\/api\/agents\/([^/]+)\/secret-refs$/);
+    if (agentSecretRefMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentSecretRefMatch[1]!;
+      const body = await readBody(req);
+      let parsed: { action?: string; key?: string; hostEnvName?: string };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!parsed.action || !["set", "unset"].includes(parsed.action)) {
+        return json(res, 400, { error: "action must be 'set' or 'unset'" });
+      }
+      if (!parsed.key) return json(res, 400, { error: "key is required" });
+      if (parsed.action === "set" && !parsed.hostEnvName) {
+        return json(res, 400, { error: "hostEnvName is required for set" });
+      }
+      try {
+        if (parsed.action === "set") {
+          await agentSecretRefSetCommand(officeId, agentName, parsed.key, parsed.hostEnvName!);
+        } else {
+          await agentSecretRefUnsetCommand(officeId, agentName, parsed.key);
+        }
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- PATCH /api/agents/:name/manager ---
+    const agentManagerMatch = path.match(/^\/api\/agents\/([^/]+)\/manager$/);
+    if (agentManagerMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const agentName = agentManagerMatch[1]!;
+      const body = await readBody(req);
+      let parsed: { manager?: string | null };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (!("manager" in parsed)) {
+        return json(res, 400, { error: "manager field is required (string or null)" });
+      }
+      if (parsed.manager !== null && typeof parsed.manager !== "string") {
+        return json(res, 400, { error: "manager must be a string or null" });
+      }
+      try {
+        await agentSetManagerCommand(officeId, agentName, parsed.manager ?? null);
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // --- Catch-all for unknown /api/* paths ---

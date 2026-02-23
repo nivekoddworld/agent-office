@@ -11,7 +11,7 @@ import {
 } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { useCommand } from "../../api/use-command.js";
+import { useSetPermissions } from "../../api/use-api-mutations.js";
 import type { AgentDetail } from "../../api/types.js";
 
 interface PermissionsEditorProps {
@@ -22,47 +22,41 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
   const perms = agent.permissions;
   const allow = perms.tools?.allow ?? [];
   const deny = perms.tools?.deny ?? [];
-  const command = useCommand();
+  const setPermissions = useSetPermissions();
 
   const [newAllowTool, setNewAllowTool] = useState("");
   const [newDenyTool, setNewDenyTool] = useState("");
 
-  const notify = (data: { ok: boolean; error?: string; output: string[] }) => {
-    if (data.ok) {
-      notifications.show({
-        title: "Permission updated",
-        message: "Run 'office reload --force' to apply",
-        color: "blue",
-      });
-    } else {
-      notifications.show({
-        title: "Failed",
-        message: data.error ?? data.output.join("\n"),
-        color: "red",
-      });
-    }
+  const notifySuccess = () => {
+    notifications.show({
+      title: "Permission updated",
+      message: "Run 'office reload --force' to apply",
+      color: "blue",
+    });
+  };
+
+  const notifyError = (err: Error) => {
+    notifications.show({ title: "Failed", message: err.message, color: "red" });
   };
 
   const toggleOfficeCron = () => {
     const val = !(perms.office_cron ?? false);
-    command.mutate(
-      { command: `agent permission set ${agent.name} office_cron ${val}` },
-      { onSuccess: notify },
+    setPermissions.mutate(
+      { agentName: agent.name, office_cron: val },
+      { onSuccess: notifySuccess, onError: notifyError },
     );
   };
 
   const setToolList = (mode: "allow" | "deny", tools: string[]) => {
     if (tools.length === 0) {
-      command.mutate(
-        { command: `agent permission clear ${agent.name} tools` },
-        { onSuccess: notify },
+      setPermissions.mutate(
+        { agentName: agent.name, tools: { clear: true } },
+        { onSuccess: notifySuccess, onError: notifyError },
       );
     } else {
-      command.mutate(
-        {
-          command: `agent permission set ${agent.name} tools ${mode} ${tools.join(",")}`,
-        },
-        { onSuccess: notify },
+      setPermissions.mutate(
+        { agentName: agent.name, tools: { mode, list: tools } },
+        { onSuccess: notifySuccess, onError: notifyError },
       );
     }
   };
@@ -92,9 +86,9 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
   };
 
   const clearOfficeCron = () => {
-    command.mutate(
-      { command: `agent permission clear ${agent.name} office_cron` },
-      { onSuccess: notify },
+    setPermissions.mutate(
+      { agentName: agent.name, office_cron: false },
+      { onSuccess: notifySuccess, onError: notifyError },
     );
   };
 

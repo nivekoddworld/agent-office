@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Stack, Button, Group } from "@mantine/core";
 import { IconRefresh, IconTrash } from "@tabler/icons-react";
-import { useCommand } from "../../api/use-command.js";
+import { useOfficeApply, useFireAgent } from "../../api/use-api-mutations.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import type { AgentDetail } from "../../api/types.js";
 
@@ -11,14 +11,15 @@ interface QuickActionsProps {
 
 export function QuickActions({ agent }: QuickActionsProps) {
   const [confirmFire, setConfirmFire] = useState(false);
-  const command = useCommand();
+  const officeApply = useOfficeApply();
+  const fireAgent = useFireAgent();
 
   const reload = () => {
-    command.mutate({ command: `office reload --force` });
+    officeApply.mutate(true);
   };
 
   const onConfirmFire = () => {
-    command.mutate({ command: `fire ${agent.name}` });
+    fireAgent.mutate(agent.name);
     setConfirmFire(false);
   };
 
@@ -31,7 +32,7 @@ export function QuickActions({ agent }: QuickActionsProps) {
           color="blue"
           onClick={reload}
           leftSection={<IconRefresh size={14} />}
-          loading={command.isPending}
+          loading={officeApply.isPending}
         >
           Reload Config
         </Button>
@@ -53,7 +54,7 @@ export function QuickActions({ agent }: QuickActionsProps) {
         confirmLabel="Fire"
         onConfirm={onConfirmFire}
         onCancel={() => setConfirmFire(false)}
-        loading={command.isPending}
+        loading={fireAgent.isPending}
       />
     </Stack>
   );

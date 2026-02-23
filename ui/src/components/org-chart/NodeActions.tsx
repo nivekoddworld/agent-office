@@ -5,7 +5,7 @@ import {
   IconUserPlus,
   IconArrowsTransferUp,
 } from "@tabler/icons-react";
-import { useCommand } from "../../api/use-command.js";
+import { useFireAgent, useSetManager } from "../../api/use-api-mutations.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 
 interface NodeActionsProps {
@@ -24,10 +24,11 @@ export function NodeActions({
   onHireReport,
 }: NodeActionsProps) {
   const [confirmFire, setConfirmFire] = useState(false);
-  const command = useCommand();
+  const fireAgent = useFireAgent();
+  const setManagerMutation = useSetManager();
 
   const handleFire = () => {
-    command.mutate({ command: `fire ${agentName}` }, { onSettled: onClose });
+    fireAgent.mutate(agentName, { onSettled: onClose });
   };
 
   return (
@@ -55,8 +56,9 @@ export function NodeActions({
                 `Set manager for "${agentName}" (blank to clear):`,
               );
               if (manager !== null) {
-                command.mutate({
-                  command: `agent-set-manager ${agentName} ${manager || "__clear__"}`,
+                setManagerMutation.mutate({
+                  agentName,
+                  manager: manager || null,
                 });
               }
               onClose();
@@ -86,7 +88,7 @@ export function NodeActions({
           setConfirmFire(false);
           onClose();
         }}
-        loading={command.isPending}
+        loading={fireAgent.isPending}
       />
     </>
   );

@@ -23,8 +23,13 @@ import {
   IconPlayerPause,
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
-import { useCommand } from "../../api/use-command.js";
+import {
+  useSchedulerAction,
+  useOfficeApply,
+  useOfficeValidate,
+} from "../../api/use-api-mutations.js";
 import type { BootstrapState } from "../../api/types.js";
 import { ChannelManager } from "./ChannelManager.js";
 import { CollaborationPolicySection } from "./CollaborationPolicySection.js";
@@ -100,7 +105,9 @@ export function OfficeSettingsModal({
   onClose,
   state,
 }: OfficeSettingsModalProps) {
-  const command = useCommand();
+  const schedulerAction = useSchedulerAction();
+  const officeApply = useOfficeApply();
+  const officeValidate = useOfficeValidate();
   const queryClient = useQueryClient();
 
   const activeAgents = state.agents.filter(
@@ -114,19 +121,48 @@ export function OfficeSettingsModal({
   ).length;
 
   const handleToggleScheduler = () => {
-    const cmd = state.scheduler.running ? "scheduler stop" : "scheduler start";
-    command.mutate({ command: cmd });
+    schedulerAction.mutate(state.scheduler.running ? "stop" : "start");
   };
 
   const handleReloadConfig = () => {
-    command.mutate({ command: "office reload --force" });
+    officeApply.mutate(true, {
+      onSuccess: () =>
+        notifications.show({
+          title: "Config reloaded",
+          message: "office.yaml applied to running agents.",
+          color: "green",
+        }),
+      onError: (err) =>
+        notifications.show({
+          title: "Reload failed",
+          message: err.message,
+          color: "red",
+        }),
+    });
   };
 
   const handleValidateConfig = () => {
-    command.mutate({ command: "office validate" });
+    officeValidate.mutate(undefined, {
+      onSuccess: (data) =>
+        notifications.show({
+          title: data.ok ? "Config valid" : "Config invalid",
+          message: data.ok ? "office.yaml is valid." : "Validation failed.",
+          color: data.ok ? "green" : "red",
+        }),
+      onError: (err) =>
+        notifications.show({
+          title: "Validate failed",
+          message: err.message,
+          color: "red",
+        }),
+    });
   };
 
   const intervalSec = (state.scheduler.intervalMs / 1000).toFixed(1);
+  const isPending =
+    officeApply.isPending ||
+    officeValidate.isPending ||
+    schedulerAction.isPending;
 
   return (
     <Modal
@@ -324,7 +360,7 @@ export function OfficeSettingsModal({
                 color="blue"
                 size="lg"
                 onClick={handleReloadConfig}
-                loading={command.isPending}
+                loading={isPending}
               >
                 <IconRefresh size={18} />
               </ActionIcon>
@@ -341,7 +377,7 @@ export function OfficeSettingsModal({
                 color="green"
                 size="lg"
                 onClick={handleValidateConfig}
-                loading={command.isPending}
+                loading={isPending}
               >
                 <IconCheck size={18} />
               </ActionIcon>
@@ -350,43 +386,6 @@ export function OfficeSettingsModal({
               Validate Config
             </Text>
           </Group>
-
-          {command.data && !command.isPending && (
-            <Box
-              mt="sm"
-              p="xs"
-              style={{
-                backgroundColor: slack.mainBg,
-                borderRadius: 4,
-                border: `1px solid ${slack.borderColor}`,
-                maxHeight: 120,
-                overflow: "auto",
-              }}
-            >
-              {command.data.output.map((line, i) => (
-                <Text
-                  key={i}
-                  size="xs"
-                  style={{
-                    color: command.data!.ok
-                      ? slack.textSecondary
-                      : slack.accentRed,
-                    fontFamily: "monospace",
-                  }}
-                >
-                  {line}
-                </Text>
-              ))}
-              {command.data.output.length === 0 && (
-                <Text
-                  size="xs"
-                  style={{ color: slack.accentGreen, fontFamily: "monospace" }}
-                >
-                  {command.data.ok ? "OK" : `Error: ${command.data.error}`}
-                </Text>
-              )}
-            </Box>
-          )}
         </Box>
       </Stack>
     </Modal>

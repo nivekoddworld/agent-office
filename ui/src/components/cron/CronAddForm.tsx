@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, TextInput, Select, Stack, Button, Group } from "@mantine/core";
-import { useCommand } from "../../api/use-command.js";
+import { useCronAdd } from "../../api/use-api-mutations.js";
 
 interface CronAddFormProps {
   opened: boolean;
@@ -14,20 +14,16 @@ export function CronAddForm({ opened, onClose, agentNames }: CronAddFormProps) {
   const [jobName, setJobName] = useState("");
   const [schedule, setSchedule] = useState("");
   const [message, setMessage] = useState("");
-  const command = useCommand();
+  const cronAdd = useCronAdd();
 
   const handleSubmit = () => {
     if (!jobName.trim() || !schedule.trim() || !message.trim()) return;
     if (scope === "agent" && !agent) return;
 
-    const escapedMsg = message.replace(/"/g, '\\"');
-    const cmd =
+    cronAdd.mutate(
       scope === "office"
-        ? `cron add office ${jobName} "${schedule}" "${escapedMsg}" --targets ${agentNames.join(",")}`
-        : `cron add ${agent} ${jobName} "${schedule}" "${escapedMsg}" --apply`;
-
-    command.mutate(
-      { command: cmd },
+        ? { scope: "office", jobName, schedule, message, targets: agentNames }
+        : { scope: "agent", agentName: agent!, jobName, schedule, message },
       {
         onSuccess: () => {
           setJobName("");
@@ -94,7 +90,7 @@ export function CronAddForm({ opened, onClose, agentNames }: CronAddFormProps) {
           <Button
             onClick={handleSubmit}
             disabled={!jobName.trim() || !schedule.trim() || !message.trim()}
-            loading={command.isPending}
+            loading={cronAdd.isPending}
           >
             Add Job
           </Button>

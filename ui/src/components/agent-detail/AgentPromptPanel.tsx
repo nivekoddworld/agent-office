@@ -28,7 +28,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { notifications } from "@mantine/notifications";
-import { useCommand } from "../../api/use-command.js";
+import { useSetPrompt, useOfficeApply } from "../../api/use-api-mutations.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { slack } from "../../theme/slack-theme.js";
@@ -79,7 +79,8 @@ function insertLinePrefix(
 
 export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
   const { data: agent, isLoading } = useAgentDetail(agentName);
-  const command = useCommand();
+  const setPrompt = useSetPrompt();
+  const officeApply = useOfficeApply();
   const [promptText, setPromptText] = useState("");
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("preview");
@@ -121,25 +122,16 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
   const handleSet = () => {
     const text = promptText.trim();
     if (!text) return;
-    const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    command.mutate(
-      { command: `agent prompt set ${agentName} "${escaped}"` },
+    setPrompt.mutate(
+      { agentName, action: "set", text },
       {
-        onSuccess: (data) => {
-          if (data.ok) {
-            notifications.show({
-              title: "Config updated",
-              message:
-                "Prompt saved to config. Click 'Apply to Runtime' to update running agents.",
-              color: "blue",
-            });
-          } else {
-            notifications.show({
-              title: "Failed",
-              message: data.error ?? data.output.join("\n"),
-              color: "red",
-            });
-          }
+        onSuccess: () => {
+          notifications.show({
+            title: "Config updated",
+            message:
+              "Prompt saved to config. Click 'Apply to Runtime' to update running agents.",
+            color: "blue",
+          });
         },
         onError: (err) => {
           notifications.show({
@@ -153,25 +145,17 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
   };
 
   const handleClear = () => {
-    command.mutate(
-      { command: `agent prompt clear ${agentName}` },
+    setPrompt.mutate(
+      { agentName, action: "clear" },
       {
-        onSuccess: (data) => {
-          if (data.ok) {
-            notifications.show({
-              title: "Config updated",
-              message:
-                "Prompt cleared from config. Click 'Apply to Runtime' to update running agents.",
-              color: "blue",
-            });
-            setPromptText("");
-          } else {
-            notifications.show({
-              title: "Failed",
-              message: data.error ?? data.output.join("\n"),
-              color: "red",
-            });
-          }
+        onSuccess: () => {
+          notifications.show({
+            title: "Config updated",
+            message:
+              "Prompt cleared from config. Click 'Apply to Runtime' to update running agents.",
+            color: "blue",
+          });
+          setPromptText("");
         },
         onError: (err) => {
           notifications.show({
@@ -186,33 +170,22 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
   };
 
   const handleReload = () => {
-    command.mutate(
-      { command: "office reload --force" },
-      {
-        onSuccess: (data) => {
-          if (data.ok) {
-            notifications.show({
-              title: "Applied",
-              message: "Config reloaded into running agents.",
-              color: "green",
-            });
-          } else {
-            notifications.show({
-              title: "Reload failed",
-              message: data.error ?? data.output.join("\n"),
-              color: "red",
-            });
-          }
-        },
-        onError: (err) => {
-          notifications.show({
-            title: "Reload failed",
-            message: err.message,
-            color: "red",
-          });
-        },
+    officeApply.mutate(true, {
+      onSuccess: () => {
+        notifications.show({
+          title: "Applied",
+          message: "Config reloaded into running agents.",
+          color: "green",
+        });
       },
-    );
+      onError: (err) => {
+        notifications.show({
+          title: "Reload failed",
+          message: err.message,
+          color: "red",
+        });
+      },
+    });
   };
 
   const showEditor = viewMode === "edit" || viewMode === "split";
@@ -445,7 +418,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               variant="light"
               leftSection={<IconDeviceFloppy size={14} />}
               onClick={handleSet}
-              loading={command.isPending}
+              loading={setPrompt.isPending}
               disabled={!promptText.trim()}
             >
               Save to Config
@@ -471,7 +444,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               variant="subtle"
               leftSection={<IconRefresh size={14} />}
               onClick={handleReload}
-              loading={command.isPending}
+              loading={officeApply.isPending}
             >
               Apply to Runtime
             </Button>
@@ -486,7 +459,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
         confirmLabel="Clear"
         onConfirm={handleClear}
         onCancel={() => setConfirmClear(false)}
-        loading={command.isPending}
+        loading={setPrompt.isPending}
       />
     </Box>
   );

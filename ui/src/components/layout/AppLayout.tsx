@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Box } from "@mantine/core";
 import { slack } from "../../theme/slack-theme.js";
-import { useCommand } from "../../api/use-command.js";
+import { useSchedulerAction } from "../../api/use-api-mutations.js";
 import { unreadStore, useUnreadCounts } from "../../store/unread-store.js";
 import { SlackSidebar, type ChannelId } from "../slack/SlackSidebar.js";
 import { ChannelView } from "../slack/ChannelView.js";
@@ -71,12 +71,11 @@ export function AppLayout({ state }: AppLayoutProps) {
     }
   }, [channel, state.channels, state.defaultConversationChannel]);
 
-  const command = useCommand();
+  const schedulerAction = useSchedulerAction();
 
   const handleToggleScheduler = useCallback(() => {
-    const cmd = state.scheduler.running ? "scheduler stop" : "scheduler start";
-    command.mutate({ command: cmd });
-  }, [state.scheduler.running, command]);
+    schedulerAction.mutate(state.scheduler.running ? "stop" : "start");
+  }, [state.scheduler.running, schedulerAction]);
 
   const handleSelectChannel = useCallback((ch: ChannelId) => {
     setChannel(ch);

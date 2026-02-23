@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, TextInput, Select, Stack, Button, Group } from "@mantine/core";
-import { useCommand } from "../../api/use-command.js";
+import { useHireAgent, useSetManager } from "../../api/use-api-mutations.js";
 
 const MODELS = [
   "anthropic:claude-sonnet-4-20250514",
@@ -45,7 +45,8 @@ export function AddNodeModal({
   const [reportsTo, setReportsTo] = useState<string | null>(
     defaultManager ?? null,
   );
-  const command = useCommand();
+  const hireAgent = useHireAgent();
+  const setManager = useSetManager();
 
   const reset = () => {
     setName("");
@@ -58,20 +59,18 @@ export function AddNodeModal({
 
   const handleSubmit = () => {
     if (!name.trim() || !model) return;
-    let cmd = `hire ${name} --model ${model} --priority ${priority ?? "2"}`;
-    if (thinking) cmd += ` --thinking ${thinking}`;
-    if (description.trim()) {
-      const safe = description.trim().replace(/"/g, "");
-      cmd += ` --desc "${safe}"`;
-    }
-    command.mutate(
-      { command: cmd },
+    hireAgent.mutate(
+      {
+        name: name.trim(),
+        model,
+        priority: priority ?? "2",
+        thinking: thinking || undefined,
+        desc: description.trim() || undefined,
+      },
       {
         onSuccess: () => {
           if (reportsTo) {
-            command.mutate({
-              command: `agent-set-manager ${name} ${reportsTo}`,
-            });
+            setManager.mutate({ agentName: name.trim(), manager: reportsTo });
           }
           reset();
           onClose();
@@ -142,7 +141,7 @@ export function AddNodeModal({
           <Button
             onClick={handleSubmit}
             disabled={!name.trim() || !model}
-            loading={command.isPending}
+            loading={hireAgent.isPending}
           >
             Hire
           </Button>

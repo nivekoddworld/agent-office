@@ -13,7 +13,7 @@ import "@xyflow/react/dist/style.css";
 import { ActionIcon } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import type { AgentInfo, AgentHierarchy } from "../../api/types.js";
-import { useCommand } from "../../api/use-command.js";
+import { useSetManager } from "../../api/use-api-mutations.js";
 import { useOrgLayout, type OrgNode } from "./use-org-layout.js";
 import { AgentNode } from "./AgentNode.js";
 import { NodeActions } from "./NodeActions.js";
@@ -37,7 +37,7 @@ export function OrgChart({ agents, hierarchy, onSelectAgent }: OrgChartProps) {
     x: number;
     y: number;
   } | null>(null);
-  const command = useCommand();
+  const setManagerMutation = useSetManager();
   const reactFlow = useReactFlow();
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -95,13 +95,12 @@ export function OrgChart({ agents, hierarchy, onSelectAgent }: OrgChartProps) {
         }
       }
 
-      command.mutate({
-        command: newManager
-          ? `agent-set-manager ${draggedNode.id} ${newManager}`
-          : `agent-set-manager ${draggedNode.id} __clear__`,
+      setManagerMutation.mutate({
+        agentName: draggedNode.id,
+        manager: newManager,
       });
     },
-    [hierarchy, command, reactFlow],
+    [hierarchy, setManagerMutation, reactFlow],
   );
 
   const openHireWithManager = (manager: string) => {

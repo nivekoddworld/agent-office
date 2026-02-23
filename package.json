@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc --noEmit",
+    "build": "tsc --noEmit && pnpm ui:build",
     "lint": "eslint --fix src/ test/",
     "lint:check": "eslint src/ test/",
     "test": "vitest run",

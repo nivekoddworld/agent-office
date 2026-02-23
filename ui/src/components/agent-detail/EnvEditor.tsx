@@ -10,7 +10,7 @@ import {
 } from "@mantine/core";
 import { IconKey, IconLock, IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { useCommand } from "../../api/use-command.js";
+import { useSetEnv, useSetSecretRef } from "../../api/use-api-mutations.js";
 import type { AgentDetail } from "../../api/types.js";
 
 interface EnvEditorProps {
@@ -18,7 +18,8 @@ interface EnvEditorProps {
 }
 
 export function EnvEditor({ agent }: EnvEditorProps) {
-  const command = useCommand();
+  const setEnv = useSetEnv();
+  const setSecretRef = useSetSecretRef();
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
   const [newSecKey, setNewSecKey] = useState("");
@@ -27,44 +28,39 @@ export function EnvEditor({ agent }: EnvEditorProps) {
   const hasEnv = agent.envKeys.length > 0;
   const hasSecrets = agent.secretKeys.length > 0;
 
-  const notify = (data: { ok: boolean; error?: string; output: string[] }) => {
-    if (data.ok) {
-      notifications.show({
-        title: "Updated",
-        message: "Run 'office reload --force' to apply",
-        color: "blue",
-      });
-    } else {
-      notifications.show({
-        title: "Failed",
-        message: data.error ?? data.output.join("\n"),
-        color: "red",
-      });
-    }
+  const notifySuccess = () => {
+    notifications.show({
+      title: "Updated",
+      message: "Run 'office reload --force' to apply",
+      color: "blue",
+    });
+  };
+
+  const notifyError = (err: Error) => {
+    notifications.show({ title: "Failed", message: err.message, color: "red" });
   };
 
   const addEnv = () => {
     const key = newEnvKey.trim();
     const val = newEnvVal.trim();
     if (!key || !val) return;
-    command.mutate(
-      { command: `agent env set ${agent.name} ${key} ${val}` },
+    setEnv.mutate(
+      { agentName: agent.name, action: "set", key, value: val },
       {
-        onSuccess: (d) => {
-          notify(d);
-          if (d.ok) {
-            setNewEnvKey("");
-            setNewEnvVal("");
-          }
+        onSuccess: () => {
+          notifySuccess();
+          setNewEnvKey("");
+          setNewEnvVal("");
         },
+        onError: notifyError,
       },
     );
   };
 
   const removeEnv = (key: string) => {
-    command.mutate(
-      { command: `agent env unset ${agent.name} ${key}` },
-      { onSuccess: notify },
+    setEnv.mutate(
+      { agentName: agent.name, action: "unset", key },
+      { onSuccess: notifySuccess, onError: notifyError },
     );
   };
 
@@ -72,24 +68,23 @@ export function EnvEditor({ agent }: EnvEditorProps) {
     const key = newSecKey.trim();
     const env = newSecEnv.trim();
     if (!key || !env) return;
-    command.mutate(
-      { command: `agent secret-ref set ${agent.name} ${key} ${env}` },
+    setSecretRef.mutate(
+      { agentName: agent.name, action: "set", key, hostEnvName: env },
       {
-        onSuccess: (d) => {
-          notify(d);
-          if (d.ok) {
-            setNewSecKey("");
-            setNewSecEnv("");
-          }
+        onSuccess: () => {
+          notifySuccess();
+          setNewSecKey("");
+          setNewSecEnv("");
         },
+        onError: notifyError,
       },
     );
   };
 
   const removeSecret = (key: string) => {
-    command.mutate(
-      { command: `agent secret-ref unset ${agent.name} ${key}` },
-      { onSuccess: notify },
+    setSecretRef.mutate(
+      { agentName: agent.name, action: "unset", key },
+      { onSuccess: notifySuccess, onError: notifyError },
     );
   };
 
