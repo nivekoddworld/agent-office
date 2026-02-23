@@ -455,15 +455,26 @@ export class Workspace {
                   request_id: requestId ?? null,
                 });
               }
-              // JSONL session file
+              // JSONL session file — fan out to all channel members
               if (sk) {
                 const filename = sessionFilename(sk);
-                appendSession(this.office.dir, config.name, filename, {
+                const entry = {
                   ts: new Date().toISOString(),
-                  role: "assistant",
+                  role: "assistant" as const,
                   from: config.name,
                   text,
-                });
+                };
+                if (sk.startsWith("ch:")) {
+                  const channelName = sk.slice(3);
+                  const cfg = this.office.channels.get(channelName);
+                  if (cfg) {
+                    for (const member of cfg.members) {
+                      appendSession(this.office.dir, member, filename, entry);
+                    }
+                  }
+                } else {
+                  appendSession(this.office.dir, config.name, filename, entry);
+                }
               }
             } catch (err) {
               console.error(
