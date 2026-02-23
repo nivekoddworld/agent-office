@@ -1343,12 +1343,17 @@ Each office gets an isolated directory, and each agent within it gets its own wo
             MEMORY.md             # agent memory (private, writable)
             memory/               # detailed topic files
             logs/                 # daily activity logs (YYYY-MM-DD.md)
+          sessions/               # JSONL session history (system-managed)
+            user-dm.jsonl         # user↔agent DMs
+            agent-reviewer.jsonl  # inter-agent conversations
+            channel-general.jsonl # channel conversations
           bootstrap/              # bootstrap files (SOUL.md, CONTEXT.md, etc.)
           skills/                 # installed skill directories
             .sources.json         # skill folder → GitHub source mapping
           .effective-prompt.md    # generated snapshot (do not edit)
         reviewer/
           workspace/
+          sessions/
           bootstrap/
           skills/
     defi-lab/
@@ -1456,16 +1461,17 @@ release();
 
 ### Message Persistence
 
-Inbox queues and DM conversation history are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`).
+Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). Conversation history is stored separately as JSONL files (see [Session History](#session-history)).
 
-| What        | DB location                            | Behavior                                                                                                 |
-| ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.         |
-| DM history  | Same DB file                           | User and assistant messages saved with `requestId` for dedup correlation. `fire <agent>` purges history. |
+| What         | DB location                            | Behavior                                                                                                 |
+| ------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Inbox queue  | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.         |
+| DM records   | Same DB file                           | User and assistant messages saved with `requestId` for dedup correlation. `fire <agent>` purges history. |
+| Obligations  | Same DB file                           | Reply obligation tracking with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.              |
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 
-The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking. The message store schema (v7) includes an `obligations` table with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.
+The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking.
 
 #### DM Context Replay
 
@@ -1483,15 +1489,25 @@ process restarts.
 | Sandbox agents    | Not supported (sandbox manages own state lifecycle)        |
 | In-process agents | Full support — replayed via `Agent.replaceMessages()`      |
 
-#### Session Memory
+#### Session History
 
-Channel-scoped shared session memory persists conversation turns across three session types:
+Conversation history is stored as JSONL files in each agent's `sessions/` directory (system-managed, agents must not write to it). Three session types are supported:
 
-| Session key format | Scope                     | Access control                 |
-| ------------------ | ------------------------- | ------------------------------ |
-| `dm:<agent>`       | Private DM with one agent | Only the named agent           |
-| `ch:<channel>`     | Shared channel session    | Current members of the channel |
-| `internal:<agent>` | Inter-agent / cron / task | Only the named agent           |
+| File name              | Scope                     |
+| ---------------------- | ------------------------- |
+| `user-dm.jsonl`        | User-to-agent DMs         |
+| `agent-<peer>.jsonl`   | Inter-agent conversations |
+| `channel-<name>.jsonl` | Channel conversations     |
+
+Each line is a JSON object: `{"ts":"ISO8601","role":"user|assistant","from":"sender","text":"content"}`.
+
+**Dual write:** Inter-agent messages are written to both the sender's and receiver's session directories, so each agent has a complete local copy of the conversation.
+
+**Rotation:** Session files are rotated at 500 lines, keeping the last 400 lines to prevent unbounded growth.
+
+**Agent access:** Agents use their native `read_file`, `grep`, and `ls` tools to search and read session history from their `sessions/` directory. There are no dedicated session tools — the base prompt instructs agents about the directory layout.
+
+**Write guard:** The `sessions/` directory is system-managed. Agents are instructed not to write to it.
 
 **Channels** are defined in `office.yaml` under `office.channels`:
 
@@ -1508,21 +1524,7 @@ office:
 
 If no `general` channel is defined, a fallback is created with all agents as members. Channel membership is refreshed on `office reload`.
 
-**Access control** is enforced at read time (current-members-only). If an agent is removed from a channel and the office is reloaded, that agent immediately loses access to the channel's session history. Denied reads return `forbidden_session_access` with an audit log entry.
-
-**Summary checkpoints** are generated every 50 messages per session. Summaries are stored idempotently with `UNIQUE(session_key, to_seq)`. The `session_search` tool returns summary hits first, then message hits (summary-first retrieval).
-
-**Session tools** available to agents:
-
-- `session_search(query, sessionHint?, limit?)` — FTS search across accessible sessions
-- `session_read_range(sessionKey, fromSeq, toSeq)` — read exact turns from a session
-
-**Session APIs** (all require `?agent=` for ACL enforcement):
-
-- `GET /api/sessions?agent=<name>` — list session keys accessible to the agent
-- `GET /api/sessions/:key/messages?agent=<name>` — read session messages (403 if agent lacks access)
-- `GET /api/sessions/:key/summaries?agent=<name>` — read session summaries (403 if agent lacks access)
-- `POST /api/channels/:name/send` — broadcast or mention-targeted channel send
+`POST /api/channels/:name/send` — broadcast or mention-targeted channel send.
 
 **Channel management API** (all require session cookie + CSRF headers):
 
@@ -1872,7 +1874,10 @@ src/
 
   messages/
     types.ts                  PersistedInbox, DmRecord interfaces
-    message-store.ts          SQLite-backed inbox + DM persistence (node:sqlite, Node 22+)
+    message-store.ts          SQLite-backed inbox + DM + obligation persistence (node:sqlite, Node 22+)
+
+  sessions/
+    session-writer.ts         JSONL append + rotation utility (500 lines max, keeps last 400)
 
   transport/
     local.ts                  In-process priority inbox queues (with SQLite persist hooks)
