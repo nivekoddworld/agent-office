@@ -203,7 +203,7 @@ office:
       message: "Run standup"
       targets: [pm, coder]
   collaborationPolicy:
-    mode: off             # off | warn | enforce
+    mode: off # off | warn | enforce
     sla:
       replyByMinutes: 5
       remindAtMinutes: 3
@@ -735,52 +735,52 @@ Runtime commands can be executed through two paths:
 
 The Web UI has dedicated controls (buttons, forms, modals) for common operations — hire, fire, send, cron, reload — that call these endpoints internally. Some commands (skill management, env/secrets, prompt editing, permissions) are API-only.
 
-| Command                                               | Description                                                |
-| ----------------------------------------------------- | ---------------------------------------------------------- |
-| `hire <name> [options]`                               | Create a new agent (persists to YAML unless `--ephemeral`) |
-| `roster`                                              | Show all agents with status table                          |
-| `send <agent> <message>`                              | Queue a message for an agent                               |
-| `fire <agent>`                                        | Stop and remove an agent (removes from YAML)               |
-| `status`                                              | Show scheduler, watchdog, and resource state               |
+| Command                                               | Description                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------- |
+| `hire <name> [options]`                               | Create a new agent (persists to YAML unless `--ephemeral`)    |
+| `roster`                                              | Show all agents with status table                             |
+| `send <agent> <message>`                              | Queue a message for an agent                                  |
+| `fire <agent>`                                        | Stop and remove an agent (removes from YAML)                  |
+| `status`                                              | Show scheduler, watchdog, and resource state                  |
 | `skill add <agent> <source>`                          | Install skills from GitHub source (`owner/repo`, legacy flow) |
-| `skill list <agent>`                                  | List installed skills                                      |
-| `skill remove <agent> <name>`                         | Remove a legacy GitHub-source skill                        |
-| `agent env set <agent> <KEY> <VALUE>`                 | Set env var in `office.yaml`                               |
-| `agent env unset <agent> <KEY>`                       | Remove env var from `office.yaml`                          |
-| `agent secret-ref set <agent> <KEY> <ENV>`            | Set secret ref in `office.yaml`                            |
-| `agent secret-ref unset <agent> <KEY>`                | Remove secret ref from `office.yaml`                       |
-| `agent config show <agent>`                           | Show agent config (secrets redacted)                       |
-| `agent prompt show <agent>`                           | Show effective prompt (version/hash)                       |
-| `agent prompt set <agent> <text>`                     | Set custom prompt (`prompt_inline` only)                   |
-| `agent prompt append <agent> <text>`                  | Append to custom prompt (`prompt_inline` only)             |
-| `agent prompt clear <agent>`                          | Remove prompt config (both inline and file ref)            |
-| `agent permission show <agent>`                       | Show agent permissions (office_cron, tools)                |
-| `agent permission set <agent> office_cron <bool>`     | Set `office_cron` permission (true/false)                  |
-| `agent permission set <agent> tools allow\|deny <t>`  | Set tools allow/deny list (comma-separated)                |
-| `agent permission clear <agent> office_cron`          | Clear `office_cron` permission                             |
-| `agent permission clear <agent> tools`                | Clear tools permissions                                    |
-| `agent hierarchy show <agent>`                        | Show agent's manager, peers, and direct reports            |
-| `org chart`                                           | Display full org tree (user at root)                       |
-| `office reload [--force]`                             | Re-apply `office.yaml` (force kills changed agents)        |
-| `office validate`                                     | Dry-run: parse + validate YAML without spawning            |
-| `office path`                                         | Print path to `office.yaml`                                |
-| `cron list`                                           | List all cron jobs                                         |
-| `cron status [agent]`                                 | Detailed cron job status                                   |
-| `cron add <agent> <job> "<sched>" <msg> [--apply]`    | Add a cron job                                             |
-| `cron remove <agent> <job> [--apply]`                 | Remove a cron job                                          |
-| `cron trigger <agent> <job>`                          | Fire a cron job immediately                                |
-| `cron enable <agent> <job> [--apply]`                 | Re-enable a paused job                                     |
-| `cron disable <agent> <job> [--apply]`                | Pause a cron job                                           |
-| `cron add office <job> "<sched>" <msg> --targets a,b` | Add an office-level cron job (applies immediately)         |
-| `cron remove office <job>`                            | Remove an office-level cron job (applies immediately)      |
-| `cron trigger office <job>`                           | Fire an office cron job immediately                        |
-| `task list [--assignee X] [--status S]`               | List tasks with optional filters                           |
-| `task board`                                          | Show Kanban board view                                     |
-| `task get <id>`                                       | Show task details                                          |
-| `prompt report <agent>`                               | Show prompt composition (block sizes, tool count, mode)    |
-| `cost status`                                         | Session token and cost totals (resets on restart)          |
-| `cost today [--agent <name>]`                         | Persistent token and cost totals for today                 |
-| `cost report --days <n> [--agent <name>]`             | Historical usage over last N days                          |
+| `skill list <agent>`                                  | List installed skills                                         |
+| `skill remove <agent> <name>`                         | Remove a legacy GitHub-source skill                           |
+| `agent env set <agent> <KEY> <VALUE>`                 | Set env var in `office.yaml`                                  |
+| `agent env unset <agent> <KEY>`                       | Remove env var from `office.yaml`                             |
+| `agent secret-ref set <agent> <KEY> <ENV>`            | Set secret ref in `office.yaml`                               |
+| `agent secret-ref unset <agent> <KEY>`                | Remove secret ref from `office.yaml`                          |
+| `agent config show <agent>`                           | Show agent config (secrets redacted)                          |
+| `agent prompt show <agent>`                           | Show effective prompt (version/hash)                          |
+| `agent prompt set <agent> <text>`                     | Set custom prompt (`prompt_inline` only)                      |
+| `agent prompt append <agent> <text>`                  | Append to custom prompt (`prompt_inline` only)                |
+| `agent prompt clear <agent>`                          | Remove prompt config (both inline and file ref)               |
+| `agent permission show <agent>`                       | Show agent permissions (office_cron, tools)                   |
+| `agent permission set <agent> office_cron <bool>`     | Set `office_cron` permission (true/false)                     |
+| `agent permission set <agent> tools allow\|deny <t>`  | Set tools allow/deny list (comma-separated)                   |
+| `agent permission clear <agent> office_cron`          | Clear `office_cron` permission                                |
+| `agent permission clear <agent> tools`                | Clear tools permissions                                       |
+| `agent hierarchy show <agent>`                        | Show agent's manager, peers, and direct reports               |
+| `org chart`                                           | Display full org tree (user at root)                          |
+| `office reload [--force]`                             | Re-apply `office.yaml` (force kills changed agents)           |
+| `office validate`                                     | Dry-run: parse + validate YAML without spawning               |
+| `office path`                                         | Print path to `office.yaml`                                   |
+| `cron list`                                           | List all cron jobs                                            |
+| `cron status [agent]`                                 | Detailed cron job status                                      |
+| `cron add <agent> <job> "<sched>" <msg> [--apply]`    | Add a cron job                                                |
+| `cron remove <agent> <job> [--apply]`                 | Remove a cron job                                             |
+| `cron trigger <agent> <job>`                          | Fire a cron job immediately                                   |
+| `cron enable <agent> <job> [--apply]`                 | Re-enable a paused job                                        |
+| `cron disable <agent> <job> [--apply]`                | Pause a cron job                                              |
+| `cron add office <job> "<sched>" <msg> --targets a,b` | Add an office-level cron job (applies immediately)            |
+| `cron remove office <job>`                            | Remove an office-level cron job (applies immediately)         |
+| `cron trigger office <job>`                           | Fire an office cron job immediately                           |
+| `task list [--assignee X] [--status S]`               | List tasks with optional filters                              |
+| `task board`                                          | Show Kanban board view                                        |
+| `task get <id>`                                       | Show task details                                             |
+| `prompt report <agent>`                               | Show prompt composition (block sizes, tool count, mode)       |
+| `cost status`                                         | Session token and cost totals (resets on restart)             |
+| `cost today [--agent <name>]`                         | Persistent token and cost totals for today                    |
+| `cost report --days <n> [--agent <name>]`             | Historical usage over last N days                             |
 
 ### Hire Options
 
@@ -852,11 +852,11 @@ Send a message to another agent's inbox. Messages are delivered on the next sche
 
 Optional parameters:
 
-| Parameter        | Type    | Default | Description                                                            |
-| ---------------- | ------- | ------- | ---------------------------------------------------------------------- |
-| `requiresReply`  | boolean | `false` | Request a reply within SLA (registers an obligation)                   |
-| `replyByMinutes` | integer | `5`     | Custom reply SLA in minutes (only used when `requiresReply` is `true`) |
-| `originTaskId`   | string  | —       | Related task ID for correlation tracking                               |
+| Parameter        | Type    | Default | Description                                                                     |
+| ---------------- | ------- | ------- | ------------------------------------------------------------------------------- |
+| `requiresReply`  | boolean | `false` | Request a reply within SLA (registers an obligation)                            |
+| `replyByMinutes` | integer | `5`     | Custom reply SLA in minutes (only used when `requiresReply` is `true`)          |
+| `originTaskId`   | string  | —       | Related task ID for correlation tracking                                        |
 | `overrideReason` | string  | —       | Policy override: `"urgent"`, `"critical"`, or `"emergency"` (enforce mode only) |
 
 Returns delivery confirmation: `{ queued: true }` on success, or `{ queued: false, reason: "..." }` on failure (e.g. `rate_limited` or policy violation).
@@ -885,10 +885,10 @@ agent calls message_agent:
 
 The `collaborationPolicy` in `office.yaml` governs how multi-step work is delegated between agents. Three modes are available:
 
-| Mode      | Behavior                                                                                          |
-| --------- | ------------------------------------------------------------------------------------------------- |
-| `off`     | No restrictions on `message_agent` usage (default)                                                |
-| `warn`    | Logs a warning when `message_agent` is used for work that should use `task_create`                |
+| Mode      | Behavior                                                                                             |
+| --------- | ---------------------------------------------------------------------------------------------------- |
+| `off`     | No restrictions on `message_agent` usage (default)                                                   |
+| `warn`    | Logs a warning when `message_agent` is used for work that should use `task_create`                   |
 | `enforce` | Blocks `message_agent` for delegatable work; agents must use `task_create` to assign multi-step work |
 
 **Detection heuristic:** Messages containing action verbs (`create`, `implement`, `review`, `build`, `fix`, `refactor`, `write`, `deploy`, `add`, `delete`, `remove`, `migrate`, `setup`, `configure`) directed to a single recipient are classified as delegatable work. Clarifications and FYIs (messages containing `"quick question"`, `"clarification"`, `"just checking"`, `"fyi"`, `"heads up"`) are always allowed regardless of mode.
@@ -925,11 +925,11 @@ Fulfilled obligations are tracked and cleaned up after 24 hours of retention.
 
 The `DeadlockDetector` runs periodic checks (default every 15 seconds) to identify workflow stalls. Three stall signals are monitored:
 
-| Signal                    | Trigger                                                            |
-| ------------------------- | ------------------------------------------------------------------ |
-| `unresolved_obligations`  | Obligations past their SLA deadline                                |
-| `all_agents_idle`         | All agents idle but queues have pending messages                   |
-| `no_queue_progress`       | No messages dequeued for `deadlockThresholdMinutes` (default: 10)  |
+| Signal                   | Trigger                                                           |
+| ------------------------ | ----------------------------------------------------------------- |
+| `unresolved_obligations` | Obligations past their SLA deadline                               |
+| `all_agents_idle`        | All agents idle but queues have pending messages                  |
+| `no_queue_progress`      | No messages dequeued for `deadlockThresholdMinutes` (default: 10) |
 
 Stall events are emitted to workspace listeners as `workflow_stalled` events. Nudge messages are sent to agents with overdue obligations, with a cooldown period (`stallCooldownMinutes`, default: 5) to prevent spam.
 

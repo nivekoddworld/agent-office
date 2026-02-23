@@ -32,7 +32,9 @@ export function useSkillSearch(agentName: string, query: string) {
   });
 }
 
-function invalidateSkillQueries(queryClient: ReturnType<typeof useQueryClient>) {
+function invalidateSkillQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
   queryClient.invalidateQueries({ queryKey: ["state"] });
   queryClient.invalidateQueries({ queryKey: ["agent"] });
   queryClient.invalidateQueries({ queryKey: ["agent-skills"] });

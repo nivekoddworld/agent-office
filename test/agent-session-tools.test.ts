@@ -33,7 +33,7 @@ describe("session tools", () => {
         text: `message ${i} about deployment`,
         ts_ms: i * 1000,
         request_id: null,
-      agent_name: null,
+        agent_name: null,
       });
     }
   });
@@ -79,7 +79,7 @@ describe("session tools", () => {
         text: "deployment plan for general",
         ts_ms: 6000,
         request_id: null,
-      agent_name: null,
+        agent_name: null,
       });
       const tool = createSessionSearchTool("alice", store, channels);
       const result = await tool.execute("test-id", {

@@ -109,21 +109,21 @@ describe("PolicyService — isSimpleWorkCandidate", () => {
       false,
     );
     expect(svc.isSimpleWorkCandidate("FYI the deploy finished", 1)).toBe(false);
-    expect(svc.isSimpleWorkCandidate("Heads up: server restart tonight", 1)).toBe(
-      false,
-    );
+    expect(
+      svc.isSimpleWorkCandidate("Heads up: server restart tonight", 1),
+    ).toBe(false);
   });
 
   it("returns true for action-verb message to single recipient", () => {
-    expect(svc.isSimpleWorkCandidate("Please implement the auth module", 1)).toBe(
-      true,
-    );
-    expect(svc.isSimpleWorkCandidate("Review the PR for the feature branch", 1)).toBe(
-      true,
-    );
-    expect(svc.isSimpleWorkCandidate("Build the Docker image and push it", 1)).toBe(
-      true,
-    );
+    expect(
+      svc.isSimpleWorkCandidate("Please implement the auth module", 1),
+    ).toBe(true);
+    expect(
+      svc.isSimpleWorkCandidate("Review the PR for the feature branch", 1),
+    ).toBe(true);
+    expect(
+      svc.isSimpleWorkCandidate("Build the Docker image and push it", 1),
+    ).toBe(true);
   });
 });
 
@@ -156,7 +156,12 @@ describe("PolicyService — onOverride callback", () => {
     const svc = new PolicyService(makePolicy("enforce"), "coder", () =>
       calls.push("called"),
     );
-    const result = svc.checkMessagePolicy(WORK_MESSAGE, 1, "please", "reviewer");
+    const result = svc.checkMessagePolicy(
+      WORK_MESSAGE,
+      1,
+      "please",
+      "reviewer",
+    );
     expect(result.blocked).toBe(true);
     expect(calls).toHaveLength(0);
   });

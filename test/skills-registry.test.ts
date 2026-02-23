@@ -87,7 +87,11 @@ describe("project skill lifecycle", () => {
     expect(content).toContain("name: my-new-skill");
     expect(content).toContain("description:");
 
-    const removed = removeProjectSkillForAgent(baseDir, "alice", "my-new-skill");
+    const removed = removeProjectSkillForAgent(
+      baseDir,
+      "alice",
+      "my-new-skill",
+    );
     expect(removed).toEqual({ removed: true });
     expect(existsSync(created.path)).toBe(false);
   });
@@ -149,7 +153,9 @@ describe("project skill lifecycle", () => {
 
     const result = removeProjectSkillForAgent(baseDir, "alice", "legacy-skill");
     expect(result).toEqual({ removed: false, reason: "legacy" });
-    expect(existsSync(join(projectRoot, "legacy-skill", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(projectRoot, "legacy-skill", "SKILL.md"))).toBe(
+      true,
+    );
   });
 
   it("defensively cleans metadata when removing project skill", () => {
@@ -170,9 +176,15 @@ describe("project skill lifecycle", () => {
       JSON.stringify({ "project-skill": "legacy/source" }),
     );
 
-    const result = removeProjectSkillForAgent(baseDir, "alice", "project-skill");
+    const result = removeProjectSkillForAgent(
+      baseDir,
+      "alice",
+      "project-skill",
+    );
     expect(result).toEqual({ removed: true });
-    expect(existsSync(join(projectRoot, "project-skill", "SKILL.md"))).toBe(false);
+    expect(existsSync(join(projectRoot, "project-skill", "SKILL.md"))).toBe(
+      false,
+    );
 
     const registryMap = JSON.parse(
       readFileSync(join(projectRoot, ".registry-map.json"), "utf-8"),
@@ -228,12 +240,12 @@ describe("project skill lifecycle", () => {
     expect(migrated).toBeDefined();
     expect(migrated?.source).toBe("project");
     expect(migrated?.origin).toBe("registry");
-    expect(
-      existsSync(join(projectRoot, "migrated-skill", "SKILL.md")),
-    ).toBe(true);
-    expect(
-      existsSync(join(fallbackRoot, "migrated-skill", "SKILL.md")),
-    ).toBe(false);
+    expect(existsSync(join(projectRoot, "migrated-skill", "SKILL.md"))).toBe(
+      true,
+    );
+    expect(existsSync(join(fallbackRoot, "migrated-skill", "SKILL.md"))).toBe(
+      false,
+    );
 
     const registryMap = JSON.parse(
       readFileSync(join(projectRoot, ".registry-map.json"), "utf-8"),
@@ -242,7 +254,9 @@ describe("project skill lifecycle", () => {
       readFileSync(join(projectRoot, ".sources.json"), "utf-8"),
     ) as Record<string, string>;
 
-    expect(registryMap["migrated-skill"]).toBe("openai/skills@project-preferred");
+    expect(registryMap["migrated-skill"]).toBe(
+      "openai/skills@project-preferred",
+    );
     expect(registryMap["missing-skill"]).toBeUndefined();
     expect(sourcesMap["migrated-skill"]).toBe("fallback/source");
     expect(sourcesMap["missing-skill"]).toBeUndefined();
@@ -270,7 +284,14 @@ describe("project skill lifecycle", () => {
     expect(listed.map((s) => s.name)).toContain("misplaced-skill");
     expect(
       existsSync(
-        join(baseDir, "agents", "alice", "skills", "misplaced-skill", "SKILL.md"),
+        join(
+          baseDir,
+          "agents",
+          "alice",
+          "skills",
+          "misplaced-skill",
+          "SKILL.md",
+        ),
       ),
     ).toBe(true);
     expect(existsSync(join(misplacedRoot, "SKILL.md"))).toBe(false);

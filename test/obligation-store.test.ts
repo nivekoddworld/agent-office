@@ -117,9 +117,24 @@ describe("ObligationStore", () => {
   });
 
   it("getPending() returns only unfulfilled obligations", () => {
-    store.add({ correlationId: "p1", from: "a", to: "b", replyByTs: Date.now() + 60_000 });
-    store.add({ correlationId: "p2", from: "a", to: "b", replyByTs: Date.now() + 60_000 });
-    store.add({ correlationId: "p3", from: "a", to: "b", replyByTs: Date.now() + 60_000 });
+    store.add({
+      correlationId: "p1",
+      from: "a",
+      to: "b",
+      replyByTs: Date.now() + 60_000,
+    });
+    store.add({
+      correlationId: "p2",
+      from: "a",
+      to: "b",
+      replyByTs: Date.now() + 60_000,
+    });
+    store.add({
+      correlationId: "p3",
+      from: "a",
+      to: "b",
+      replyByTs: Date.now() + 60_000,
+    });
     store.fulfill("p2");
 
     const pending = store.getPending();
@@ -131,8 +146,18 @@ describe("ObligationStore", () => {
   });
 
   it("cleanup() removes fulfilled obligations older than retention period", () => {
-    store.add({ correlationId: "old", from: "a", to: "b", replyByTs: Date.now() - 1000 });
-    store.add({ correlationId: "new", from: "a", to: "b", replyByTs: Date.now() + 60_000 });
+    store.add({
+      correlationId: "old",
+      from: "a",
+      to: "b",
+      replyByTs: Date.now() - 1000,
+    });
+    store.add({
+      correlationId: "new",
+      from: "a",
+      to: "b",
+      replyByTs: Date.now() + 60_000,
+    });
     store.fulfill("old");
     store.fulfill("new");
 
@@ -148,7 +173,12 @@ describe("ObligationStore", () => {
   });
 
   it("cleanup() keeps fulfilled obligations within retention period", () => {
-    store.add({ correlationId: "recent", from: "a", to: "b", replyByTs: Date.now() - 1000 });
+    store.add({
+      correlationId: "recent",
+      from: "a",
+      to: "b",
+      replyByTs: Date.now() - 1000,
+    });
     store.fulfill("recent");
 
     // cleanup with 1 hour retention — recently fulfilled should survive

@@ -570,7 +570,10 @@ export async function handleTaskCreate(
 ): Promise<void> {
   const parsed = await parseTaskBody(req, res, deps);
   if (!parsed) return;
-  const result = taskCreateImpl(makeTaskDeps(parsed.deps), parsed.params as any);
+  const result = taskCreateImpl(
+    makeTaskDeps(parsed.deps),
+    parsed.params as any,
+  );
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result }));
 }
@@ -582,7 +585,10 @@ export async function handleTaskUpdate(
 ): Promise<void> {
   const parsed = await parseTaskBody(req, res, deps);
   if (!parsed) return;
-  const result = taskUpdateImpl(makeTaskDeps(parsed.deps), parsed.params as any);
+  const result = taskUpdateImpl(
+    makeTaskDeps(parsed.deps),
+    parsed.params as any,
+  );
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result }));
 }

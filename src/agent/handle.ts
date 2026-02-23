@@ -178,8 +178,13 @@ export class AgentHandle {
   }
 
   private get skillPaths(): string[] {
-    const merged = [join(this.agentDir, "skills"), ...(this.config.skillDirs ?? [])];
-    return [...new Set(merged.map((p) => p.trim()).filter((p) => p.length > 0))];
+    const merged = [
+      join(this.agentDir, "skills"),
+      ...(this.config.skillDirs ?? []),
+    ];
+    return [
+      ...new Set(merged.map((p) => p.trim()).filter((p) => p.length > 0)),
+    ];
   }
 
   private resolveLatestSkillsMap(): Map<string, string> {
@@ -209,9 +214,8 @@ export class AgentHandle {
       this.sandboxInfo = result.sandboxInfo;
       this._toolCount = result.toolCount;
       if (this.config.onDemandSkills !== false) {
-        this.hostApi?.setAgentSkillResolver?.(
-          this.name,
-          () => this.resolveLatestSkillsMap(),
+        this.hostApi?.setAgentSkillResolver?.(this.name, () =>
+          this.resolveLatestSkillsMap(),
         );
       }
 

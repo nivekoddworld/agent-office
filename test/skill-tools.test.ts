@@ -29,8 +29,8 @@ describe("skillRemoveImpl", () => {
       { name: "legacy-skill" },
     );
 
-    expect(result).toContain('legacy (GitHub source)');
-    expect(result).toContain('skill remove alice legacy-skill');
+    expect(result).toContain("legacy (GitHub source)");
+    expect(result).toContain("skill remove alice legacy-skill");
   });
 
   it("removes project skill successfully", () => {
@@ -41,7 +41,9 @@ describe("skillRemoveImpl", () => {
       { name: "project-skill" },
     );
 
-    expect(result).toBe('Removed skill "project-skill" from agents/alice/skills.');
+    expect(result).toBe(
+      'Removed skill "project-skill" from agents/alice/skills.',
+    );
   });
 
   it("returns not_found when project skill is missing", () => {

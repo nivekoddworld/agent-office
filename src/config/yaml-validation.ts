@@ -28,9 +28,7 @@ export function validateCollaborationPolicy(raw: unknown): string[] {
   const r = raw as Record<string, unknown>;
   for (const key of Object.keys(r)) {
     if (!KNOWN_COLLABORATION_POLICY_KEYS.has(key)) {
-      errors.push(
-        `${p}: unknown key "${key}" — known: mode, sla`,
-      );
+      errors.push(`${p}: unknown key "${key}" — known: mode, sla`);
     }
   }
 

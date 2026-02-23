@@ -10,6 +10,7 @@ const textResult = (text: string) => ({
 export function createSkillSearchTool(deps: SkillToolDeps): AgentTool<any> {
   return {
     ...SKILL_SEARCH,
-    execute: async (_id, params) => textResult(await skillSearchImpl(deps, params)),
+    execute: async (_id, params) =>
+      textResult(await skillSearchImpl(deps, params)),
   };
 }

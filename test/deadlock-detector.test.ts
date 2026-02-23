@@ -9,7 +9,9 @@ describe("DeadlockDetector", () => {
   let detector: DeadlockDetector;
   let events: StallEvent[];
 
-  const makeConfig = (overrides?: Partial<Parameters<typeof createDeadlockDetector>[0]>) => ({
+  const makeConfig = (
+    overrides?: Partial<Parameters<typeof createDeadlockDetector>[0]>,
+  ) => ({
     deadlockThresholdMinutes: 10,
     stallCooldownMinutes: 5,
     checkIntervalMs: 1000,
@@ -122,7 +124,9 @@ describe("DeadlockDetector", () => {
     // Advance less than threshold — should NOT emit again
     await vi.advanceTimersByTimeAsync(30_001);
 
-    expect(events.filter((e) => e.type === "no_queue_progress")).toHaveLength(0);
+    expect(events.filter((e) => e.type === "no_queue_progress")).toHaveLength(
+      0,
+    );
   });
 
   it("emits 'unresolved_obligations' when getOverdueObligations returns items", async () => {
@@ -232,7 +236,9 @@ describe("DeadlockDetector", () => {
     const incidents = detector.getIncidents();
     const id = incidents[0]!.id;
     expect(detector.resolveIncident(id)).toBe(true);
-    expect(detector.getIncidents().find((i) => i.id === id)?.resolved).toBe(true);
+    expect(detector.getIncidents().find((i) => i.id === id)?.resolved).toBe(
+      true,
+    );
     // resolving again returns false
     expect(detector.resolveIncident(id)).toBe(false);
   });

@@ -19,8 +19,7 @@ export const MESSAGE_AGENT = {
     ),
     replyByMinutes: Type.Optional(
       Type.Integer({
-        description:
-          "Custom reply SLA in minutes (overrides office default)",
+        description: "Custom reply SLA in minutes (overrides office default)",
         minimum: 1,
       }),
     ),
@@ -33,7 +32,8 @@ export const MESSAGE_AGENT = {
       Type.Unsafe<string>({
         type: "string",
         enum: ["urgent", "critical", "emergency"],
-        description: "Policy override reason (enforce mode only, use sparingly)",
+        description:
+          "Policy override reason (enforce mode only, use sparingly)",
       }),
     ),
   }),

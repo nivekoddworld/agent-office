@@ -1,4 +1,12 @@
-import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterAll,
+} from "vitest";
 import http from "node:http";
 
 // --- Mocks (hoisted) ---
@@ -744,9 +752,12 @@ describe("UI server", () => {
         agent_name: "alice",
       },
     ]);
-    const res = await fetch(`${origin}/api/channels/general/messages?limit=20`, {
-      headers: { Cookie: sessionCookie },
-    });
+    const res = await fetch(
+      `${origin}/api/channels/general/messages?limit=20`,
+      {
+        headers: { Cookie: sessionCookie },
+      },
+    );
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.channel).toBe("general");
@@ -780,9 +791,12 @@ describe("UI server", () => {
   });
 
   it("GET /api/channels/:name/messages validates limit", async () => {
-    const res = await fetch(`${origin}/api/channels/general/messages?limit=abc`, {
-      headers: { Cookie: sessionCookie },
-    });
+    const res = await fetch(
+      `${origin}/api/channels/general/messages?limit=abc`,
+      {
+        headers: { Cookie: sessionCookie },
+      },
+    );
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_limit" });
   });

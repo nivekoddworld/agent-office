@@ -99,9 +99,7 @@ export class DeadlockDetector {
     const anyQueued = agents.some((a) => a.queueDepth > 0);
     if (!anyRunning && anyQueued) {
       this._maybeEmit("all_agents_idle", now, {
-        queuedAgents: agents
-          .filter((a) => a.queueDepth > 0)
-          .map((a) => a.name),
+        queuedAgents: agents.filter((a) => a.queueDepth > 0).map((a) => a.name),
       });
     }
 

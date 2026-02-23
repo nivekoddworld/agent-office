@@ -18,13 +18,17 @@ import {
 } from "./fetch.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
-const PACKAGE_RE =
-  /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+@[a-zA-Z0-9._\/-]+$/;
+const PACKAGE_RE = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+@[a-zA-Z0-9._\/-]+$/;
 const ANSI_RE = /\u001b\[[0-9;]*m/g;
 const REGISTRY_MAP_FILE = ".registry-map.json";
 const SOURCE_MAP_FILE = ".sources.json";
 
-export interface SkillSearchEntry { packageName: string; repo: string; skillName: string; url?: string; }
+export interface SkillSearchEntry {
+  packageName: string;
+  repo: string;
+  skillName: string;
+  url?: string;
+}
 export type InstalledSkillOrigin = "registry" | "github" | "local";
 export interface InstalledAgentSkill {
   name: string;
@@ -34,7 +38,10 @@ export interface InstalledAgentSkill {
   packageName?: string;
   origin?: InstalledSkillOrigin;
 }
-export interface InstallRegistrySkillResult { installed: InstalledAgentSkill[]; output: string[]; }
+export interface InstallRegistrySkillResult {
+  installed: InstalledAgentSkill[];
+  output: string[];
+}
 export interface RemoveProjectSkillResult {
   removed: boolean;
   reason?: "not_found" | "legacy";
@@ -45,7 +52,11 @@ export interface CreateSkillInput {
   instructions?: string;
   whenToUse?: string;
 }
-interface CliResult { code: number; stdout: string; stderr: string; }
+interface CliResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
 
 function validateAgentName(agentName: string): void {
   if (!AGENT_NAME_RE.test(agentName)) {
@@ -359,7 +370,9 @@ export function listInstalledAgentSkills(
     return {
       name,
       source:
-        packageName || !githubSource ? ("project" as const) : ("legacy" as const),
+        packageName || !githubSource
+          ? ("project" as const)
+          : ("legacy" as const),
       origin,
       path,
       description: readSkillDescription(path),

@@ -92,7 +92,11 @@ export function skillRemoveImpl(
   if (!name) return "Error: name is required";
 
   try {
-    const removed = removeProjectSkillForAgent(deps.baseDir, deps.agentName, name);
+    const removed = removeProjectSkillForAgent(
+      deps.baseDir,
+      deps.agentName,
+      name,
+    );
     if (!removed.removed && removed.reason === "legacy") {
       return `Error: skill "${name}" is legacy (GitHub source). Use CLI "skill remove ${deps.agentName} ${name}" to remove it safely.`;
     }
@@ -121,7 +125,9 @@ export function skillCreateImpl(
       name,
       description,
       instructions:
-        typeof params.instructions === "string" ? params.instructions : undefined,
+        typeof params.instructions === "string"
+          ? params.instructions
+          : undefined,
       whenToUse:
         typeof params.when_to_use === "string" ? params.when_to_use : undefined,
     });

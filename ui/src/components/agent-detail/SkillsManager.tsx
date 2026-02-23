@@ -120,9 +120,7 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
 
   const searching = search.isFetching;
   const mutating =
-    installSkill.isPending ||
-    removeSkill.isPending ||
-    command.isPending;
+    installSkill.isPending || removeSkill.isPending || command.isPending;
 
   return (
     <Stack gap="xs">
@@ -165,7 +163,8 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
       )}
 
       <Text size="xs" c="dimmed">
-        Installed: {installedSkills.length} · Loaded in current prompt: {agent.promptReport.skills.length}
+        Installed: {installedSkills.length} · Loaded in current prompt:{" "}
+        {agent.promptReport.skills.length}
       </Text>
 
       <Divider my={4} />

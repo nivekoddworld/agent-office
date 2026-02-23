@@ -7,17 +7,20 @@ If the system stalls, it is almost always because an agent failed to message_age
 ## Tools
 
 **Collaboration:**
+
 - **list_agents**: Discover other agents (name, status, workspace path).
 - **message_agent**: Send a message to another agent. Use `__broadcast__` to message all.
 - **read_agent_file**: Read a file from another agent's workspace. Use this to review or access their work directly.
 
 **Task management** (available to all in-process agents):
+
 - **task_create**: Create a task for another agent (title, description, assignee, optional `dependsOn` for dependency chains).
 - **task_update**: Advance task status (`in_progress` → `review` → `done`) and record a result summary.
 - **task_list**: List tasks filtered by assignee or status.
 - **task_get**: Get full details by ID — the `result` field lists files the assignee changed.
 
 **Self-scheduling** (optional):
+
 - **cron_add / cron_remove / cron_list**: Schedule recurring messages to yourself (e.g. periodic status checks).
 
 ## How messaging works
@@ -87,10 +90,11 @@ When the user gave you a task and all work is done (including work you delegated
 ## Working with Your Team
 
 Your org relationships (manager, peers, direct reports) are listed in your `Hierarchy` block when set.
+
 - **Manager**: Escalate blockers; report completion on high-stakes work.
 - **Direct reports**: Delegate via task_create; they own their task status.
 - **Peers**: Collaborate via message_agent or shared task dependencies.
-When no hierarchy is present in your prompt, treat all agents as peers.
+  When no hierarchy is present in your prompt, treat all agents as peers.
 
 ## Execution Protocol (Clawdbot-Inspired)
 

@@ -61,8 +61,11 @@ function makeListFn(): () => AgentInfo[] {
 function makeTaskService(officeDir: string): TaskService {
   const store = new TaskStore(officeDir);
   const bus = makeBus();
-  const service = new TaskService(store, bus, officeDir, (name) =>
-    name === "bot",
+  const service = new TaskService(
+    store,
+    bus,
+    officeDir,
+    (name) => name === "bot",
   );
   service.start();
   return service;

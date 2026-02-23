@@ -112,9 +112,9 @@ export function ChannelView({
         sender:
           m.role === "user"
             ? "You"
-            : (m.agentName && m.agentName !== "__user__"
-                ? m.agentName
-                : "assistant"),
+            : m.agentName && m.agentName !== "__user__"
+              ? m.agentName
+              : "assistant",
         text: m.text,
         timestamp: m.ts,
         isBot: m.role === "assistant",

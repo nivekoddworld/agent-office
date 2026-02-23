@@ -105,8 +105,7 @@ export class Workspace {
       {
         deadlockThresholdMinutes:
           this.office.policy?.sla.deadlockThresholdMinutes ?? 10,
-        stallCooldownMinutes:
-          this.office.policy?.sla.stallCooldownMinutes ?? 5,
+        stallCooldownMinutes: this.office.policy?.sla.stallCooldownMinutes ?? 5,
       },
       () =>
         [...this.agents.values()].map((a) => ({
@@ -130,12 +129,14 @@ export class Workspace {
       getOverdueObligations: () => this.obligationStore.getOverdue(),
       getPendingObligations: () => this.obligationStore.getPending(),
       getStaleTasks: () =>
-        this.tasks.list().filter(
-          (t) =>
-            t.status !== "done" &&
-            t.status !== "cancelled" &&
-            Date.now() - t.updatedAt > staleThresholdMs,
-        ),
+        this.tasks
+          .list()
+          .filter(
+            (t) =>
+              t.status !== "done" &&
+              t.status !== "cancelled" &&
+              Date.now() - t.updatedAt > staleThresholdMs,
+          ),
       getStallIncidents: () => this.deadlockDetector.getIncidents(),
     });
 
@@ -331,9 +332,7 @@ export class Workspace {
         const e = event as unknown as Record<string, unknown>;
         const toolName = (e["toolName"] as string) ?? "?";
         const input = e["input"] as Record<string, unknown> | undefined;
-        const inputStr = input
-          ? JSON.stringify(input).slice(0, 120)
-          : "";
+        const inputStr = input ? JSON.stringify(input).slice(0, 120) : "";
         console.log(
           `[event] ${config.name}: tool_execution_start tool=${toolName}` +
             (inputStr ? ` input=${inputStr}` : ""),
@@ -342,9 +341,7 @@ export class Workspace {
         const e = event as unknown as Record<string, unknown>;
         const toolName = (e["toolName"] as string) ?? "?";
         const output = e["output"] as Record<string, unknown> | undefined;
-        const outputStr = output
-          ? JSON.stringify(output).slice(0, 120)
-          : "";
+        const outputStr = output ? JSON.stringify(output).slice(0, 120) : "";
         console.log(
           `[event] ${config.name}: tool_execution_end tool=${toolName}` +
             (outputStr ? ` output=${outputStr}` : ""),
@@ -354,7 +351,9 @@ export class Workspace {
         const msg = e["message"] as Record<string, unknown> | undefined;
         const role = (msg?.["role"] as string) ?? "?";
         const usage = msg?.["usage"] as Record<string, unknown> | undefined;
-        const tokens = usage ? `in=${usage["input"]} out=${usage["output"]}` : "";
+        const tokens = usage
+          ? `in=${usage["input"]} out=${usage["output"]}`
+          : "";
         const content = msg?.["content"];
         const text =
           typeof content === "string"
@@ -375,9 +374,14 @@ export class Workspace {
         );
       } else if (event.type === "agent_end") {
         const e = event as unknown as Record<string, unknown>;
-        const msgs = e["messages"] as Array<Record<string, unknown>> | undefined;
+        const msgs = e["messages"] as
+          | Array<Record<string, unknown>>
+          | undefined;
         const lastMsg = msgs?.[msgs.length - 1];
-        const reason = (lastMsg?.["stopReason"] as string) ?? (e["stopReason"] as string) ?? "?";
+        const reason =
+          (lastMsg?.["stopReason"] as string) ??
+          (e["stopReason"] as string) ??
+          "?";
         const errMsg = (lastMsg?.["errorMessage"] as string) ?? "";
         console.log(
           `[event] ${config.name}: agent_end stopReason=${reason}` +
@@ -385,9 +389,14 @@ export class Workspace {
             (requestId ? ` requestId=${requestId}` : "") +
             (sk ? ` session=${sk}` : ""),
         );
-      } else if ((event as unknown as Record<string, unknown>)["type"] === "error") {
+      } else if (
+        (event as unknown as Record<string, unknown>)["type"] === "error"
+      ) {
         const e = event as unknown as Record<string, unknown>;
-        console.error(`[event] ${config.name}: ERROR`, JSON.stringify(e).slice(0, 300));
+        console.error(
+          `[event] ${config.name}: ERROR`,
+          JSON.stringify(e).slice(0, 300),
+        );
       }
 
       // Track usage on assistant message_end

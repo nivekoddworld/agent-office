@@ -114,7 +114,7 @@ describe("MessageStore sessions", () => {
         text: `msg${i}`,
         ts_ms: i * 1000,
         request_id: null,
-      agent_name: null,
+        agent_name: null,
       });
     }
     const tail = store.querySessionTail("ch:gen", 3, 10);
@@ -268,7 +268,7 @@ describe("MessageStore sessions", () => {
         text: `turn ${i}`,
         ts_ms: i * 100,
         request_id: null,
-      agent_name: null,
+        agent_name: null,
       });
     }
     // Verify tail query works for summary threshold check

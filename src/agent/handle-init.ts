@@ -72,7 +72,10 @@ export interface SandboxInitResult {
 }
 
 function resolveSkillPaths(ctx: InitContext): string[] {
-  const merged = [join(ctx.agentDir, "skills"), ...(ctx.config.skillDirs ?? [])];
+  const merged = [
+    join(ctx.agentDir, "skills"),
+    ...(ctx.config.skillDirs ?? []),
+  ];
   return [...new Set(merged.map((p) => p.trim()).filter((p) => p.length > 0))];
 }
 
@@ -228,7 +231,12 @@ export async function initInProcessAgent(
   let inProcSkillsPrompt: string | undefined;
   const allTools: AgentTool<any>[] = [
     ...createCodingTools(ctx.cwd),
-    createMessageAgentTool({ agentName: ctx.name, bus, obligationStore, policyService }),
+    createMessageAgentTool({
+      agentName: ctx.name,
+      bus,
+      obligationStore,
+      policyService,
+    }),
     createListAgentsTool(ctx.name, listAgentsFn, ctx.baseDir),
     createReadAgentFileTool(ctx.baseDir),
     ...(Object.keys(resolvedSecrets).length > 0
