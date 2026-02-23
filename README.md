@@ -16,7 +16,7 @@ pnpm dev start --office basic-team --sandbox docker
 ```
 
 ```env
-OPENAI_API_KEY=
+GEMINI_API_KEY=
 ```
 
 **OpenServ team** — idea scout, team lead, agent dev, and token launcher:
@@ -80,6 +80,10 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [task_update](#task_update)
   - [task_list](#task_list)
   - [task_get](#task_get)
+  - [Collaboration Policy](#collaboration-policy)
+  - [Obligation Tracking](#obligation-tracking)
+  - [Deadlock Detection](#deadlock-detection)
+  - [Collaboration Metrics](#collaboration-metrics)
   - [Tool Architecture](#tool-architecture)
   - [Prompt System](#prompt-system)
 - [Memory System](#memory-system)
@@ -198,6 +202,15 @@ office:
       schedule: "0 9 * * 1-5"
       message: "Run standup"
       targets: [pm, coder]
+  collaborationPolicy:
+    mode: off             # off | warn | enforce
+    sla:
+      replyByMinutes: 5
+      remindAtMinutes: 3
+      escalateAtMinutes: 5
+      staleTaskHours: 24
+      deadlockThresholdMinutes: 10
+      stallCooldownMinutes: 5
 
 agents:
   designer:
@@ -228,6 +241,8 @@ agents:
 ```
 
 Office-level `env` and `secrets` are inherited by all agents. Agent-level values override office-level.
+
+The `collaborationPolicy` block configures collaboration enforcement for all agents. See [Collaboration Policy](#collaboration-policy).
 
 All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.
 
@@ -480,7 +495,7 @@ agent calls cron_add:
 
 Agents can create, assign, and track tasks through a shared Kanban-style task system. The `TaskService` manages task state, enforces status transitions, resolves dependency chains, and dispatches notifications via the message bus.
 
-Task tools (`task_create`, `task_update`, `task_list`, `task_get`) are registered as default tools for all in-process agents. Restrict access per agent via `permissions.tools.deny`. Task proxy endpoints for Docker sandbox mode are not yet wired.
+Task tools (`task_create`, `task_update`, `task_list`, `task_get`) are registered as default tools for all agents. Restrict access per agent via `permissions.tools.deny`. Task proxy endpoints are available via Host API.
 
 #### Task Lifecycle
 
@@ -632,8 +647,7 @@ Host Process                        Docker Container (per agent)
    - Volume mount: host workspace directory -> `/workspace` in container
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
-   - Proxy tools that forward `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get` to the Host API over HTTP
-   - **Note:** Task tool proxy files exist but are not yet wired in `sandbox-entry.ts` / Host API. Task tools are currently in-process only.
+   - Proxy tools that forward `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `task_create`, `task_update`, `task_list`, `task_get` to the Host API over HTTP
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
 6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
@@ -704,6 +718,11 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | `POST` | `/api/prompt-done`               | Notify host that a prompt completed                            |
 | `POST` | `/api/agent-event`               | Forward agent events to host (redacted)                        |
 | `POST` | `/api/heartbeat`                 | Update agent heartbeat timestamp                               |
+| `POST` | `/api/task-create`               | Create a task (auth required)                                  |
+| `POST` | `/api/task-update`               | Update a task (auth required)                                  |
+| `POST` | `/api/task-list`                 | List tasks (auth required)                                     |
+| `POST` | `/api/task-get`                  | Get task details (auth required)                               |
+| `GET`  | `/api/collaboration/metrics`     | Collaboration observability snapshot                           |
 
 All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable. Model API keys are never passed as Docker env vars — they are fetched via `GET /api/secrets` at boot and stored in memory only.
 
@@ -804,7 +823,7 @@ With `--no-ui`, the dashboard and API server are not started — runtime command
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. In-process agents expose the full set; sandbox/proxy exposure depends on currently wired Host API endpoints (task tools may be unavailable in sandbox).
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
 
 ### Task Event Notifications
 
@@ -831,15 +850,104 @@ Discover all agents in the workspace with their name, status, and description. A
 
 Send a message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]`. Use `__broadcast__` to message all agents.
 
+Optional parameters:
+
+| Parameter        | Type    | Default | Description                                                            |
+| ---------------- | ------- | ------- | ---------------------------------------------------------------------- |
+| `requiresReply`  | boolean | `false` | Request a reply within SLA (registers an obligation)                   |
+| `replyByMinutes` | integer | `5`     | Custom reply SLA in minutes (only used when `requiresReply` is `true`) |
+| `originTaskId`   | string  | —       | Related task ID for correlation tracking                               |
+| `overrideReason` | string  | —       | Policy override: `"urgent"`, `"critical"`, or `"emergency"` (enforce mode only) |
+
+Returns delivery confirmation: `{ queued: true }` on success, or `{ queued: false, reason: "..." }` on failure (e.g. `rate_limited` or policy violation).
+
 ```
 copywriter calls message_agent:
   to: "designer"
   message: "Here's the landing page copy: ..."
+  requiresReply: true
 
--> Message lands in designer's inbox
+-> Message lands in designer's inbox (obligation registered, 5-min SLA)
 -> Next tick delivers it as: [Message from copywriter]\nHere's the landing page copy: ...
 -> Designer starts working
 ```
+
+```
+# In enforce mode, delegatable work without overrideReason is blocked:
+agent calls message_agent:
+  to: "coder"
+  message: "Implement the login page"
+
+-> { queued: false, reason: "multi_step_work_requires_task" }
+```
+
+### Collaboration Policy
+
+The `collaborationPolicy` in `office.yaml` governs how multi-step work is delegated between agents. Three modes are available:
+
+| Mode      | Behavior                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------- |
+| `off`     | No restrictions on `message_agent` usage (default)                                                |
+| `warn`    | Logs a warning when `message_agent` is used for work that should use `task_create`                |
+| `enforce` | Blocks `message_agent` for delegatable work; agents must use `task_create` to assign multi-step work |
+
+**Detection heuristic:** Messages containing action verbs (`create`, `implement`, `review`, `build`, `fix`, `refactor`, `write`, `deploy`, `add`, `delete`, `remove`, `migrate`, `setup`, `configure`) directed to a single recipient are classified as delegatable work. Clarifications and FYIs (messages containing `"quick question"`, `"clarification"`, `"just checking"`, `"fyi"`, `"heads up"`) are always allowed regardless of mode.
+
+**Override (enforce mode only):** Pass `overrideReason` with `"urgent"`, `"critical"`, or `"emergency"` to bypass the policy block. Overrides are logged for audit.
+
+```yaml
+# office.yaml
+office:
+  collaborationPolicy:
+    mode: enforce
+    sla:
+      replyByMinutes: 5
+      remindAtMinutes: 3
+      escalateAtMinutes: 5
+      staleTaskHours: 24
+      deadlockThresholdMinutes: 10
+      stallCooldownMinutes: 5
+```
+
+### Obligation Tracking
+
+When `message_agent` is called with `requiresReply: true`, an obligation is registered tracking the expected reply.
+
+Each obligation records: `correlationId`, `from`, `to`, `replyByTs`, and optionally `originTaskId`. Obligations are persisted to `<officeDir>/obligations/obligations.json` using atomic writes (temp file + rename).
+
+**SLA defaults:** `replyByMinutes: 5` (configurable per-message via the `replyByMinutes` parameter or globally via the office SLA config).
+
+**Overdue handling:** When an obligation passes its SLA deadline, the `DeadlockDetector` sends a nudge message from `__system__` to the delinquent agent. If the agent has a `reports_to` manager, the manager is also notified via escalation.
+
+Fulfilled obligations are tracked and cleaned up after 24 hours of retention.
+
+### Deadlock Detection
+
+The `DeadlockDetector` runs periodic checks (default every 15 seconds) to identify workflow stalls. Three stall signals are monitored:
+
+| Signal                    | Trigger                                                            |
+| ------------------------- | ------------------------------------------------------------------ |
+| `unresolved_obligations`  | Obligations past their SLA deadline                                |
+| `all_agents_idle`         | All agents idle but queues have pending messages                   |
+| `no_queue_progress`       | No messages dequeued for `deadlockThresholdMinutes` (default: 10)  |
+
+Stall events are emitted to workspace listeners as `workflow_stalled` events. Nudge messages are sent to agents with overdue obligations, with a cooldown period (`stallCooldownMinutes`, default: 5) to prevent spam.
+
+Incidents are tracked and can be resolved programmatically. Configure thresholds via the `sla` block in `collaborationPolicy`.
+
+### Collaboration Metrics
+
+The `CollaborationMetricsCollector` tracks message volume, task-vs-DM ratios, and reply latency in 24-hour rolling windows. Metrics are persisted to `<officeDir>/collaboration-metrics.json`.
+
+An observability snapshot is available via `GET /api/collaboration/metrics` and includes:
+
+- `currentWindow` — message counts, reply latencies, simple-work candidates
+- `simpleWorkRatio` — fraction of DMs that could have been tasks
+- `avgReplyLatencyMs` — average reply latency in the current window
+- `pendingObligationCount` / `overdueObligationCount` — obligation status
+- `pendingReplyAges` — per-obligation age breakdown (`from`, `to`, `ageMs`)
+- `staleTaskCount` — tasks not updated within `staleTaskHours`
+- `stallIncidentCount` / `recentStallIncidents` — deadlock incident history
 
 ### `read_agent_file`
 
@@ -1061,7 +1169,7 @@ agent calls task_get:
 src/agent/tools/
   contracts.ts              Single source of truth (name, label, description, parameters)
   fetch-helpers.ts          Shared SSRF protection, URL validation, auth header builder
-  message-agent.ts           Host implementation (direct bus.send)
+  message-agent.ts           Host implementation (bus.send + policy check + obligation tracking)
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
@@ -1079,10 +1187,10 @@ src/agent/tools/
     authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
     memory-search.ts        memory_search — proxy implementation (HTTP)
     memory-get.ts           memory_get — proxy implementation (HTTP)
-    task-create.ts          task_create — proxy (HTTP, not yet wired)
-    task-update.ts          task_update — proxy (HTTP, not yet wired)
-    task-list.ts            task_list — proxy (HTTP, not yet wired)
-    task-get.ts             task_get — proxy (HTTP, not yet wired)
+    task-create.ts          task_create — proxy implementation (HTTP)
+    task-update.ts          task_update — proxy implementation (HTTP)
+    task-list.ts            task_list — proxy implementation (HTTP)
+    task-get.ts             task_get — proxy implementation (HTTP)
     index.ts                Barrel export + HostFetch type
 ```
 
@@ -1093,7 +1201,7 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 Every agent receives a **layered system prompt** composed from nine ordered layers:
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — always included, never overridden. Covers:
-   - Agent-to-agent collaboration (tools, messaging protocol, reply-loop avoidance, workflow rules, reporting)
+   - Agent-to-agent collaboration (tools, messaging protocol, reply-loop avoidance, workflow rules, reporting, collaboration policy enforce/warn/off modes)
    - Execution protocol (Plan → Act → Verify → Report)
    - Workspace discipline and persistence discipline
    - No invented details — do not fabricate external systems, links, IDs, or integrations; ask or state unknown
@@ -1222,6 +1330,9 @@ Each office gets an isolated directory, and each agent within it gets its own wo
         state.json          # cron job state
       tasks/
         tasks.json          # task store
+      obligations/
+        obligations.json    # reply obligation store
+      collaboration-metrics.json  # collaboration metrics
       logs/
         cron-audit.jsonl    # agent cron tool audit trail
         task-audit.jsonl    # task mutation audit trail
@@ -1353,6 +1464,8 @@ Inbox queues and DM conversation history are persisted to SQLite so they survive
 | DM history  | Same DB file                           | User and assistant messages saved with `requestId` for dedup correlation. `fire <agent>` purges history. |
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
+
+The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking. The message store schema (v7) includes an `obligations` table with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.
 
 #### DM Context Replay
 
@@ -1660,7 +1773,7 @@ See [`examples/feature-team/`](examples/feature-team/) for the full `office.yaml
 ```
 src/
   index.ts                    CLI entry + startup
-  workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox)
+  workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox, collaboration)
   types.ts                    Shared types (Priority, AgentConfig, OfficeYaml, OfficeContext, etc.)
   constants.ts                Shared constants, office path helpers, officeId validation
 
@@ -1698,7 +1811,7 @@ src/
       contracts.ts            Shared tool metadata (name, label, description, parameters)
       fetch-helpers.ts        Shared SSRF, URL validation, auth header builder
       index.ts                Barrel re-export for host-side tools
-      message-agent.ts         message_agent — host implementation (bus.send)
+      message-agent.ts         message_agent — host implementation (bus.send + policy check + obligation tracking)
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
@@ -1723,10 +1836,10 @@ src/
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
         memory-search.ts      memory_search — proxy implementation (HTTP)
         memory-get.ts         memory_get — proxy implementation (HTTP)
-        task-create.ts        task_create — proxy (HTTP, not yet wired)
-        task-update.ts        task_update — proxy (HTTP, not yet wired)
-        task-list.ts          task_list — proxy (HTTP, not yet wired)
-        task-get.ts           task_get — proxy (HTTP, not yet wired)
+        task-create.ts        task_create — proxy implementation (HTTP)
+        task-update.ts        task_update — proxy implementation (HTTP)
+        task-list.ts          task_list — proxy implementation (HTTP)
+        task-get.ts           task_get — proxy implementation (HTTP)
         cron-add.ts           cron_add — proxy implementation (HTTP)
         cron-remove.ts        cron_remove — proxy implementation (HTTP)
         cron-list.ts          cron_list — proxy implementation (HTTP)
@@ -1783,6 +1896,12 @@ src/
   metrics/
     usage-tracker.ts          Usage/cost JSONL tracker (record, read, summarize)
 
+  collaboration/
+    metrics.ts              Baseline metrics collector (message volume, reply latency, snapshots)
+    obligation-store.ts     Reply obligation persistence (JSON, atomic writes)
+    deadlock-detector.ts    Stall detection (idle agents, no progress, overdue obligations)
+    policy-service.ts       Collaboration policy enforcement (off/warn/enforce modes)
+
 test/
   office-yaml.test.ts        Office config: officeId validation, load, validate, merge, mutations, lock
   agents-yaml.test.ts        Legacy YAML config tests
@@ -1827,6 +1946,11 @@ test/
   usage-tracker.test.ts       Usage JSONL recording, reading, filtering
   cost-commands.test.ts       Cost status/today/report formatting
   cli-behavior.test.ts        CLI flag/option validation
+  collaboration-metrics.test.ts  Collaboration snapshot shape, obligation counts, ages
+  deadlock-detector.test.ts      Stall detection signals, cooldown, nudge, incidents
+  obligation-store.test.ts       Obligation CRUD, overdue detection, persistence
+  policy-service.test.ts         Policy modes (off/warn/enforce), override, heuristic
+  host-api-tasks.test.ts         Task proxy Host API endpoints (create/update/list/get)
 ```
 
 ## Dependencies
