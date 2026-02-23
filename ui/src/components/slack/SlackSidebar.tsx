@@ -24,6 +24,7 @@ import {
   IconPlus,
   IconHeartHandshake,
   IconBug,
+  IconClock,
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -228,7 +229,7 @@ export function SlackSidebar({
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
         <Box py={6}>
-          {/* Tasks — top-level item above channels */}
+          {/* Tasks & Cron — top-level items above channels */}
           <Box px="xs" mb={4}>
             <SidebarItem
               icon={<IconLayoutKanban size={15} color={slack.accentBlue} />}
@@ -238,6 +239,15 @@ export function SlackSidebar({
                 name: "tasks",
               })}
               onClick={() => onSelectChannel({ kind: "system", name: "tasks" })}
+            />
+            <SidebarItem
+              icon={<IconClock size={15} color={slack.accentBlue} />}
+              label="Cron"
+              active={isActive(activeChannel, {
+                kind: "system",
+                name: "cron",
+              })}
+              onClick={() => onSelectChannel({ kind: "system", name: "cron" })}
             />
           </Box>
 
@@ -276,16 +286,6 @@ export function SlackSidebar({
                 }
               />
             ))}
-            {/* Cron is always shown as a built-in channel */}
-            <SidebarItem
-              icon={<IconHash size={15} color={slack.channelHashColor} />}
-              label="cron"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "cron",
-              })}
-              onClick={() => onSelectChannel({ kind: "system", name: "cron" })}
-            />
           </SidebarSection>
 
           {/* Direct Messages */}
