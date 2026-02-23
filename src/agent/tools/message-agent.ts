@@ -31,12 +31,6 @@ export interface MessageAgentDeps {
     peerName: string,
     entry: SessionEntry,
   ) => void;
-  getActiveSessionKey?: () => string | undefined;
-  setReplySession?: (from: string, to: string, sessionKey: string) => void;
-  getAndClearReplySession?: (
-    recipient: string,
-    sender: string,
-  ) => string | undefined;
 }
 
 export function createMessageAgentTool(
@@ -121,20 +115,15 @@ export function createMessageAgentTool(
           ? Date.now() + slaMinutes * 60_000
           : undefined;
 
-        // 3. Reply-session routing: check if recipient has a pending reply
-        //    session for messages from this sender, otherwise default internal.
-        const replySession = deps.getAndClearReplySession?.(params.to, agentName);
-        const sk = replySession ?? sessionKey("internal", params.to);
-
-        // 4. Send with envelope
+        // 3. Send with envelope
         const outcome = msgBus.sendWithOutcome({
           from: agentName,
           to: params.to,
           type: "prompt",
           payload: params.message,
           priority: Priority.NORMAL,
-          sessionKey: sk,
-          sourceKind: replySession ? "dm" : "internal",
+          sessionKey: sessionKey("internal", params.to),
+          sourceKind: "internal",
           correlationId,
           requiresReply: params.requiresReply,
           replyByTs: replyByMs,
@@ -147,17 +136,7 @@ export function createMessageAgentTool(
           );
         }
 
-        // 5. Record reply session (only for direct 1:1, non-internal sessions)
-        const activeKey = deps.getActiveSessionKey?.();
-        if (
-          activeKey &&
-          !activeKey.startsWith("internal:") &&
-          params.to !== "__broadcast__"
-        ) {
-          deps.setReplySession?.(agentName, params.to, activeKey);
-        }
-
-        // 6. Dual write: sender's session file
+        // 4. Dual write: sender's session file
         try {
           deps.onSessionWrite?.(agentName, params.to, {
             ts: new Date().toISOString(),
@@ -169,7 +148,7 @@ export function createMessageAgentTool(
           // best-effort
         }
 
-        // 7. Register obligation if requiresReply
+        // 5. Register obligation if requiresReply
         if (
           params.requiresReply &&
           replyByMs !== undefined &&

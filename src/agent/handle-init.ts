@@ -173,7 +173,6 @@ export async function initInProcessAgent(
   _sessionDeps?: unknown,
   obligationStore?: ObligationStore,
   policyService?: PolicyService,
-  handle?: { getActiveSessionKey(): string | undefined },
 ): Promise<InProcessInitResult> {
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
 
@@ -238,10 +237,6 @@ export async function initInProcessAgent(
         const filename = `agent-${peer}.jsonl`;
         appendSession(ctx.baseDir, agent, filename, entry);
       },
-      getActiveSessionKey: () => handle?.getActiveSessionKey(),
-      setReplySession: (from, to, sk) => bus.setReplySession(from, to, sk),
-      getAndClearReplySession: (recipient, sender) =>
-        bus.getAndClearReplySession(recipient, sender),
     }),
     createListAgentsTool(ctx.name, listAgentsFn, ctx.baseDir),
     createReadAgentFileTool(ctx.baseDir),

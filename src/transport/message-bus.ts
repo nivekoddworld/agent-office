@@ -25,8 +25,6 @@ export class MessageBus {
   >();
   private store: MessageStore | null = null;
   private metrics: CollaborationMetricsCollector | null = null;
-  /** key: "${originalSender}:${recipient}" → session key to route reply into */
-  private replySessionMap = new Map<string, string>();
 
   setStore(store: MessageStore): void {
     this.store = store;
@@ -186,21 +184,5 @@ export class MessageBus {
       this.store.deleteAllInbox(name);
       this.store.deleteDm(name);
     }
-  }
-
-  /** Record the session a reply should be routed to. */
-  setReplySession(from: string, to: string, sessionKey: string): void {
-    this.replySessionMap.set(`${from}:${to}`, sessionKey);
-  }
-
-  /** Consume (one-shot) the reply session for a given sender→recipient pair. */
-  getAndClearReplySession(
-    recipient: string,
-    sender: string,
-  ): string | undefined {
-    const key = `${recipient}:${sender}`;
-    const session = this.replySessionMap.get(key);
-    if (session) this.replySessionMap.delete(key);
-    return session;
   }
 }
