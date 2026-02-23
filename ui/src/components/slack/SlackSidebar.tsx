@@ -23,6 +23,7 @@ import {
   IconLayoutKanban,
   IconPlus,
   IconHeartHandshake,
+  IconBug,
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -354,6 +355,15 @@ export function SlackSidebar({
 
           {/* Tools */}
           <SidebarSection label="Tools">
+            <SidebarItem
+              icon={<IconBug size={15} color={slack.sidebarText} />}
+              label="Debug Logs"
+              active={isActive(activeChannel, {
+                kind: "system",
+                name: "debug",
+              })}
+              onClick={() => onSelectChannel({ kind: "system", name: "debug" })}
+            />
             <SidebarItem
               icon={<IconCoin size={15} color={slack.sidebarText} />}
               label="Cost Dashboard"

@@ -6,6 +6,7 @@ import { unreadStore, useUnreadCounts } from "../../store/unread-store.js";
 import { SlackSidebar, type ChannelId } from "../slack/SlackSidebar.js";
 import { ChannelView } from "../slack/ChannelView.js";
 import { CronChannelView } from "../slack/CronChannelView.js";
+import { OfficeDebugPanel } from "../slack/OfficeDebugPanel.js";
 import { KanbanBoard } from "../kanban/KanbanBoard.js";
 import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
 import { OrgChartModal } from "../slack/OrgChartModal.js";
@@ -132,7 +133,9 @@ export function AppLayout({ state }: AppLayoutProps) {
       </Box>
 
       <Box style={{ flex: 1, minWidth: 0 }}>
-        {channel.kind === "system" && channel.name === "cron" ? (
+        {channel.kind === "system" && channel.name === "debug" ? (
+          <OfficeDebugPanel agentNames={agentNames} />
+        ) : channel.kind === "system" && channel.name === "cron" ? (
           <CronChannelView cronJobs={state.cronJobs} agentNames={agentNames} />
         ) : channel.kind === "system" && channel.name === "tasks" ? (
           <KanbanBoard tasks={state.tasks ?? []} agentNames={agentNames} />

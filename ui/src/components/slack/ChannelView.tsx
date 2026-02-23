@@ -207,7 +207,10 @@ export function ChannelView({
   const targetAgent = channel.kind === "dm" ? channel.agentName : null;
 
   const handleMessageSent = useCallback(
-    (_agentName: string, _text: string, _requestId: string) => {
+    (agentName: string, text: string, requestId: string) => {
+      void agentName;
+      void text;
+      void requestId;
       if (channel.kind === "dm") {
         void queryClient.invalidateQueries({
           queryKey: ["agent-messages", channel.agentName],

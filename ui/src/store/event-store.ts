@@ -9,7 +9,7 @@ interface FeedEvent {
 
 const MAX_EVENTS = 2000;
 
-/** Client-side event ring store for the live feed. */
+/** Client-side event ring store for the chat feed. Only receives chat-relevant SSE events. */
 function createEventStore() {
   let events: FeedEvent[] = [];
   let nextId = 1;

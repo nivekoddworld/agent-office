@@ -6,6 +6,8 @@ import { useSSE } from "./api/use-events.js";
 import { pushEvent } from "./store/event-store.js";
 import { agentActivityStore } from "./store/agent-activity-store.js";
 import { unreadStore } from "./store/unread-store.js";
+import { debugCaptureStore } from "./store/debug-capture-store.js";
+import { isChatRelevantSSE } from "./components/slack/debug-helpers.js";
 import { AppLayout } from "./components/layout/AppLayout.js";
 import {
   extractText,
@@ -25,7 +27,10 @@ export function App() {
   const authed = auth === "authenticated";
 
   const handleSSE = useCallback((type: string, data: unknown) => {
-    pushEvent(type, data);
+    debugCaptureStore.ingestEvent(type, data);
+    if (isChatRelevantSSE(type)) {
+      pushEvent(type, data);
+    }
 
     const d = data as Record<string, unknown>;
     const eventType = (d.type as string) ?? type;
