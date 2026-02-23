@@ -80,6 +80,7 @@ export class AgentHandle {
   private listeners: Array<(e: AgentEvent) => void> = [];
   private _activeRequestId: string | undefined;
   private _activeSessionKey: string | undefined;
+  private _activeConversationPeer: string | undefined;
   private baseDir: string;
   private officeId: string;
   private officeName: string;
@@ -156,6 +157,14 @@ export class AgentHandle {
 
   getActiveSessionKey(): string | undefined {
     return this._activeSessionKey;
+  }
+
+  setActiveConversationPeer(peer: string | undefined): void {
+    this._activeConversationPeer = peer;
+  }
+
+  getActiveConversationPeer(): string | undefined {
+    return this._activeConversationPeer;
   }
 
   private get agentDir(): string {
@@ -403,6 +412,7 @@ export class AgentHandle {
       this.agent = null;
     }
     this._activeRequestId = undefined;
+    this._activeConversationPeer = undefined;
     this.listeners = [];
   }
 }

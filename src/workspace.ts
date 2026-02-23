@@ -166,7 +166,12 @@ export class Workspace {
       // Channel user turns are persisted once at send time; skip fanout duplicates
       if (msg.sourceKind === "channel") return;
       try {
-        const filename = sessionFilename(msg.sessionKey);
+        // For inter-agent messages, file under the sender's name so
+        // agent-X.jsonl means "my conversation WITH agent X"
+        const filename =
+          msg.sourceKind === "internal"
+            ? `agent-${msg.from}.jsonl`
+            : sessionFilename(msg.sessionKey);
         appendSession(this.office.dir, msg.to, filename, {
           ts: new Date(msg.timestamp).toISOString(),
           role: "user",
@@ -472,6 +477,18 @@ export class Workspace {
                       appendSession(this.office.dir, member, filename, entry);
                     }
                   }
+                } else if (sk.startsWith("internal:")) {
+                  // Use conversation peer so the file is agent-${peer}.jsonl
+                  const peer = handle.getActiveConversationPeer();
+                  const peerFilename = peer
+                    ? `agent-${peer}.jsonl`
+                    : filename;
+                  appendSession(
+                    this.office.dir,
+                    config.name,
+                    peerFilename,
+                    entry,
+                  );
                 } else {
                   appendSession(this.office.dir, config.name, filename, entry);
                 }

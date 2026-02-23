@@ -80,6 +80,9 @@ export class Scheduler {
       handle.setStatus("running");
       handle.setActiveRequestId(msg.requestId);
       handle.setActiveSessionKey(msg.sessionKey);
+      handle.setActiveConversationPeer(
+        msg.sourceKind === "internal" ? msg.from : undefined,
+      );
 
       const payload = formatMessagePayload(msg);
       const dispatch =
@@ -97,6 +100,7 @@ export class Scheduler {
         .finally(() => {
           handle.setActiveRequestId(undefined);
           handle.setActiveSessionKey(undefined);
+          handle.setActiveConversationPeer(undefined);
         });
     }
 
