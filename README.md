@@ -1461,7 +1461,7 @@ release();
 
 ### Message Persistence
 
-Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). Conversation history is stored separately as JSONL files (see [Session History](#session-history)).
+Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). DM conversations are **dual-written** to both SQLite (`dm_messages` table) and JSONL session files — SQLite is the primary source for UI display and agent context hydration, while JSONL enables agent self-service lookup via `read_file`/`grep`. Inter-agent and channel messages are JSONL-only (see [Session History](#session-history)).
 
 | What         | DB location                            | Behavior                                                                                                 |
 | ------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -1501,7 +1501,9 @@ Conversation history is stored as JSONL files in each agent's `sessions/` direct
 
 Each line is a JSON object: `{"ts":"ISO8601","role":"user|assistant","from":"sender","text":"content"}`.
 
-**Dual write:** Inter-agent messages are written to both the sender's and receiver's session directories, so each agent has a complete local copy of the conversation.
+**Dual write (inter-agent):** Inter-agent messages are written to both the sender's and receiver's session directories, so each agent has a complete local copy of the conversation.
+
+**Dual write (DMs):** User-agent DM conversations are written to both SQLite (`dm_messages` table) and JSONL (`user-dm.jsonl`). SQLite serves as the primary source for UI DM display (`GET /api/agents/:name/messages`) and agent context hydration on startup. JSONL enables agents to search and read their DM history via `read_file`/`grep`.
 
 **Rotation:** Session files are rotated at 500 lines, keeping the last 400 lines to prevent unbounded growth.
 
