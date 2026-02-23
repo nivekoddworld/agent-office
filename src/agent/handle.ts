@@ -27,6 +27,8 @@ import {
 } from "./skills/on-demand.js";
 import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
+import type { ObligationStore } from "../collaboration/obligation-store.js";
+import type { PolicyService } from "../collaboration/policy-service.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import {
@@ -58,6 +60,8 @@ export interface AgentHandleDeps {
   taskService?: TaskService;
   messageStore?: MessageStore;
   channels?: Map<string, ChannelConfig>;
+  obligationStore?: ObligationStore;
+  policyService?: PolicyService;
 }
 
 export class AgentHandle {
@@ -85,6 +89,8 @@ export class AgentHandle {
   private taskService?: TaskService;
   private _messageStore?: MessageStore;
   private _channels?: Map<string, ChannelConfig>;
+  private _obligationStore?: ObligationStore;
+  private _policyService?: PolicyService;
   private _bootstrapDir: string;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
@@ -103,6 +109,8 @@ export class AgentHandle {
     this.taskService = deps.taskService;
     this._messageStore = deps.messageStore;
     this._channels = deps.channels;
+    this._obligationStore = deps.obligationStore;
+    this._policyService = deps.policyService;
     this._bootstrapDir =
       config.bootstrapDir ??
       join(deps.baseDir, "agents", config.name, "bootstrap");
@@ -230,6 +238,8 @@ export class AgentHandle {
       this._messageStore && this._channels
         ? { store: this._messageStore, channels: this._channels }
         : undefined,
+      this._obligationStore,
+      this._policyService,
     );
     this.agent = result.agent;
     this._toolCount = result.toolCount;

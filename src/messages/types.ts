@@ -11,6 +11,11 @@ export interface PersistedInbox {
   session_key?: string | null;
   source_kind?: string | null;
   channel?: string | null;
+  // New envelope fields (snake_case for SQLite columns)
+  correlation_id?: string | null;
+  requires_reply?: number; // SQLite INTEGER (0/1)
+  reply_by_ts?: number | null;
+  origin_task_id?: string | null;
 }
 
 export interface DmRecord {

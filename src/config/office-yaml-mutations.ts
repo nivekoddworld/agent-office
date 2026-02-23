@@ -10,6 +10,7 @@ import {
   ENV_REF_RE,
   RESERVED_KEYS,
 } from "./yaml-utils.js";
+import type { CollaborationMode, CollaborationSla } from "../types.js";
 
 function requireOfficeDoc(officeId: string): {
   path: string;
@@ -389,6 +390,32 @@ export async function clearAgentPermissionTools(
     ) {
       doc.deleteIn(["agents", agentName, "permissions", "tools"]);
       cleanupEmptyMap(doc, ["agents", agentName, "permissions"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Collaboration policy mutations ---
+
+export async function setCollaborationMode(
+  officeDir: string,
+  mode: CollaborationMode,
+): Promise<void> {
+  return withOfficeLock(officeDir, async () => {
+    const { path, doc } = requireOfficeDoc(officeDir);
+    doc.setIn(["office", "collaborationPolicy", "mode"], mode);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function setCollaborationSla(
+  officeDir: string,
+  sla: Partial<CollaborationSla>,
+): Promise<void> {
+  return withOfficeLock(officeDir, async () => {
+    const { path, doc } = requireOfficeDoc(officeDir);
+    for (const [key, value] of Object.entries(sla)) {
+      doc.setIn(["office", "collaborationPolicy", "sla", key], value);
     }
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });

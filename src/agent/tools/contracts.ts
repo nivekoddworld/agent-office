@@ -12,6 +12,30 @@ export const MESSAGE_AGENT = {
       description: "Target agent name (or '__broadcast__' for all)",
     }),
     message: Type.String({ description: "Message content" }),
+    requiresReply: Type.Optional(
+      Type.Boolean({
+        description: "Request a reply within SLA (default: false)",
+      }),
+    ),
+    replyByMinutes: Type.Optional(
+      Type.Integer({
+        description:
+          "Custom reply SLA in minutes (overrides office default)",
+        minimum: 1,
+      }),
+    ),
+    originTaskId: Type.Optional(
+      Type.String({
+        description: "Related task ID for correlation tracking",
+      }),
+    ),
+    overrideReason: Type.Optional(
+      Type.Unsafe<string>({
+        type: "string",
+        enum: ["urgent", "critical", "emergency"],
+        description: "Policy override reason (enforce mode only, use sparingly)",
+      }),
+    ),
   }),
 };
 

@@ -29,7 +29,15 @@ import {
   skillSearchImpl,
   type SkillToolDeps,
 } from "../agent/tools/skill-impl.js";
+import {
+  taskCreateImpl,
+  taskUpdateImpl,
+  taskListImpl,
+  taskGetImpl,
+  type TaskToolDeps,
+} from "../agent/tools/task-impl.js";
 import type { CronService } from "../cron/cron-service.js";
+import type { TaskService } from "../tasks/task-service.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { readBody } from "./host-api-handlers.js";
 
@@ -407,6 +415,11 @@ export interface SessionHandlerDeps {
   channels: Map<string, ChannelConfig>;
 }
 
+export interface TaskHandlerDeps {
+  agentName: string;
+  taskService: TaskService;
+}
+
 export async function handleSessionSearch(
   req: IncomingMessage,
   res: ServerResponse,
@@ -517,4 +530,83 @@ export async function handleSessionReadRange(
           .join("\n---\n");
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result: formatted }));
+}
+
+async function parseTaskBody(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: TaskHandlerDeps | null,
+): Promise<{ params: unknown; deps: TaskHandlerDeps } | null> {
+  const body = await readBody(req);
+  if (!body) {
+    res.writeHead(413);
+    res.end();
+    return null;
+  }
+  if (!deps) {
+    res.writeHead(503, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Task service not available" }));
+    return null;
+  }
+  let params: unknown;
+  try {
+    params = JSON.parse(body);
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Invalid JSON" }));
+    return null;
+  }
+  return { params, deps };
+}
+
+function makeTaskDeps(deps: TaskHandlerDeps): TaskToolDeps {
+  return { agentName: deps.agentName, taskService: deps.taskService };
+}
+
+export async function handleTaskCreate(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: TaskHandlerDeps | null,
+): Promise<void> {
+  const parsed = await parseTaskBody(req, res, deps);
+  if (!parsed) return;
+  const result = taskCreateImpl(makeTaskDeps(parsed.deps), parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
+export async function handleTaskUpdate(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: TaskHandlerDeps | null,
+): Promise<void> {
+  const parsed = await parseTaskBody(req, res, deps);
+  if (!parsed) return;
+  const result = taskUpdateImpl(makeTaskDeps(parsed.deps), parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
+export async function handleTaskList(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: TaskHandlerDeps | null,
+): Promise<void> {
+  const parsed = await parseTaskBody(req, res, deps);
+  if (!parsed) return;
+  const result = taskListImpl(makeTaskDeps(parsed.deps), parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
+export async function handleTaskGet(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: TaskHandlerDeps | null,
+): Promise<void> {
+  const parsed = await parseTaskBody(req, res, deps);
+  if (!parsed) return;
+  const result = taskGetImpl(makeTaskDeps(parsed.deps), parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
 }

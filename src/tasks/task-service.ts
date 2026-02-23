@@ -316,7 +316,8 @@ export class TaskService {
       `Use task_get("${task.id}") for full details.`;
 
     try {
-      this.bus.send({
+      const correlationId = randomUUID();
+      this.bus.sendWithOutcome({
         from: "__task__",
         to: task.createdBy,
         type: "prompt",
@@ -324,6 +325,8 @@ export class TaskService {
         priority: task.priority,
         sessionKey: sessionKey("internal", task.createdBy),
         sourceKind: "internal",
+        correlationId,
+        originTaskId: task.id,
       });
     } catch {
       // Best-effort: creator agent might not be registered
@@ -344,7 +347,8 @@ export class TaskService {
       `Use task_get("${task.id}") for full details.`;
 
     try {
-      this.bus.send({
+      const correlationId = randomUUID();
+      this.bus.sendWithOutcome({
         from: "__task__",
         to: task.assignee,
         type: "prompt",
@@ -352,6 +356,8 @@ export class TaskService {
         priority: task.priority,
         sessionKey: sessionKey("internal", task.assignee),
         sourceKind: "internal",
+        correlationId,
+        originTaskId: task.id,
       });
     } catch {
       // Best-effort: agent might not be registered yet

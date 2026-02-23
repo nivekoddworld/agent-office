@@ -242,6 +242,83 @@ export function createMessageStore(dbPath: string): MessageStore {
     db.exec(`UPDATE schema_meta SET value = '5' WHERE key = 'version'`);
   }
 
+  // v5 → v6 migration: add envelope fields for collaboration tracking
+  const v6Check = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+  if (v6Check && parseInt(v6Check.value) < 6) {
+    try {
+      db.exec(`ALTER TABLE inbox_messages ADD COLUMN correlation_id TEXT`);
+    } catch {
+      /* already exists */
+    }
+    try {
+      db.exec(
+        `ALTER TABLE inbox_messages ADD COLUMN requires_reply INTEGER DEFAULT 0`,
+      );
+    } catch {
+      /* already exists */
+    }
+    try {
+      db.exec(`ALTER TABLE inbox_messages ADD COLUMN reply_by_ts INTEGER`);
+    } catch {
+      /* already exists */
+    }
+    try {
+      db.exec(`ALTER TABLE inbox_messages ADD COLUMN origin_task_id TEXT`);
+    } catch {
+      /* already exists */
+    }
+
+    // Performance indexes for new fields
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_inbox_correlation_id ON inbox_messages(correlation_id)`,
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_inbox_reply_by_ts ON inbox_messages(reply_by_ts)`,
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_inbox_to_requires_reply ON inbox_messages(to_agent, requires_reply)`,
+    );
+
+    db.exec(`UPDATE schema_meta SET value = '6' WHERE key = 'version'`);
+  }
+
+  // v6 → v7 migration: obligation tracking table
+  const v7Check = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+  if (v7Check && parseInt(v7Check.value) < 7) {
+    db.exec(`BEGIN TRANSACTION`);
+    try {
+      db.exec(`CREATE TABLE IF NOT EXISTS obligations (
+        id TEXT PRIMARY KEY,
+        correlation_id TEXT NOT NULL,
+        from_agent TEXT NOT NULL,
+        to_agent TEXT NOT NULL,
+        reply_by_ts INTEGER NOT NULL,
+        created_at_ms INTEGER NOT NULL,
+        origin_task_id TEXT,
+        fulfilled INTEGER DEFAULT 0,
+        fulfilled_at_ms INTEGER
+      )`);
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_obligations_correlation ON obligations(correlation_id)`,
+      );
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_obligations_reply_by_ts ON obligations(reply_by_ts)`,
+      );
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_obligations_fulfilled ON obligations(fulfilled)`,
+      );
+      db.exec(`UPDATE schema_meta SET value = '7' WHERE key = 'version'`);
+      db.exec(`COMMIT`);
+    } catch (err) {
+      db.exec(`ROLLBACK`);
+      throw err;
+    }
+  }
+
   // Ensure session tables exist on fresh v3 DBs
   db.exec(`CREATE TABLE IF NOT EXISTS session_messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -304,8 +381,8 @@ export function createMessageStore(dbPath: string): MessageStore {
   }
 
   const insertInbox = db.prepare(
-    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms, session_key, source_kind, channel)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms, session_key, source_kind, channel, correlation_id, requires_reply, reply_by_ts, origin_task_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const selectInbox = db.prepare(
     `SELECT * FROM inbox_messages WHERE to_agent = ? ORDER BY priority DESC, seq ASC`,
@@ -365,6 +442,10 @@ export function createMessageStore(dbPath: string): MessageStore {
         msg.session_key ?? null,
         msg.source_kind ?? null,
         msg.channel ?? null,
+        msg.correlation_id ?? null,
+        msg.requires_reply ?? 0,
+        msg.reply_by_ts ?? null,
+        msg.origin_task_id ?? null,
       );
     },
     loadInbox(agent) {

@@ -45,6 +45,8 @@ import type { CronService } from "../cron/cron-service.js";
 import type { CronToolDeps } from "./tools/cron-impl.js";
 import type { TaskService } from "../tasks/task-service.js";
 import type { TaskToolDeps } from "./tools/task-impl.js";
+import type { ObligationStore } from "../collaboration/obligation-store.js";
+import type { PolicyService } from "../collaboration/policy-service.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { getCronSummaries } from "../config/office-yaml.js";
@@ -169,6 +171,8 @@ export async function initInProcessAgent(
   cronService: CronService | undefined,
   taskService: TaskService | undefined,
   sessionDeps?: { store: MessageStore; channels: Map<string, ChannelConfig> },
+  obligationStore?: ObligationStore,
+  policyService?: PolicyService,
 ): Promise<InProcessInitResult> {
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
 
@@ -224,7 +228,7 @@ export async function initInProcessAgent(
   let inProcSkillsPrompt: string | undefined;
   const allTools: AgentTool<any>[] = [
     ...createCodingTools(ctx.cwd),
-    createMessageAgentTool(ctx.name, bus),
+    createMessageAgentTool({ agentName: ctx.name, bus, obligationStore, policyService }),
     createListAgentsTool(ctx.name, listAgentsFn, ctx.baseDir),
     createReadAgentFileTool(ctx.baseDir),
     ...(Object.keys(resolvedSecrets).length > 0

@@ -76,23 +76,27 @@ describe("createReadAgentFileTool", () => {
 
 describe("createMessageAgentTool", () => {
   it("sends via bus and returns confirmation", async () => {
-    const bus = { send: vi.fn() } as any;
-    const tool = createMessageAgentTool("sender", bus);
+    const bus = {
+      sendWithOutcome: vi.fn().mockReturnValue({ queued: true }),
+    } as any;
+    const tool = createMessageAgentTool({ agentName: "sender", bus });
 
     const result = await tool.execute("id-1", {
       to: "designer",
       message: "hello",
     });
 
-    expect(bus.send).toHaveBeenCalledWith({
-      from: "sender",
-      to: "designer",
-      type: "prompt",
-      payload: "hello",
-      priority: Priority.NORMAL,
-      sessionKey: "internal:designer",
-      sourceKind: "internal",
-    });
+    expect(bus.sendWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: "sender",
+        to: "designer",
+        type: "prompt",
+        payload: "hello",
+        priority: Priority.NORMAL,
+        sessionKey: "internal:designer",
+        sourceKind: "internal",
+      }),
+    );
     expect(getText(result)).toContain("designer");
   });
 });

@@ -8,6 +8,7 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentInfo, AgentPermissions, ChannelConfig } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { CronService } from "../cron/cron-service.js";
+import type { TaskService } from "../tasks/task-service.js";
 import { isToolDenied } from "../agent/tools/policy.js";
 import { createRedactor } from "../security/redact.js";
 import type { CitationMode } from "../types.js";
@@ -34,8 +35,13 @@ import {
   handleSkillCreate,
   handleSessionSearch,
   handleSessionReadRange,
+  handleTaskCreate,
+  handleTaskUpdate,
+  handleTaskList,
+  handleTaskGet,
   type CronHandlerDeps,
   type SessionHandlerDeps,
+  type TaskHandlerDeps,
 } from "./host-api-ext-handlers.js";
 
 const PROMPT_TIMEOUT_MS = 5 * 60_000; // 5 min
@@ -72,6 +78,7 @@ export class HostApi {
     store: MessageStore;
     channels: Map<string, ChannelConfig>;
   } | null = null;
+  private taskDeps: { taskService: TaskService } | null = null;
   private bus: MessageBus;
   private listFn: () => AgentInfo[];
   private baseDir: string;
@@ -95,6 +102,10 @@ export class HostApi {
     channels: Map<string, ChannelConfig>;
   }): void {
     this.sessionDeps = deps;
+  }
+
+  setTaskDeps(deps: { taskService: TaskService }): void {
+    this.taskDeps = deps;
   }
 
   registerAgent(
@@ -322,6 +333,18 @@ export class HostApi {
             res,
             this.buildSessionDeps(agentName),
           );
+      } else if (req.method === "POST" && path === "/api/task-create") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleTaskCreate(req, res, this.buildTaskDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/task-update") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleTaskUpdate(req, res, this.buildTaskDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/task-list") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleTaskList(req, res, this.buildTaskDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/task-get") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleTaskGet(req, res, this.buildTaskDeps(agentName));
       } else if (req.method === "POST" && path === "/api/tool-count") {
         await handleToolCount(req, res, agentName, this.agentToolCounts);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
@@ -350,6 +373,10 @@ export class HostApi {
     "/api/skill-create": "skill_create",
     "/api/session-search": "session_search",
     "/api/session-read-range": "session_read_range",
+    "/api/task-create": "task_create",
+    "/api/task-update": "task_update",
+    "/api/task-list": "task_list",
+    "/api/task-get": "task_get",
   };
 
   private checkToolPolicy(
@@ -398,6 +425,11 @@ export class HostApi {
       store: this.sessionDeps.store,
       channels: this.sessionDeps.channels,
     };
+  }
+
+  private buildTaskDeps(agentName: string): TaskHandlerDeps | null {
+    if (!this.taskDeps) return null;
+    return { agentName, taskService: this.taskDeps.taskService };
   }
 
   private sweepDedup(): void {

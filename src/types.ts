@@ -78,6 +78,11 @@ export interface InboxMessage {
   sessionKey?: string;
   sourceKind?: SourceKind;
   channel?: string;
+  // New envelope fields (camelCase)
+  correlationId?: string;
+  requiresReply?: boolean;
+  replyByTs?: number;
+  originTaskId?: string;
 }
 
 // --- Scheduler ---
@@ -118,6 +123,7 @@ export interface OfficeYaml {
     cron?: Record<string, OfficeCronYamlEntry>;
     memory?: { citations?: "on" | "off" | "auto" };
     channels?: Record<string, { members: string[]; description?: string }>;
+    collaborationPolicy?: CollaborationPolicy;
   };
   agents: Record<string, import("./config/yaml-utils.js").AgentYamlEntry>;
 }
@@ -133,7 +139,40 @@ export interface OfficeContext {
   dir: string;
   citationMode: CitationMode;
   channels: Map<string, ChannelConfig>;
+  policy?: CollaborationPolicy;
 }
+
+// --- Collaboration Policy ---
+
+export type CollaborationMode = "off" | "warn" | "enforce";
+
+export interface CollaborationSla {
+  replyByMinutes: number;
+  remindAtMinutes: number;
+  escalateAtMinutes: number;
+  staleTaskHours: number;
+  deadlockThresholdMinutes: number;
+  stallCooldownMinutes: number;
+}
+
+export interface CollaborationPolicy {
+  mode: CollaborationMode;
+  sla: CollaborationSla;
+}
+
+export const DEFAULT_COLLABORATION_SLA: CollaborationSla = {
+  replyByMinutes: 5,
+  remindAtMinutes: 3,
+  escalateAtMinutes: 5,
+  staleTaskHours: 24,
+  deadlockThresholdMinutes: 10,
+  stallCooldownMinutes: 5,
+};
+
+export const DEFAULT_COLLABORATION_POLICY: CollaborationPolicy = {
+  mode: "off",
+  sla: DEFAULT_COLLABORATION_SLA,
+};
 
 // --- Workspace ---
 

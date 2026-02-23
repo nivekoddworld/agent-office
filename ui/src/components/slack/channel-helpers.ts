@@ -65,7 +65,15 @@ export function eventToMessages(
       if (!isDmSessionForAgent(d.sessionKey, channel.agentName)) continue;
     }
     if (channel.kind === "conversation") {
-      if (!isChannelSession(d.sessionKey, channel.name)) continue;
+      // For system events in default channel, allow them through without session key
+      const isSystemEvent =
+        type === "agent_end" ||
+        type === "tool_execution_start" ||
+        type === "tool_execution_end" ||
+        type === "turn_start" ||
+        type === "turn_end";
+      if (!isSystemEvent && !isChannelSession(d.sessionKey, channel.name))
+        continue;
     }
 
     if (type === "message_end") {

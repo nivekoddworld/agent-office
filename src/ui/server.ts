@@ -22,6 +22,7 @@ import {
   getAgentFileContent,
   getAgentFiles,
   getBootstrapState,
+  getCollaborationMetrics,
   getCostSummary,
   getHierarchy,
   getManifest,
@@ -1060,6 +1061,11 @@ export async function startUiServer(
       const days = parseInt(url.searchParams.get("days") ?? "7", 10);
       const agent = url.searchParams.get("agent") ?? undefined;
       return json(res, 200, getCostSummary(officeId, days, agent));
+    }
+
+    // --- GET /api/collaboration/metrics ---
+    if (path === "/api/collaboration/metrics" && method === "GET") {
+      return json(res, 200, getCollaborationMetrics(workspace));
     }
 
     // --- GET /api/manifest ---

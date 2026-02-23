@@ -31,6 +31,21 @@ import {
   type MessageStore,
 } from "./messages/message-store.js";
 import type { DmRecord } from "./messages/types.js";
+import {
+  createBaselineMetrics,
+  type CollaborationMetricsCollector,
+} from "./collaboration/metrics.js";
+import {
+  ObligationStore,
+  createObligationStore,
+} from "./collaboration/obligation-store.js";
+import {
+  DeadlockDetector,
+  createDeadlockDetector,
+  type StallIncident,
+} from "./collaboration/deadlock-detector.js";
+import { createPolicyService } from "./collaboration/policy-service.js";
+import type { CollaborationSnapshot } from "./collaboration/metrics.js";
 
 const DEFAULT_HOST_PORT = 13000;
 
@@ -45,6 +60,9 @@ export class Workspace {
   readonly cron: CronService;
   readonly tasks: TaskService;
   readonly office: OfficeContext;
+  readonly baselineMetrics: CollaborationMetricsCollector;
+  readonly obligationStore: ObligationStore;
+  private deadlockDetector: DeadlockDetector;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
   private hostApi: HostApi | null = null;
   private sandboxProvider: SandboxProvider | null = null;
@@ -54,6 +72,7 @@ export class Workspace {
 
   constructor(config: WorkspaceConfig) {
     this.office = config.office;
+    this.baselineMetrics = createBaselineMetrics(this.office.dir);
     this.sandboxMode = config.sandbox?.mode ?? "none";
     this.hostApiPort = config.sandbox?.hostPort ?? DEFAULT_HOST_PORT;
     this.scheduler = new Scheduler(
@@ -78,6 +97,48 @@ export class Workspace {
       (name) => this.agents.has(name),
     );
 
+    this.obligationStore = createObligationStore(
+      join(this.office.dir, "obligations"),
+    );
+
+    this.deadlockDetector = createDeadlockDetector(
+      {
+        deadlockThresholdMinutes:
+          this.office.policy?.sla.deadlockThresholdMinutes ?? 10,
+        stallCooldownMinutes:
+          this.office.policy?.sla.stallCooldownMinutes ?? 5,
+      },
+      () =>
+        [...this.agents.values()].map((a) => ({
+          name: a.name,
+          status: a.info().status,
+          queueDepth: a.info().queueDepth,
+        })),
+      () => this.obligationStore.getOverdue(),
+      (event) => {
+        const payload = { type: "workflow_stalled", stall: event } as any;
+        for (const fn of this.listeners) {
+          fn("__workspace__", payload);
+        }
+      },
+      (agentName, message) => this.handleNudge(agentName, message),
+    );
+
+    const staleThresholdMs =
+      (this.office.policy?.sla.staleTaskHours ?? 24) * 3_600_000;
+    this.baselineMetrics.setObservabilityDeps({
+      getOverdueObligations: () => this.obligationStore.getOverdue(),
+      getPendingObligations: () => this.obligationStore.getPending(),
+      getStaleTasks: () =>
+        this.tasks.list().filter(
+          (t) =>
+            t.status !== "done" &&
+            t.status !== "cancelled" &&
+            Date.now() - t.updatedAt > staleThresholdMs,
+        ),
+      getStallIncidents: () => this.deadlockDetector.getIncidents(),
+    });
+
     if (this.sandboxMode === "docker") {
       this.hostApi = new HostApi(this.bus, () => this.list(), this.office.dir);
       this.hostApi.setCronDeps({
@@ -85,6 +146,7 @@ export class Workspace {
         officeDir: this.office.dir,
         cron: this.cron,
       });
+      this.hostApi.setTaskDeps({ taskService: this.tasks });
       this.sandboxProvider = new DockerProvider(this.hostApi, this.hostApiPort);
     }
   }
@@ -97,6 +159,7 @@ export class Workspace {
     const dbPath = join(this.office.dir, "messages", "messages.sqlite");
     this.messageStore = createMessageStore(dbPath);
     this.bus.setStore(this.messageStore);
+    this.bus.setMetrics(this.baselineMetrics);
     this.bus.setAfterEnqueueHook((msg) => {
       if (!msg.sessionKey || !this.messageStore) return;
       // Channel user turns are persisted once at send time; skip fanout duplicates
@@ -129,9 +192,11 @@ export class Workspace {
     this.watchdog.start();
     this.cron.start();
     this.tasks.start();
+    this.deadlockDetector.start();
   }
 
   async stop(): Promise<void> {
+    this.deadlockDetector.stop();
     this.tasks.stop();
     this.cron.stop();
     this.scheduler.stop();
@@ -194,6 +259,13 @@ export class Workspace {
       hostApi = this.hostApi;
     }
 
+    const policyService = createPolicyService(
+      this.office.policy,
+      config.name,
+      (from, to, reason) =>
+        console.warn(`[policy:override] ${from} → ${to}: reason=${reason}`),
+    );
+
     const handle = new AgentHandle(config, {
       bus: this.bus,
       listAgentsFn: () => this.list(),
@@ -209,6 +281,8 @@ export class Workspace {
       taskService: this.tasks,
       messageStore: this.messageStore ?? undefined,
       channels: this.office.channels,
+      obligationStore: this.obligationStore,
+      policyService,
     });
     try {
       await handle.init();
@@ -242,12 +316,78 @@ export class Workspace {
         ...(sourceKind ? { sourceKind } : {}),
       } as unknown as AgentEvent;
 
-      if (
-        event.type === "tool_execution_start" ||
-        event.type === "message_end" ||
-        event.type === "agent_end"
-      ) {
-        console.log(`[event] ${config.name}: ${event.type}`);
+      if (event.type === "message_start") {
+        this.deadlockDetector.recordActivity();
+      }
+
+      if (event.type === "message_start") {
+        const e = event as unknown as Record<string, unknown>;
+        console.log(
+          `[event] ${config.name}: message_start` +
+            (requestId ? ` requestId=${requestId}` : "") +
+            (sk ? ` session=${sk}` : ""),
+        );
+      } else if (event.type === "tool_execution_start") {
+        const e = event as unknown as Record<string, unknown>;
+        const toolName = (e["toolName"] as string) ?? "?";
+        const input = e["input"] as Record<string, unknown> | undefined;
+        const inputStr = input
+          ? JSON.stringify(input).slice(0, 120)
+          : "";
+        console.log(
+          `[event] ${config.name}: tool_execution_start tool=${toolName}` +
+            (inputStr ? ` input=${inputStr}` : ""),
+        );
+      } else if (event.type === "tool_execution_end") {
+        const e = event as unknown as Record<string, unknown>;
+        const toolName = (e["toolName"] as string) ?? "?";
+        const output = e["output"] as Record<string, unknown> | undefined;
+        const outputStr = output
+          ? JSON.stringify(output).slice(0, 120)
+          : "";
+        console.log(
+          `[event] ${config.name}: tool_execution_end tool=${toolName}` +
+            (outputStr ? ` output=${outputStr}` : ""),
+        );
+      } else if (event.type === "message_end") {
+        const e = event as unknown as Record<string, unknown>;
+        const msg = e["message"] as Record<string, unknown> | undefined;
+        const role = (msg?.["role"] as string) ?? "?";
+        const usage = msg?.["usage"] as Record<string, unknown> | undefined;
+        const tokens = usage ? `in=${usage["input"]} out=${usage["output"]}` : "";
+        const content = msg?.["content"];
+        const text =
+          typeof content === "string"
+            ? content.slice(0, 200)
+            : Array.isArray(content)
+              ? (content as Array<Record<string, unknown>>)
+                  .filter((b) => b["type"] === "text")
+                  .map((b) => String(b["text"] ?? ""))
+                  .join("")
+                  .slice(0, 200)
+              : "";
+        const errMsg2 = (msg?.["errorMessage"] as string) ?? "";
+        console.log(
+          `[event] ${config.name}: message_end role=${role}` +
+            (tokens ? ` tokens=(${tokens})` : "") +
+            (text ? ` text="${text}"` : "") +
+            (errMsg2 ? ` error="${errMsg2}"` : ""),
+        );
+      } else if (event.type === "agent_end") {
+        const e = event as unknown as Record<string, unknown>;
+        const msgs = e["messages"] as Array<Record<string, unknown>> | undefined;
+        const lastMsg = msgs?.[msgs.length - 1];
+        const reason = (lastMsg?.["stopReason"] as string) ?? (e["stopReason"] as string) ?? "?";
+        const errMsg = (lastMsg?.["errorMessage"] as string) ?? "";
+        console.log(
+          `[event] ${config.name}: agent_end stopReason=${reason}` +
+            (errMsg ? ` error="${errMsg}"` : "") +
+            (requestId ? ` requestId=${requestId}` : "") +
+            (sk ? ` session=${sk}` : ""),
+        );
+      } else if ((event as unknown as Record<string, unknown>)["type"] === "error") {
+        const e = event as unknown as Record<string, unknown>;
+        console.error(`[event] ${config.name}: ERROR`, JSON.stringify(e).slice(0, 300));
       }
 
       // Track usage on assistant message_end
@@ -414,6 +554,14 @@ export class Workspace {
     });
   }
 
+  getStallIncidents(): StallIncident[] {
+    return this.deadlockDetector.getIncidents();
+  }
+
+  getCollaborationMetrics(): CollaborationSnapshot {
+    return this.baselineMetrics.getCollaborationSnapshot();
+  }
+
   // --- Events ---
 
   onAgentEvent(fn: (name: string, event: AgentEvent) => void): () => void {
@@ -437,6 +585,45 @@ export class Workspace {
     if (filtered.length === 0) return;
 
     handle.seedConversation(filtered.reverse());
+  }
+
+  // --- Nudge / escalation ---
+
+  private handleNudge(agentName: string, message: string): void {
+    if (!this.agents.has(agentName)) return;
+    const handle = this.agents.get(agentName)!;
+    try {
+      this.bus.send({
+        from: "__system__",
+        to: agentName,
+        type: "steer",
+        payload: message,
+        priority: handle.config.priority,
+        sessionKey: sessionKey("internal", agentName),
+        sourceKind: "internal",
+      });
+    } catch {
+      // best-effort
+    }
+
+    // Escalate to manager if configured
+    const manager = handle.config.hierarchy?.manager;
+    if (manager && this.agents.has(manager)) {
+      const mHandle = this.agents.get(manager)!;
+      try {
+        this.bus.send({
+          from: "__system__",
+          to: manager,
+          type: "steer",
+          payload: `[SLA Escalation] Agent "${agentName}" has overdue obligations. Please investigate.`,
+          priority: mHandle.config.priority,
+          sessionKey: sessionKey("internal", manager),
+          sourceKind: "internal",
+        });
+      } catch {
+        // best-effort
+      }
+    }
   }
 
   // --- Watchdog stuck handler ---

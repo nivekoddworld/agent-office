@@ -1059,6 +1059,7 @@ describe("UI server", () => {
     const channel = { kind: "conversation" as const, name: "eng" };
     const withDefault = eventToMessages([event], channel, true);
     const withoutDefault = eventToMessages([event], channel, false);
+
     expect(withDefault.some((m: any) => m.sender === "system")).toBe(true);
     expect(withoutDefault.some((m: any) => m.sender === "system")).toBe(false);
   });
