@@ -32,11 +32,6 @@ export interface MessageAgentDeps {
     entry: SessionEntry,
   ) => void;
   getActiveSessionKey?: () => string | undefined;
-  setReplySession?: (from: string, to: string, sessionKey: string) => void;
-  getAndClearReplySession?: (
-    recipient: string,
-    sender: string,
-  ) => string | undefined;
 }
 
 export function createMessageAgentTool(
@@ -121,9 +116,8 @@ export function createMessageAgentTool(
           ? Date.now() + slaMinutes * 60_000
           : undefined;
 
-        // 3. Reply-session routing: use pending reply session or default
-        const replySk = deps.getAndClearReplySession?.(params.to, agentName);
-        const sk = replySk ?? sessionKey("internal", params.to);
+        // 3. Session key
+        const sk = sessionKey("internal", params.to);
 
         // 4. Send with envelope
         const outcome = msgBus.sendWithOutcome({
@@ -133,7 +127,7 @@ export function createMessageAgentTool(
           payload: params.message,
           priority: Priority.NORMAL,
           sessionKey: sk,
-          sourceKind: replySk ? "dm" : "internal",
+          sourceKind: "internal",
           correlationId,
           requiresReply: params.requiresReply,
           replyByTs: replyByMs,
@@ -146,17 +140,7 @@ export function createMessageAgentTool(
           );
         }
 
-        // 5. Record reply session (only for 1:1 from DM sessions)
-        const activeKey = deps.getActiveSessionKey?.();
-        if (
-          activeKey &&
-          activeKey.startsWith("dm:") &&
-          params.to !== "__broadcast__"
-        ) {
-          deps.setReplySession?.(agentName, params.to, activeKey);
-        }
-
-        // 6. Dual write: sender's session file
+        // 5. Dual write: sender's session file
         try {
           deps.onSessionWrite?.(agentName, params.to, {
             ts: new Date().toISOString(),
@@ -168,7 +152,7 @@ export function createMessageAgentTool(
           // best-effort
         }
 
-        // 7. Register obligation if requiresReply
+        // 6. Register obligation if requiresReply
         if (
           params.requiresReply &&
           replyByMs !== undefined &&
