@@ -215,7 +215,6 @@ Detailed audit of all backend commands, API endpoints, and features — cross-re
 | `POST /api/tasks`      | Never called — no task creation UI    |
 | `PATCH /api/tasks/:id` | Never called — no task editing UI     |
 | `GET /api/cron`        | Data included in `/api/state` instead |
-| `GET /api/manifest`    | Never called — no command palette UI  |
 
 ---
 
@@ -259,7 +258,7 @@ Detailed audit of all backend commands, API endpoints, and features — cross-re
 | `agent prompt show` command         | Replaced by `/api/agents/:name` prompt report                                 |
 | `agent hierarchy show` command      | Replaced by org chart + agent detail                                          |
 | `agent permission show` command     | Replaced by `/api/agents/:name` permissions data                              |
-| Command manifest / palette          | `GET /api/manifest` endpoint exists but no UI consumes it                     |
+| Command palette / autocomplete      | Not implemented in UI                                                          |
 
 ---
 
@@ -276,7 +275,7 @@ Detailed audit of all backend commands, API endpoints, and features — cross-re
 1. **Permissions Editing**: `PermissionsEditor.tsx` is read-only. Users cannot toggle `office_cron` or edit tool allow/deny lists from the UI.
 2. **Prompt Editing**: `PromptViewer.tsx` is read-only. Users cannot set, append, or clear agent prompts from the UI.
 3. **Cron Status Details**: The cron dashboard doesn't show execution statistics (attempt count, sent count, skipped-busy count, skipped-cap count, last error). The `cron status` command provides this data.
-4. **Command Palette**: A `GET /api/manifest` endpoint exists with all command definitions, but no command palette or autocomplete UI consumes it.
+4. **Command Palette**: No command palette or autocomplete UI is implemented yet.
 
 ### Low Impact (adequately replaced)
 
