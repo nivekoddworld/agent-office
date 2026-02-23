@@ -43,6 +43,8 @@ import {
   createChannelInOfficeYaml,
   updateChannelInOfficeYaml,
   deleteChannelFromOfficeYaml,
+  setCollaborationMode,
+  setCollaborationSla,
 } from "../config/office-yaml.js";
 
 const DEFAULT_PORT = 3847;
@@ -331,6 +333,14 @@ export async function startUiServer(
     }
   }
 
+  function refreshPolicy(): void {
+    const yaml = loadOfficeYaml(officeId);
+    if (yaml) {
+      const ctx = buildOfficeContext(officeId, yaml);
+      workspace.office.policy = ctx.policy;
+    }
+  }
+
   const unsubTick = workspace.scheduler.onTick((state) =>
     broadcast("scheduler_tick", state),
   );
@@ -614,7 +624,8 @@ export async function startUiServer(
       }
 
       const packageName = parsed.packageName?.trim();
-      if (!packageName) return json(res, 400, { error: "missing_package_name" });
+      if (!packageName)
+        return json(res, 400, { error: "missing_package_name" });
 
       try {
         const result = await installRegistrySkillForAgent(
@@ -644,7 +655,9 @@ export async function startUiServer(
     }
 
     // --- DELETE /api/agents/:name/skills/:skill ---
-    const skillsDeleteMatch = path.match(/^\/api\/agents\/([^/]+)\/skills\/([^/]+)$/);
+    const skillsDeleteMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/skills\/([^/]+)$/,
+    );
     if (skillsDeleteMatch && method === "DELETE") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -953,7 +966,7 @@ export async function startUiServer(
         const members = parsed.members ?? existing.members;
         const description =
           "description" in parsed
-            ? (parsed.description || undefined)
+            ? parsed.description || undefined
             : existing.description;
         const agentNames = workspace.list().map((a) => a.name);
         const errors = validateChannelEntry(
@@ -1066,6 +1079,56 @@ export async function startUiServer(
     // --- GET /api/collaboration/metrics ---
     if (path === "/api/collaboration/metrics" && method === "GET") {
       return json(res, 200, getCollaborationMetrics(workspace));
+    }
+
+    // --- PATCH /api/collaboration/policy ---
+    if (path === "/api/collaboration/policy" && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const body = await readBody(req);
+      let parsed: { mode?: string; sla?: Record<string, unknown> };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      const validModes = ["off", "warn", "enforce"];
+      if (parsed.mode !== undefined) {
+        if (
+          typeof parsed.mode !== "string" ||
+          !validModes.includes(parsed.mode)
+        )
+          return json(res, 400, {
+            error: `mode must be one of: ${validModes.join(", ")}`,
+          });
+      }
+      if (parsed.sla !== undefined) {
+        if (!isRecord(parsed.sla))
+          return json(res, 400, { error: "sla must be an object" });
+        for (const [key, val] of Object.entries(parsed.sla)) {
+          if (typeof val !== "number" || val <= 0)
+            return json(res, 400, {
+              error: `sla.${key} must be a positive number`,
+            });
+        }
+      }
+      try {
+        if (parsed.mode !== undefined) {
+          await setCollaborationMode(officeId, parsed.mode as any);
+        }
+        if (parsed.sla !== undefined) {
+          await setCollaborationSla(officeId, parsed.sla as any);
+        }
+        refreshPolicy();
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 500, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // --- GET /api/manifest ---

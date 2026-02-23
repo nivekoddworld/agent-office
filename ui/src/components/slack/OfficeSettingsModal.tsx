@@ -27,6 +27,7 @@ import { slack } from "../../theme/slack-theme.js";
 import { useCommand } from "../../api/use-command.js";
 import type { BootstrapState } from "../../api/types.js";
 import { ChannelManager } from "./ChannelManager.js";
+import { CollaborationPolicySection } from "./CollaborationPolicySection.js";
 
 interface OfficeSettingsModalProps {
   opened: boolean;
@@ -293,6 +294,10 @@ export function OfficeSettingsModal({
             <InfoRow label="Active" value={`${activeCronJobs}`} />
           </Box>
         </Box>
+
+        <Divider color={slack.borderColor} />
+
+        <CollaborationPolicySection policy={state.collaborationPolicy} />
 
         <Divider color={slack.borderColor} />
 

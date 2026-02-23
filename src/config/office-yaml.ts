@@ -164,7 +164,9 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       channels: office.channels as
         | Record<string, { members: string[]; description?: string }>
         | undefined,
-      collaborationPolicy: parseCollaborationPolicy(office["collaborationPolicy"]),
+      collaborationPolicy: parseCollaborationPolicy(
+        office["collaborationPolicy"],
+      ),
     },
     agents: result,
   };

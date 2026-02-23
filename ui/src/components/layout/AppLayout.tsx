@@ -11,6 +11,7 @@ import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
 import { OrgChartModal } from "../slack/OrgChartModal.js";
 import { CostModal } from "../slack/CostModal.js";
 import { OfficeSettingsModal } from "../slack/OfficeSettingsModal.js";
+import { CollaborationModal } from "../slack/CollaborationModal.js";
 import type { BootstrapState } from "../../api/types.js";
 
 type ModalState =
@@ -18,7 +19,8 @@ type ModalState =
   | { kind: "profile"; agentName: string }
   | { kind: "orgChart" }
   | { kind: "cost" }
-  | { kind: "settings" };
+  | { kind: "settings" }
+  | { kind: "collaboration" };
 
 interface AppLayoutProps {
   state: BootstrapState;
@@ -117,6 +119,7 @@ export function AppLayout({ state }: AppLayoutProps) {
           onSelectChannel={handleSelectChannel}
           onOpenOrgChart={() => setModal({ kind: "orgChart" })}
           onOpenCost={() => setModal({ kind: "cost" })}
+          onOpenCollaboration={() => setModal({ kind: "collaboration" })}
           onOpenSettings={() => setModal({ kind: "settings" })}
           schedulerRunning={state.scheduler.running}
           onToggleScheduler={handleToggleScheduler}
@@ -168,6 +171,11 @@ export function AppLayout({ state }: AppLayoutProps) {
         opened={modal.kind === "settings"}
         onClose={closeModal}
         state={state}
+      />
+
+      <CollaborationModal
+        opened={modal.kind === "collaboration"}
+        onClose={closeModal}
       />
     </Box>
   );

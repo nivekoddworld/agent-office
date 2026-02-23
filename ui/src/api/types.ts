@@ -86,6 +86,7 @@ export interface BootstrapState {
   officeName: string;
   channels?: Record<string, ChannelConfig>;
   defaultConversationChannel?: string;
+  collaborationPolicy?: CollaborationPolicy;
 }
 
 export interface BlockMeta {
@@ -240,4 +241,58 @@ export interface ChannelHistoryResponse {
   channel: string;
   session_key: string;
   messages: ChannelMessage[];
+}
+
+// --- Collaboration ---
+
+export interface CollaborationMetricsWindow {
+  totalMessages: number;
+  directMessages: number;
+  taskMessages: number;
+  replyLatencyMs: number[];
+  simpleWorkCandidates: number;
+  timestamp: number;
+}
+
+export interface PendingReplyAge {
+  from: string;
+  to: string;
+  ageMs: number;
+}
+
+export interface StallIncident {
+  id: string;
+  type: string;
+  details: Record<string, unknown>;
+  timestamp: number;
+  resolved: boolean;
+  resolvedAt?: number;
+}
+
+export interface CollaborationSnapshot {
+  currentWindow: CollaborationMetricsWindow;
+  simpleWorkRatio: number;
+  avgReplyLatencyMs: number;
+  pendingObligationCount: number;
+  overdueObligationCount: number;
+  pendingReplyAges: PendingReplyAge[];
+  staleTaskCount: number;
+  stallIncidentCount: number;
+  recentStallIncidents: StallIncident[];
+}
+
+export interface CollaborationSla {
+  replyByMinutes: number;
+  remindAtMinutes: number;
+  escalateAtMinutes: number;
+  staleTaskHours: number;
+  deadlockThresholdMinutes: number;
+  stallCooldownMinutes: number;
+}
+
+export type CollaborationMode = "off" | "warn" | "enforce";
+
+export interface CollaborationPolicy {
+  mode: CollaborationMode;
+  sla: CollaborationSla;
 }

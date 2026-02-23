@@ -22,6 +22,7 @@ import {
   IconPlayerPause,
   IconLayoutKanban,
   IconPlus,
+  IconHeartHandshake,
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -42,6 +43,7 @@ interface SlackSidebarProps {
   onSelectChannel: (ch: ChannelId) => void;
   onOpenOrgChart: () => void;
   onOpenCost: () => void;
+  onOpenCollaboration?: () => void;
   onOpenSettings?: () => void;
   schedulerRunning: boolean;
   onToggleScheduler?: () => void;
@@ -118,6 +120,7 @@ export function SlackSidebar({
   onSelectChannel,
   onOpenOrgChart,
   onOpenCost,
+  onOpenCollaboration,
   onOpenSettings,
   schedulerRunning,
   onToggleScheduler,
@@ -355,6 +358,11 @@ export function SlackSidebar({
               icon={<IconCoin size={15} color={slack.sidebarText} />}
               label="Cost Dashboard"
               onClick={onOpenCost}
+            />
+            <SidebarItem
+              icon={<IconHeartHandshake size={15} color={slack.sidebarText} />}
+              label="Collaboration"
+              onClick={() => onOpenCollaboration?.()}
             />
             <SidebarItem
               icon={<IconSettings size={15} color={slack.sidebarText} />}
