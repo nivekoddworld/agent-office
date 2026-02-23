@@ -1,6 +1,9 @@
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import { sessionKey } from "../messages/session-key.js";
+
+/** Callback to persist a cron trigger to a report channel's JSONL session. */
+export type CronChannelFanout = (channelName: string, message: string) => void;
 import type {
   CronJobConfig,
   CronJobState,
@@ -40,6 +43,7 @@ export class CronService {
   private bus: MessageBus;
   private agents: Map<string, AgentHandle>;
   private store: CronStore;
+  private channelFanout: CronChannelFanout | undefined;
   private jobs = new Map<string, ActiveJob>(); // key: "agent:job"
   private officeJobs = new Map<string, ActiveOfficeJob>(); // key: jobName
   private dispatchLog: number[] = []; // timestamps of recent dispatches
@@ -48,10 +52,12 @@ export class CronService {
     bus: MessageBus,
     agents: Map<string, AgentHandle>,
     store: CronStore,
+    channelFanout?: CronChannelFanout,
   ) {
     this.bus = bus;
     this.agents = agents;
     this.store = store;
+    this.channelFanout = channelFanout;
   }
 
   /** Load persisted state and start timers for all jobs. */
@@ -294,14 +300,16 @@ export class CronService {
       }
 
       try {
+        const rc = job.config.reportChannel;
         this.bus.send({
           from: "__cron__",
           to: target,
           type: "prompt",
           payload: job.config.message,
           priority: Priority.NORMAL,
-          sessionKey: sessionKey("internal", target),
-          sourceKind: "internal",
+          sessionKey: rc ? sessionKey("channel", rc) : sessionKey("internal", target),
+          sourceKind: rc ? "channel" : "internal",
+          channel: rc,
         });
         this.dispatchLog.push(now);
         sent++;
@@ -324,6 +332,9 @@ export class CronService {
             ? "skipped_busy"
             : "error";
     job.state.lastError = null;
+    if (sent > 0 && job.config.reportChannel) {
+      this.channelFanout?.(job.config.reportChannel, job.config.message);
+    }
     this.persistState();
   }
 
@@ -389,15 +400,18 @@ export class CronService {
 
     // Dispatch
     try {
+      const rc = job.config.reportChannel;
       this.bus.send({
         from: "__cron__",
         to: job.agentName,
         type: "prompt",
         payload: job.config.message,
         priority: Priority.NORMAL,
-        sessionKey: sessionKey("internal", job.agentName),
-        sourceKind: "internal",
+        sessionKey: rc ? sessionKey("channel", rc) : sessionKey("internal", job.agentName),
+        sourceKind: rc ? "channel" : "internal",
+        channel: rc,
       });
+      if (rc) this.channelFanout?.(rc, job.config.message);
       this.dispatchLog.push(now);
       job.state.sentCount++;
       job.state.lastStatus = "ok";

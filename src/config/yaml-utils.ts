@@ -35,6 +35,7 @@ export interface AgentYamlEntry {
       timezone?: string;
       catch_up?: string;
       enabled?: boolean;
+      report_channel?: string;
     }
   >;
   heartbeat?: {
@@ -103,6 +104,7 @@ export function extractCronJobs(
         timezone: raw.timezone,
         catchUp: (raw.catch_up as "skip" | "once") ?? "skip",
         enabled: raw.enabled ?? true,
+        reportChannel: raw.report_channel,
       };
     }
     if (Object.keys(jobs).length > 0) result.set(agent, jobs);
@@ -126,6 +128,7 @@ export function extractOfficeCronJobs(
       catchUp: (raw.catch_up as "skip" | "once") ?? "skip",
       enabled: raw.enabled ?? true,
       targets: raw.targets,
+      reportChannel: raw.report_channel,
     };
   }
   return result;

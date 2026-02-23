@@ -135,7 +135,11 @@ export function AppLayout({ state }: AppLayoutProps) {
         {channel.kind === "system" && channel.name === "debug" ? (
           <OfficeDebugPanel agentNames={agentNames} />
         ) : channel.kind === "system" && channel.name === "cron" ? (
-          <CronChannelView cronJobs={state.cronJobs} agentNames={agentNames} />
+          <CronChannelView
+            cronJobs={state.cronJobs}
+            agentNames={agentNames}
+            channels={Object.keys(state.channels ?? {})}
+          />
         ) : channel.kind === "system" && channel.name === "tasks" ? (
           <KanbanBoard tasks={state.tasks ?? []} agentNames={agentNames} />
         ) : (

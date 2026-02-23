@@ -89,6 +89,7 @@ export function useCronAdd() {
       targets?: string[];
       timezone?: string;
       catchUp?: string;
+      reportChannel?: string;
     }) => {
       if (args.scope === "office") {
         return apiFetch<{ ok: boolean }>("/api/cron/office", {
@@ -100,6 +101,7 @@ export function useCronAdd() {
             targets: args.targets,
             timezone: args.timezone,
             catchUp: args.catchUp,
+            reportChannel: args.reportChannel || undefined,
           }),
         });
       }
@@ -113,6 +115,7 @@ export function useCronAdd() {
             message: args.message,
             timezone: args.timezone,
             catchUp: args.catchUp,
+            reportChannel: args.reportChannel || undefined,
           }),
         },
       );

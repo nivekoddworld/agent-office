@@ -5,6 +5,8 @@ export interface CronJobConfig {
   timezone?: string;
   catchUp?: "skip" | "once";
   enabled?: boolean;
+  /** Channel where the cron trigger is posted so results are visible there. */
+  reportChannel?: string;
 }
 
 /** Runtime state for a cron job, persisted to disk. */

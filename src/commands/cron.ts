@@ -84,7 +84,7 @@ export async function cronAddCommand(
   jobName: string,
   schedule: string,
   message: string,
-  opts?: { timezone?: string; catchUp?: string },
+  opts?: { timezone?: string; catchUp?: string; reportChannel?: string },
   workspace?: Workspace,
 ): Promise<boolean> {
   if (!JOB_NAME_RE.test(jobName)) {
@@ -128,6 +128,7 @@ export async function cronAddCommand(
     const entry: Record<string, unknown> = { schedule, message };
     if (opts?.timezone) entry.timezone = opts.timezone;
     if (opts?.catchUp) entry.catch_up = opts.catchUp;
+    if (opts?.reportChannel) entry.report_channel = opts.reportChannel;
     doc.setIn(["agents", agentName, "cron", jobName], entry);
     atomicWriteYaml(path, doc.toString());
     written = true;
@@ -288,7 +289,7 @@ export async function cronAddOfficeCommand(
   schedule: string,
   message: string,
   targets: string[],
-  opts?: { timezone?: string; catchUp?: string },
+  opts?: { timezone?: string; catchUp?: string; reportChannel?: string },
   workspace?: Workspace,
 ): Promise<boolean> {
   if (!JOB_NAME_RE.test(jobName)) {
@@ -344,6 +345,7 @@ export async function cronAddOfficeCommand(
     const entry: Record<string, unknown> = { schedule, message, targets };
     if (opts?.timezone) entry.timezone = opts.timezone;
     if (opts?.catchUp) entry.catch_up = opts.catchUp;
+    if (opts?.reportChannel) entry.report_channel = opts.reportChannel;
     doc.setIn(["office", "cron", jobName], entry);
     atomicWriteYaml(path, doc.toString());
     written = true;

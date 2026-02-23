@@ -32,6 +32,7 @@ export interface CronJobEntry {
     message: string;
     timezone?: string;
     enabled?: boolean;
+    reportChannel?: string;
   };
   state: {
     lastRunAt: number | null;

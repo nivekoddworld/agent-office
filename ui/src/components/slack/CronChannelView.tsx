@@ -17,11 +17,13 @@ import type { CronJobEntry } from "../../api/types.js";
 interface CronChannelViewProps {
   cronJobs: CronJobEntry[];
   agentNames: string[];
+  channels?: string[];
 }
 
 export function CronChannelView({
   cronJobs,
   agentNames,
+  channels = [],
 }: CronChannelViewProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -86,6 +88,7 @@ export function CronChannelView({
         opened={addOpen}
         onClose={() => setAddOpen(false)}
         agentNames={agentNames}
+        channels={channels}
       />
     </Box>
   );

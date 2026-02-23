@@ -1491,6 +1491,7 @@ export async function startUiServer(
         message?: string;
         timezone?: string;
         catchUp?: string;
+        reportChannel?: string;
       };
       try {
         parsed = JSON.parse(body);
@@ -1511,7 +1512,7 @@ export async function startUiServer(
           parsed.jobName,
           parsed.schedule,
           parsed.message,
-          { timezone: parsed.timezone, catchUp: parsed.catchUp },
+          { timezone: parsed.timezone, catchUp: parsed.catchUp, reportChannel: parsed.reportChannel },
           workspace,
         );
         if (!ok) return json(res, 400, { ok: false, error: "cron_add_failed" });
@@ -1612,6 +1613,7 @@ export async function startUiServer(
         targets?: string[];
         timezone?: string;
         catchUp?: string;
+        reportChannel?: string;
       };
       try {
         parsed = JSON.parse(body);
@@ -1632,7 +1634,7 @@ export async function startUiServer(
           parsed.schedule,
           parsed.message,
           parsed.targets,
-          { timezone: parsed.timezone, catchUp: parsed.catchUp },
+          { timezone: parsed.timezone, catchUp: parsed.catchUp, reportChannel: parsed.reportChannel },
           workspace,
         );
         if (!ok) return json(res, 400, { ok: false, error: "cron_add_failed" });

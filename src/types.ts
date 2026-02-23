@@ -119,6 +119,7 @@ export interface OfficeCronYamlEntry {
   catch_up?: string;
   enabled?: boolean;
   targets: string[];
+  report_channel?: string;
 }
 
 export interface OfficeYaml {

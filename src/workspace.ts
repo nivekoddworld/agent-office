@@ -21,7 +21,7 @@ import { resolveEnvRefs } from "./config/env-substitution.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
-import { CronService } from "./cron/cron-service.js";
+import { CronService, type CronChannelFanout } from "./cron/cron-service.js";
 import { CronStore } from "./cron/cron-store.js";
 import { TaskService } from "./tasks/task-service.js";
 import { TaskStore } from "./tasks/task-store.js";
@@ -85,10 +85,26 @@ export class Workspace {
       (name) => this.handleStuck(name),
       config.watchdog,
     );
+    const cronChannelFanout: CronChannelFanout = (channelName, message) => {
+      const cfg = this.office.channels.get(channelName);
+      if (!cfg) return;
+      const sk = sessionKey("channel", channelName);
+      const filename = sessionFilename(sk);
+      const entry = {
+        ts: new Date().toISOString(),
+        role: "user" as const,
+        from: "__cron__",
+        text: message,
+      };
+      for (const member of cfg.members) {
+        appendSession(this.office.dir, member, filename, entry);
+      }
+    };
     this.cron = new CronService(
       this.bus,
       this.agents,
       new CronStore(join(this.office.dir, "cron")),
+      cronChannelFanout,
     );
     this.tasks = new TaskService(
       new TaskStore(join(this.office.dir, "tasks")),
