@@ -848,7 +848,9 @@ Discover all agents in the workspace with their name, status, and description. A
 
 ### `message_agent`
 
-Send a message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]`. Use `__broadcast__` to message all agents.
+Send a message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]` and a footer `[To reply, call message_agent with to="sender"]`. Use `__broadcast__` to message all agents.
+
+**Reply-routing:** When an agent calls `message_agent` from a DM session (e.g. `dm:pm`), the system records a one-shot reply session. When the recipient replies, the reply is routed back into the originating DM session instead of the default `internal:*` session, keeping the conversation in the user-facing context.
 
 Optional parameters:
 
@@ -868,7 +870,7 @@ copywriter calls message_agent:
   requiresReply: true
 
 -> Message lands in designer's inbox (obligation registered, 5-min SLA)
--> Next tick delivers it as: [Message from copywriter]\nHere's the landing page copy: ...
+-> Next tick delivers it as: [Message from copywriter]\nHere's the landing page copy: ...\n\n[To reply, call message_agent with to="copywriter"]
 -> Designer starts working
 ```
 
@@ -1463,15 +1465,15 @@ release();
 
 Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). DM conversations are **dual-written** to both SQLite (`dm_messages` table) and JSONL session files — SQLite is the primary source for UI display and agent context hydration, while JSONL enables agent self-service lookup via `read_file`/`grep`. Inter-agent and channel messages are JSONL-only (see [Session History](#session-history)).
 
-| What         | DB location                            | Behavior                                                                                                 |
-| ------------ | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Inbox queue  | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.         |
-| DM records   | Same DB file                           | User and assistant messages saved with `requestId` for dedup correlation. `fire <agent>` purges history. |
-| Obligations  | Same DB file                           | Reply obligation tracking with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.              |
+| What        | DB location                            | Behavior                                                                                                 |
+| ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.         |
+| DM records  | Same DB file                           | User and assistant messages saved with `requestId` for dedup correlation. `fire <agent>` purges history. |
+| Obligations | Same DB file                           | Reply obligation tracking with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.              |
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 
-The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking.
+The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking. A one-shot `replySessionMap` routes inter-agent replies back to the originating DM session (see [message_agent](#message_agent)).
 
 #### DM Context Replay
 
@@ -1619,6 +1621,7 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 - **Kanban board** — task board with columns (backlog → todo → in_progress → review → done) and per-agent filter
 - **Agent DMs** — conversation threads per agent with message input, tool call display, and thread drawer
 - **Cron channel** — dedicated #cron channel view for cron job events
+- **Debug logs** — live event capture panel with source/kind/agent filters, preset views (All, Errors, Tools, Messages, Task/Cron), group-by-agent mode, and JSONL export
 - **Org chart** — interactive hierarchy modal
 - **Cost dashboard** — per-agent token usage and cost breakdown
 - **Office settings** — office configuration modal with channel management (create, edit members/description, delete), scheduler controls, config reload/validate
@@ -1958,6 +1961,8 @@ test/
   obligation-store.test.ts       Obligation CRUD, overdue detection, persistence
   policy-service.test.ts         Policy modes (off/warn/enforce), override, heuristic
   host-api-tasks.test.ts         Task proxy Host API endpoints (create/update/list/get)
+  session-context.test.ts        Session key helpers (sessionKey, parseSessionKey)
+  chat-feed-routing.test.ts      SSE event routing (chat-relevant vs suppressed)
 ```
 
 ## Dependencies
@@ -1981,7 +1986,7 @@ test/
 pnpm install          # Install dependencies
 pnpm build            # TypeScript type check (tsc --noEmit)
 pnpm lint:check       # ESLint
-pnpm test             # Run test suite (vitest) — ~700 tests
+pnpm test             # Run test suite (vitest) — ~980 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```

@@ -480,9 +480,7 @@ export class Workspace {
                 } else if (sk.startsWith("internal:")) {
                   // Use conversation peer so the file is agent-${peer}.jsonl
                   const peer = handle.getActiveConversationPeer();
-                  const peerFilename = peer
-                    ? `agent-${peer}.jsonl`
-                    : filename;
+                  const peerFilename = peer ? `agent-${peer}.jsonl` : filename;
                   appendSession(
                     this.office.dir,
                     config.name,
