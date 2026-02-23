@@ -33,10 +33,7 @@ import {
   createTaskListTool,
   createTaskGetTool,
 } from "./tools/index.js";
-import { createSessionSearchTool } from "./tools/session-search.js";
-import { createSessionReadRangeTool } from "./tools/session-read-range.js";
-import type { MessageStore } from "../messages/message-store.js";
-import type { ChannelConfig } from "../types.js";
+import { appendSession } from "../sessions/session-writer.js";
 import {
   extractSkillSummaries,
   formatSkillSummariesForPrompt,
@@ -173,7 +170,7 @@ export async function initInProcessAgent(
   listAgentsFn: () => AgentInfo[],
   cronService: CronService | undefined,
   taskService: TaskService | undefined,
-  sessionDeps?: { store: MessageStore; channels: Map<string, ChannelConfig> },
+  _sessionDeps?: unknown,
   obligationStore?: ObligationStore,
   policyService?: PolicyService,
 ): Promise<InProcessInitResult> {
@@ -236,6 +233,10 @@ export async function initInProcessAgent(
       bus,
       obligationStore,
       policyService,
+      onSessionWrite: (agent, peer, entry) => {
+        const filename = `agent-${peer}.jsonl`;
+        appendSession(ctx.baseDir, agent, filename, entry);
+      },
     }),
     createListAgentsTool(ctx.name, listAgentsFn, ctx.baseDir),
     createReadAgentFileTool(ctx.baseDir),
@@ -255,20 +256,6 @@ export async function initInProcessAgent(
     createSkillInstallTool(skillDeps),
     createSkillRemoveTool(skillDeps),
     createSkillCreateTool(skillDeps),
-    ...(sessionDeps
-      ? [
-          createSessionSearchTool(
-            ctx.name,
-            sessionDeps.store,
-            sessionDeps.channels,
-          ),
-          createSessionReadRangeTool(
-            ctx.name,
-            sessionDeps.store,
-            sessionDeps.channels,
-          ),
-        ]
-      : []),
     ...(ctx.config.tools ?? []),
   ];
 

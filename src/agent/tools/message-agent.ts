@@ -6,6 +6,7 @@ import { sessionKey } from "../../messages/session-key.js";
 import { MESSAGE_AGENT } from "./contracts.js";
 import type { ObligationStore } from "../../collaboration/obligation-store.js";
 import type { PolicyService } from "../../collaboration/policy-service.js";
+import type { SessionEntry } from "../../sessions/session-writer.js";
 
 const DEFAULT_REPLY_SLA_MINUTES = 5;
 
@@ -25,6 +26,11 @@ export interface MessageAgentDeps {
     overrideReason: string;
     correlationId: string;
   }) => void;
+  onSessionWrite?: (
+    agentName: string,
+    peerName: string,
+    entry: SessionEntry,
+  ) => void;
 }
 
 export function createMessageAgentTool(
@@ -130,7 +136,19 @@ export function createMessageAgentTool(
           );
         }
 
-        // 4. Register obligation if requiresReply
+        // 4. Dual write: sender's session file
+        try {
+          deps.onSessionWrite?.(agentName, params.to, {
+            ts: new Date().toISOString(),
+            role: "user",
+            from: agentName,
+            text: params.message,
+          });
+        } catch {
+          // best-effort
+        }
+
+        // 5. Register obligation if requiresReply
         if (
           params.requiresReply &&
           replyByMs !== undefined &&

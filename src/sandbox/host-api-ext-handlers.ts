@@ -1,13 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import { loadSkills } from "@mariozechner/pi-coding-agent";
-import type {
-  CitationMode,
-  AgentPermissions,
-  ChannelConfig,
-} from "../types.js";
-import type { MessageStore } from "../messages/message-store.js";
-import { canAccessSession } from "../messages/session-acl.js";
+import type { CitationMode, AgentPermissions } from "../types.js";
 import { redactText } from "../security/redact.js";
 import {
   validateFetchParams,
@@ -409,127 +403,9 @@ export async function handleReadSkill(
   res.end(JSON.stringify({ result: content }));
 }
 
-export interface SessionHandlerDeps {
-  agentName: string;
-  store: MessageStore;
-  channels: Map<string, ChannelConfig>;
-}
-
 export interface TaskHandlerDeps {
   agentName: string;
   taskService: TaskService;
-}
-
-export async function handleSessionSearch(
-  req: IncomingMessage,
-  res: ServerResponse,
-  deps: SessionHandlerDeps | null,
-): Promise<void> {
-  const body = await readBody(req);
-  if (!body) {
-    res.writeHead(413);
-    res.end();
-    return;
-  }
-  if (!deps) {
-    res.writeHead(503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Session store not available" }));
-    return;
-  }
-  const { query, sessionHint, limit } = JSON.parse(body) as {
-    query?: string;
-    sessionHint?: string;
-    limit?: number;
-  };
-  if (!query) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Missing required field: query" }));
-    return;
-  }
-  if (
-    sessionHint &&
-    !canAccessSession(deps.agentName, sessionHint, deps.channels)
-  ) {
-    console.warn(
-      `[session-acl] forbidden_session_access agent=${deps.agentName} key=${sessionHint}`,
-    );
-    res.writeHead(403, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "forbidden_session_access" }));
-    return;
-  }
-  const results = deps.store.searchSessions(
-    query,
-    deps.agentName,
-    deps.channels,
-  );
-  const filtered = sessionHint
-    ? results.filter((r) => r.session_key === sessionHint)
-    : results;
-  const limited = filtered.slice(0, limit ?? 20);
-  const formatted =
-    limited.length === 0
-      ? "No results found."
-      : limited
-          .map(
-            (r) =>
-              `[${r.kind}] session=${r.session_key} rank=${r.rank.toFixed(2)}\n${r.snippet.slice(0, 300)}`,
-          )
-          .join("\n---\n");
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ result: formatted }));
-}
-
-export async function handleSessionReadRange(
-  req: IncomingMessage,
-  res: ServerResponse,
-  deps: SessionHandlerDeps | null,
-): Promise<void> {
-  const body = await readBody(req);
-  if (!body) {
-    res.writeHead(413);
-    res.end();
-    return;
-  }
-  if (!deps) {
-    res.writeHead(503, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Session store not available" }));
-    return;
-  }
-  const { sessionKey, fromSeq, toSeq } = JSON.parse(body) as {
-    sessionKey?: string;
-    fromSeq?: number;
-    toSeq?: number;
-  };
-  if (!sessionKey || fromSeq === undefined || toSeq === undefined) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Missing required fields" }));
-    return;
-  }
-  if (!canAccessSession(deps.agentName, sessionKey, deps.channels)) {
-    console.warn(
-      `[session-acl] forbidden_session_access agent=${deps.agentName} key=${sessionKey}`,
-    );
-    res.writeHead(403, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "forbidden_session_access" }));
-    return;
-  }
-  const rangeLimit = toSeq - fromSeq + 1;
-  if (rangeLimit <= 0 || rangeLimit > 200) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Invalid range (max 200)" }));
-    return;
-  }
-  const msgs = deps.store.querySessionTail(sessionKey, fromSeq - 1, rangeLimit);
-  const formatted =
-    msgs.length === 0
-      ? "No messages in range."
-      : msgs
-          .map(
-            (m) => `[seq=${m.session_seq} ${m.role}] ${m.text.slice(0, 500)}`,
-          )
-          .join("\n---\n");
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ result: formatted }));
 }
 
 async function parseTaskBody(

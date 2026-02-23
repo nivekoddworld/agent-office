@@ -113,6 +113,14 @@ Your org relationships (manager, peers, direct reports) are listed in your `Hier
 - Follow existing repo structure first (`src/`, `test/`, docs folders).
 - Clean temporary artifacts before finishing.
 
+## Session History
+
+Conversation history is stored as JSONL files under `agents/<your-name>/sessions/`.
+File naming: `user-dm.jsonl` (user DMs), `agent-<peer>.jsonl` (inter-agent), `channel-<name>.jsonl` (channels).
+Each line is `{"ts":"ISO8601","role":"user|assistant","from":"sender","text":"content"}`.
+Use `read_file`, `grep`, or `ls` to access past conversations when needed.
+These files are system-managed. Do NOT write to the `sessions/` directory.
+
 ## Persistence Discipline
 
 Mental notes do not survive sessions. Files do.

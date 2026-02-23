@@ -17,7 +17,7 @@ import type {
   WorkspaceConfig,
 } from "./types.js";
 import { sessionKey } from "./messages/session-key.js";
-import { maybeTriggerSummary } from "./messages/session-summary.js";
+import { appendSession, sessionFilename } from "./sessions/session-writer.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
@@ -162,31 +162,23 @@ export class Workspace {
     this.bus.setStore(this.messageStore);
     this.bus.setMetrics(this.baselineMetrics);
     this.bus.setAfterEnqueueHook((msg) => {
-      if (!msg.sessionKey || !this.messageStore) return;
+      if (!msg.sessionKey) return;
       // Channel user turns are persisted once at send time; skip fanout duplicates
       if (msg.sourceKind === "channel") return;
       try {
-        const seq = this.messageStore.nextSessionSeq(msg.sessionKey);
-        this.messageStore.saveSession({
-          session_key: msg.sessionKey,
-          session_seq: seq,
+        const filename = sessionFilename(msg.sessionKey);
+        appendSession(this.office.dir, msg.to, filename, {
+          ts: new Date(msg.timestamp).toISOString(),
           role: "user",
+          from: msg.from,
           text: msg.payload,
-          ts_ms: msg.timestamp,
-          request_id: msg.requestId ?? null,
-          agent_name: "__user__",
         });
-        this.triggerSummaryCheck(msg.sessionKey);
       } catch (err) {
         console.error("[workspace] Failed to persist user session turn:", err);
       }
     });
 
     if (this.hostApi && this.sandboxMode === "docker") {
-      this.hostApi.setSessionDeps({
-        store: this.messageStore,
-        channels: this.office.channels,
-      });
       await this.hostApi.start(this.hostApiPort);
     }
     this.scheduler.start();
@@ -447,14 +439,14 @@ export class Workspace {
           }
         }
 
-        // Persist assistant text to session_messages (+ dm_messages for DM sessions)
-        if (msg.role === "assistant" && this.messageStore) {
+        // Persist assistant text to DM store + JSONL session file
+        if (msg.role === "assistant") {
           const text = extractDmText(msg.content);
           if (text) {
             const sk = handle.getActiveSessionKey();
             try {
-              // Legacy DM dual-write only for dm:* sessions
-              if (!sk || sk.startsWith("dm:")) {
+              // DM store for hydration
+              if (this.messageStore && (!sk || sk.startsWith("dm:"))) {
                 this.messageStore.saveDm({
                   agent: config.name,
                   role: "assistant",
@@ -463,25 +455,14 @@ export class Workspace {
                   request_id: requestId ?? null,
                 });
               }
+              // JSONL session file
               if (sk) {
-                const seq = this.messageStore.nextSessionSeq(sk);
-                this.messageStore.saveSession({
-                  session_key: sk,
-                  session_seq: seq,
+                const filename = sessionFilename(sk);
+                appendSession(this.office.dir, config.name, filename, {
+                  ts: new Date().toISOString(),
                   role: "assistant",
+                  from: config.name,
                   text,
-                  ts_ms: Date.now(),
-                  request_id: requestId ?? null,
-                  agent_name: config.name,
-                });
-                // Async summary checkpoint (fire-and-forget)
-                maybeTriggerSummary(
-                  this.messageStore!,
-                  sk,
-                  config.model,
-                  resolveModelKey(config),
-                ).catch(() => {
-                  /* best-effort */
                 });
               }
             } catch (err) {
@@ -546,21 +527,6 @@ export class Workspace {
 
   list(): AgentInfo[] {
     return [...this.agents.values()].map((h) => h.info());
-  }
-
-  /** Fire-and-forget summary checkpoint evaluation for a session. */
-  triggerSummaryCheck(sk: string): void {
-    if (!this.messageStore) return;
-    const first = this.agents.values().next().value;
-    if (!first) return;
-    maybeTriggerSummary(
-      this.messageStore,
-      sk,
-      first.config.model,
-      resolveModelKey(first.config),
-    ).catch(() => {
-      /* best-effort */
-    });
   }
 
   getStallIncidents(): StallIncident[] {

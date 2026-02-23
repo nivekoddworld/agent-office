@@ -5,8 +5,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { MessageBus } from "../transport/message-bus.js";
-import type { AgentInfo, AgentPermissions, ChannelConfig } from "../types.js";
-import type { MessageStore } from "../messages/message-store.js";
+import type { AgentInfo, AgentPermissions } from "../types.js";
 import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
 import { isToolDenied } from "../agent/tools/policy.js";
@@ -33,14 +32,11 @@ import {
   handleSkillInstall,
   handleSkillRemove,
   handleSkillCreate,
-  handleSessionSearch,
-  handleSessionReadRange,
   handleTaskCreate,
   handleTaskUpdate,
   handleTaskList,
   handleTaskGet,
   type CronHandlerDeps,
-  type SessionHandlerDeps,
   type TaskHandlerDeps,
 } from "./host-api-ext-handlers.js";
 
@@ -74,10 +70,6 @@ export class HostApi {
     officeDir: string;
     cron: CronService;
   } | null = null;
-  private sessionDeps: {
-    store: MessageStore;
-    channels: Map<string, ChannelConfig>;
-  } | null = null;
   private taskDeps: { taskService: TaskService } | null = null;
   private bus: MessageBus;
   private listFn: () => AgentInfo[];
@@ -95,13 +87,6 @@ export class HostApi {
     cron: CronService;
   }): void {
     this.cronDeps = deps;
-  }
-
-  setSessionDeps(deps: {
-    store: MessageStore;
-    channels: Map<string, ChannelConfig>;
-  }): void {
-    this.sessionDeps = deps;
   }
 
   setTaskDeps(deps: { taskService: TaskService }): void {
@@ -323,16 +308,6 @@ export class HostApi {
       } else if (req.method === "POST" && path === "/api/skill-create") {
         if (this.checkToolPolicy(path, agentName, res))
           await handleSkillCreate(req, res, this.buildSkillDeps(agentName));
-      } else if (req.method === "POST" && path === "/api/session-search") {
-        if (this.checkToolPolicy(path, agentName, res))
-          await handleSessionSearch(req, res, this.buildSessionDeps(agentName));
-      } else if (req.method === "POST" && path === "/api/session-read-range") {
-        if (this.checkToolPolicy(path, agentName, res))
-          await handleSessionReadRange(
-            req,
-            res,
-            this.buildSessionDeps(agentName),
-          );
       } else if (req.method === "POST" && path === "/api/task-create") {
         if (this.checkToolPolicy(path, agentName, res))
           await handleTaskCreate(req, res, this.buildTaskDeps(agentName));
@@ -371,8 +346,6 @@ export class HostApi {
     "/api/skill-install": "skill_install",
     "/api/skill-remove": "skill_remove",
     "/api/skill-create": "skill_create",
-    "/api/session-search": "session_search",
-    "/api/session-read-range": "session_read_range",
     "/api/task-create": "task_create",
     "/api/task-update": "task_update",
     "/api/task-list": "task_list",
@@ -415,15 +388,6 @@ export class HostApi {
       agentName,
       baseDir: this.baseDir,
       getSkillsMap: this.skillResolvers.get(agentName),
-    };
-  }
-
-  private buildSessionDeps(agentName: string): SessionHandlerDeps | null {
-    if (!this.sessionDeps) return null;
-    return {
-      agentName,
-      store: this.sessionDeps.store,
-      channels: this.sessionDeps.channels,
     };
   }
 

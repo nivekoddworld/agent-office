@@ -81,15 +81,6 @@ export class Scheduler {
       handle.setActiveRequestId(msg.requestId);
       handle.setActiveSessionKey(msg.sessionKey);
 
-      // Seed session context (summary + tail) before dispatch
-      if (msg.sessionKey) {
-        try {
-          handle.seedSessionContext(msg.sessionKey, msg.payload);
-        } catch {
-          // Best-effort — don't block dispatch
-        }
-      }
-
       const payload = formatMessagePayload(msg);
       const dispatch =
         msg.type === "steer" ? handle.steer(payload) : handle.prompt(payload);

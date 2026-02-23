@@ -35,8 +35,6 @@ import {
   createTaskUpdateProxy,
   createTaskListProxy,
   createTaskGetProxy,
-  createSessionSearchProxy,
-  createSessionReadRangeProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
@@ -149,8 +147,6 @@ const allTools: AgentTool<any>[] = [
   createSkillInstallProxy(hostFetch),
   createSkillRemoveProxy(hostFetch),
   createSkillCreateProxy(hostFetch),
-  createSessionSearchProxy(hostFetch),
-  createSessionReadRangeProxy(hostFetch),
   ...(process.env["ON_DEMAND_SKILLS"] === "1"
     ? [createReadSkillProxy(hostFetch)]
     : []),
