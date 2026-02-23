@@ -449,54 +449,65 @@ export class Workspace {
           const text = extractDmText(msg.content);
           if (text) {
             const sk = handle.getActiveSessionKey();
-            try {
-              // DM store for hydration
-              if (this.messageStore && (!sk || sk.startsWith("dm:"))) {
-                this.messageStore.saveDm({
-                  agent: config.name,
-                  role: "assistant",
-                  text,
-                  ts_ms: Date.now(),
-                  request_id: requestId ?? null,
-                });
-              }
-              // JSONL session file — fan out to all channel members
-              if (sk) {
-                const filename = sessionFilename(sk);
-                const entry = {
-                  ts: new Date().toISOString(),
-                  role: "assistant" as const,
-                  from: config.name,
-                  text,
-                };
-                if (sk.startsWith("ch:")) {
-                  const channelName = sk.slice(3);
-                  const cfg = this.office.channels.get(channelName);
-                  if (cfg) {
-                    for (const member of cfg.members) {
-                      appendSession(this.office.dir, member, filename, entry);
-                    }
-                  }
-                } else if (sk.startsWith("internal:")) {
-                  // Use conversation peer so the file is agent-${peer}.jsonl
-                  const peer = handle.getActiveConversationPeer();
-                  const peerFilename = peer ? `agent-${peer}.jsonl` : filename;
-                  appendSession(
-                    this.office.dir,
-                    config.name,
-                    peerFilename,
-                    entry,
-                  );
-                } else {
-                  appendSession(this.office.dir, config.name, filename, entry);
+            // Suppress HEARTBEAT_OK responses from persistence
+            const isHeartbeatOk =
+              sk?.startsWith("heartbeat:") && text.trim() === "HEARTBEAT_OK";
+            if (!isHeartbeatOk)
+              try {
+                // DM store for hydration
+                if (this.messageStore && (!sk || sk.startsWith("dm:"))) {
+                  this.messageStore.saveDm({
+                    agent: config.name,
+                    role: "assistant",
+                    text,
+                    ts_ms: Date.now(),
+                    request_id: requestId ?? null,
+                  });
                 }
+                // JSONL session file — fan out to all channel members
+                if (sk) {
+                  const filename = sessionFilename(sk);
+                  const entry = {
+                    ts: new Date().toISOString(),
+                    role: "assistant" as const,
+                    from: config.name,
+                    text,
+                  };
+                  if (sk.startsWith("ch:")) {
+                    const channelName = sk.slice(3);
+                    const cfg = this.office.channels.get(channelName);
+                    if (cfg) {
+                      for (const member of cfg.members) {
+                        appendSession(this.office.dir, member, filename, entry);
+                      }
+                    }
+                  } else if (sk.startsWith("internal:")) {
+                    // Use conversation peer so the file is agent-${peer}.jsonl
+                    const peer = handle.getActiveConversationPeer();
+                    const peerFilename = peer
+                      ? `agent-${peer}.jsonl`
+                      : filename;
+                    appendSession(
+                      this.office.dir,
+                      config.name,
+                      peerFilename,
+                      entry,
+                    );
+                  } else {
+                    appendSession(
+                      this.office.dir,
+                      config.name,
+                      filename,
+                      entry,
+                    );
+                  }
+                }
+              } catch (err) {
+                console.error(
+                  "[workspace] Failed to persist assistant turn:",
+                  err,
+                );
               }
-            } catch (err) {
-              console.error(
-                "[workspace] Failed to persist assistant turn:",
-                err,
-              );
-            }
           }
         }
       }

@@ -1,6 +1,7 @@
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { InboxMessage, SchedulerState } from "../types.js";
+import { DEFAULT_HEARTBEAT_PROMPT, isWithinActiveHours } from "./heartbeat.js";
 
 /**
  * Tick-based priority scheduler (inspired by FreeRTOS).
@@ -14,6 +15,7 @@ export class Scheduler {
   private _tickCount = 0;
   private _intervalMs: number;
   private listeners: Array<(state: SchedulerState) => void> = [];
+  private lastHeartbeatTs = new Map<string, number>();
 
   constructor(
     agents: Map<string, AgentHandle>,
@@ -52,6 +54,10 @@ export class Scheduler {
     return () => {
       this.listeners = this.listeners.filter((l) => l !== fn);
     };
+  }
+
+  getLastHeartbeatTs(name: string): number | null {
+    return this.lastHeartbeatTs.get(name) ?? null;
   }
 
   state(): SchedulerState {
@@ -104,6 +110,31 @@ export class Scheduler {
         });
     }
 
+    // Heartbeat injection for idle agents
+    const now = Date.now();
+    for (const handle of sorted) {
+      if (handle.status !== "idle") continue;
+      const hb = handle.config.heartbeat;
+      if (!hb) continue;
+      if (this.bus.peek(handle.name) > 0) continue;
+      const lastTs = this.lastHeartbeatTs.get(handle.name) ?? 0;
+      if (now - lastTs < hb.intervalMs) continue;
+      if (hb.activeHours && !isWithinActiveHours(hb.activeHours)) continue;
+
+      this.lastHeartbeatTs.set(handle.name, now);
+      handle.setLastScheduledHeartbeatTs(now);
+      const prompt = hb.prompt ?? DEFAULT_HEARTBEAT_PROMPT;
+      this.bus.send({
+        from: "__heartbeat__",
+        to: handle.name,
+        type: "prompt",
+        payload: prompt,
+        priority: handle.config.priority,
+        sourceKind: "internal",
+        sessionKey: `heartbeat:${handle.name}`,
+      });
+    }
+
     const state = this.state();
     for (const fn of this.listeners) fn(state);
   }
@@ -113,6 +144,7 @@ export class Scheduler {
 function formatMessagePayload(msg: InboxMessage): string {
   if (msg.from === "__user__") return msg.payload;
   if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
+  if (msg.from === "__heartbeat__") return `[Heartbeat]\n${msg.payload}`;
   return (
     `[Message from ${msg.from}]\n${msg.payload}\n\n` +
     `[To reply, call message_agent with to="${msg.from}"]`

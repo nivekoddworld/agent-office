@@ -20,6 +20,7 @@ import {
   IconChecklist,
   IconCoin,
   IconRobot,
+  IconHeartbeat,
 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
@@ -37,6 +38,7 @@ import { AgentHierarchySection } from "./AgentHierarchySection.js";
 import { AgentCronSection } from "./AgentCronSection.js";
 import { AgentTasksSection } from "./AgentTasksSection.js";
 import { AgentCostSection } from "./AgentCostSection.js";
+import { HeartbeatEditor } from "./HeartbeatEditor.js";
 import type { CronJobEntry, Task } from "../../api/types.js";
 
 interface AgentConfigPanelProps {
@@ -206,6 +208,13 @@ export function AgentConfigPanel({
           title="Cost (7 days)"
         >
           <AgentCostSection agentName={agentName} />
+        </SectionCard>
+
+        <SectionCard
+          icon={<IconHeartbeat size={16} color={slack.textMuted} />}
+          title="Heartbeat"
+        >
+          <HeartbeatEditor agent={agent} />
         </SectionCard>
       </SimpleGrid>
 

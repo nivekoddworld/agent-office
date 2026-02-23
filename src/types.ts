@@ -30,6 +30,12 @@ export interface AgentPermissions {
   tools?: { allow?: string[]; deny?: string[] };
 }
 
+export interface HeartbeatConfig {
+  intervalMs: number;
+  prompt?: string;
+  activeHours?: { start: string; end: string };
+}
+
 export interface AgentConfig {
   name: string;
   model: Model<any>;
@@ -51,6 +57,7 @@ export interface AgentConfig {
   promptMode?: "full" | "minimal";
   onDemandSkills?: boolean;
   hierarchy?: { manager: string | null; peers: string[]; reports: string[] };
+  heartbeat?: HeartbeatConfig;
 }
 
 export interface AgentInfo {

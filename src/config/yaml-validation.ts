@@ -277,6 +277,55 @@ export function validateAgentEntry(
     }
   }
 
+  if (entry.heartbeat !== undefined) {
+    const hb = entry.heartbeat;
+    if (typeof hb !== "object" || hb === null) {
+      errors.push(`heartbeat must be an object`);
+    } else {
+      if (
+        typeof hb.interval_ms !== "number" ||
+        !Number.isFinite(hb.interval_ms) ||
+        hb.interval_ms < 60000
+      ) {
+        errors.push(
+          `heartbeat.interval_ms must be a number >= 60000 (1 minute)`,
+        );
+      }
+      if (hb.prompt !== undefined && typeof hb.prompt !== "string") {
+        errors.push(`heartbeat.prompt must be a string`);
+      }
+      if (hb.active_hours !== undefined) {
+        const ah = hb.active_hours;
+        if (typeof ah !== "object" || ah === null) {
+          errors.push(`heartbeat.active_hours must be an object`);
+        } else {
+          const timeRe = /^([01]\d|2[0-3]):[0-5]\d$/;
+          if (typeof ah.start !== "string" || !timeRe.test(ah.start)) {
+            errors.push(
+              `heartbeat.active_hours.start must be HH:MM format (00:00-23:59)`,
+            );
+          }
+          if (typeof ah.end !== "string" || !timeRe.test(ah.end)) {
+            errors.push(
+              `heartbeat.active_hours.end must be HH:MM format (00:00-23:59)`,
+            );
+          }
+          if (
+            typeof ah.start === "string" &&
+            typeof ah.end === "string" &&
+            timeRe.test(ah.start) &&
+            timeRe.test(ah.end) &&
+            ah.start >= ah.end
+          ) {
+            errors.push(
+              `heartbeat.active_hours: start must be before end (overnight ranges not supported)`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   if (entry.permissions !== undefined) {
     if (typeof entry.permissions !== "object" || entry.permissions === null) {
       errors.push(`permissions must be an object`);

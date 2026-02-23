@@ -159,6 +159,8 @@ export function getAgentDetail(handle: AgentHandle): AgentDetail {
     customPrompt: cfg.systemPrompt ?? null,
     promptReport: report,
     hierarchy: cfg.hierarchy ?? null,
+    heartbeat: cfg.heartbeat ?? null,
+    lastScheduledHeartbeatTs: handle.getLastScheduledHeartbeatTs(),
   };
 }
 

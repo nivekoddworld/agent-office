@@ -49,6 +49,12 @@ export interface AgentDetail {
     peers: string[];
     reports: string[];
   } | null;
+  heartbeat: {
+    intervalMs: number;
+    prompt?: string;
+    activeHours?: { start: string; end: string };
+  } | null;
+  lastScheduledHeartbeatTs: number | null;
 }
 
 // --- Command dispatch ---

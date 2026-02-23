@@ -15,6 +15,8 @@ import {
   setAgentPermissionTools,
   clearAgentPermissionTools,
   setAgentManager,
+  setAgentHeartbeat,
+  clearAgentHeartbeat,
 } from "../config/office-yaml.js";
 import { officeDir } from "../constants.js";
 import { createRedactor } from "../security/redact.js";
@@ -124,6 +126,7 @@ export function agentConfigShowCommand(
   if (entry.reports_to) display.reports_to = entry.reports_to;
   if (entry.permissions && Object.keys(entry.permissions).length > 0)
     display.permissions = entry.permissions;
+  if (entry.heartbeat) display.heartbeat = entry.heartbeat;
 
   console.log(`\nAgent "${agentName}" config:`);
   console.log(JSON.stringify(display, null, 2));
@@ -320,6 +323,57 @@ export async function agentSetManagerCommand(
   } else {
     console.log(`[agent] Cleared manager for "${agentName}" (reports to user)`);
   }
+}
+
+// --- Heartbeat commands ---
+
+export async function agentHeartbeatSetCommand(
+  officeId: string,
+  agentName: string,
+  intervalMs: number,
+  prompt?: string,
+  activeHours?: { start: string; end: string },
+): Promise<void> {
+  await setAgentHeartbeat(officeId, agentName, {
+    interval_ms: intervalMs,
+    prompt,
+    active_hours: activeHours,
+  });
+  console.log(
+    `[agent] Set heartbeat for "${agentName}" (interval: ${intervalMs}ms). Run "office reload --force" to apply.`,
+  );
+}
+
+export async function agentHeartbeatClearCommand(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  await clearAgentHeartbeat(officeId, agentName);
+  console.log(
+    `[agent] Cleared heartbeat for "${agentName}". Run "office reload --force" to apply.`,
+  );
+}
+
+export function agentHeartbeatShowCommand(
+  officeId: string,
+  agentName: string,
+): void {
+  const yaml = loadOfficeYaml(officeId);
+  if (!yaml) {
+    console.error("[agent] Could not load office.yaml");
+    return;
+  }
+  const entry = yaml.agents[agentName];
+  if (!entry) {
+    console.error(`[agent] Agent "${agentName}" not found in office.yaml`);
+    return;
+  }
+  if (!entry.heartbeat) {
+    console.log(`Agent "${agentName}" has no heartbeat configured.`);
+    return;
+  }
+  console.log(`\nAgent "${agentName}" heartbeat:`);
+  console.log(JSON.stringify(entry.heartbeat, null, 2));
 }
 
 export function agentHierarchyShowCommand(

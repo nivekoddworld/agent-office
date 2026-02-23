@@ -12,7 +12,12 @@ const TASK_RATE_LIMIT = 40;
 const RATE_WINDOW_MS = 30_000;
 
 function resolveRateLimit(source: string): number | null {
-  if (source === "__user__" || source === "__cron__") return null;
+  if (
+    source === "__user__" ||
+    source === "__cron__" ||
+    source === "__heartbeat__"
+  )
+    return null;
   if (source === "__task__") return TASK_RATE_LIMIT;
   return DEFAULT_RATE_LIMIT;
 }

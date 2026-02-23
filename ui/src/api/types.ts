@@ -102,6 +102,12 @@ export interface PromptReport {
   skills: string[];
 }
 
+export interface HeartbeatConfig {
+  intervalMs: number;
+  prompt?: string;
+  activeHours?: { start: string; end: string };
+}
+
 export interface AgentDetail extends AgentInfo {
   sandbox: string | null;
   thinkingLevel: string | null;
@@ -114,6 +120,8 @@ export interface AgentDetail extends AgentInfo {
   customPrompt: string | null;
   promptReport: PromptReport;
   hierarchy: AgentHierarchy | null;
+  heartbeat: HeartbeatConfig | null;
+  lastScheduledHeartbeatTs: number | null;
 }
 
 export interface AgentSkill {

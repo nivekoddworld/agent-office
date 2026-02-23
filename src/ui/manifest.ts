@@ -120,6 +120,24 @@ export const COMMAND_MANIFEST: CommandEntry[] = [
     category: "agent",
     args: "<agent> <manager|__clear__>",
   },
+  {
+    name: "agent heartbeat show",
+    description: "Show agent heartbeat configuration",
+    category: "agent",
+    args: "<agent>",
+  },
+  {
+    name: "agent heartbeat set",
+    description: "Set agent heartbeat",
+    category: "agent",
+    args: "<agent> <intervalMs> [--prompt text] [--hours HH:MM-HH:MM]",
+  },
+  {
+    name: "agent heartbeat clear",
+    description: "Clear agent heartbeat",
+    category: "agent",
+    args: "<agent>",
+  },
 
   // --- Skills ---
   {

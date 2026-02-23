@@ -474,3 +474,10 @@ export {
   setCollaborationMode,
   setCollaborationSla,
 } from "./office-yaml-mutations.js";
+
+// --- Re-export heartbeat mutations from dedicated module ---
+
+export {
+  setAgentHeartbeat,
+  clearAgentHeartbeat,
+} from "./office-yaml-mutations.js";

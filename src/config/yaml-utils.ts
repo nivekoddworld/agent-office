@@ -37,6 +37,11 @@ export interface AgentYamlEntry {
       enabled?: boolean;
     }
   >;
+  heartbeat?: {
+    interval_ms: number;
+    prompt?: string;
+    active_hours?: { start: string; end: string };
+  };
 }
 
 // --- Shared constants ---
@@ -183,5 +188,14 @@ export function buildYamlEntry(
     out.prompt_mode = entry.prompt_mode;
   if (entry.on_demand_skills === false) out.on_demand_skills = false;
   if (entry.reports_to) out.reports_to = entry.reports_to;
+  if (entry.heartbeat) {
+    const hb: Record<string, unknown> = {
+      interval_ms: entry.heartbeat.interval_ms,
+    };
+    if (entry.heartbeat.prompt) hb.prompt = entry.heartbeat.prompt;
+    if (entry.heartbeat.active_hours)
+      hb.active_hours = entry.heartbeat.active_hours;
+    out.heartbeat = hb;
+  }
   return out;
 }

@@ -17,6 +17,9 @@ import {
   agentPermissionSetToolsCommand,
   agentPermissionClearToolsCommand,
   agentHierarchyShowCommand,
+  agentHeartbeatSetCommand,
+  agentHeartbeatClearCommand,
+  agentHeartbeatShowCommand,
 } from "../commands/agent-config.js";
 import {
   cronListCommand,
@@ -129,9 +132,41 @@ export async function dispatchAgentSubcommand(
     parts[4] === "tools"
   ) {
     await agentPermissionClearToolsCommand(officeId, agent);
+  } else if (sub === "heartbeat" && action === "show" && agent) {
+    agentHeartbeatShowCommand(officeId, agent);
+  } else if (sub === "heartbeat" && action === "set" && agent && parts[4]) {
+    const intervalMs = parseInt(parts[4], 10);
+    if (isNaN(intervalMs) || intervalMs < 60000) {
+      console.log(
+        "Usage: agent heartbeat set <agent> <intervalMs> [--prompt text] [--hours HH:MM-HH:MM]",
+      );
+      return "noop";
+    }
+    const promptIdx = parts.indexOf("--prompt");
+    const hoursIdx = parts.indexOf("--hours");
+    const promptEnd =
+      hoursIdx !== -1 && hoursIdx > promptIdx ? hoursIdx : parts.length;
+    const prompt =
+      promptIdx !== -1 && parts[promptIdx + 1]
+        ? parts.slice(promptIdx + 1, promptEnd).join(" ")
+        : undefined;
+    let activeHours: { start: string; end: string } | undefined;
+    if (hoursIdx !== -1 && parts[hoursIdx + 1]) {
+      const [start, end] = parts[hoursIdx + 1]!.split("-");
+      if (start && end) activeHours = { start, end };
+    }
+    await agentHeartbeatSetCommand(
+      officeId,
+      agent,
+      intervalMs,
+      prompt,
+      activeHours,
+    );
+  } else if (sub === "heartbeat" && action === "clear" && agent) {
+    await agentHeartbeatClearCommand(officeId, agent);
   } else {
     console.log(
-      "Usage: agent env set|unset <agent> <KEY> [VALUE]\n       agent secret-ref set|unset <agent> <KEY> [ENV]\n       agent config show <agent>\n       agent prompt show|set|append|clear <agent> [text]\n       agent hierarchy show <agent>\n       agent permission show <agent>\n       agent permission set <agent> office_cron <true|false>\n       agent permission set <agent> tools allow|deny <tool1,tool2,...>\n       agent permission clear <agent> office_cron|tools",
+      "Usage: agent env set|unset <agent> <KEY> [VALUE]\n       agent secret-ref set|unset <agent> <KEY> [ENV]\n       agent config show <agent>\n       agent prompt show|set|append|clear <agent> [text]\n       agent hierarchy show <agent>\n       agent permission show <agent>\n       agent permission set <agent> office_cron <true|false>\n       agent permission set <agent> tools allow|deny <tool1,tool2,...>\n       agent permission clear <agent> office_cron|tools\n       agent heartbeat show|set|clear <agent> [intervalMs] [--prompt text] [--hours HH:MM-HH:MM]",
     );
     return "noop";
   }

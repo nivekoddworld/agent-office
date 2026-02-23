@@ -45,6 +45,8 @@ import {
   deleteChannelFromOfficeYaml,
   setCollaborationMode,
   setCollaborationSla,
+  setAgentHeartbeat,
+  clearAgentHeartbeat,
 } from "../config/office-yaml.js";
 
 const DEFAULT_PORT = 3847;
@@ -698,6 +700,71 @@ export async function startUiServer(
       const handle = workspace.getAgent(name);
       if (!handle) return json(res, 404, { error: "agent_not_found" });
       return json(res, 200, getAgentDetail(handle));
+    }
+
+    // --- PATCH /api/agents/:name/heartbeat ---
+    const hbPatchMatch = path.match(/^\/api\/agents\/([^/]+)\/heartbeat$/);
+    if (hbPatchMatch && method === "PATCH") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const name = hbPatchMatch[1]!;
+      if (!workspace.getAgent(name))
+        return json(res, 404, { error: "agent_not_found" });
+      const body = await readBody(req);
+      let parsed: {
+        interval_ms?: number;
+        prompt?: string;
+        active_hours?: { start: string; end: string };
+      };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+      if (
+        typeof parsed.interval_ms !== "number" ||
+        parsed.interval_ms < 60000
+      ) {
+        return json(res, 400, {
+          error: "interval_ms must be a number >= 60000",
+        });
+      }
+      try {
+        await setAgentHeartbeat(officeId, name, {
+          interval_ms: parsed.interval_ms,
+          prompt: parsed.prompt,
+          active_hours: parsed.active_hours,
+        });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    // --- DELETE /api/agents/:name/heartbeat ---
+    const hbDeleteMatch = path.match(/^\/api\/agents\/([^/]+)\/heartbeat$/);
+    if (hbDeleteMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+      const name = hbDeleteMatch[1]!;
+      if (!workspace.getAgent(name))
+        return json(res, 404, { error: "agent_not_found" });
+      try {
+        await clearAgentHeartbeat(officeId, name);
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
+      } catch (err) {
+        return json(res, 400, {
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     // --- GET /api/tasks ---

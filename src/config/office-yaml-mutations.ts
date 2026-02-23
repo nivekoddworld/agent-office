@@ -100,6 +100,7 @@ export async function upsertAgentToOfficeYaml(
         "prompt_mode",
         "on_demand_skills",
         "reports_to",
+        "heartbeat",
       ]) {
         if (!(key in clean)) doc.deleteIn(["agents", name, key]);
       }
@@ -468,6 +469,44 @@ export async function deleteChannelFromOfficeYaml(
       throw new Error(`Channel "${name}" not found`);
     doc.deleteIn(["office", "channels", name]);
     cleanupEmptyMap(doc, ["office", "channels"]);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Heartbeat mutations ---
+
+export async function setAgentHeartbeat(
+  officeId: string,
+  agentName: string,
+  config: {
+    interval_ms: number;
+    prompt?: string;
+    active_hours?: { start: string; end: string };
+  },
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    const value: Record<string, unknown> = {
+      interval_ms: config.interval_ms,
+    };
+    if (config.prompt) value.prompt = config.prompt;
+    if (config.active_hours) value.active_hours = config.active_hours;
+    doc.setIn(["agents", agentName, "heartbeat"], value);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function clearAgentHeartbeat(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    doc.deleteIn(["agents", agentName, "heartbeat"]);
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }

@@ -93,6 +93,7 @@ export class AgentHandle {
   private _obligationStore?: ObligationStore;
   private _policyService?: PolicyService;
   private _bootstrapDir: string;
+  private _lastScheduledHeartbeatTs: number | null = null;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
     this.config = config;
@@ -165,6 +166,14 @@ export class AgentHandle {
 
   getActiveConversationPeer(): string | undefined {
     return this._activeConversationPeer;
+  }
+
+  setLastScheduledHeartbeatTs(ts: number): void {
+    this._lastScheduledHeartbeatTs = ts;
+  }
+
+  getLastScheduledHeartbeatTs(): number | null {
+    return this._lastScheduledHeartbeatTs;
   }
 
   private get agentDir(): string {

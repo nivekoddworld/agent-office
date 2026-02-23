@@ -21,6 +21,8 @@ const MUTATION_PREFIXES = [
   "agent permission set",
   "agent permission clear",
   "agent-set-manager",
+  "agent heartbeat set",
+  "agent heartbeat clear",
   "skill add",
   "skill remove",
   "scheduler start",
