@@ -37,7 +37,9 @@ export function HeartbeatEditor({ agent }: HeartbeatEditorProps) {
   const save = async () => {
     setSaving(true);
     try {
-      const body: Record<string, unknown> = { interval_ms: intervalMin * 60000 };
+      const body: Record<string, unknown> = {
+        interval_ms: intervalMin * 60000,
+      };
       if (prompt.trim()) body.prompt = prompt.trim();
       if (hoursStart && hoursEnd) {
         body.active_hours = { start: hoursStart, end: hoursEnd };

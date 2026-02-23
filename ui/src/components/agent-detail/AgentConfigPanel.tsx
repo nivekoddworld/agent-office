@@ -11,7 +11,6 @@ import {
   IconSettings,
   IconShield,
   IconVariable,
-  IconSparkles,
   IconFileText,
   IconBolt,
   IconInbox,
@@ -30,7 +29,6 @@ import { agentHue } from "../slack/channel-helpers.js";
 import { ConfigSection } from "./ConfigSection.js";
 import { PermissionsEditor } from "./PermissionsEditor.js";
 import { EnvEditor } from "./EnvEditor.js";
-import { SkillsManager } from "./SkillsManager.js";
 import { PromptViewer } from "./PromptViewer.js";
 import { QuickActions } from "./QuickActions.js";
 import { QueuePreview } from "./QueuePreview.js";
@@ -194,13 +192,6 @@ export function AgentConfigPanel({
           title="Environment & Secrets"
         >
           <EnvEditor agent={agent} />
-        </SectionCard>
-
-        <SectionCard
-          icon={<IconSparkles size={16} color={slack.textMuted} />}
-          title="Skills"
-        >
-          <SkillsManager agent={agent} />
         </SectionCard>
 
         <SectionCard

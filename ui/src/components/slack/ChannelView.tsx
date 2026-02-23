@@ -7,6 +7,7 @@ import {
   IconFiles,
   IconSettings,
   IconFileText,
+  IconSparkles,
 } from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
 import { slack } from "../../theme/slack-theme.js";
@@ -19,6 +20,7 @@ import { MessageInput } from "./MessageInput.js";
 import { AgentFilesPanel } from "./AgentFilesPanel.js";
 import { AgentConfigPanel } from "../agent-detail/AgentConfigPanel.js";
 import { AgentPromptPanel } from "../agent-detail/AgentPromptPanel.js";
+import { AgentSkillsPanel } from "../agent-detail/AgentSkillsPanel.js";
 import {
   eventToMessages,
   mergeBaselineWithLive,
@@ -36,7 +38,7 @@ import type {
 import { useAgentMessages } from "../../api/use-agent-messages.js";
 import { useChannelMessages } from "../../api/use-channel-messages.js";
 
-type DmTab = "messages" | "files" | "prompt" | "configure";
+type DmTab = "messages" | "files" | "prompt" | "skills" | "configure";
 
 interface ChannelViewProps {
   channel: ChannelId;
@@ -260,68 +262,75 @@ export function ChannelView({
           }}
         >
           <Group gap={0} px="md">
-            {(["messages", "files", "prompt", "configure"] as const).map(
-              (tab) => {
-                const active = dmTab === tab;
-                const icons: Record<DmTab, React.ReactNode> = {
-                  messages: (
-                    <IconMessages
-                      size={15}
-                      color={active ? slack.accentBlue : slack.textMuted}
-                    />
-                  ),
-                  files: (
-                    <IconFiles
-                      size={15}
-                      color={active ? slack.accentBlue : slack.textMuted}
-                    />
-                  ),
-                  prompt: (
-                    <IconFileText
-                      size={15}
-                      color={active ? slack.accentBlue : slack.textMuted}
-                    />
-                  ),
-                  configure: (
-                    <IconSettings
-                      size={15}
-                      color={active ? slack.accentBlue : slack.textMuted}
-                    />
-                  ),
-                };
-                const labels: Record<DmTab, string> = {
-                  messages: "Messages",
-                  files: "Files",
-                  prompt: "Prompt",
-                  configure: "Configure",
-                };
-                const icon = icons[tab];
-                const label = labels[tab];
-                return (
-                  <UnstyledButton
-                    key={tab}
-                    px="sm"
-                    py={8}
-                    onClick={() => setDmTab(tab)}
-                    style={{
-                      borderBottom: `2px solid ${active ? slack.accentBlue : "transparent"}`,
-                      marginBottom: -1,
-                    }}
-                  >
-                    <Group gap={6}>
-                      {icon}
-                      <Text
-                        size="sm"
-                        fw={active ? 600 : 400}
-                        style={{ color: active ? "#fff" : slack.textMuted }}
-                      >
-                        {label}
-                      </Text>
-                    </Group>
-                  </UnstyledButton>
-                );
-              },
-            )}
+            {(
+              ["messages", "files", "prompt", "skills", "configure"] as const
+            ).map((tab) => {
+              const active = dmTab === tab;
+              const icons: Record<DmTab, React.ReactNode> = {
+                messages: (
+                  <IconMessages
+                    size={15}
+                    color={active ? slack.accentBlue : slack.textMuted}
+                  />
+                ),
+                files: (
+                  <IconFiles
+                    size={15}
+                    color={active ? slack.accentBlue : slack.textMuted}
+                  />
+                ),
+                prompt: (
+                  <IconFileText
+                    size={15}
+                    color={active ? slack.accentBlue : slack.textMuted}
+                  />
+                ),
+                skills: (
+                  <IconSparkles
+                    size={15}
+                    color={active ? slack.accentBlue : slack.textMuted}
+                  />
+                ),
+                configure: (
+                  <IconSettings
+                    size={15}
+                    color={active ? slack.accentBlue : slack.textMuted}
+                  />
+                ),
+              };
+              const labels: Record<DmTab, string> = {
+                messages: "Messages",
+                files: "Files",
+                prompt: "Prompt",
+                skills: "Skills",
+                configure: "Configure",
+              };
+              const icon = icons[tab];
+              const label = labels[tab];
+              return (
+                <UnstyledButton
+                  key={tab}
+                  px="sm"
+                  py={8}
+                  onClick={() => setDmTab(tab)}
+                  style={{
+                    borderBottom: `2px solid ${active ? slack.accentBlue : "transparent"}`,
+                    marginBottom: -1,
+                  }}
+                >
+                  <Group gap={6}>
+                    {icon}
+                    <Text
+                      size="sm"
+                      fw={active ? 600 : 400}
+                      style={{ color: active ? "#fff" : slack.textMuted }}
+                    >
+                      {label}
+                    </Text>
+                  </Group>
+                </UnstyledButton>
+              );
+            })}
           </Group>
         </Box>
       )}
@@ -335,6 +344,8 @@ export function ChannelView({
         />
       ) : isDm && dmTab === "prompt" ? (
         <AgentPromptPanel agentName={channel.agentName} />
+      ) : isDm && dmTab === "skills" ? (
+        <AgentSkillsPanel agentName={channel.agentName} />
       ) : isDm && dmTab === "files" ? (
         <AgentFilesPanel agentName={channel.agentName} />
       ) : (
