@@ -6,7 +6,6 @@ import {
   loadSkills,
   formatSkillsForPrompt,
 } from "@mariozechner/pi-coding-agent";
-import type { DmRecord } from "../messages/types.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type {
   AgentConfig,
@@ -392,21 +391,6 @@ export class AgentHandle {
     };
   }
 
-  seedConversation(records: DmRecord[]): void {
-    if (!this.agent || records.length === 0) return;
-    const history = formatDmHistory(records);
-    this.agent.replaceMessages([
-      {
-        role: "user" as const,
-        content:
-          `[Prior conversation context — ${records.length} turns replayed]\n` +
-          `The following is the conversation history from a previous session. ` +
-          `Each turn is prefixed with the speaker role.\n\n${history}`,
-        timestamp: records[records.length - 1]!.ts_ms,
-      },
-    ]);
-  }
-
   clearConversation(): void {
     this.agent?.replaceMessages([]);
   }
@@ -429,8 +413,4 @@ export class AgentHandle {
     this._activeConversationPeer = undefined;
     this.listeners = [];
   }
-}
-
-export function formatDmHistory(records: DmRecord[]): string {
-  return records.map((r) => `--- ${r.role} ---\n${r.text}`).join("\n\n");
 }

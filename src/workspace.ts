@@ -11,7 +11,6 @@ import { join } from "node:path";
 import type {
   AgentConfig,
   AgentInfo,
-  InboxMessage,
   OfficeContext,
   Priority,
   WorkspaceConfig,
@@ -30,7 +29,7 @@ import {
   createMessageStore,
   type MessageStore,
 } from "./messages/message-store.js";
-import type { DmRecord } from "./messages/types.js";
+
 import {
   createBaselineMetrics,
   type CollaborationMetricsCollector,
@@ -295,8 +294,6 @@ export class Workspace {
 
     this.agents.set(config.name, handle);
     this.bus.register(config.name);
-    this.hydrateDmContext(handle);
-
     // Forward agent events to workspace listeners
     handle.onEvent((e) => {
       const requestId = handle.getActiveRequestId();
@@ -584,22 +581,6 @@ export class Workspace {
     };
   }
 
-  private hydrateDmContext(handle: AgentHandle): void {
-    if (!this.messageStore) return;
-
-    const DM_CONTEXT_LIMIT = 50;
-    const records = this.messageStore.queryDm(handle.name, DM_CONTEXT_LIMIT);
-    if (records.length === 0) return;
-
-    const filtered = filterDmForHydration(
-      records,
-      this.bus.peekMessages(handle.name),
-    );
-    if (filtered.length === 0) return;
-
-    handle.seedConversation(filtered.reverse());
-  }
-
   // --- Nudge / escalation ---
 
   private handleNudge(agentName: string, message: string): void {
@@ -652,7 +633,6 @@ export class Workspace {
     // Re-init the agent with a fresh Pi instance
     try {
       await handle.init();
-      this.hydrateDmContext(handle);
       console.log(`[watchdog] Agent "${name}" restarted`);
     } catch (err) {
       console.error(`[watchdog] Failed to restart "${name}":`, err);
@@ -696,40 +676,3 @@ function resolveModelKey(config: AgentConfig): string {
   );
 }
 
-export function filterDmForHydration(
-  records: DmRecord[],
-  pending: InboxMessage[],
-): DmRecord[] {
-  const userPrompts = pending.filter(
-    (m) => m.from === "__user__" && m.type === "prompt",
-  );
-  if (userPrompts.length === 0) return records;
-
-  const pendingRequestIds = new Set(
-    userPrompts.filter((m) => m.requestId).map((m) => m.requestId!),
-  );
-
-  // Count-based fingerprint map: each pending message can neutralize at most
-  // one historical DM record. Prevents dropping all "ok"s when only one is
-  // actually pending.
-  const pendingFingerprints = new Map<string, number>();
-  for (const m of userPrompts) {
-    if (m.requestId) continue;
-    const fp = m.payload.trim();
-    pendingFingerprints.set(fp, (pendingFingerprints.get(fp) ?? 0) + 1);
-  }
-
-  return records.filter((r) => {
-    if (r.role !== "user") return true;
-    if (r.request_id && pendingRequestIds.has(r.request_id)) return false;
-    if (!r.request_id) {
-      const fp = r.text.trim();
-      const remaining = pendingFingerprints.get(fp);
-      if (remaining !== undefined && remaining > 0) {
-        pendingFingerprints.set(fp, remaining - 1);
-        return false;
-      }
-    }
-    return true;
-  });
-}
