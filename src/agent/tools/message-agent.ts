@@ -146,11 +146,11 @@ export function createMessageAgentTool(
           );
         }
 
-        // 5. Record reply session (only for 1:1 from non-internal sessions)
+        // 5. Record reply session (only for 1:1 from DM sessions)
         const activeKey = deps.getActiveSessionKey?.();
         if (
           activeKey &&
-          !activeKey.startsWith("internal:") &&
+          activeKey.startsWith("dm:") &&
           params.to !== "__broadcast__"
         ) {
           deps.setReplySession?.(agentName, params.to, activeKey);

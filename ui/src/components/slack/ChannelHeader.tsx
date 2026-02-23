@@ -1,5 +1,13 @@
-import { Group, Text, Box, Tooltip, ActionIcon } from "@mantine/core";
-import { IconHash, IconUsers, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { Group, Text, Box, Tooltip, ActionIcon, Menu } from "@mantine/core";
+import {
+  IconHash,
+  IconUsers,
+  IconEye,
+  IconEyeOff,
+  IconDots,
+  IconTrash,
+  IconFileText,
+} from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import type { ChannelId } from "./channel-types.js";
 
@@ -10,6 +18,8 @@ interface ChannelHeaderProps {
   description?: string;
   showSystemMessages?: boolean;
   onToggleSystemMessages?: () => void;
+  onClearHistory?: () => void;
+  clearLoading?: boolean;
 }
 
 export function ChannelHeader({
@@ -19,6 +29,8 @@ export function ChannelHeader({
   description,
   showSystemMessages,
   onToggleSystemMessages,
+  onClearHistory,
+  clearLoading,
 }: ChannelHeaderProps) {
   const name = channel.kind === "dm" ? channel.agentName : channel.name;
   const desc = description ?? "";
@@ -90,6 +102,39 @@ export function ChannelHeader({
                 </Text>
               </Group>
             </Tooltip>
+          )}
+          {onClearHistory != null && (
+            <Menu position="bottom-end" withArrow>
+              <Menu.Target>
+                <ActionIcon
+                  variant="subtle"
+                  color="gray"
+                  size="sm"
+                  loading={clearLoading}
+                >
+                  <IconDots size={16} color={slack.textSecondary} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item
+                  leftSection={<IconTrash size={14} />}
+                  color="red"
+                  onClick={onClearHistory}
+                >
+                  Clear History
+                </Menu.Item>
+                <Tooltip label="Coming soon" withArrow>
+                  <span style={{ pointerEvents: "all" }}>
+                    <Menu.Item
+                      leftSection={<IconFileText size={14} />}
+                      disabled
+                    >
+                      Summarize
+                    </Menu.Item>
+                  </span>
+                </Tooltip>
+              </Menu.Dropdown>
+            </Menu>
           )}
         </Group>
       </Group>

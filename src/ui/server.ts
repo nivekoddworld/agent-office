@@ -6,7 +6,7 @@ import {
 } from "node:http";
 import type { AddressInfo } from "node:net";
 import { randomUUID } from "node:crypto";
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync, writeFileSync } from "node:fs";
 import { join, extname, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Priority } from "../types.js";
@@ -524,6 +524,75 @@ export async function startUiServer(
           requestId: r.request_id,
         })),
       });
+    }
+
+    // --- DELETE /api/agents/:name/messages ---
+    const dmDeleteMatch = path.match(/^\/api\/agents\/([^/]+)\/messages$/);
+    if (dmDeleteMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const name = dmDeleteMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      // 1. Delete from SQLite
+      if (workspace.store) {
+        workspace.store.deleteDm(name);
+      }
+
+      // 2. Truncate JSONL session file
+      const sessionPath = join(
+        workspace.office.dir,
+        "agents",
+        name,
+        "sessions",
+        "user-dm.jsonl",
+      );
+      try {
+        writeFileSync(sessionPath, "", "utf-8");
+      } catch {
+        // file may not exist
+      }
+
+      // 3. Clear agent in-memory conversation
+      handle.clearConversation();
+
+      // 4. Broadcast state change
+      broadcast("state_changed", getBootstrapState(workspace, officeId));
+      return json(res, 200, { ok: true });
+    }
+
+    // --- DELETE /api/channels/:name/messages ---
+    const chMsgDeleteMatch = path.match(/^\/api\/channels\/([^/]+)\/messages$/);
+    if (chMsgDeleteMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const chName = decodeURIComponent(chMsgDeleteMatch[1]!).replace(/^#/, "");
+      const cfg = workspace.office.channels.get(chName);
+      if (!cfg) return json(res, 404, { error: "channel_not_found" });
+
+      // Truncate channel JSONL for all member agents
+      for (const member of cfg.members) {
+        const sessionPath = join(
+          workspace.office.dir,
+          "agents",
+          member,
+          "sessions",
+          `channel-${chName}.jsonl`,
+        );
+        try {
+          writeFileSync(sessionPath, "", "utf-8");
+        } catch {
+          // file may not exist
+        }
+      }
+
+      broadcast("state_changed", getBootstrapState(workspace, officeId));
+      return json(res, 200, { ok: true });
     }
 
     // --- GET /api/agents/:name/files ---

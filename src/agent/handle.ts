@@ -407,6 +407,10 @@ export class AgentHandle {
     ]);
   }
 
+  clearConversation(): void {
+    this.agent?.replaceMessages([]);
+  }
+
   async destroy(): Promise<void> {
     if (this.provider && this.sandboxInfo) {
       await this.provider

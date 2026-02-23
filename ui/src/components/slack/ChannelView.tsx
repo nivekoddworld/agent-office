@@ -1,5 +1,6 @@
 import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Box, Button, Text, Group, UnstyledButton } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   IconArrowDown,
@@ -11,6 +12,7 @@ import {
 } from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
 import { slack } from "../../theme/slack-theme.js";
+import { apiFetch } from "../../api/client.js";
 import { ChannelHeader } from "./ChannelHeader.js";
 import { SlackMessage } from "./SlackMessage.js";
 import type { SlackMessageData } from "./types.js";
@@ -21,6 +23,7 @@ import { AgentFilesPanel } from "./AgentFilesPanel.js";
 import { AgentConfigPanel } from "../agent-detail/AgentConfigPanel.js";
 import { AgentPromptPanel } from "../agent-detail/AgentPromptPanel.js";
 import { AgentSkillsPanel } from "../agent-detail/AgentSkillsPanel.js";
+import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import {
   eventToMessages,
   mergeBaselineWithLive,
@@ -227,6 +230,45 @@ export function ChannelView({
   );
 
   const isDm = channel.kind === "dm";
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+
+  const handleClearHistory = useCallback(async () => {
+    setClearLoading(true);
+    try {
+      if (channel.kind === "dm") {
+        await apiFetch(
+          `/api/agents/${encodeURIComponent(channel.agentName)}/messages`,
+          { method: "DELETE" },
+        );
+        void queryClient.invalidateQueries({
+          queryKey: ["agent-messages", channel.agentName],
+        });
+      } else if (channel.kind === "conversation") {
+        await apiFetch(
+          `/api/channels/${encodeURIComponent(channel.name)}/messages`,
+          { method: "DELETE" },
+        );
+      }
+      notifications.show({
+        title: "History cleared",
+        message:
+          channel.kind === "dm"
+            ? `Conversation with ${channel.agentName} has been cleared.`
+            : `Channel #${channel.name} history has been cleared.`,
+        color: "green",
+      });
+    } catch (err) {
+      notifications.show({
+        title: "Failed to clear history",
+        message: err instanceof Error ? err.message : "Unknown error",
+        color: "red",
+      });
+    } finally {
+      setClearLoading(false);
+      setClearConfirm(false);
+    }
+  }, [channel, queryClient]);
 
   return (
     <Box
@@ -252,6 +294,27 @@ export function ChannelView({
         onToggleSystemMessages={
           isDefaultChannel ? () => setShowSystemMessages((v) => !v) : undefined
         }
+        onClearHistory={
+          isDm || channel.kind === "conversation"
+            ? () => setClearConfirm(true)
+            : undefined
+        }
+        clearLoading={clearLoading || undefined}
+      />
+
+      <ConfirmDialog
+        opened={clearConfirm}
+        title="Clear History"
+        message={
+          channel.kind === "dm"
+            ? `Clear all conversation history with ${channel.agentName}? This cannot be undone.`
+            : `Clear all history in #${channel.kind === "conversation" ? channel.name : ""}? This cannot be undone.`
+        }
+        confirmLabel="Clear History"
+        confirmColor="red"
+        onConfirm={handleClearHistory}
+        onCancel={() => setClearConfirm(false)}
+        loading={clearLoading}
       />
 
       {isDm && (
