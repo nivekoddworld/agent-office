@@ -8,8 +8,10 @@ import {
   Group,
   Text,
   Badge,
+  Box,
   Loader,
 } from "@mantine/core";
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type {
   ComboboxItem,
   ComboboxData,
@@ -201,13 +203,40 @@ export function AddNodeModal({
       centered
     >
       <Stack gap="sm">
-        <TextInput
-          label="Name"
-          placeholder="agent-name"
-          value={name}
-          onChange={(e) => setName(e.currentTarget.value)}
-          required
-        />
+        <Group gap="md" align="flex-end" wrap="nowrap">
+          <Box
+            style={{
+              width: 48,
+              height: 48,
+              flexShrink: 0,
+              borderRadius: "22%",
+              overflow: "hidden",
+              backgroundColor: name.trim()
+                ? undefined
+                : "var(--mantine-color-dark-4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              transition: "background-color 0.2s",
+            }}
+          >
+            {name.trim() ? (
+              <AgentAvatar name={name.trim()} size={48} />
+            ) : (
+              <Text size="lg" c="dimmed">
+                ?
+              </Text>
+            )}
+          </Box>
+          <TextInput
+            label="Name"
+            placeholder="agent-name"
+            value={name}
+            onChange={(e) => setName(e.currentTarget.value)}
+            required
+            style={{ flex: 1 }}
+          />
+        </Group>
         {isLoading ? (
           <Group gap="xs">
             <Loader size="xs" />
