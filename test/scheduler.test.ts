@@ -436,10 +436,7 @@ describe("Scheduler", () => {
     it("excludes recipient from the members list", () => {
       const agents = new Map<string, any>();
       const bus = new MessageBus();
-      const channels = makeChannels([
-        "dev",
-        { members: ["alice", "bob"] },
-      ]);
+      const channels = makeChannels(["dev", { members: ["alice", "bob"] }]);
 
       const target = mockHandle("alice", Priority.NORMAL);
       agents.set("alice", target);
@@ -487,9 +484,7 @@ describe("Scheduler", () => {
       vi.advanceTimersByTime(100);
       sched.stop();
 
-      expect(target.prompt).toHaveBeenCalledWith(
-        "[Posted in #unknown]\nhello",
-      );
+      expect(target.prompt).toHaveBeenCalledWith("[Posted in #unknown]\nhello");
     });
   });
 });

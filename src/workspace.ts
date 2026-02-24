@@ -691,4 +691,3 @@ function resolveModelKey(config: AgentConfig): string {
     `Agent "${config.name}": model key not found. Set ${envVar ?? "provider API key"} in host env or use api_key_ref.`,
   );
 }
-

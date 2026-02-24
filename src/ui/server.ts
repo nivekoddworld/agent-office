@@ -38,7 +38,10 @@ import {
 import { skillRemoveCommand } from "../commands/skill.js";
 import { hireCommand, type HireArgs } from "../commands/hire.js";
 import { fireCommand } from "../commands/fire.js";
-import { applyOfficeYaml, officeValidateCommand } from "../commands/office-apply.js";
+import {
+  applyOfficeYaml,
+  officeValidateCommand,
+} from "../commands/office-apply.js";
 import {
   cronAddCommand,
   cronRemoveCommand,
@@ -1345,7 +1348,11 @@ export async function startUiServer(
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (!parsed.name || typeof parsed.name !== "string" || !parsed.name.trim()) {
+      if (
+        !parsed.name ||
+        typeof parsed.name !== "string" ||
+        !parsed.name.trim()
+      ) {
         return json(res, 400, { error: "name is required" });
       }
       const AGENT_NAME_RE = /^[a-z][a-z0-9_-]*$/;
@@ -1372,13 +1379,19 @@ export async function startUiServer(
         ephemeral: parsed.ephemeral,
         "api-key-ref": parsed.api_key_ref,
         env: parsed.env,
-        ...(Object.keys(secretRefs).length > 0 ? { "secret-ref": secretRefs } : {}),
+        ...(Object.keys(secretRefs).length > 0
+          ? { "secret-ref": secretRefs }
+          : {}),
       };
       try {
         await hireCommand(workspace, hireArgs);
         const handle = workspace.getAgent(parsed.name);
         broadcast("state_changed", getBootstrapState(workspace, officeId));
-        return json(res, 201, { ok: true, name: parsed.name, cwd: handle?.cwd ?? null });
+        return json(res, 201, {
+          ok: true,
+          name: parsed.name,
+          cwd: handle?.cwd ?? null,
+        });
       } catch (err) {
         return json(res, 400, {
           ok: false,
@@ -1499,11 +1512,15 @@ export async function startUiServer(
         return json(res, 400, { error: "invalid_body" });
       }
       if (!parsed.jobName || !parsed.schedule || !parsed.message) {
-        return json(res, 400, { error: "jobName, schedule, and message are required" });
+        return json(res, 400, {
+          error: "jobName, schedule, and message are required",
+        });
       }
       const fieldCount = parsed.schedule.trim().split(/\s+/).length;
       if (fieldCount !== 5) {
-        return json(res, 400, { error: "schedule must be a 5-field cron expression" });
+        return json(res, 400, {
+          error: "schedule must be a 5-field cron expression",
+        });
       }
       try {
         const ok = await cronAddCommand(
@@ -1512,7 +1529,11 @@ export async function startUiServer(
           parsed.jobName,
           parsed.schedule,
           parsed.message,
-          { timezone: parsed.timezone, catchUp: parsed.catchUp, reportChannel: parsed.reportChannel },
+          {
+            timezone: parsed.timezone,
+            catchUp: parsed.catchUp,
+            reportChannel: parsed.reportChannel,
+          },
           workspace,
         );
         if (!ok) return json(res, 400, { ok: false, error: "cron_add_failed" });
@@ -1527,7 +1548,9 @@ export async function startUiServer(
     }
 
     // --- DELETE /api/agents/:name/cron/:job ---
-    const agentCronDeleteMatch = path.match(/^\/api\/agents\/([^/]+)\/cron\/([^/]+)$/);
+    const agentCronDeleteMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/cron\/([^/]+)$/,
+    );
     if (agentCronDeleteMatch && method === "DELETE") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -1535,8 +1558,14 @@ export async function startUiServer(
       const agentName = agentCronDeleteMatch[1]!;
       const jobName = decodeURIComponent(agentCronDeleteMatch[2]!);
       try {
-        const ok = await cronRemoveCommand(officeId, agentName, jobName, workspace);
-        if (!ok) return json(res, 404, { ok: false, error: "cron_job_not_found" });
+        const ok = await cronRemoveCommand(
+          officeId,
+          agentName,
+          jobName,
+          workspace,
+        );
+        if (!ok)
+          return json(res, 404, { ok: false, error: "cron_job_not_found" });
         broadcast("state_changed", getBootstrapState(workspace, officeId));
         return json(res, 200, { ok: true });
       } catch (err) {
@@ -1548,7 +1577,9 @@ export async function startUiServer(
     }
 
     // --- PATCH /api/agents/:name/cron/:job (enable/disable) ---
-    const agentCronPatchMatch = path.match(/^\/api\/agents\/([^/]+)\/cron\/([^/]+)$/);
+    const agentCronPatchMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/cron\/([^/]+)$/,
+    );
     if (agentCronPatchMatch && method === "PATCH") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -1569,7 +1600,8 @@ export async function startUiServer(
         const ok = parsed.enabled
           ? await cronEnableCommand(officeId, agentName, jobName, workspace)
           : await cronDisableCommand(officeId, agentName, jobName, workspace);
-        if (!ok) return json(res, 404, { ok: false, error: "cron_job_not_found" });
+        if (!ok)
+          return json(res, 404, { ok: false, error: "cron_job_not_found" });
         broadcast("state_changed", getBootstrapState(workspace, officeId));
         return json(res, 200, { ok: true });
       } catch (err) {
@@ -1581,7 +1613,9 @@ export async function startUiServer(
     }
 
     // --- POST /api/agents/:name/cron/:job/trigger ---
-    const agentCronTriggerMatch = path.match(/^\/api\/agents\/([^/]+)\/cron\/([^/]+)\/trigger$/);
+    const agentCronTriggerMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/cron\/([^/]+)\/trigger$/,
+    );
     if (agentCronTriggerMatch && method === "POST") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -1620,12 +1654,21 @@ export async function startUiServer(
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (!parsed.jobName || !parsed.schedule || !parsed.message || !parsed.targets?.length) {
-        return json(res, 400, { error: "jobName, schedule, message, and targets are required" });
+      if (
+        !parsed.jobName ||
+        !parsed.schedule ||
+        !parsed.message ||
+        !parsed.targets?.length
+      ) {
+        return json(res, 400, {
+          error: "jobName, schedule, message, and targets are required",
+        });
       }
       const fieldCount = parsed.schedule.trim().split(/\s+/).length;
       if (fieldCount !== 5) {
-        return json(res, 400, { error: "schedule must be a 5-field cron expression" });
+        return json(res, 400, {
+          error: "schedule must be a 5-field cron expression",
+        });
       }
       try {
         const ok = await cronAddOfficeCommand(
@@ -1634,7 +1677,11 @@ export async function startUiServer(
           parsed.schedule,
           parsed.message,
           parsed.targets,
-          { timezone: parsed.timezone, catchUp: parsed.catchUp, reportChannel: parsed.reportChannel },
+          {
+            timezone: parsed.timezone,
+            catchUp: parsed.catchUp,
+            reportChannel: parsed.reportChannel,
+          },
           workspace,
         );
         if (!ok) return json(res, 400, { ok: false, error: "cron_add_failed" });
@@ -1657,7 +1704,8 @@ export async function startUiServer(
       const jobName = decodeURIComponent(officeCronDeleteMatch[1]!);
       try {
         const ok = await cronRemoveOfficeCommand(officeId, jobName, workspace);
-        if (!ok) return json(res, 404, { ok: false, error: "cron_job_not_found" });
+        if (!ok)
+          return json(res, 404, { ok: false, error: "cron_job_not_found" });
         broadcast("state_changed", getBootstrapState(workspace, officeId));
         return json(res, 200, { ok: true });
       } catch (err) {
@@ -1669,7 +1717,9 @@ export async function startUiServer(
     }
 
     // --- POST /api/cron/office/:job/trigger ---
-    const officeCronTriggerMatch = path.match(/^\/api\/cron\/office\/([^/]+)\/trigger$/);
+    const officeCronTriggerMatch = path.match(
+      /^\/api\/cron\/office\/([^/]+)\/trigger$/,
+    );
     if (officeCronTriggerMatch && method === "POST") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -1701,10 +1751,18 @@ export async function startUiServer(
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (!parsed.action || !["set", "append", "clear"].includes(parsed.action)) {
-        return json(res, 400, { error: "action must be 'set', 'append', or 'clear'" });
+      if (
+        !parsed.action ||
+        !["set", "append", "clear"].includes(parsed.action)
+      ) {
+        return json(res, 400, {
+          error: "action must be 'set', 'append', or 'clear'",
+        });
       }
-      if ((parsed.action === "set" || parsed.action === "append") && !parsed.text) {
+      if (
+        (parsed.action === "set" || parsed.action === "append") &&
+        !parsed.text
+      ) {
         return json(res, 400, { error: "text is required for set/append" });
       }
       try {
@@ -1726,7 +1784,9 @@ export async function startUiServer(
     }
 
     // --- PATCH /api/agents/:name/permissions ---
-    const agentPermissionsMatch = path.match(/^\/api\/agents\/([^/]+)\/permissions$/);
+    const agentPermissionsMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/permissions$/,
+    );
     if (agentPermissionsMatch && method === "PATCH") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -1745,7 +1805,11 @@ export async function startUiServer(
       try {
         if (typeof parsed.office_cron === "boolean") {
           if (parsed.office_cron) {
-            await agentPermissionSetOfficeCronCommand(officeId, agentName, true);
+            await agentPermissionSetOfficeCronCommand(
+              officeId,
+              agentName,
+              true,
+            );
           } else {
             await agentPermissionClearOfficeCronCommand(officeId, agentName);
           }
@@ -1766,7 +1830,8 @@ export async function startUiServer(
             );
           } else {
             return json(res, 400, {
-              error: "tools requires mode ('allow'|'deny') + list, or clear:true",
+              error:
+                "tools requires mode ('allow'|'deny') + list, or clear:true",
             });
           }
         }
@@ -1803,7 +1868,12 @@ export async function startUiServer(
       }
       try {
         if (parsed.action === "set") {
-          await agentEnvSetCommand(officeId, agentName, parsed.key, parsed.value!);
+          await agentEnvSetCommand(
+            officeId,
+            agentName,
+            parsed.key,
+            parsed.value!,
+          );
         } else {
           await agentEnvUnsetCommand(officeId, agentName, parsed.key);
         }
@@ -1818,7 +1888,9 @@ export async function startUiServer(
     }
 
     // --- PATCH /api/agents/:name/secret-refs ---
-    const agentSecretRefMatch = path.match(/^\/api\/agents\/([^/]+)\/secret-refs$/);
+    const agentSecretRefMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/secret-refs$/,
+    );
     if (agentSecretRefMatch && method === "PATCH") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -1840,7 +1912,12 @@ export async function startUiServer(
       }
       try {
         if (parsed.action === "set") {
-          await agentSecretRefSetCommand(officeId, agentName, parsed.key, parsed.hostEnvName!);
+          await agentSecretRefSetCommand(
+            officeId,
+            agentName,
+            parsed.key,
+            parsed.hostEnvName!,
+          );
         } else {
           await agentSecretRefUnsetCommand(officeId, agentName, parsed.key);
         }
@@ -1869,13 +1946,19 @@ export async function startUiServer(
         return json(res, 400, { error: "invalid_body" });
       }
       if (!("manager" in parsed)) {
-        return json(res, 400, { error: "manager field is required (string or null)" });
+        return json(res, 400, {
+          error: "manager field is required (string or null)",
+        });
       }
       if (parsed.manager !== null && typeof parsed.manager !== "string") {
         return json(res, 400, { error: "manager must be a string or null" });
       }
       try {
-        await agentSetManagerCommand(officeId, agentName, parsed.manager ?? null);
+        await agentSetManagerCommand(
+          officeId,
+          agentName,
+          parsed.manager ?? null,
+        );
         broadcast("state_changed", getBootstrapState(workspace, officeId));
         return json(res, 200, { ok: true });
       } catch (err) {

@@ -307,7 +307,9 @@ export class CronService {
           type: "prompt",
           payload: job.config.message,
           priority: Priority.NORMAL,
-          sessionKey: rc ? sessionKey("channel", rc) : sessionKey("internal", target),
+          sessionKey: rc
+            ? sessionKey("channel", rc)
+            : sessionKey("internal", target),
           sourceKind: rc ? "channel" : "internal",
           channel: rc,
         });
@@ -407,7 +409,9 @@ export class CronService {
         type: "prompt",
         payload: job.config.message,
         priority: Priority.NORMAL,
-        sessionKey: rc ? sessionKey("channel", rc) : sessionKey("internal", job.agentName),
+        sessionKey: rc
+          ? sessionKey("channel", rc)
+          : sessionKey("internal", job.agentName),
         sourceKind: rc ? "channel" : "internal",
         channel: rc,
       });

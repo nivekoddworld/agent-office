@@ -271,7 +271,7 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
 | `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)                 |
 | `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill`          |
-| `heartbeat`        | map              | _(none)_                                               | Proactive heartbeat config (see [Heartbeat](#heartbeat))                        |
+| `heartbeat`        | map              | _(none)_                                               | Proactive heartbeat config (see [Heartbeat](#heartbeat))                         |
 
 **Task tools** (`task_create`, `task_update`, `task_list`, `task_get`) are available to all in-process agents by default. Restrict access via `permissions.tools.deny`. See [Task Management](#task-management).
 
@@ -290,11 +290,11 @@ agents:
         end: "17:00"
 ```
 
-| Field          | Required | Default      | Description                                 |
-| -------------- | -------- | ------------ | ------------------------------------------- |
-| `interval_ms`  | yes      | —            | Interval in milliseconds between heartbeats |
-| `prompt`       | no       | _(default)_  | Custom prompt text for heartbeat messages   |
-| `active_hours` | no       | _(none)_     | Restrict heartbeats to a time window        |
+| Field          | Required | Default     | Description                                 |
+| -------------- | -------- | ----------- | ------------------------------------------- |
+| `interval_ms`  | yes      | —           | Interval in milliseconds between heartbeats |
+| `prompt`       | no       | _(default)_ | Custom prompt text for heartbeat messages   |
+| `active_hours` | no       | _(none)_    | Restrict heartbeats to a time window        |
 
 Heartbeat messages are injected with `from: "__heartbeat__"` and formatted as `[Heartbeat]\n<prompt>`. Busy agents (status `running`) are skipped.
 
@@ -408,14 +408,14 @@ agents:
         report_channel: general # optional, post trigger to this channel
 ```
 
-| Field            | Required | Default   | Description                                                                 |
-| ---------------- | -------- | --------- | --------------------------------------------------------------------------- |
-| `schedule`       | yes      | —         | 5-field cron expression (`@daily`/`@hourly` rejected)                       |
-| `message`        | yes      | —         | Prompt text sent to the agent                                               |
-| `timezone`       | no       | `UTC`     | IANA timezone for schedule evaluation                                       |
-| `catch_up`       | no       | `skip`    | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
-| `enabled`        | no       | `true`    | Set `false` to pause without removing                                       |
-| `report_channel` | no       | _(none)_  | Channel name to post the cron trigger to (visible in channel session)       |
+| Field            | Required | Default  | Description                                                                 |
+| ---------------- | -------- | -------- | --------------------------------------------------------------------------- |
+| `schedule`       | yes      | —        | 5-field cron expression (`@daily`/`@hourly` rejected)                       |
+| `message`        | yes      | —        | Prompt text sent to the agent                                               |
+| `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                       |
+| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `enabled`        | no       | `true`   | Set `false` to pause without removing                                       |
+| `report_channel` | no       | _(none)_ | Channel name to post the cron trigger to (visible in channel session)       |
 
 Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 
@@ -459,15 +459,15 @@ office:
       targets: [__broadcast__] # sends to all agents
 ```
 
-| Field            | Required | Default   | Description                                                                 |
-| ---------------- | -------- | --------- | --------------------------------------------------------------------------- |
-| `schedule`       | yes      | —         | 5-field cron expression                                                     |
-| `message`        | yes      | —         | Prompt text sent to each target agent                                       |
-| `targets`        | yes      | —         | Agent names or `__broadcast__` (all agents)                                 |
-| `timezone`       | no       | `UTC`     | IANA timezone for schedule evaluation                                       |
-| `catch_up`       | no       | `skip`    | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
-| `enabled`        | no       | `true`    | Set `false` to pause without removing                                       |
-| `report_channel` | no       | _(none)_  | Channel name to post the cron trigger to (visible in channel session)       |
+| Field            | Required | Default  | Description                                                                 |
+| ---------------- | -------- | -------- | --------------------------------------------------------------------------- |
+| `schedule`       | yes      | —        | 5-field cron expression                                                     |
+| `message`        | yes      | —        | Prompt text sent to each target agent                                       |
+| `targets`        | yes      | —        | Agent names or `__broadcast__` (all agents)                                 |
+| `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                       |
+| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `enabled`        | no       | `true`   | Set `false` to pause without removing                                       |
+| `report_channel` | no       | _(none)_ | Channel name to post the cron trigger to (visible in channel session)       |
 
 Target agent names are validated at parse time. Typos fail fast:
 
@@ -866,8 +866,8 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 **Auth & SSE:**
 
-| Method | Path             | Description                                   |
-| ------ | ---------------- | --------------------------------------------- |
+| Method | Path             | Description                                    |
+| ------ | ---------------- | ---------------------------------------------- |
 | `POST` | `/api/auth`      | Authenticate with bootstrap token, set session |
 | `GET`  | `/api/events`    | SSE event stream (real-time updates)           |
 | `GET`  | `/api/state`     | Full workspace state snapshot                  |
@@ -877,28 +877,28 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 **Agents:**
 
-| Method   | Path                                    | Description                           |
-| -------- | --------------------------------------- | ------------------------------------- |
-| `POST`   | `/api/agents`                           | Hire a new agent                      |
-| `GET`    | `/api/agents/:name`                     | Get agent details                     |
-| `DELETE` | `/api/agents/:name`                     | Fire an agent                         |
-| `POST`   | `/api/send`                             | Send a message to an agent            |
-| `GET`    | `/api/agents/:name/inbox`               | Get agent inbox queue                 |
-| `GET`    | `/api/agents/:name/messages`            | Get agent DM history                  |
-| `DELETE` | `/api/agents/:name/messages`            | Clear agent DM history                |
-| `GET`    | `/api/agents/:name/files`               | List agent workspace files            |
-| `GET`    | `/api/agents/:name/files/content`       | Read a file from agent workspace      |
-| `PATCH`  | `/api/agents/:name/prompt`              | Set, append, or clear agent prompt    |
-| `PATCH`  | `/api/agents/:name/permissions`         | Update agent permissions              |
-| `PATCH`  | `/api/agents/:name/env`                 | Set or unset agent env var            |
-| `PATCH`  | `/api/agents/:name/secret-refs`         | Set or unset agent secret ref         |
-| `PATCH`  | `/api/agents/:name/manager`             | Set or clear agent manager            |
-| `PATCH`  | `/api/agents/:name/heartbeat`           | Set agent heartbeat config            |
-| `DELETE` | `/api/agents/:name/heartbeat`           | Clear agent heartbeat config          |
-| `GET`    | `/api/agents/:name/skills`              | List agent installed skills           |
-| `GET`    | `/api/agents/:name/skills/search`       | Search skills registry                |
-| `POST`   | `/api/agents/:name/skills/install`      | Install a skill for an agent          |
-| `DELETE` | `/api/agents/:name/skills/:skill`       | Remove an installed skill             |
+| Method   | Path                               | Description                        |
+| -------- | ---------------------------------- | ---------------------------------- |
+| `POST`   | `/api/agents`                      | Hire a new agent                   |
+| `GET`    | `/api/agents/:name`                | Get agent details                  |
+| `DELETE` | `/api/agents/:name`                | Fire an agent                      |
+| `POST`   | `/api/send`                        | Send a message to an agent         |
+| `GET`    | `/api/agents/:name/inbox`          | Get agent inbox queue              |
+| `GET`    | `/api/agents/:name/messages`       | Get agent DM history               |
+| `DELETE` | `/api/agents/:name/messages`       | Clear agent DM history             |
+| `GET`    | `/api/agents/:name/files`          | List agent workspace files         |
+| `GET`    | `/api/agents/:name/files/content`  | Read a file from agent workspace   |
+| `PATCH`  | `/api/agents/:name/prompt`         | Set, append, or clear agent prompt |
+| `PATCH`  | `/api/agents/:name/permissions`    | Update agent permissions           |
+| `PATCH`  | `/api/agents/:name/env`            | Set or unset agent env var         |
+| `PATCH`  | `/api/agents/:name/secret-refs`    | Set or unset agent secret ref      |
+| `PATCH`  | `/api/agents/:name/manager`        | Set or clear agent manager         |
+| `PATCH`  | `/api/agents/:name/heartbeat`      | Set agent heartbeat config         |
+| `DELETE` | `/api/agents/:name/heartbeat`      | Clear agent heartbeat config       |
+| `GET`    | `/api/agents/:name/skills`         | List agent installed skills        |
+| `GET`    | `/api/agents/:name/skills/search`  | Search skills registry             |
+| `POST`   | `/api/agents/:name/skills/install` | Install a skill for an agent       |
+| `DELETE` | `/api/agents/:name/skills/:skill`  | Remove an installed skill          |
 
 **Cron:**
 
@@ -915,42 +915,42 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 **Tasks:**
 
-| Method  | Path               | Description              |
-| ------- | ------------------ | ------------------------ |
-| `GET`   | `/api/tasks`       | List tasks with filters  |
-| `POST`  | `/api/tasks`       | Create a task            |
-| `GET`   | `/api/tasks/board` | Get Kanban board data    |
-| `GET`   | `/api/tasks/:id`   | Get task details         |
-| `PATCH` | `/api/tasks/:id`   | Update task status/data  |
+| Method  | Path               | Description             |
+| ------- | ------------------ | ----------------------- |
+| `GET`   | `/api/tasks`       | List tasks with filters |
+| `POST`  | `/api/tasks`       | Create a task           |
+| `GET`   | `/api/tasks/board` | Get Kanban board data   |
+| `GET`   | `/api/tasks/:id`   | Get task details        |
+| `PATCH` | `/api/tasks/:id`   | Update task status/data |
 
 **Channels:**
 
-| Method   | Path                             | Description                      |
-| -------- | -------------------------------- | -------------------------------- |
-| `POST`   | `/api/channels`                  | Create a channel                 |
-| `PATCH`  | `/api/channels/:name`            | Update channel members/desc      |
-| `DELETE` | `/api/channels/:name`            | Delete a channel                 |
-| `POST`   | `/api/channels/:name/send`       | Send a message to a channel      |
-| `GET`    | `/api/channels/:name/messages`   | Get channel message history      |
-| `DELETE` | `/api/channels/:name/messages`   | Clear channel history            |
+| Method   | Path                           | Description                 |
+| -------- | ------------------------------ | --------------------------- |
+| `POST`   | `/api/channels`                | Create a channel            |
+| `PATCH`  | `/api/channels/:name`          | Update channel members/desc |
+| `DELETE` | `/api/channels/:name`          | Delete a channel            |
+| `POST`   | `/api/channels/:name/send`     | Send a message to a channel |
+| `GET`    | `/api/channels/:name/messages` | Get channel message history |
+| `DELETE` | `/api/channels/:name/messages` | Clear channel history       |
 
 **Office & Scheduler:**
 
-| Method | Path                             | Description                            |
-| ------ | -------------------------------- | -------------------------------------- |
-| `POST` | `/api/office/apply`              | Apply office.yaml changes              |
-| `GET`  | `/api/office/validate`           | Validate office.yaml                   |
-| `GET`  | `/api/office/path`               | Get office.yaml file path              |
-| `POST` | `/api/scheduler/start`           | Start the scheduler                    |
-| `POST` | `/api/scheduler/stop`            | Stop the scheduler                     |
+| Method | Path                   | Description               |
+| ------ | ---------------------- | ------------------------- |
+| `POST` | `/api/office/apply`    | Apply office.yaml changes |
+| `GET`  | `/api/office/validate` | Validate office.yaml      |
+| `GET`  | `/api/office/path`     | Get office.yaml file path |
+| `POST` | `/api/scheduler/start` | Start the scheduler       |
+| `POST` | `/api/scheduler/stop`  | Stop the scheduler        |
 
 **Metrics:**
 
-| Method  | Path                             | Description                            |
-| ------- | -------------------------------- | -------------------------------------- |
-| `GET`   | `/api/cost`                      | Cost and token usage data              |
-| `GET`   | `/api/collaboration/metrics`     | Collaboration observability snapshot   |
-| `PATCH` | `/api/collaboration/policy`      | Update collaboration policy            |
+| Method  | Path                         | Description                          |
+| ------- | ---------------------------- | ------------------------------------ |
+| `GET`   | `/api/cost`                  | Cost and token usage data            |
+| `GET`   | `/api/collaboration/metrics` | Collaboration observability snapshot |
+| `PATCH` | `/api/collaboration/policy`  | Update collaboration policy          |
 
 ## Agent Collaboration
 

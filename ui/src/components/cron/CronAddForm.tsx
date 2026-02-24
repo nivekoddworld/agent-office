@@ -67,7 +67,13 @@ export function CronAddForm({
   const [frequency, setFrequency] = useState<Frequency>("daily");
   const [minute, setMinute] = useState<number>(0);
   const [hour, setHour] = useState<number>(9);
-  const [selectedDays, setSelectedDays] = useState<string[]>(["1", "2", "3", "4", "5"]);
+  const [selectedDays, setSelectedDays] = useState<string[]>([
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+  ]);
   const [customSchedule, setCustomSchedule] = useState("");
 
   // Report channel

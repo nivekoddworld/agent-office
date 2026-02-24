@@ -43,10 +43,13 @@ export function useHireAgent() {
       thinking?: string;
       desc?: string;
     }) =>
-      apiFetch<{ ok: boolean; name: string; cwd: string | null }>("/api/agents", {
-        method: "POST",
-        body: JSON.stringify(args),
-      }),
+      apiFetch<{ ok: boolean; name: string; cwd: string | null }>(
+        "/api/agents",
+        {
+          method: "POST",
+          body: JSON.stringify(args),
+        },
+      ),
     onSuccess: () => invalidateState(queryClient),
   });
 }
@@ -55,9 +58,12 @@ export function useFireAgent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (agentName: string) =>
-      apiFetch<{ ok: boolean }>(`/api/agents/${encodeURIComponent(agentName)}`, {
-        method: "DELETE",
-      }),
+      apiFetch<{ ok: boolean }>(
+        `/api/agents/${encodeURIComponent(agentName)}`,
+        {
+          method: "DELETE",
+        },
+      ),
     onSuccess: () => invalidateState(queryClient),
   });
 }
@@ -65,7 +71,13 @@ export function useFireAgent() {
 export function useSetManager() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ agentName, manager }: { agentName: string; manager: string | null }) =>
+    mutationFn: ({
+      agentName,
+      manager,
+    }: {
+      agentName: string;
+      manager: string | null;
+    }) =>
       apiFetch<{ ok: boolean }>(
         `/api/agents/${encodeURIComponent(agentName)}/manager`,
         {
