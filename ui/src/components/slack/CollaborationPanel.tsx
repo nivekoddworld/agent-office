@@ -1,23 +1,9 @@
-import {
-  Modal,
-  Box,
-  Text,
-  Group,
-  Stack,
-  Badge,
-  Loader,
-  Divider,
-} from "@mantine/core";
+import { Box, Text, Group, Stack, Badge, Loader, Divider } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { IconMessage, IconAlertTriangle } from "@tabler/icons-react";
 import { apiFetch } from "../../api/client.js";
 import { slack } from "../../theme/slack-theme.js";
 import type { CollaborationSnapshot } from "../../api/types.js";
-
-interface CollaborationModalProps {
-  opened: boolean;
-  onClose: () => void;
-}
 
 function formatMs(ms: number): string {
   if (ms <= 0) return "N/A";
@@ -70,40 +56,31 @@ function StatCard({
   );
 }
 
-export function CollaborationModal({
-  opened,
-  onClose,
-}: CollaborationModalProps) {
+export function CollaborationPanel() {
   const { data, isLoading } = useQuery<CollaborationSnapshot>({
     queryKey: ["collaboration-metrics"],
     queryFn: () =>
       apiFetch<CollaborationSnapshot>("/api/collaboration/metrics"),
     refetchInterval: 10_000,
-    enabled: opened,
   });
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title="Collaboration Health"
-      size="lg"
-      centered
-      styles={{
-        content: { backgroundColor: slack.mainBg },
-        header: {
-          backgroundColor: slack.mainBg,
-          borderBottom: `1px solid ${slack.borderColor}`,
-        },
-        title: { color: "#fff", fontWeight: 700 },
-      }}
-    >
-      <Box py="md">
+    <Box style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <Group
+        px="md"
+        py="xs"
+        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+      >
+        <Text size="sm" fw={700} style={{ color: "#fff" }}>
+          Collaboration Health
+        </Text>
+      </Group>
+
+      <Box style={{ flex: 1, overflow: "auto" }} px="md" py="md">
         {isLoading ? (
           <Loader size="sm" />
         ) : data ? (
           <Stack gap="lg">
-            {/* Summary Stats */}
             <Group gap="xl">
               <StatCard
                 label="Pending Obligations"
@@ -128,7 +105,6 @@ export function CollaborationModal({
 
             <Divider color={slack.borderColor} />
 
-            {/* Message Volume */}
             <Box>
               <SectionHeader
                 icon={<IconMessage size={16} color={slack.accentBlue} />}
@@ -177,7 +153,6 @@ export function CollaborationModal({
               </Box>
             </Box>
 
-            {/* Overdue Replies */}
             {data.pendingReplyAges.length > 0 && (
               <>
                 <Divider color={slack.borderColor} />
@@ -204,7 +179,6 @@ export function CollaborationModal({
               </>
             )}
 
-            {/* Recent Stall Incidents */}
             {data.recentStallIncidents.length > 0 && (
               <>
                 <Divider color={slack.borderColor} />
@@ -251,6 +225,6 @@ export function CollaborationModal({
           </Text>
         )}
       </Box>
-    </Modal>
+    </Box>
   );
 }

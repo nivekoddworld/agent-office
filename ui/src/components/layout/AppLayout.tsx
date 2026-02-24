@@ -10,18 +10,15 @@ import { OfficeDebugPanel } from "../slack/OfficeDebugPanel.js";
 import { KanbanBoard } from "../kanban/KanbanBoard.js";
 import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
 import { OrgChartModal } from "../slack/OrgChartModal.js";
-import { CostModal } from "../slack/CostModal.js";
-import { OfficeSettingsModal } from "../slack/OfficeSettingsModal.js";
-import { CollaborationModal } from "../slack/CollaborationModal.js";
+import { CostPanel } from "../slack/CostPanel.js";
+import { CollaborationPanel } from "../slack/CollaborationPanel.js";
+import { SettingsPanel } from "../slack/SettingsPanel.js";
 import type { BootstrapState } from "../../api/types.js";
 
 type ModalState =
   | { kind: "none" }
   | { kind: "profile"; agentName: string }
-  | { kind: "orgChart" }
-  | { kind: "cost" }
-  | { kind: "settings" }
-  | { kind: "collaboration" };
+  | { kind: "orgChart" };
 
 interface AppLayoutProps {
   state: BootstrapState;
@@ -118,9 +115,6 @@ export function AppLayout({ state }: AppLayoutProps) {
           activeChannel={channel}
           onSelectChannel={handleSelectChannel}
           onOpenOrgChart={() => setModal({ kind: "orgChart" })}
-          onOpenCost={() => setModal({ kind: "cost" })}
-          onOpenCollaboration={() => setModal({ kind: "collaboration" })}
-          onOpenSettings={() => setModal({ kind: "settings" })}
           schedulerRunning={state.scheduler.running}
           onToggleScheduler={handleToggleScheduler}
           unreadCounts={unreadCounts}
@@ -142,6 +136,12 @@ export function AppLayout({ state }: AppLayoutProps) {
           />
         ) : channel.kind === "system" && channel.name === "tasks" ? (
           <KanbanBoard tasks={state.tasks ?? []} agentNames={agentNames} />
+        ) : channel.kind === "system" && channel.name === "cost" ? (
+          <CostPanel />
+        ) : channel.kind === "system" && channel.name === "collaboration" ? (
+          <CollaborationPanel />
+        ) : channel.kind === "system" && channel.name === "settings" ? (
+          <SettingsPanel state={state} />
         ) : (
           <ChannelView
             channel={channel}
@@ -169,19 +169,6 @@ export function AppLayout({ state }: AppLayoutProps) {
         agents={state.agents}
         hierarchy={state.hierarchy}
         onSelectAgent={handleOrgChartSelect}
-      />
-
-      <CostModal opened={modal.kind === "cost"} onClose={closeModal} />
-
-      <OfficeSettingsModal
-        opened={modal.kind === "settings"}
-        onClose={closeModal}
-        state={state}
-      />
-
-      <CollaborationModal
-        opened={modal.kind === "collaboration"}
-        onClose={closeModal}
       />
     </Box>
   );

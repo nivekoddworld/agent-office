@@ -44,9 +44,6 @@ interface SlackSidebarProps {
   activeChannel: ChannelId;
   onSelectChannel: (ch: ChannelId) => void;
   onOpenOrgChart: () => void;
-  onOpenCost: () => void;
-  onOpenCollaboration?: () => void;
-  onOpenSettings?: () => void;
   schedulerRunning: boolean;
   onToggleScheduler?: () => void;
   unreadCounts?: Record<string, number>;
@@ -121,9 +118,6 @@ export function SlackSidebar({
   activeChannel,
   onSelectChannel,
   onOpenOrgChart,
-  onOpenCost,
-  onOpenCollaboration,
-  onOpenSettings,
   schedulerRunning,
   onToggleScheduler,
   unreadCounts = {},
@@ -367,17 +361,33 @@ export function SlackSidebar({
             <SidebarItem
               icon={<IconCoin size={15} color={slack.sidebarText} />}
               label="Cost Dashboard"
-              onClick={onOpenCost}
+              active={isActive(activeChannel, {
+                kind: "system",
+                name: "cost",
+              })}
+              onClick={() => onSelectChannel({ kind: "system", name: "cost" })}
             />
             <SidebarItem
               icon={<IconHeartHandshake size={15} color={slack.sidebarText} />}
               label="Collaboration"
-              onClick={() => onOpenCollaboration?.()}
+              active={isActive(activeChannel, {
+                kind: "system",
+                name: "collaboration",
+              })}
+              onClick={() =>
+                onSelectChannel({ kind: "system", name: "collaboration" })
+              }
             />
             <SidebarItem
               icon={<IconSettings size={15} color={slack.sidebarText} />}
               label="Settings"
-              onClick={() => onOpenSettings?.()}
+              active={isActive(activeChannel, {
+                kind: "system",
+                name: "settings",
+              })}
+              onClick={() =>
+                onSelectChannel({ kind: "system", name: "settings" })
+              }
             />
           </SidebarSection>
         </Box>

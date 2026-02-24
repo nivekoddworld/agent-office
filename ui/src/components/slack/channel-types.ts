@@ -1,4 +1,10 @@
-export type SystemTarget = "tasks" | "cron" | "debug";
+export type SystemTarget =
+  | "tasks"
+  | "cron"
+  | "debug"
+  | "cost"
+  | "collaboration"
+  | "settings";
 
 export type ChannelId =
   | { kind: "conversation"; name: string }

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-  Modal,
   Box,
   Text,
   Group,
@@ -14,51 +13,39 @@ import { slack } from "../../theme/slack-theme.js";
 import { CostChart } from "../cost/CostChart.js";
 import type { CostResponse } from "../../api/types.js";
 
-interface CostModalProps {
-  opened: boolean;
-  onClose: () => void;
-}
-
-export function CostModal({ opened, onClose }: CostModalProps) {
+export function CostPanel() {
   const [days, setDays] = useState("1");
 
   const { data, isLoading } = useQuery<CostResponse>({
     queryKey: ["cost", days],
     queryFn: () => apiFetch<CostResponse>(`/api/cost?days=${days}`),
     refetchInterval: 30_000,
-    enabled: opened,
   });
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title="Cost Dashboard"
-      size="lg"
-      centered
-      styles={{
-        content: { backgroundColor: slack.mainBg },
-        header: {
-          backgroundColor: slack.mainBg,
-          borderBottom: `1px solid ${slack.borderColor}`,
-        },
-        title: { color: "#fff", fontWeight: 700 },
-      }}
-    >
-      <Box py="md">
-        <Group justify="flex-end" mb="md">
-          <SegmentedControl
-            size="xs"
-            value={days}
-            onChange={setDays}
-            data={[
-              { value: "1", label: "Today" },
-              { value: "7", label: "7 days" },
-              { value: "30", label: "30 days" },
-            ]}
-          />
-        </Group>
+    <Box style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <Group
+        px="md"
+        py="xs"
+        justify="space-between"
+        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+      >
+        <Text size="sm" fw={700} style={{ color: "#fff" }}>
+          Cost Dashboard
+        </Text>
+        <SegmentedControl
+          size="xs"
+          value={days}
+          onChange={setDays}
+          data={[
+            { value: "1", label: "Today" },
+            { value: "7", label: "7 days" },
+            { value: "30", label: "30 days" },
+          ]}
+        />
+      </Group>
 
+      <Box style={{ flex: 1, overflow: "auto" }} px="md" py="md">
         {isLoading ? (
           <Loader size="sm" />
         ) : data ? (
@@ -108,6 +95,6 @@ export function CostModal({ opened, onClose }: CostModalProps) {
           </Text>
         )}
       </Box>
-    </Modal>
+    </Box>
   );
 }
