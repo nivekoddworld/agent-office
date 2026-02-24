@@ -560,17 +560,17 @@ describe("agentPromptShowCommand", () => {
 describe("getCronSummaries", () => {
   it("returns summaries for enabled cron jobs", () => {
     writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n",
+      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        tasks:\n          - title: Run report\n            assignee: bot\n",
     );
     const summaries = getCronSummaries(OFFICE_ID, "bot");
     expect(summaries).toHaveLength(1);
     expect(summaries[0]).toContain("daily");
-    expect(summaries[0]).toContain("Run report");
+    expect(summaries[0]).toContain("1 task");
   });
 
   it("skips disabled cron jobs", () => {
     writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        message: Run report\n        enabled: false\n",
+      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: '0 9 * * *'\n        tasks:\n          - title: Run report\n            assignee: bot\n        enabled: false\n",
     );
     expect(getCronSummaries(OFFICE_ID, "bot")).toHaveLength(0);
   });
@@ -591,14 +591,14 @@ describe("getCronSummaries", () => {
 describe("agentPromptShowCommand cron integration", () => {
   it("includes cron summaries in effective prompt", () => {
     writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      standup:\n        schedule: '0 9 * * 1-5'\n        message: Run standup\n",
+      "office:\n  name: Test\nagents:\n  bot:\n    cron:\n      standup:\n        schedule: '0 9 * * 1-5'\n        tasks:\n          - title: Run standup\n            assignee: bot\n",
     );
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
     agentPromptShowCommand(OFFICE_ID, "bot");
     const output = spy.mock.calls.map((c) => c[0]).join("\n");
     expect(output).toContain("Active cron jobs");
     expect(output).toContain("standup");
-    expect(output).toContain("Run standup");
+    expect(output).toContain("1 task");
     spy.mockRestore();
   });
 

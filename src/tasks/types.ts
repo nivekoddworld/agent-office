@@ -42,6 +42,7 @@ export interface Task {
   startedAt?: number;
   completedAt?: number;
   result?: string;
+  reportChannel?: string;
 }
 
 export interface TaskFilter {

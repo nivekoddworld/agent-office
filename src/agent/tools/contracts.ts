@@ -142,13 +142,28 @@ export const CRON_ADD = {
   name: "cron_add" as const,
   label: "Cron Add",
   description:
-    "Add or update a cron job. scope='agent' (default) manages your own jobs. scope='office' requires office_cron permission.",
+    "Add or update a cron job. scope='agent' (default) manages your own jobs. scope='office' requires office_cron permission. Each job creates a chain of tasks when fired — every task depends on the previous one.",
   parameters: Type.Object({
     name: Type.String({ description: "Job name ([a-zA-Z0-9_-]+)" }),
     schedule: Type.String({
       description: "5-field cron expression (min hour dom month dow)",
     }),
-    message: Type.String({ description: "Message sent when job fires" }),
+    tasks: Type.Array(
+      Type.Object({
+        title: Type.String({ description: "Task title" }),
+        description: Type.Optional(
+          Type.String({ description: "Task description (optional)" }),
+        ),
+        assignee: Type.String({ description: "Agent name to assign this task to" }),
+        parent_id: Type.Optional(
+          Type.String({ description: "Parent task ID for sub-task grouping (optional)" }),
+        ),
+        report_channel: Type.Optional(
+          Type.String({ description: "Channel to notify when this task completes (optional)" }),
+        ),
+      }),
+      { description: "Ordered list of tasks to create when the job fires. Each task depends on the previous one. priority (CRITICAL) and dependsOn (auto-chain) are predefined." },
+    ),
     scope: Type.Optional(
       Type.Unsafe<string>({
         type: "string",
@@ -166,10 +181,10 @@ export const CRON_ADD = {
         description: "Catch-up policy (default: skip)",
       }),
     ),
-    targets: Type.Optional(
-      Type.Array(Type.String(), {
+    report_channel: Type.Optional(
+      Type.String({
         description:
-          "Target agents (required for scope=office). Use '__broadcast__' for all.",
+          "Channel to post a summary when this cron job fires (optional)",
       }),
     ),
   }),
@@ -304,6 +319,11 @@ export const TASK_CREATE = {
           "Task priority (affects notification urgency). Default: normal",
       }),
     ),
+    reportChannel: Type.Optional(
+      Type.String({
+        description: "Channel to notify when this task completes (optional)",
+      }),
+    ),
   }),
 };
 
@@ -311,7 +331,7 @@ export const TASK_UPDATE = {
   name: "task_update" as const,
   label: "Task Update",
   description:
-    "Update a task's status, result, assignee, or priority. Status transitions: backlog→todo, todo→in_progress, in_progress→review/done, review→in_progress/done. Completing a task auto-unblocks dependent tasks.",
+    "Update a task's status, result, assignee, or priority. Status transitions: backlog→todo, todo→in_progress, in_progress→review/done, review→in_progress/done, cancelled→backlog. Completing a task auto-unblocks dependent tasks.",
   parameters: Type.Object({
     id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
     status: Type.Optional(
@@ -347,6 +367,9 @@ export const TASK_LIST = {
   parameters: Type.Object({
     assignee: Type.Optional(
       Type.String({ description: "Filter by assignee agent name" }),
+    ),
+    createdBy: Type.Optional(
+      Type.String({ description: "Filter by creator agent name" }),
     ),
     status: Type.Optional(
       Type.Unsafe<string>({

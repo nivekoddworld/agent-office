@@ -20,15 +20,30 @@ function makeAgent(
   return { status, config: { name } } as any;
 }
 
+function makeTaskService() {
+  const created: any[] = [];
+  const service = {
+    create: vi.fn((_createdBy: string, opts: any) => {
+      const id = `T-${created.length}`;
+      const task = { id, ...opts };
+      created.push(task);
+      return task;
+    }),
+  };
+  return { service, created };
+}
+
 function makeOfficeConfig(
   overrides?: Partial<OfficeCronJobConfig>,
 ): OfficeCronJobConfig {
   return {
     schedule: "0 * * * *",
-    message: "standup",
+    tasks: [
+      { title: "standup", assignee: "pm" },
+      { title: "ops report", assignee: "ops" },
+    ],
     catchUp: "skip",
     enabled: true,
-    targets: ["pm", "ops"],
     ...overrides,
   };
 }
@@ -54,7 +69,6 @@ describe("Office CronService", () => {
 
   it("setOfficeJobs registers jobs, listJobs shows scope: office", () => {
     agents.set("pm", makeAgent("pm"));
-    bus.register("pm");
     const svc = new CronService(bus, agents, store);
     svc.setOfficeJobs({ standup: makeOfficeConfig() });
 
@@ -62,123 +76,93 @@ describe("Office CronService", () => {
     const office = jobs.filter((j) => j.scope === "office");
     expect(office).toHaveLength(1);
     expect(office[0]!.jobName).toBe("standup");
-    expect(office[0]!.targets).toEqual(["pm", "ops"]);
+    expect(office[0]!.config.tasks).toHaveLength(2);
     svc.stop();
   });
 
-  it("fires to each target agent", () => {
+  it("fires tasks for all configured assignees in the chain", () => {
     vi.setSystemTime(new Date("2024-01-15T14:30:00Z"));
     agents.set("pm", makeAgent("pm"));
     agents.set("ops", makeAgent("ops"));
-    bus.register("pm");
-    bus.register("ops");
 
-    const svc = new CronService(bus, agents, store);
+    const { service: taskService, created } = makeTaskService();
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setOfficeJobs({ standup: makeOfficeConfig() });
 
     vi.advanceTimersByTime(30 * 60 * 1000);
 
-    expect(bus.peek("pm")).toBe(1);
-    expect(bus.peek("ops")).toBe(1);
-    expect(bus.drain("pm")[0]!.payload).toBe("standup");
-    expect(bus.drain("ops")[0]!.from).toBe("__cron__");
+    expect(created).toHaveLength(2);
+    expect(created[0]!.title).toBe("standup");
+    expect(created[0]!.assignee).toBe("pm");
+    expect(created[1]!.title).toBe("ops report");
+    expect(created[1]!.assignee).toBe("ops");
+    // Second task depends on first
+    expect(created[1]!.dependsOn).toEqual([created[0]!.id]);
     svc.stop();
   });
 
-  it("__broadcast__ resolves to all registered agents", () => {
-    vi.setSystemTime(new Date("2024-01-15T14:30:00Z"));
-    agents.set("a", makeAgent("a"));
-    agents.set("b", makeAgent("b"));
-    agents.set("c", makeAgent("c"));
-    bus.register("a");
-    bus.register("b");
-    bus.register("c");
-
-    const svc = new CronService(bus, agents, store);
-    svc.setOfficeJobs({
-      all: makeOfficeConfig({ targets: ["__broadcast__"] }),
-    });
-
-    vi.advanceTimersByTime(30 * 60 * 1000);
-
-    expect(bus.peek("a")).toBe(1);
-    expect(bus.peek("b")).toBe(1);
-    expect(bus.peek("c")).toBe(1);
-    svc.stop();
-  });
-
-  it("skips busy agent, delivers to others", () => {
-    vi.setSystemTime(new Date("2024-01-15T14:30:00Z"));
-    agents.set("pm", makeAgent("pm", "running"));
-    agents.set("ops", makeAgent("ops"));
-    bus.register("pm");
-    bus.register("ops");
-    const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
-
-    const svc = new CronService(bus, agents, store);
-    svc.setOfficeJobs({ standup: makeOfficeConfig() });
-
-    vi.advanceTimersByTime(30 * 60 * 1000);
-
-    expect(bus.peek("pm")).toBe(0);
-    expect(bus.peek("ops")).toBe(1);
-    const state = svc.listJobs().find((j) => j.jobName === "standup")!.state;
-    expect(state.attemptCount).toBe(1);
-    expect(state.sentCount).toBe(1);
-    expect(state.skippedBusyCount).toBe(1);
-    spy.mockRestore();
-    svc.stop();
-  });
-
-  it("dispatch cap counts per-target", () => {
+  it("dispatch cap limits task creation globally", () => {
     vi.setSystemTime(new Date("2024-01-15T14:00:00Z"));
-    agents.set("a", makeAgent("a"));
-    agents.set("b", makeAgent("b"));
-    bus.register("a");
-    bus.register("b");
+    agents.set("pm", makeAgent("pm"));
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const svc = new CronService(bus, agents, store);
+    const { service: taskService, created } = makeTaskService();
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setOfficeJobs({
       fast: makeOfficeConfig({
         schedule: "* * * * *",
-        targets: ["a", "b"],
+        tasks: [{ title: "ping", assignee: "pm" }],
       }),
     });
 
-    // Trigger 30 times = 60 dispatches (2 per trigger)
-    for (let i = 0; i < 30; i++) svc.triggerOffice("fast");
-    expect(bus.peek("a")).toBe(30);
-    expect(bus.peek("b")).toBe(30);
+    // Trigger 60 times = 60 dispatches (1 per trigger)
+    for (let i = 0; i < 60; i++) svc.triggerOffice("fast");
+    expect(created).toHaveLength(60);
 
-    // 31st trigger: first dispatch to "a" is #61 → capped
+    // 61st trigger: capped
     svc.triggerOffice("fast");
-    // a should still be 30 (capped), b should still be 30 (capped too)
-    expect(bus.peek("a")).toBe(30);
-    expect(bus.peek("b")).toBe(30);
+    expect(created).toHaveLength(60);
+
     const state = svc.listJobs().find((j) => j.jobName === "fast")!.state;
-    expect(state.attemptCount).toBe(31);
-    expect(state.sentCount).toBe(60);
-    expect(state.skippedCapCount).toBe(2);
+    expect(state.skippedCapCount).toBe(1);
     spy.mockRestore();
     svc.stop();
   });
 
-  it("triggerOffice sends immediate messages", () => {
+  it("triggerOffice creates tasks immediately", () => {
     agents.set("pm", makeAgent("pm"));
     agents.set("ops", makeAgent("ops"));
-    bus.register("pm");
-    bus.register("ops");
 
-    const svc = new CronService(bus, agents, store);
+    const { service: taskService, created } = makeTaskService();
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setOfficeJobs({
-      standup: makeOfficeConfig({ message: "manual fire" }),
+      standup: makeOfficeConfig({
+        tasks: [{ title: "manual fire", assignee: "pm" }],
+      }),
     });
     svc.triggerOffice("standup");
 
-    expect(bus.peek("pm")).toBe(1);
-    expect(bus.peek("ops")).toBe(1);
-    expect(bus.drain("pm")[0]!.payload).toBe("manual fire");
+    expect(created).toHaveLength(1);
+    expect(created[0]!.title).toBe("manual fire");
+    expect(created[0]!.assignee).toBe("pm");
     svc.stop();
   });
 
@@ -190,9 +174,15 @@ describe("Office CronService", () => {
 
   it("state persisted with __office__: prefix key", () => {
     agents.set("pm", makeAgent("pm"));
-    bus.register("pm");
 
-    const svc = new CronService(bus, agents, store);
+    const { service: taskService } = makeTaskService();
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setOfficeJobs({ standup: makeOfficeConfig() });
     svc.triggerOffice("standup");
 
@@ -210,7 +200,7 @@ describe("Office CronService", () => {
       svc.setJobs("__office__", {
         test: {
           schedule: "0 * * * *",
-          message: "x",
+          tasks: [{ title: "x", assignee: "bot" }],
           catchUp: "skip",
           enabled: true,
         },
@@ -221,7 +211,6 @@ describe("Office CronService", () => {
 
   it("removeOfficeJobs clears timers and state", () => {
     agents.set("pm", makeAgent("pm"));
-    bus.register("pm");
 
     const svc = new CronService(bus, agents, store);
     svc.setOfficeJobs({ standup: makeOfficeConfig() });
@@ -235,16 +224,29 @@ describe("Office CronService", () => {
   it("office jobs survive start/stop lifecycle", () => {
     vi.setSystemTime(new Date("2024-01-15T14:00:00Z"));
     agents.set("pm", makeAgent("pm"));
-    bus.register("pm");
 
-    const svc1 = new CronService(bus, agents, store);
+    const { service: taskService1 } = makeTaskService();
+    const svc1 = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService1 as any,
+    );
     svc1.setOfficeJobs({ standup: makeOfficeConfig() });
     svc1.triggerOffice("standup");
     expect(svc1.listJobs()[0]!.state.attemptCount).toBe(1);
     expect(svc1.listJobs()[0]!.state.sentCount).toBe(1);
     svc1.stop();
 
-    const svc2 = new CronService(bus, agents, store);
+    const { service: taskService2 } = makeTaskService();
+    const svc2 = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService2 as any,
+    );
     svc2.setOfficeJobs({ standup: makeOfficeConfig() });
     svc2.start();
     expect(
@@ -259,13 +261,12 @@ describe("Office CronService", () => {
 
   it("agent + office jobs coexist in listJobs", () => {
     agents.set("pm", makeAgent("pm"));
-    bus.register("pm");
 
     const svc = new CronService(bus, agents, store);
     svc.setJobs("pm", {
       personal: {
         schedule: "0 * * * *",
-        message: "agent tick",
+        tasks: [{ title: "agent tick", assignee: "pm" }],
         catchUp: "skip",
         enabled: true,
       },
@@ -281,48 +282,52 @@ describe("Office CronService", () => {
 });
 
 describe("Office cron validation", () => {
-  it("rejects empty targets", () => {
+  it("rejects empty tasks array", () => {
     const entry: OfficeCronYamlEntry = {
       schedule: "0 9 * * *",
-      message: "standup",
-      targets: [],
+      tasks: [],
     };
     const errors = validateOfficeCronEntry("standup", entry, ["pm"]);
-    expect(errors.some((e) => e.includes("targets"))).toBe(true);
+    expect(errors.some((e) => e.includes("tasks"))).toBe(true);
   });
 
-  it("rejects unknown target agent", () => {
+  it("rejects task with missing title", () => {
     const entry: OfficeCronYamlEntry = {
       schedule: "0 9 * * *",
-      message: "standup",
-      targets: ["pm", "ghost"],
+      tasks: [{ title: "", assignee: "pm" }],
+    };
+    const errors = validateOfficeCronEntry("standup", entry, ["pm"]);
+    expect(errors.some((e) => e.includes("title"))).toBe(true);
+  });
+
+  it("rejects task with unknown assignee", () => {
+    const entry: OfficeCronYamlEntry = {
+      schedule: "0 9 * * *",
+      tasks: [{ title: "standup", assignee: "ghost" }],
     };
     const errors = validateOfficeCronEntry("standup", entry, ["pm", "ops"]);
-    expect(errors.some((e) => e.includes('unknown target agent "ghost"'))).toBe(
+    expect(errors.some((e) => e.includes('unknown assignee "ghost"'))).toBe(
       true,
     );
   });
 
-  it("allows __broadcast__ as target", () => {
+  it("allows __broadcast__ as assignee", () => {
     const entry: OfficeCronYamlEntry = {
       schedule: "0 9 * * *",
-      message: "standup",
-      targets: ["__broadcast__"],
+      tasks: [{ title: "standup", assignee: "__broadcast__" }],
     };
     const errors = validateOfficeCronEntry("standup", entry, ["pm"]);
     expect(errors).toHaveLength(0);
   });
 
-  it("validates schedule, message, timezone", () => {
+  it("validates schedule and timezone", () => {
     const entry: OfficeCronYamlEntry = {
       schedule: "invalid",
-      message: "",
       timezone: "Not/Real",
-      targets: ["pm"],
+      tasks: [{ title: "standup", assignee: "pm" }],
     };
     const errors = validateOfficeCronEntry("bad", entry, ["pm"]);
     expect(errors.some((e) => e.includes("schedule"))).toBe(true);
-    expect(errors.some((e) => e.includes("message"))).toBe(true);
     expect(errors.some((e) => e.includes("timezone"))).toBe(true);
   });
 
@@ -330,13 +335,11 @@ describe("Office cron validation", () => {
     const cron: Record<string, OfficeCronYamlEntry> = {
       active: {
         schedule: "0 9 * * *",
-        message: "go",
-        targets: ["pm"],
+        tasks: [{ title: "go", assignee: "pm" }],
       },
       disabled: {
         schedule: "0 9 * * *",
-        message: "skip",
-        targets: ["pm"],
+        tasks: [{ title: "skip", assignee: "pm" }],
         enabled: false,
       },
     };

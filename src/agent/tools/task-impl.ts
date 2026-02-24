@@ -43,6 +43,7 @@ interface TaskCreateParams {
   dependsOn?: string[];
   parentId?: string;
   priority?: string;
+  reportChannel?: string;
 }
 
 export function taskCreateImpl(
@@ -63,6 +64,7 @@ export function taskCreateImpl(
     dependsOn: params.dependsOn,
     parentId: params.parentId,
     priority,
+    reportChannel: params.reportChannel,
   });
 
   if (typeof result === "string") return result;
@@ -121,6 +123,7 @@ export function taskUpdateImpl(
 
 interface TaskListParams {
   assignee?: string;
+  createdBy?: string;
   status?: string;
   priority?: string;
 }
@@ -135,6 +138,7 @@ export function taskListImpl(
 
   const tasks = deps.taskService.list({
     assignee: params.assignee,
+    createdBy: params.createdBy,
     status: params.status as TaskStatus | undefined,
     priority,
   });

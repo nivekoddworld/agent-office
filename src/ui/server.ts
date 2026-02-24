@@ -21,6 +21,8 @@ import {
   getAgentDetail,
   getAgentFileContent,
   getAgentFiles,
+  openAgentFile,
+  deleteAgentFile,
   getBootstrapState,
   getCollaborationMetrics,
   getCostSummary,
@@ -115,6 +117,7 @@ interface TaskCreateBody {
   dependsOn?: string[];
   parentId?: string;
   priority: Priority;
+  reportChannel?: string;
 }
 
 interface TaskUpdateBody {
@@ -252,6 +255,11 @@ function parseTaskCreateBody(value: unknown): ValidationResult<TaskCreateBody> {
   const priorityResult = parsePriority(value["priority"]);
   if (!priorityResult.ok) return priorityResult;
 
+  const reportChannel = value["reportChannel"];
+  if (reportChannel !== undefined && typeof reportChannel !== "string") {
+    return { ok: false, error: "reportChannel must be a string" };
+  }
+
   return {
     ok: true,
     value: {
@@ -261,6 +269,7 @@ function parseTaskCreateBody(value: unknown): ValidationResult<TaskCreateBody> {
       ...(parentId !== undefined ? { parentId } : {}),
       ...(dependsOn !== undefined ? { dependsOn } : {}),
       priority: priorityResult.value ?? Priority.NORMAL,
+      ...(reportChannel ? { reportChannel } : {}),
     },
   };
 }
@@ -382,6 +391,10 @@ export async function startUiServer(
     broadcast("agent_event", { agent: name, ...event }),
   );
   const heartbeat = setInterval(() => broadcast("heartbeat", {}), HEARTBEAT_MS);
+
+  workspace.setTaskStateChangedCallback(() =>
+    broadcast("state_changed", getBootstrapState(workspace, officeId)),
+  );
 
   // Static file root
   const thisDir = fileURLToPath(new URL(".", import.meta.url));
@@ -648,6 +661,50 @@ export async function startUiServer(
       const filePath = url.searchParams.get("path");
       if (!filePath) return json(res, 400, { error: "missing_path" });
       const result = await getAgentFileContent(handle, filePath);
+      if ("error" in result) return json(res, 400, result);
+      return json(res, 200, result);
+    }
+
+    // --- POST /api/agents/:name/files/open ---
+    const fileOpenMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/files\/open$/,
+    );
+    if (fileOpenMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const name = fileOpenMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      const body = await readBody(req);
+      let parsed: { path?: string; reveal?: boolean };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+
+      if (!parsed.path) return json(res, 400, { error: "missing_path" });
+      const result = await openAgentFile(handle, parsed.path, parsed.reveal);
+      if ("error" in result) return json(res, 400, result);
+      return json(res, 200, result);
+    }
+
+    // --- DELETE /api/agents/:name/files?path=... ---
+    if (filesMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const name = filesMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      const filePath = url.searchParams.get("path");
+      if (!filePath) return json(res, 400, { error: "missing_path" });
+      const result = await deleteAgentFile(handle, filePath);
       if ("error" in result) return json(res, 400, result);
       return json(res, 200, result);
     }
@@ -1076,6 +1133,8 @@ export async function startUiServer(
               role: string;
               from: string;
               text: string;
+              kind?: string;
+              jobName?: string;
             };
             return {
               seq: idx + 1,
@@ -1083,6 +1142,8 @@ export async function startUiServer(
               text: entry.text,
               ts: new Date(entry.ts).getTime(),
               agentName: entry.from,
+              kind: entry.kind,
+              jobName: entry.jobName,
             };
           } catch {
             return null;
@@ -1502,7 +1563,7 @@ export async function startUiServer(
       let parsed: {
         jobName?: string;
         schedule?: string;
-        message?: string;
+        tasks?: Array<{ title: string; description?: string; assignee: string }>;
         timezone?: string;
         catchUp?: string;
         reportChannel?: string;
@@ -1512,10 +1573,15 @@ export async function startUiServer(
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (!parsed.jobName || !parsed.schedule || !parsed.message) {
+      if (!parsed.jobName || !parsed.schedule || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
         return json(res, 400, {
-          error: "jobName, schedule, and message are required",
+          error: "jobName, schedule, and tasks (non-empty array) are required",
         });
+      }
+      for (const t of parsed.tasks) {
+        if (!t.title?.trim() || !t.assignee?.trim()) {
+          return json(res, 400, { error: "each task must have a title and assignee" });
+        }
       }
       const fieldCount = parsed.schedule.trim().split(/\s+/).length;
       if (fieldCount !== 5) {
@@ -1529,7 +1595,7 @@ export async function startUiServer(
           agentName,
           parsed.jobName,
           parsed.schedule,
-          parsed.message,
+          parsed.tasks,
           {
             timezone: parsed.timezone,
             catchUp: parsed.catchUp,
@@ -1644,8 +1710,7 @@ export async function startUiServer(
       let parsed: {
         jobName?: string;
         schedule?: string;
-        message?: string;
-        targets?: string[];
+        tasks?: Array<{ title: string; description?: string; assignee: string }>;
         timezone?: string;
         catchUp?: string;
         reportChannel?: string;
@@ -1655,15 +1720,15 @@ export async function startUiServer(
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (
-        !parsed.jobName ||
-        !parsed.schedule ||
-        !parsed.message ||
-        !parsed.targets?.length
-      ) {
+      if (!parsed.jobName || !parsed.schedule || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
         return json(res, 400, {
-          error: "jobName, schedule, message, and targets are required",
+          error: "jobName, schedule, and tasks (non-empty array) are required",
         });
+      }
+      for (const t of parsed.tasks) {
+        if (!t.title?.trim() || !t.assignee?.trim()) {
+          return json(res, 400, { error: "each task must have a title and assignee" });
+        }
       }
       const fieldCount = parsed.schedule.trim().split(/\s+/).length;
       if (fieldCount !== 5) {
@@ -1676,8 +1741,7 @@ export async function startUiServer(
           officeId,
           parsed.jobName,
           parsed.schedule,
-          parsed.message,
-          parsed.targets,
+          parsed.tasks,
           {
             timezone: parsed.timezone,
             catchUp: parsed.catchUp,

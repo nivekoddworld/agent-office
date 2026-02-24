@@ -9,9 +9,12 @@ office:
   cron:
     daily-standup:
       schedule: "0 9 * * 1-5"
-      message: "Report your status for today's standup"
       timezone: America/New_York
-      targets: [pm]
+      report_channel: general
+      tasks:
+        - title: "Daily standup report"
+          description: "Report your status for today's standup. Summarize what you worked on yesterday, what you're doing today, and any blockers."
+          assignee: pm
 
 agents:
   coder:

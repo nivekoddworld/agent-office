@@ -24,13 +24,22 @@ export interface AgentHierarchy {
   reports: string[];
 }
 
+export interface CronTaskTemplate {
+  title: string;
+  description?: string;
+  assignee: string;
+  parentId?: string;
+  reportChannel?: string;
+}
+
 export interface CronJobEntry {
   agentName: string;
   jobName: string;
   config: {
     schedule: string;
-    message: string;
+    tasks: CronTaskTemplate[];
     timezone?: string;
+    catchUp?: string;
     enabled?: boolean;
     reportChannel?: string;
   };
@@ -39,12 +48,10 @@ export interface CronJobEntry {
     nextRunAt: number;
     attemptCount: number;
     sentCount: number;
-    skippedBusyCount: number;
     skippedCapCount: number;
     lastStatus: string | null;
   };
   scope: "agent" | "office";
-  targets?: string[];
 }
 
 export type TaskStatus =
@@ -70,6 +77,16 @@ export interface Task {
   startedAt?: number;
   completedAt?: number;
   result?: string;
+  reportChannel?: string;
+}
+
+export interface TaskCreateBody {
+  title: string;
+  description?: string;
+  assignee: string;
+  dependsOn?: string[];
+  priority: "idle" | "low" | "normal" | "high" | "critical";
+  reportChannel?: string;
 }
 
 export interface ChannelConfig {
@@ -244,6 +261,8 @@ export interface ChannelMessage {
   ts: number;
   requestId: string | null;
   agentName?: string;
+  kind?: string;
+  jobName?: string;
 }
 
 export interface ChannelHistoryResponse {

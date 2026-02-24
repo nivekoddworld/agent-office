@@ -114,11 +114,16 @@ export interface WatchdogConfig {
 
 export interface OfficeCronYamlEntry {
   schedule: string;
-  message: string;
+  tasks: Array<{
+    title: string;
+    description?: string;
+    assignee: string;
+    parent_id?: string;
+    report_channel?: string;
+  }>;
   timezone?: string;
   catch_up?: string;
   enabled?: boolean;
-  targets: string[];
   report_channel?: string;
 }
 

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client.js";
+import type { CronTaskTemplate, Task, TaskCreateBody } from "./types.js";
 
 function invalidateState(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["state"] });
@@ -97,8 +98,7 @@ export function useCronAdd() {
       agentName?: string;
       jobName: string;
       schedule: string;
-      message: string;
-      targets?: string[];
+      tasks: CronTaskTemplate[];
       timezone?: string;
       catchUp?: string;
       reportChannel?: string;
@@ -109,8 +109,7 @@ export function useCronAdd() {
           body: JSON.stringify({
             jobName: args.jobName,
             schedule: args.schedule,
-            message: args.message,
-            targets: args.targets,
+            tasks: args.tasks,
             timezone: args.timezone,
             catchUp: args.catchUp,
             reportChannel: args.reportChannel || undefined,
@@ -124,7 +123,7 @@ export function useCronAdd() {
           body: JSON.stringify({
             jobName: args.jobName,
             schedule: args.schedule,
-            message: args.message,
+            tasks: args.tasks,
             timezone: args.timezone,
             catchUp: args.catchUp,
             reportChannel: args.reportChannel || undefined,
@@ -279,6 +278,18 @@ export function useSetEnv() {
           body: JSON.stringify({ action, key, value }),
         },
       ),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
+export function useTaskCreate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TaskCreateBody) =>
+      apiFetch<Task>("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     onSuccess: () => invalidateState(queryClient),
   });
 }

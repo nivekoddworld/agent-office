@@ -35,14 +35,22 @@ function parseMutationScope(
 
 // --- cron_add ---
 
+interface CronTaskTemplateParam {
+  title: string;
+  description?: string;
+  assignee: string;
+  parent_id?: string;
+  report_channel?: string;
+}
+
 interface CronAddParams {
   name: string;
   schedule: string;
-  message: string;
+  tasks: CronTaskTemplateParam[];
   scope?: string;
   timezone?: string;
   catch_up?: string;
-  targets?: string[];
+  report_channel?: string;
 }
 
 export async function cronAddImpl(
@@ -82,10 +90,20 @@ export async function cronAddImpl(
     return audit(deps, "add", scope, params.name, "error", {
       reason: `invalid schedule "${params.schedule}"`,
     });
-  if (typeof params.message !== "string" || !params.message.trim())
+  if (!Array.isArray(params.tasks) || params.tasks.length === 0)
     return audit(deps, "add", scope, params.name, "error", {
-      reason: "message is required",
+      reason: "tasks array is required and must have at least one item",
     });
+  for (const t of params.tasks) {
+    if (!t.title?.trim())
+      return audit(deps, "add", scope, params.name, "error", {
+        reason: "each task must have a non-empty title",
+      });
+    if (!t.assignee?.trim())
+      return audit(deps, "add", scope, params.name, "error", {
+        reason: "each task must have a non-empty assignee",
+      });
+  }
   if (params.timezone && !isValidTimezone(params.timezone))
     return audit(deps, "add", scope, params.name, "error", {
       reason: `invalid timezone "${params.timezone}"`,
@@ -94,13 +112,6 @@ export async function cronAddImpl(
     return audit(deps, "add", scope, params.name, "error", {
       reason: `invalid catch_up "${params.catch_up}"`,
     });
-
-  if (scope === "office") {
-    if (!params.targets || params.targets.length === 0)
-      return audit(deps, "add", scope, params.name, "error", {
-        reason: "targets required for office scope",
-      });
-  }
 
   let result: string | undefined;
   await withOfficeLock(officeId, async () => {
@@ -118,6 +129,14 @@ export async function cronAddImpl(
       });
       return;
     }
+
+    const tasksYaml = params.tasks.map((t) => {
+      const obj: Record<string, unknown> = { title: t.title, assignee: t.assignee };
+      if (t.description) obj.description = t.description;
+      if (t.parent_id) obj.parent_id = t.parent_id;
+      if (t.report_channel) obj.report_channel = t.report_channel;
+      return obj;
+    });
 
     if (scope === "agent") {
       if (!doc.getIn(["agents", agentName])) {
@@ -142,10 +161,11 @@ export async function cronAddImpl(
 
       const entry: Record<string, unknown> = {
         schedule: params.schedule,
-        message: params.message,
+        tasks: tasksYaml,
       };
       if (params.timezone) entry.timezone = params.timezone;
       if (params.catch_up) entry.catch_up = params.catch_up;
+      if (params.report_channel) entry.report_channel = params.report_channel;
       doc.setIn(["agents", agentName, "cron", params.name], entry);
       atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
 
@@ -155,28 +175,13 @@ export async function cronAddImpl(
       const jobs = cronJobs.get(agentName);
       if (jobs) deps.cron!.setJobs(agentName, jobs);
     } else {
-      // Office scope — validate targets against YAML roster
-      const agentsNode = doc.getIn(["agents"]);
-      const roster = agentsNode
-        ? Object.keys((agentsNode as any).toJSON?.() ?? agentsNode)
-        : [];
-      for (const t of params.targets!) {
-        if (t === "__broadcast__") continue;
-        if (!roster.includes(t)) {
-          result = audit(deps, "add", scope, params.name, "error", {
-            reason: `unknown target agent "${t}"`,
-          });
-          return;
-        }
-      }
-
       const entry: Record<string, unknown> = {
         schedule: params.schedule,
-        message: params.message,
-        targets: params.targets,
+        tasks: tasksYaml,
       };
       if (params.timezone) entry.timezone = params.timezone;
       if (params.catch_up) entry.catch_up = params.catch_up;
+      if (params.report_channel) entry.report_channel = params.report_channel;
       doc.setIn(["office", "cron", params.name], entry);
       atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
 
@@ -345,8 +350,8 @@ export function cronListImpl(
       j.scope === "office" ? `[office] ${j.jobName}` : `[agent] ${j.jobName}`;
     const desc = describeCron(j.config.schedule);
     const next = new Date(j.state.nextRunAt).toISOString();
-    const targets = j.targets ? ` → ${j.targets.join(",")}` : "";
-    return `${label}  ${j.config.schedule} (${desc})  next: ${next}${targets}`;
+    const taskCount = j.config.tasks.length;
+    return `${label}  ${j.config.schedule} (${desc})  next: ${next}  tasks: ${taskCount}`;
   });
   return lines.join("\n");
 }

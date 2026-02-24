@@ -30,6 +30,8 @@ export interface CreateTaskParams {
   dependsOn?: string[];
   parentId?: string;
   priority: Priority;
+  /** Channel name to notify when task is done. */
+  reportChannel?: string;
 }
 
 export interface UpdateTaskParams {
@@ -45,6 +47,8 @@ export class TaskService {
   private bus: MessageBus;
   private officeDir: string;
   private agentExists: (name: string) => boolean;
+  private doneHook: ((task: Task) => void) | undefined;
+  private stateChangedCallback: (() => void) | undefined;
 
   constructor(
     store: TaskStore,
@@ -56,6 +60,16 @@ export class TaskService {
     this.bus = bus;
     this.officeDir = officeDir;
     this.agentExists = agentExists;
+  }
+
+  /** Register a callback invoked whenever a task transitions to "done". */
+  setDoneHook(hook: (task: Task) => void): void {
+    this.doneHook = hook;
+  }
+
+  /** Register a callback invoked whenever task state changes (create or update). */
+  setStateChangedCallback(cb: () => void): void {
+    this.stateChangedCallback = cb;
   }
 
   start(): void {
@@ -114,10 +128,12 @@ export class TaskService {
       dependsOn: deps,
       createdAt: now,
       updatedAt: now,
+      ...(params.reportChannel ? { reportChannel: params.reportChannel } : {}),
     };
 
     this.tasks[task.id] = task;
     this.persist();
+    this.stateChangedCallback?.();
 
     auditTaskAction(this.officeDir, {
       ts: new Date().toISOString(),
@@ -190,6 +206,7 @@ export class TaskService {
     }
 
     this.persist();
+    this.stateChangedCallback?.();
 
     auditTaskAction(this.officeDir, {
       ts: new Date().toISOString(),
@@ -210,6 +227,7 @@ export class TaskService {
 
     if (task.status === "done" && oldStatus !== "done") {
       this.resolveDependencies(task.id);
+      this.doneHook?.(task);
     }
 
     return task;

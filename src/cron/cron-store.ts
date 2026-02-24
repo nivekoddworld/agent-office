@@ -36,7 +36,6 @@ function normalizeState(raw: unknown): CronJobState | null {
   const lastStatus = state["lastStatus"];
   const validStatus =
     lastStatus === "ok" ||
-    lastStatus === "skipped_busy" ||
     lastStatus === "skipped_cap" ||
     lastStatus === "error"
       ? lastStatus
@@ -47,7 +46,6 @@ function normalizeState(raw: unknown): CronJobState | null {
     nextRunAt,
     attemptCount,
     sentCount,
-    skippedBusyCount: asNonNegativeNumber(state["skippedBusyCount"]),
     skippedCapCount: asNonNegativeNumber(state["skippedCapCount"]),
     lastStatus: validStatus,
     lastError:

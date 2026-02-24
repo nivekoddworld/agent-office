@@ -12,6 +12,7 @@ import {
   IconArrowForwardUp,
   IconUser,
   IconBolt,
+  IconCircleCheck,
 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { MarkdownContent } from "./MarkdownContent.js";
@@ -127,6 +128,9 @@ export function SlackMessage({
 }: SlackMessageProps) {
   const [hovered, setHovered] = useState(false);
   const isOperator = !message.isBot;
+  const isTaskReport = message.kind === "task_report";
+  const isCronReport = isTaskReport && !!message.jobName;
+  const reportColor = isCronReport ? slack.accentBlue : slack.accentGreen;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.text).catch(() => {});
@@ -141,6 +145,12 @@ export function SlackMessage({
       style={{
         position: "relative",
         backgroundColor: hovered ? slack.messageHoverBg : "transparent",
+        borderLeft: isTaskReport
+          ? `3px solid ${reportColor}`
+          : undefined,
+        paddingLeft: isTaskReport
+          ? "calc(var(--mantine-spacing-md) - 3px)"
+          : undefined,
       }}
     >
       {hovered && (
@@ -167,6 +177,23 @@ export function SlackMessage({
         )}
 
         <Box style={{ flex: 1, minWidth: 0 }}>
+          {!compact && isTaskReport && (
+            <Group gap={4} mb={4}>
+              <IconCircleCheck size={13} color={reportColor} />
+              <Text
+                size="xs"
+                fw={600}
+                style={{
+                  color: reportColor,
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {message.jobName ? `Cron: ${message.jobName}` : "Task Report"}
+              </Text>
+            </Group>
+          )}
           {!compact && (
             <Group gap={8} mb={2}>
               <Text

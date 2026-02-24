@@ -1,9 +1,11 @@
-import { useState, useMemo } from "react";
-import { Box, Group, Text, SegmentedControl } from "@mantine/core";
+import { useState, useMemo, useEffect } from "react";
+import { Box, Button, Group, Text, SegmentedControl } from "@mantine/core";
+import { IconPlus } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
 import { KanbanColumn } from "../../components/kanban/KanbanColumn.js";
 import { TaskDetailModal } from "../../components/kanban/TaskDetailModal.js";
+import { TaskAddForm } from "../../components/kanban/TaskAddForm.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
@@ -22,8 +24,21 @@ export function KanbanBoard() {
     [state.agents],
   );
 
+  const channels = useMemo(
+    () => Object.keys(state.channels ?? {}),
+    [state.channels],
+  );
+
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filter, setFilter] = useState("all");
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Sync selectedTask when tasks prop updates (e.g. agent status change via SSE)
+  useEffect(() => {
+    if (!selectedTask) return;
+    const updated = (state.tasks ?? []).find((t) => t.id === selectedTask.id);
+    if (updated) setSelectedTask(updated);
+  }, [state.tasks]);
 
   const filtered = useMemo(() => {
     const tasks = state.tasks ?? [];
@@ -88,9 +103,18 @@ export function KanbanBoard() {
               data={filterOptions}
             />
           </Group>
-          <Text size="xs" style={{ color: slack.textMuted }}>
-            {filtered.length} task{filtered.length !== 1 ? "s" : ""}
-          </Text>
+          <Group gap="sm">
+            <Text size="xs" style={{ color: slack.textMuted }}>
+              {filtered.length} task{filtered.length !== 1 ? "s" : ""}
+            </Text>
+            <Button
+              size="xs"
+              leftSection={<IconPlus size={14} />}
+              onClick={() => setAddOpen(true)}
+            >
+              New Task
+            </Button>
+          </Group>
         </Group>
       </Box>
 
@@ -118,6 +142,13 @@ export function KanbanBoard() {
         task={selectedTask}
         opened={selectedTask !== null}
         onClose={() => setSelectedTask(null)}
+      />
+
+      <TaskAddForm
+        opened={addOpen}
+        onClose={() => setAddOpen(false)}
+        agentNames={agentNames}
+        channels={channels}
       />
     </Box>
   );

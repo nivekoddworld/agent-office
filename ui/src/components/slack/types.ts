@@ -12,4 +12,6 @@ export interface SlackMessageData {
   eventType?: string;
   usage?: MessageUsage;
   requestId?: string;
+  kind?: string;
+  jobName?: string;
 }
