@@ -299,6 +299,30 @@ export interface CollaborationSla {
   stallCooldownMinutes: number;
 }
 
+// --- Models discovery ---
+
+export interface ModelCost {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  reasoning: boolean;
+  contextWindow: number;
+  maxTokens: number;
+  cost: ModelCost;
+}
+
+export interface ModelsResponse {
+  providers: string[];
+  models: ModelInfo[];
+}
+
 export type CollaborationMode = "off" | "warn" | "enforce";
 
 export interface CollaborationPolicy {

@@ -26,6 +26,7 @@ import {
   getCostSummary,
   getHierarchy,
   getManifest,
+  getModelsResponse,
 } from "./routes.js";
 import { dispatchCommand, type DispatchResult } from "./command-parser.js";
 import { isMutation } from "./command-intent.js";
@@ -1967,6 +1968,11 @@ export async function startUiServer(
           error: err instanceof Error ? err.message : String(err),
         });
       }
+    }
+
+    // --- GET /api/models ---
+    if (path === "/api/models" && method === "GET") {
+      return json(res, 200, getModelsResponse());
     }
 
     // --- Catch-all for unknown /api/* paths ---

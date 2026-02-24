@@ -1,13 +1,43 @@
-import { useState } from "react";
-import { Modal, TextInput, Select, Stack, Button, Group } from "@mantine/core";
+import { useState, useMemo } from "react";
+import {
+  Modal,
+  TextInput,
+  Select,
+  Stack,
+  Button,
+  Group,
+  Text,
+  Badge,
+  Loader,
+} from "@mantine/core";
+import type {
+  ComboboxItem,
+  ComboboxData,
+  ComboboxItemGroup,
+  ComboboxLikeRenderOptionInput,
+} from "@mantine/core";
 import { useHireAgent, useSetManager } from "../../api/use-api-mutations.js";
+import { useModels } from "../../api/use-models.js";
+import type { ModelInfo } from "../../api/types.js";
 
-const MODELS = [
-  "anthropic:claude-sonnet-4-20250514",
-  "anthropic:claude-haiku-3-20240307",
-  "openai:gpt-4o",
-  "openai:gpt-4o-mini",
+const FALLBACK_MODELS: ComboboxItemGroup[] = [
+  {
+    group: "anthropic",
+    items: [
+      { value: "anthropic:claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+      { value: "anthropic:claude-haiku-3-20240307", label: "Claude Haiku 3" },
+    ],
+  },
+  {
+    group: "openai",
+    items: [
+      { value: "openai:gpt-4o", label: "GPT-4o" },
+      { value: "openai:gpt-4o-mini", label: "GPT-4o Mini" },
+    ],
+  },
 ];
+
+const FALLBACK_FIRST = "anthropic:claude-sonnet-4-20250514";
 
 const PRIORITIES = [
   { value: "2", label: "Normal" },
@@ -24,6 +54,37 @@ const THINKING = [
   { value: "high", label: "High" },
 ];
 
+function formatContextWindow(tokens: number): string {
+  return `${Math.round(tokens / 1000)}k`;
+}
+
+function buildModelData(models: ModelInfo[]): {
+  data: ComboboxData;
+  firstValue: string | null;
+  lookup: Map<string, ModelInfo>;
+} {
+  const lookup = new Map<string, ModelInfo>();
+  const byProvider = new Map<string, ComboboxItem[]>();
+
+  for (const m of models) {
+    lookup.set(m.id, m);
+    const items = byProvider.get(m.provider) ?? [];
+    items.push({ value: m.id, label: m.name });
+    byProvider.set(m.provider, items);
+  }
+
+  const groups: ComboboxItemGroup[] = [];
+  for (const [provider, items] of byProvider) {
+    groups.push({ group: provider, items });
+  }
+
+  return {
+    data: groups as ComboboxData,
+    firstValue: models[0]?.id ?? null,
+    lookup,
+  };
+}
+
 interface AddNodeModalProps {
   opened: boolean;
   onClose: () => void;
@@ -38,7 +99,7 @@ export function AddNodeModal({
   defaultManager,
 }: AddNodeModalProps) {
   const [name, setName] = useState("");
-  const [model, setModel] = useState<string | null>(MODELS[0]!);
+  const [model, setModel] = useState<string | null>(null);
   const [priority, setPriority] = useState<string | null>("2");
   const [thinking, setThinking] = useState<string | null>("");
   const [description, setDescription] = useState("");
@@ -47,10 +108,57 @@ export function AddNodeModal({
   );
   const hireAgent = useHireAgent();
   const setManager = useSetManager();
+  const { data: modelsResp, isLoading, isError } = useModels();
+
+  const {
+    data: selectData,
+    firstValue,
+    lookup,
+  } = useMemo(() => {
+    if (!modelsResp?.models.length) {
+      return {
+        data: FALLBACK_MODELS as ComboboxData,
+        firstValue: FALLBACK_FIRST,
+        lookup: new Map<string, ModelInfo>(),
+      };
+    }
+    return buildModelData(modelsResp.models);
+  }, [modelsResp]);
+
+  if (!model && firstValue) {
+    setModel(firstValue);
+  }
+
+  const renderModelOption = ({
+    option,
+  }: ComboboxLikeRenderOptionInput<ComboboxItem>) => {
+    const info = lookup.get(option.value);
+    if (!info) {
+      return <Text size="sm">{option.label}</Text>;
+    }
+    return (
+      <Group gap="xs" wrap="nowrap">
+        <Text size="sm" truncate style={{ flex: 1 }}>
+          {option.label}
+        </Text>
+        {info.reasoning && (
+          <Badge size="xs" variant="light" color="violet">
+            reasoning
+          </Badge>
+        )}
+        <Text size="xs" c="dimmed">
+          {formatContextWindow(info.contextWindow)}
+        </Text>
+        <Text size="xs" c="dimmed">
+          ${info.cost.input}/${info.cost.output}
+        </Text>
+      </Group>
+    );
+  };
 
   const reset = () => {
     setName("");
-    setModel(MODELS[0]!);
+    setModel(firstValue);
     setPriority("2");
     setThinking("");
     setDescription("");
@@ -100,14 +208,33 @@ export function AddNodeModal({
           onChange={(e) => setName(e.currentTarget.value)}
           required
         />
-        <Select
-          label="Model"
-          data={MODELS}
-          value={model}
-          onChange={setModel}
-          searchable
-          allowDeselect={false}
-        />
+        {isLoading ? (
+          <Group gap="xs">
+            <Loader size="xs" />
+            <Text size="sm" c="dimmed">
+              Loading models...
+            </Text>
+          </Group>
+        ) : (
+          <>
+            <Select
+              label="Model"
+              data={selectData}
+              value={model}
+              onChange={setModel}
+              searchable
+              allowDeselect={false}
+              renderOption={renderModelOption}
+              maxDropdownHeight={300}
+              limit={50}
+            />
+            {isError && (
+              <Text size="xs" c="yellow">
+                Could not fetch models from server. Showing defaults.
+              </Text>
+            )}
+          </>
+        )}
         <Group grow>
           <Select
             label="Priority"

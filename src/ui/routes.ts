@@ -10,6 +10,7 @@ import { COMMAND_MANIFEST } from "./manifest.js";
 import { readUsageRecords, summarizeUsage } from "../metrics/usage-tracker.js";
 import { officeDir } from "../constants.js";
 import type { CollaborationSnapshot } from "../collaboration/metrics.js";
+import { getProviders, getModels } from "@mariozechner/pi-ai";
 
 // --- Scoped logger ---
 
@@ -193,6 +194,47 @@ export function getCollaborationMetrics(
   workspace: Workspace,
 ): CollaborationSnapshot {
   return workspace.getCollaborationMetrics();
+}
+
+// --- Models discovery ---
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+  reasoning: boolean;
+  contextWindow: number;
+  maxTokens: number;
+  cost: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  };
+}
+
+export interface ModelsResponse {
+  providers: string[];
+  models: ModelInfo[];
+}
+
+export function getModelsResponse(): ModelsResponse {
+  const providers = getProviders();
+  const models: ModelInfo[] = [];
+  for (const provider of providers) {
+    for (const m of getModels(provider)) {
+      models.push({
+        id: `${provider}:${m.id}`,
+        name: m.name,
+        provider,
+        reasoning: m.reasoning,
+        contextWindow: m.contextWindow,
+        maxTokens: m.maxTokens,
+        cost: m.cost,
+      });
+    }
+  }
+  return { providers, models };
 }
 
 // --- Agent file listing ---
