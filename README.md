@@ -1858,9 +1858,11 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 - **Dynamic model selection** — Hire modal displays all 700+ available models from pi-ai, grouped by provider with metadata (reasoning capability, context window, costs). Auto-updates when pi-ai upgrades.
 - **Cron management** — top-level sidebar item with dedicated cron view, human-friendly schedule builder (hourly/daily/weekly/custom), report channel selector, loading states, and delete confirmation
 - **Debug logs** — live event capture panel with source/kind/agent filters, preset views (All, Errors, Tools, Messages, Task/Cron), group-by-agent mode, and JSONL export
-- **Org chart** — interactive hierarchy modal
-- **Cost dashboard** — per-agent token usage and cost breakdown
-- **Office settings** — office configuration modal with channel management (create, edit members/description, delete), scheduler controls, config reload/validate
+- **Org chart** — dedicated page (`/org-chart`) with interactive hierarchy visualization and agent profile drawer
+- **Cost dashboard** — dedicated page (`/cost`) with per-agent token usage and cost breakdown
+- **Collaboration** — dedicated page (`/collaboration`) with metrics, obligation tracking, and deadlock signals
+- **Office settings** — dedicated page (`/settings`) with channel management (create, edit members/description, delete), scheduler controls, config reload/validate
+- **URL-based navigation** — React Router v7 with bookmarkable URLs, browser back/forward, and deep linking to any view
 - **Real-time updates** — SSE event stream with unread badges and queue depth indicators
 
 ### Configuration
@@ -1879,7 +1881,7 @@ pnpm ui:lint      # ESLint + single-component-per-file check
 pnpm ui:check     # TypeScript type check only
 ```
 
-The frontend lives in `ui/` (Vite + React 19 + Mantine 7). During dev, `pnpm -C ui dev` starts the Vite dev server with API proxy to the backend.
+The frontend lives in `ui/` (Vite + React 19 + Mantine 7 + React Router v7). During dev, `pnpm -C ui dev` starts the Vite dev server with API proxy to the backend.
 
 ## End-to-End Examples
 
@@ -2177,6 +2179,38 @@ src/
     api/
       types.ts              Shared API types (ModelInfo, ModelCost, ModelsResponse)
       use-models.ts         React Query hook for fetching GET /api/models with 5-min stale time
+
+ui/src/
+  routes.tsx                  createBrowserRouter route definitions (all app routes)
+  main.tsx                    App entry — RouterProvider + Mantine + QueryClient providers
+  components/
+    layout/
+      RootLayout.tsx          Top-level layout: auth, SSE, bootstrap, sidebar + Outlet
+      app-state-context.ts    AppStateContext + useAppState() hook (BootstrapState for pages)
+      app-actions-context.ts  AppActionsContext + useAppActions() hook (openAgentProfile)
+    slack/
+      SlackSidebar.tsx        Sidebar with useNavigate/useLocation (URL-based active state)
+      ChannelView.tsx         DM + channel conversation thread view
+      ...                     Other shared UI components
+  pages/
+    tasks/
+      KanbanBoard.tsx         /tasks — task board with columns and per-agent filter
+    cron/
+      CronChannelView.tsx     /cron — cron job management with schedule builder
+    dm/
+      DmView.tsx              /dm/:agentName — wrapper that extracts param → ChannelView
+    channel/
+      ConversationView.tsx    /channels/:name — wrapper that extracts param → ChannelView
+    cost/
+      CostPanel.tsx           /cost — per-agent token usage and cost breakdown
+    collaboration/
+      CollaborationPanel.tsx  /collaboration — collaboration metrics panel
+    settings/
+      SettingsPanel.tsx       /settings — office settings and channel management
+    debug/
+      OfficeDebugPanel.tsx    /debug — live debug log capture panel
+    org-chart/
+      OrgChartPanel.tsx       /org-chart — interactive agent hierarchy visualization
 
 test/
   office-yaml.test.ts        Office config: officeId validation, load, validate, merge, mutations, lock
