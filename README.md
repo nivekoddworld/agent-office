@@ -176,6 +176,7 @@ XAI_API_KEY=...                          # For xAI Grok models
 ```
 
 **Important:** When you hire an agent with a specific model, that model's API key must be present in `.env`. For example:
+
 - `hire designer --model openai:gpt-4o` requires `OPENAI_API_KEY`
 - `hire researcher --model anthropic:claude-opus-4-6` requires `ANTHROPIC_API_KEY`
 
@@ -856,6 +857,7 @@ The hire modal in the Web UI displays all available models dynamically, grouped 
 - **Provider grouping**: Easy navigation by provider (anthropic, openai, google, etc.)
 
 **How it works:**
+
 1. Web UI calls `GET /api/models` endpoint
 2. Backend fetches available models and groups them by provider
 3. Models are displayed with metadata for easy selection
@@ -889,6 +891,7 @@ Response:
 ```
 
 **Example:** When you click "Hire" in the UI, you'll see all models grouped like:
+
 ```
 Anthropic
   └─ Claude Opus 4.6 (reasoning: ✓, context: 200k, cost: $3-15/MTok)

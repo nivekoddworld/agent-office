@@ -4,7 +4,8 @@ export type SystemTarget =
   | "debug"
   | "cost"
   | "collaboration"
-  | "settings";
+  | "settings"
+  | "org-chart";
 
 export type ChannelId =
   | { kind: "conversation"; name: string }

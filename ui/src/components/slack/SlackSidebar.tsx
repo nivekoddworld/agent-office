@@ -43,7 +43,6 @@ interface SlackSidebarProps {
   agents: AgentInfo[];
   activeChannel: ChannelId;
   onSelectChannel: (ch: ChannelId) => void;
-  onOpenOrgChart: () => void;
   schedulerRunning: boolean;
   onToggleScheduler?: () => void;
   unreadCounts?: Record<string, number>;
@@ -117,7 +116,6 @@ export function SlackSidebar({
   agents,
   activeChannel,
   onSelectChannel,
-  onOpenOrgChart,
   schedulerRunning,
   onToggleScheduler,
   unreadCounts = {},
@@ -343,7 +341,13 @@ export function SlackSidebar({
             <SidebarItem
               icon={<IconSitemap size={15} color={slack.sidebarText} />}
               label="Org Chart"
-              onClick={onOpenOrgChart}
+              active={isActive(activeChannel, {
+                kind: "system",
+                name: "org-chart",
+              })}
+              onClick={() =>
+                onSelectChannel({ kind: "system", name: "org-chart" })
+              }
             />
           </SidebarSection>
 

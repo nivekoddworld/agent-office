@@ -9,16 +9,13 @@ import { CronChannelView } from "../slack/CronChannelView.js";
 import { OfficeDebugPanel } from "../slack/OfficeDebugPanel.js";
 import { KanbanBoard } from "../kanban/KanbanBoard.js";
 import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
-import { OrgChartModal } from "../slack/OrgChartModal.js";
+import { OrgChartPanel } from "../org-chart/OrgChartPanel.js";
 import { CostPanel } from "../slack/CostPanel.js";
 import { CollaborationPanel } from "../slack/CollaborationPanel.js";
 import { SettingsPanel } from "../slack/SettingsPanel.js";
 import type { BootstrapState } from "../../api/types.js";
 
-type ModalState =
-  | { kind: "none" }
-  | { kind: "profile"; agentName: string }
-  | { kind: "orgChart" };
+type ModalState = { kind: "none" } | { kind: "profile"; agentName: string };
 
 interface AppLayoutProps {
   state: BootstrapState;
@@ -114,7 +111,6 @@ export function AppLayout({ state }: AppLayoutProps) {
           agents={state.agents}
           activeChannel={channel}
           onSelectChannel={handleSelectChannel}
-          onOpenOrgChart={() => setModal({ kind: "orgChart" })}
           schedulerRunning={state.scheduler.running}
           onToggleScheduler={handleToggleScheduler}
           unreadCounts={unreadCounts}
@@ -142,6 +138,12 @@ export function AppLayout({ state }: AppLayoutProps) {
           <CollaborationPanel />
         ) : channel.kind === "system" && channel.name === "settings" ? (
           <SettingsPanel state={state} />
+        ) : channel.kind === "system" && channel.name === "org-chart" ? (
+          <OrgChartPanel
+            agents={state.agents}
+            hierarchy={state.hierarchy}
+            onSelectAgent={handleOrgChartSelect}
+          />
         ) : (
           <ChannelView
             channel={channel}
@@ -161,14 +163,6 @@ export function AppLayout({ state }: AppLayoutProps) {
         opened={modal.kind === "profile"}
         onClose={closeModal}
         onSendMessage={handleSendMessage}
-      />
-
-      <OrgChartModal
-        opened={modal.kind === "orgChart"}
-        onClose={closeModal}
-        agents={state.agents}
-        hierarchy={state.hierarchy}
-        onSelectAgent={handleOrgChartSelect}
       />
     </Box>
   );
