@@ -162,14 +162,24 @@ pnpm dev start --office my-team
 pnpm dev start --office my-team --sandbox docker
 ```
 
-Create a `.env` file with your provider keys:
+Create a `.env` file with your provider API keys. Each model requires its corresponding provider key:
 
 ```env
-OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-...
-# GEMINI_API_KEY=...
-# MY_GH_TOKEN=ghp_...           # Host env vars for secret refs (office.yaml secrets)
+# Model API Keys (required for agents using these models)
+OPENAI_API_KEY=sk-...                    # For OpenAI models (gpt-4o, etc.)
+ANTHROPIC_API_KEY=sk-...                 # For Anthropic models (Claude, etc.)
+GEMINI_API_KEY=...                       # For Google Gemini models
+XAI_API_KEY=...                          # For xAI Grok models
+
+# Optional: Custom secret refs for office.yaml agents
+# MY_GH_TOKEN=ghp_...                     # Host env vars for authenticated_fetch secrets
 ```
+
+**Important:** When you hire an agent with a specific model, that model's API key must be present in `.env`. For example:
+- `hire designer --model openai:gpt-4o` requires `OPENAI_API_KEY`
+- `hire researcher --model anthropic:claude-opus-4-6` requires `ANTHROPIC_API_KEY`
+
+See the **Dynamic Model Discovery** section below for how to browse available models and their requirements in the Web UI.
 
 ## Multi-Office Architecture
 
@@ -835,6 +845,60 @@ hire <name>
   --env <KEY=VALUE>         Non-sensitive env var (repeatable)
   --secret-ref <KEY=ENV>    Secret ref mapping (repeatable)
   --ephemeral               Don't persist to office.yaml
+```
+
+#### Dynamic Model Discovery
+
+The hire modal in the Web UI displays all available models dynamically, grouped by provider. Instead of a hardcoded list, you can browse:
+
+- **700+ available models** from 10+ providers (Anthropic, OpenAI, Google, xAI, Mistral, etc.)
+- **Model metadata**: reasoning capability, context window, input/output costs
+- **Provider grouping**: Easy navigation by provider (anthropic, openai, google, etc.)
+
+**How it works:**
+1. Web UI calls `GET /api/models` endpoint
+2. Backend fetches available models and groups them by provider
+3. Models are displayed with metadata for easy selection
+4. Fallback to default model if fetch fails
+
+**API Endpoint:**
+
+```
+GET /api/models
+Auth: Session cookie required
+Response:
+{
+  "providers": ["anthropic", "openai", "google", ...],
+  "models": {
+    "anthropic": [
+      {
+        "id": "claude-opus-4-6",
+        "name": "Claude Opus 4.6",
+        "provider": "anthropic",
+        "reasoning": true,
+        "contextWindow": 200000,
+        "maxTokens": 4096,
+        "cost": { "input": 3, "output": 15 }
+      },
+      ...
+    ],
+    "openai": [...],
+    ...
+  }
+}
+```
+
+**Example:** When you click "Hire" in the UI, you'll see all models grouped like:
+```
+Anthropic
+  └─ Claude Opus 4.6 (reasoning: ✓, context: 200k, cost: $3-15/MTok)
+  └─ Claude Sonnet 4 (reasoning: ✗, context: 200k, cost: $3-15/MTok)
+  └─ Claude Haiku 3.5 (reasoning: ✗, context: 200k, cost: $0.8-4/MTok)
+
+OpenAI
+  └─ GPT-4o (reasoning: ✓, context: 128k, cost: $5-15/MTok)
+  └─ GPT-4o mini (reasoning: ✗, context: 128k, cost: $0.15-0.6/MTok)
+  └─ ...
 ```
 
 ### CLI Flags
@@ -1788,6 +1852,7 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 - **Kanban board** — task board with columns (backlog → todo → in_progress → review → done) and per-agent filter
 - **Agent DMs** — conversation threads per agent with message input, tool call display, thread drawer, and clear history via three-dot menu
 - **Agent detail** — skills tab for viewing installed skills per agent
+- **Dynamic model selection** — Hire modal displays all 700+ available models from pi-ai, grouped by provider with metadata (reasoning capability, context window, costs). Auto-updates when pi-ai upgrades.
 - **Cron management** — top-level sidebar item with dedicated cron view, human-friendly schedule builder (hourly/daily/weekly/custom), report channel selector, loading states, and delete confirmation
 - **Debug logs** — live event capture panel with source/kind/agent filters, preset views (All, Errors, Tools, Messages, Task/Cron), group-by-agent mode, and JSONL export
 - **Org chart** — interactive hierarchy modal
@@ -2099,13 +2164,16 @@ src/
 
   ui/
     server.ts               HTTP server (:3847), SSE streaming, static file serving
-    routes.ts               REST API route definitions (typed endpoints)
+    routes.ts               REST API route definitions (typed endpoints) + getModelsResponse()
     types.ts                UI-specific type definitions
     command-parser.ts       Chat command parser (slash commands, natural language)
     command-intent.ts       Command intent resolution (parsed command → action)
     command-dispatch-sub.ts Command dispatch subscriber (wires intents to workspace)
     event-buffer.ts         SSE event buffering and batching
     manifest.ts             UI build manifest loader
+    api/
+      types.ts              Shared API types (ModelInfo, ModelCost, ModelsResponse)
+      use-models.ts         React Query hook for fetching GET /api/models with 5-min stale time
 
 test/
   office-yaml.test.ts        Office config: officeId validation, load, validate, merge, mutations, lock
