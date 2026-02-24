@@ -443,7 +443,9 @@ export function getCronSummaries(
   for (const [name, raw] of Object.entries(entry.cron)) {
     if (!raw || raw.enabled === false) continue;
     const taskCount = Array.isArray(raw.tasks) ? raw.tasks.length : 0;
-    summaries.push(`${name}: ${describeCron(raw.schedule)} — ${taskCount} task(s)`);
+    summaries.push(
+      `${name}: ${describeCron(raw.schedule)} — ${taskCount} task(s)`,
+    );
   }
   return summaries;
 }

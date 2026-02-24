@@ -1,5 +1,13 @@
 import { useState, useMemo } from "react";
-import { Modal, TextInput, Textarea, Select, Stack, Button, Group } from "@mantine/core";
+import {
+  Modal,
+  TextInput,
+  Textarea,
+  Select,
+  Stack,
+  Button,
+  Group,
+} from "@mantine/core";
 import { useTaskCreate } from "../../api/use-api-mutations.js";
 
 interface TaskAddFormProps {
@@ -17,7 +25,12 @@ const PRIORITY_OPTIONS = [
   { value: "critical", label: "Critical" },
 ];
 
-export function TaskAddForm({ opened, onClose, agentNames, channels = [] }: TaskAddFormProps) {
+export function TaskAddForm({
+  opened,
+  onClose,
+  agentNames,
+  channels = [],
+}: TaskAddFormProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignee, setAssignee] = useState<string | null>(null);
@@ -73,7 +86,13 @@ export function TaskAddForm({ opened, onClose, agentNames, channels = [] }: Task
   const agentOptions = agentNames.map((n) => ({ value: n, label: n }));
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="New Task" size="md" centered>
+    <Modal
+      opened={opened}
+      onClose={handleClose}
+      title="New Task"
+      size="md"
+      centered
+    >
       <Stack gap="sm">
         <TextInput
           label="Title"

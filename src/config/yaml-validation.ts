@@ -272,11 +272,18 @@ export function validateAgentEntry(
           } else {
             if (!t.title || typeof t.title !== "string" || !t.title.trim())
               errors.push(`${p}: tasks[${i}].title is required`);
-            if (!t.assignee || typeof t.assignee !== "string" || !t.assignee.trim())
+            if (
+              !t.assignee ||
+              typeof t.assignee !== "string" ||
+              !t.assignee.trim()
+            )
               errors.push(`${p}: tasks[${i}].assignee is required`);
             if (t.parent_id !== undefined && typeof t.parent_id !== "string")
               errors.push(`${p}: tasks[${i}].parent_id must be a string`);
-            if (t.report_channel !== undefined && typeof t.report_channel !== "string")
+            if (
+              t.report_channel !== undefined &&
+              typeof t.report_channel !== "string"
+            )
               errors.push(`${p}: tasks[${i}].report_channel must be a string`);
           }
         }
@@ -416,11 +423,17 @@ export function validateOfficeCronEntry(
           errors.push(`${p}: tasks[${i}].title is required`);
         if (!t.assignee || typeof t.assignee !== "string" || !t.assignee.trim())
           errors.push(`${p}: tasks[${i}].assignee is required`);
-        else if (t.assignee !== "__broadcast__" && !agentNames.includes(t.assignee))
+        else if (
+          t.assignee !== "__broadcast__" &&
+          !agentNames.includes(t.assignee)
+        )
           errors.push(`${p}: tasks[${i}]: unknown assignee "${t.assignee}"`);
         if (t.parent_id !== undefined && typeof t.parent_id !== "string")
           errors.push(`${p}: tasks[${i}].parent_id must be a string`);
-        if (t.report_channel !== undefined && typeof t.report_channel !== "string")
+        if (
+          t.report_channel !== undefined &&
+          typeof t.report_channel !== "string"
+        )
           errors.push(`${p}: tasks[${i}].report_channel must be a string`);
       }
     }

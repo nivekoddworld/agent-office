@@ -426,24 +426,24 @@ agents:
             assignee: standup-bot
 ```
 
-| Field            | Required | Default  | Description                                                                 |
-| ---------------- | -------- | -------- | --------------------------------------------------------------------------- |
-| `schedule`       | yes      | —        | 5-field cron expression (`@daily`/`@hourly` rejected)                       |
-| `tasks`          | yes      | —        | Array of task templates; each requires `title` and `assignee`               |
-| `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                       |
-| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up task    |
-| `enabled`        | no       | `true`   | Set `false` to pause without removing                                       |
-| `report_channel` | no       | _(none)_ | Channel name to post task completion summaries to                           |
+| Field            | Required | Default  | Description                                                              |
+| ---------------- | -------- | -------- | ------------------------------------------------------------------------ |
+| `schedule`       | yes      | —        | 5-field cron expression (`@daily`/`@hourly` rejected)                    |
+| `tasks`          | yes      | —        | Array of task templates; each requires `title` and `assignee`            |
+| `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                    |
+| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up task |
+| `enabled`        | no       | `true`   | Set `false` to pause without removing                                    |
+| `report_channel` | no       | _(none)_ | Channel name to post task completion summaries to                        |
 
 Each task in the `tasks` array supports:
 
-| Field            | Required | Description                                                    |
-| ---------------- | -------- | -------------------------------------------------------------- |
-| `title`          | yes      | Task title shown in Kanban board                               |
-| `assignee`       | yes      | Agent name to assign the task to                               |
-| `description`    | no       | Detailed instructions for the assignee                         |
-| `parent_id`      | no       | Parent task ID (T-prefixed) to nest under                      |
-| `report_channel` | no       | Per-task channel override for completion notification          |
+| Field            | Required | Description                                           |
+| ---------------- | -------- | ----------------------------------------------------- |
+| `title`          | yes      | Task title shown in Kanban board                      |
+| `assignee`       | yes      | Agent name to assign the task to                      |
+| `description`    | no       | Detailed instructions for the assignee                |
+| `parent_id`      | no       | Parent task ID (T-prefixed) to nest under             |
+| `report_channel` | no       | Per-task channel override for completion notification |
 
 Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs (max 10 per agent via tools).
 
@@ -497,14 +497,14 @@ office:
           assignee: pm
 ```
 
-| Field            | Required | Default  | Description                                                                 |
-| ---------------- | -------- | -------- | --------------------------------------------------------------------------- |
-| `schedule`       | yes      | —        | 5-field cron expression                                                     |
-| `tasks`          | yes      | —        | Array of task templates; each requires `title` and `assignee`               |
-| `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                       |
-| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up task    |
-| `enabled`        | no       | `true`   | Set `false` to pause without removing                                       |
-| `report_channel` | no       | _(none)_ | Channel name to post task completion summaries to                           |
+| Field            | Required | Default  | Description                                                              |
+| ---------------- | -------- | -------- | ------------------------------------------------------------------------ |
+| `schedule`       | yes      | —        | 5-field cron expression                                                  |
+| `tasks`          | yes      | —        | Array of task templates; each requires `title` and `assignee`            |
+| `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                    |
+| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up task |
+| `enabled`        | no       | `true`   | Set `false` to pause without removing                                    |
+| `report_channel` | no       | _(none)_ | Channel name to post task completion summaries to                        |
 
 Assignee names are validated at parse time. Typos fail fast:
 

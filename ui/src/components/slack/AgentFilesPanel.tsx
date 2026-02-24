@@ -221,7 +221,8 @@ function FileTreeItem({
                 </Tooltip>
               )}
               <Text size="xs" style={{ color: slack.textMuted }}>
-                {node.children.length} item{node.children.length !== 1 ? "s" : ""}
+                {node.children.length} item
+                {node.children.length !== 1 ? "s" : ""}
               </Text>
             </Group>
           </Group>
@@ -313,10 +314,10 @@ function FileViewer({
 
   const openFile = useCallback(
     (reveal: boolean) => {
-      apiFetch(
-        `/api/agents/${encodeURIComponent(agentName)}/files/open`,
-        { method: "POST", body: JSON.stringify({ path: filePath, reveal }) },
-      ).catch(() => {});
+      apiFetch(`/api/agents/${encodeURIComponent(agentName)}/files/open`, {
+        method: "POST",
+        body: JSON.stringify({ path: filePath, reveal }),
+      }).catch(() => {});
     },
     [agentName, filePath],
   );
@@ -383,7 +384,12 @@ function FileViewer({
                 <IconFolderOpen size={16} />
               </ActionIcon>
             </Tooltip>
-            <ActionIcon variant="subtle" color="gray" size="sm" onClick={onClose}>
+            <ActionIcon
+              variant="subtle"
+              color="gray"
+              size="sm"
+              onClick={onClose}
+            >
               <IconX size={16} />
             </ActionIcon>
           </Group>

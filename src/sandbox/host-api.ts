@@ -70,7 +70,10 @@ export class HostApi {
     officeDir: string;
     cron: CronService;
   } | null = null;
-  private taskDeps: { taskService: TaskService; onStateChanged?: () => void } | null = null;
+  private taskDeps: {
+    taskService: TaskService;
+    onStateChanged?: () => void;
+  } | null = null;
   private bus: MessageBus;
   private listFn: () => AgentInfo[];
   private baseDir: string;
@@ -89,7 +92,10 @@ export class HostApi {
     this.cronDeps = deps;
   }
 
-  setTaskDeps(deps: { taskService: TaskService; onStateChanged?: () => void }): void {
+  setTaskDeps(deps: {
+    taskService: TaskService;
+    onStateChanged?: () => void;
+  }): void {
     this.taskDeps = deps;
   }
 

@@ -135,7 +135,15 @@ export function ChannelView({
   }, [baseline, channelBaseline, dmAgent, conversationChannel]);
 
   const liveMessages = useMemo(
-    () => eventToMessages(events, channel, isDefaultChannel, undefined, undefined, clearedAt),
+    () =>
+      eventToMessages(
+        events,
+        channel,
+        isDefaultChannel,
+        undefined,
+        undefined,
+        clearedAt,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [events, channelKey, isDefaultChannel, clearedAt],
   );

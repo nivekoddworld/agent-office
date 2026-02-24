@@ -666,9 +666,7 @@ export async function startUiServer(
     }
 
     // --- POST /api/agents/:name/files/open ---
-    const fileOpenMatch = path.match(
-      /^\/api\/agents\/([^/]+)\/files\/open$/,
-    );
+    const fileOpenMatch = path.match(/^\/api\/agents\/([^/]+)\/files\/open$/);
     if (fileOpenMatch && method === "POST") {
       if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
       const xrw = req.headers["x-requested-with"];
@@ -1563,7 +1561,11 @@ export async function startUiServer(
       let parsed: {
         jobName?: string;
         schedule?: string;
-        tasks?: Array<{ title: string; description?: string; assignee: string }>;
+        tasks?: Array<{
+          title: string;
+          description?: string;
+          assignee: string;
+        }>;
         timezone?: string;
         catchUp?: string;
         reportChannel?: string;
@@ -1573,14 +1575,21 @@ export async function startUiServer(
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (!parsed.jobName || !parsed.schedule || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
+      if (
+        !parsed.jobName ||
+        !parsed.schedule ||
+        !Array.isArray(parsed.tasks) ||
+        parsed.tasks.length === 0
+      ) {
         return json(res, 400, {
           error: "jobName, schedule, and tasks (non-empty array) are required",
         });
       }
       for (const t of parsed.tasks) {
         if (!t.title?.trim() || !t.assignee?.trim()) {
-          return json(res, 400, { error: "each task must have a title and assignee" });
+          return json(res, 400, {
+            error: "each task must have a title and assignee",
+          });
         }
       }
       const fieldCount = parsed.schedule.trim().split(/\s+/).length;
@@ -1710,7 +1719,11 @@ export async function startUiServer(
       let parsed: {
         jobName?: string;
         schedule?: string;
-        tasks?: Array<{ title: string; description?: string; assignee: string }>;
+        tasks?: Array<{
+          title: string;
+          description?: string;
+          assignee: string;
+        }>;
         timezone?: string;
         catchUp?: string;
         reportChannel?: string;
@@ -1720,14 +1733,21 @@ export async function startUiServer(
       } catch {
         return json(res, 400, { error: "invalid_body" });
       }
-      if (!parsed.jobName || !parsed.schedule || !Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
+      if (
+        !parsed.jobName ||
+        !parsed.schedule ||
+        !Array.isArray(parsed.tasks) ||
+        parsed.tasks.length === 0
+      ) {
         return json(res, 400, {
           error: "jobName, schedule, and tasks (non-empty array) are required",
         });
       }
       for (const t of parsed.tasks) {
         if (!t.title?.trim() || !t.assignee?.trim()) {
-          return json(res, 400, { error: "each task must have a title and assignee" });
+          return json(res, 400, {
+            error: "each task must have a title and assignee",
+          });
         }
       }
       const fieldCount = parsed.schedule.trim().split(/\s+/).length;

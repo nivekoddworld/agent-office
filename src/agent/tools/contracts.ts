@@ -154,15 +154,25 @@ export const CRON_ADD = {
         description: Type.Optional(
           Type.String({ description: "Task description (optional)" }),
         ),
-        assignee: Type.String({ description: "Agent name to assign this task to" }),
+        assignee: Type.String({
+          description: "Agent name to assign this task to",
+        }),
         parent_id: Type.Optional(
-          Type.String({ description: "Parent task ID for sub-task grouping (optional)" }),
+          Type.String({
+            description: "Parent task ID for sub-task grouping (optional)",
+          }),
         ),
         report_channel: Type.Optional(
-          Type.String({ description: "Channel to notify when this task completes (optional)" }),
+          Type.String({
+            description:
+              "Channel to notify when this task completes (optional)",
+          }),
         ),
       }),
-      { description: "Ordered list of tasks to create when the job fires. Each task depends on the previous one. priority (CRITICAL) and dependsOn (auto-chain) are predefined." },
+      {
+        description:
+          "Ordered list of tasks to create when the job fires. Each task depends on the previous one. priority (CRITICAL) and dependsOn (auto-chain) are predefined.",
+      },
     ),
     scope: Type.Optional(
       Type.Unsafe<string>({

@@ -145,9 +145,7 @@ export function SlackMessage({
       style={{
         position: "relative",
         backgroundColor: hovered ? slack.messageHoverBg : "transparent",
-        borderLeft: isTaskReport
-          ? `3px solid ${reportColor}`
-          : undefined,
+        borderLeft: isTaskReport ? `3px solid ${reportColor}` : undefined,
         paddingLeft: isTaskReport
           ? "calc(var(--mantine-spacing-md) - 3px)"
           : undefined,

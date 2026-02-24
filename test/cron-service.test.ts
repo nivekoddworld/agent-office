@@ -73,7 +73,13 @@ describe("CronService", () => {
   it("fires job at expected time", () => {
     vi.setSystemTime(new Date("2024-01-15T14:30:00Z"));
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     agents.set("bot", makeAgent("bot"));
     svc.setJobs("bot", { hourly: makeConfig({ schedule: "0 * * * *" }) });
 
@@ -91,7 +97,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot", "running"));
     const { service: taskService, created } = makeTaskService();
 
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", { hourly: makeConfig() });
     vi.advanceTimersByTime(30 * 60 * 1000);
 
@@ -123,7 +135,13 @@ describe("CronService", () => {
     store.save(savedStates);
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", {
       daily: makeConfig({ schedule: "0 9 * * *", catchUp: "once" }),
     });
@@ -138,7 +156,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot"));
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", {
       daily: makeConfig({ schedule: "0 9 * * *", catchUp: "once" }),
     });
@@ -165,7 +189,13 @@ describe("CronService", () => {
     });
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", {
       daily: makeConfig({ schedule: "0 9 * * *", catchUp: "skip" }),
     });
@@ -230,9 +260,17 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot"));
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", {
-      hourly: makeConfig({ tasks: [{ title: "manual fire", assignee: "bot" }] }),
+      hourly: makeConfig({
+        tasks: [{ title: "manual fire", assignee: "bot" }],
+      }),
     });
     svc.trigger("bot", "hourly");
 
@@ -246,7 +284,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot"));
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", {
       chain: makeConfig({
         tasks: [
@@ -277,9 +321,19 @@ describe("CronService", () => {
     agents.set("b", makeAgent("b"));
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
-    svc.setJobs("a", { j1: makeConfig({ tasks: [{ title: "for-a", assignee: "a" }] }) });
-    svc.setJobs("b", { j2: makeConfig({ tasks: [{ title: "for-b", assignee: "b" }] }) });
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
+    svc.setJobs("a", {
+      j1: makeConfig({ tasks: [{ title: "for-a", assignee: "a" }] }),
+    });
+    svc.setJobs("b", {
+      j2: makeConfig({ tasks: [{ title: "for-b", assignee: "b" }] }),
+    });
 
     vi.advanceTimersByTime(30 * 60 * 1000);
 
@@ -296,7 +350,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot"));
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", { hourly: makeConfig() });
     vi.advanceTimersByTime(30 * 60 * 1000);
     expect(created).toHaveLength(1);
@@ -309,7 +369,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot"));
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     // Schedule: Jan 31 at midnight = 30 days away
     svc.setJobs("bot", { monthly: makeConfig({ schedule: "0 0 31 1 *" }) });
 
@@ -329,7 +395,13 @@ describe("CronService", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const { service: taskService, created } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", {
       fast: makeConfig({ schedule: "* * * * *" }),
     });
@@ -353,7 +425,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot"));
 
     const { service: taskService } = makeTaskService();
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", { hourly: makeConfig() });
 
     // Trigger to get "ok" status
@@ -376,7 +454,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot", "running")); // busy — should not matter
     const { service: taskService } = makeTaskService();
 
-    const svc = new CronService(bus, agents, store, undefined, taskService as any);
+    const svc = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService as any,
+    );
     svc.setJobs("bot", { hourly: makeConfig() });
 
     vi.advanceTimersByTime(30 * 60 * 1000);
@@ -392,7 +476,13 @@ describe("CronService", () => {
     agents.set("bot", makeAgent("bot"));
 
     const { service: taskService1 } = makeTaskService();
-    const svc1 = new CronService(bus, agents, store, undefined, taskService1 as any);
+    const svc1 = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService1 as any,
+    );
     svc1.setJobs("bot", { hourly: makeConfig() });
     svc1.trigger("bot", "hourly");
     expect(svc1.listJobs()[0]!.state.attemptCount).toBe(1);
@@ -401,7 +491,13 @@ describe("CronService", () => {
 
     // New service instance, loads state from store
     const { service: taskService2 } = makeTaskService();
-    const svc2 = new CronService(bus, agents, store, undefined, taskService2 as any);
+    const svc2 = new CronService(
+      bus,
+      agents,
+      store,
+      undefined,
+      taskService2 as any,
+    );
     svc2.setJobs("bot", { hourly: makeConfig() });
     svc2.start();
     expect(svc2.listJobs()[0]!.state.attemptCount).toBe(1);

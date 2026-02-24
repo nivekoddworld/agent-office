@@ -131,7 +131,10 @@ export async function cronAddImpl(
     }
 
     const tasksYaml = params.tasks.map((t) => {
-      const obj: Record<string, unknown> = { title: t.title, assignee: t.assignee };
+      const obj: Record<string, unknown> = {
+        title: t.title,
+        assignee: t.assignee,
+      };
       if (t.description) obj.description = t.description;
       if (t.parent_id) obj.parent_id = t.parent_id;
       if (t.report_channel) obj.report_channel = t.report_channel;

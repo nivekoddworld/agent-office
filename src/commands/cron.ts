@@ -126,7 +126,10 @@ export async function cronAddCommand(
     }
 
     const tasksYaml = tasks.map((t) => {
-      const obj: Record<string, unknown> = { title: t.title, assignee: t.assignee };
+      const obj: Record<string, unknown> = {
+        title: t.title,
+        assignee: t.assignee,
+      };
       if (t.description) obj.description = t.description;
       return obj;
     });
@@ -328,7 +331,10 @@ export async function cronAddOfficeCommand(
     }
     const doc = parseDocument(readFileSync(path, "utf-8"));
     const tasksYaml = tasks.map((t) => {
-      const obj: Record<string, unknown> = { title: t.title, assignee: t.assignee };
+      const obj: Record<string, unknown> = {
+        title: t.title,
+        assignee: t.assignee,
+      };
       if (t.description) obj.description = t.description;
       return obj;
     });
