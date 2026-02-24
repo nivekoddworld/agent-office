@@ -50,6 +50,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
 - [Multi-Office Architecture](#multi-office-architecture)
   - [Creating an Office](#creating-an-office)
   - [Office Configuration](#office-configuration-officeyaml)
+  - [Heartbeat](#heartbeat)
   - [Permissions](#permissions)
   - [Tool Policy](#tool-policy)
   - [Hierarchy](#hierarchy)
@@ -67,6 +68,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Hire Options](#hire-options)
   - [CLI Flags](#cli-flags)
   - [Execution Surfaces](#execution-surfaces)
+  - [REST API Endpoints](#rest-api-endpoints)
 - [Agent Collaboration](#agent-collaboration)
   - [list_agents](#list_agents)
   - [message_agent](#message_agent)
@@ -76,6 +78,10 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [cron_remove](#cron_remove)
   - [cron_list](#cron_list)
   - [read_skill](#read_skill)
+  - [skill_search](#skill_search)
+  - [skill_install](#skill_install)
+  - [skill_remove](#skill_remove)
+  - [skill_create](#skill_create)
   - [task_create](#task_create)
   - [task_update](#task_update)
   - [task_list](#task_list)
@@ -98,7 +104,6 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Skills](#skills)
   - [Bootstrap Files](#bootstrap-files)
   - [Watchdog](#watchdog)
-  - [Resource Guards](#resource-guards)
   - [Message Persistence](#message-persistence)
 - [Prompt Inspection](#prompt-inspection)
 - [Cost Tracking](#cost-tracking)
@@ -135,7 +140,7 @@ graph TD
 
 **Core flow:** `office.yaml` (auto-spawn) / CLI / Web UI / Cron / Agent cron tools / Task notifications -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to UI.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -266,8 +271,32 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
 | `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)                 |
 | `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill`          |
+| `heartbeat`        | map              | _(none)_                                               | Proactive heartbeat config (see [Heartbeat](#heartbeat))                        |
 
 **Task tools** (`task_create`, `task_update`, `task_list`, `task_get`) are available to all in-process agents by default. Restrict access via `permissions.tools.deny`. See [Task Management](#task-management).
+
+#### Heartbeat
+
+Agents can run proactively via heartbeats — periodic messages that prompt agents to check for work or run maintenance without external triggers.
+
+```yaml
+agents:
+  monitor:
+    heartbeat:
+      interval_ms: 60000
+      prompt: "Check for pending work and report status"
+      active_hours:
+        start: "09:00"
+        end: "17:00"
+```
+
+| Field          | Required | Default      | Description                                 |
+| -------------- | -------- | ------------ | ------------------------------------------- |
+| `interval_ms`  | yes      | —            | Interval in milliseconds between heartbeats |
+| `prompt`       | no       | _(default)_  | Custom prompt text for heartbeat messages   |
+| `active_hours` | no       | _(none)_     | Restrict heartbeats to a time window        |
+
+Heartbeat messages are injected with `from: "__heartbeat__"` and formatted as `[Heartbeat]\n<prompt>`. Busy agents (status `running`) are skipped.
 
 ### Permissions
 
@@ -376,15 +405,17 @@ agents:
         timezone: "America/New_York" # optional, default UTC
         catch_up: once # optional: "skip" (default) | "once"
         enabled: true # optional, default true
+        report_channel: general # optional, post trigger to this channel
 ```
 
-| Field      | Required | Default | Description                                                                 |
-| ---------- | -------- | ------- | --------------------------------------------------------------------------- |
-| `schedule` | yes      | —       | 5-field cron expression (`@daily`/`@hourly` rejected)                       |
-| `message`  | yes      | —       | Prompt text sent to the agent                                               |
-| `timezone` | no       | `UTC`   | IANA timezone for schedule evaluation                                       |
-| `catch_up` | no       | `skip`  | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
-| `enabled`  | no       | `true`  | Set `false` to pause without removing                                       |
+| Field            | Required | Default   | Description                                                                 |
+| ---------------- | -------- | --------- | --------------------------------------------------------------------------- |
+| `schedule`       | yes      | —         | 5-field cron expression (`@daily`/`@hourly` rejected)                       |
+| `message`        | yes      | —         | Prompt text sent to the agent                                               |
+| `timezone`       | no       | `UTC`     | IANA timezone for schedule evaluation                                       |
+| `catch_up`       | no       | `skip`    | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `enabled`        | no       | `true`    | Set `false` to pause without removing                                       |
+| `report_channel` | no       | _(none)_  | Channel name to post the cron trigger to (visible in channel session)       |
 
 Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 
@@ -428,14 +459,15 @@ office:
       targets: [__broadcast__] # sends to all agents
 ```
 
-| Field      | Required | Default | Description                                                                 |
-| ---------- | -------- | ------- | --------------------------------------------------------------------------- |
-| `schedule` | yes      | —       | 5-field cron expression                                                     |
-| `message`  | yes      | —       | Prompt text sent to each target agent                                       |
-| `targets`  | yes      | —       | Agent names or `__broadcast__` (all agents)                                 |
-| `timezone` | no       | `UTC`   | IANA timezone for schedule evaluation                                       |
-| `catch_up` | no       | `skip`  | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
-| `enabled`  | no       | `true`  | Set `false` to pause without removing                                       |
+| Field            | Required | Default   | Description                                                                 |
+| ---------------- | -------- | --------- | --------------------------------------------------------------------------- |
+| `schedule`       | yes      | —         | 5-field cron expression                                                     |
+| `message`        | yes      | —         | Prompt text sent to each target agent                                       |
+| `targets`        | yes      | —         | Agent names or `__broadcast__` (all agents)                                 |
+| `timezone`       | no       | `UTC`     | IANA timezone for schedule evaluation                                       |
+| `catch_up`       | no       | `skip`    | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `enabled`        | no       | `true`    | Set `false` to pause without removing                                       |
+| `report_channel` | no       | _(none)_  | Channel name to post the cron trigger to (visible in channel session)       |
 
 Target agent names are validated at parse time. Typos fail fast:
 
@@ -647,7 +679,7 @@ Host Process                        Docker Container (per agent)
    - Volume mount: host workspace directory -> `/workspace` in container
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
-   - Proxy tools that forward `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `task_create`, `task_update`, `task_list`, `task_get` to the Host API over HTTP
+   - Proxy tools that forward `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `task_create`, `task_update`, `task_list`, `task_get`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create` to the Host API over HTTP
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
 6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
@@ -722,18 +754,25 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | `POST` | `/api/task-update`               | Update a task (auth required)                                  |
 | `POST` | `/api/task-list`                 | List tasks (auth required)                                     |
 | `POST` | `/api/task-get`                  | Get task details (auth required)                               |
-| `GET`  | `/api/collaboration/metrics`     | Collaboration observability snapshot                           |
+| `POST` | `/api/read-skill`                | Read full skill content (auth required)                        |
+| `POST` | `/api/skill-search`              | Search skills registry (auth required)                         |
+| `POST` | `/api/skill-install`             | Install a skill from registry (auth required)                  |
+| `POST` | `/api/skill-remove`              | Remove an installed skill (auth required)                      |
+| `POST` | `/api/skill-create`              | Create a custom skill (auth required)                          |
+| `POST` | `/api/tool-count`                | Report agent tool count (auth required)                        |
 
 All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable. Model API keys are never passed as Docker env vars — they are fetched via `GET /api/secrets` at boot and stored in memory only.
 
 ## Commands
 
-Runtime commands can be executed through two paths:
+Runtime operations are available through two surfaces:
 
-- **`POST /api/commands/:command`** — accepts any command string from the table below. Unsupported commands return HTTP 400 with `{ "error": "unknown_command" }`.
+- **Typed REST API** — dedicated endpoints for each operation (e.g. `POST /api/agents` to hire, `DELETE /api/agents/:name` to fire, `PATCH /api/agents/:name/prompt` to update prompt). See [REST API Endpoints](#rest-api-endpoints) for the full list.
 - **`POST /api/send`** — structured endpoint for sending messages to agents (`{ "agent": "<name>", "message": "<text>" }`).
 
-The Web UI has dedicated controls (buttons, forms, modals) for common operations — hire, fire, send, cron, reload — that call these endpoints internally. Some commands (skill management, env/secrets, prompt editing, permissions) are API-only.
+The Web UI has dedicated controls (buttons, forms, modals) for common operations — hire, fire, send, cron, reload — that call these typed endpoints internally.
+
+The table below lists all available operations and their descriptions:
 
 | Command                                               | Description                                                   |
 | ----------------------------------------------------- | ------------------------------------------------------------- |
@@ -808,22 +847,114 @@ pnpm dev start
   --no-ui                   Run headless without the web UI
 ```
 
-> **Migration note:** The interactive `ao>` REPL has been removed. All runtime commands are now available through the Web UI controls and `POST /api/commands/:command`. Use `--no-ui` for headless operation; send `SIGINT`/`SIGTERM` to shut down.
+> **Migration note:** The interactive `ao>` REPL has been removed. All runtime commands are now available through the Web UI controls and typed REST API endpoints. Use `--no-ui` for headless operation; send `SIGINT`/`SIGTERM` to shut down.
 
 ### Execution Surfaces
 
 Runtime commands (everything in the table above) can be executed through two surfaces:
 
 - **Web UI** — dedicated controls (buttons, forms, modals) for common operations: hire, fire, send messages, cron management, office reload, org chart. Some data (tasks, cost, permissions, skills) is displayed read-only. There is no free-text command prompt in the UI.
-- **REST API** — `POST /api/commands/:command` for any command string, `POST /api/send` for agent messages. Callable via `curl`, scripts, or browser DevTools.
+- **REST API** — typed endpoints per resource (e.g. `POST /api/agents`, `DELETE /api/agents/:name`, `PATCH /api/agents/:name/prompt`), plus `POST /api/send` for agent messages. Callable via `curl`, scripts, or browser DevTools. See [REST API Endpoints](#rest-api-endpoints).
 
 One-shot CLI commands (`office create`, `office validate`, `office migrate`, `start`) are run in the terminal and are not part of the runtime API.
 
 With `--no-ui`, the dashboard and API server are not started — runtime commands are unavailable for that process.
 
+### REST API Endpoints
+
+The Web UI server exposes typed REST endpoints for all operations. All mutating endpoints require session cookie + CSRF headers (`Origin` + `X-Requested-With: XMLHttpRequest`).
+
+**Auth & SSE:**
+
+| Method | Path             | Description                                   |
+| ------ | ---------------- | --------------------------------------------- |
+| `POST` | `/api/auth`      | Authenticate with bootstrap token, set session |
+| `GET`  | `/api/events`    | SSE event stream (real-time updates)           |
+| `GET`  | `/api/state`     | Full workspace state snapshot                  |
+| `GET`  | `/api/status`    | Scheduler and agent status overview            |
+| `GET`  | `/api/hierarchy` | Org chart hierarchy data                       |
+| `GET`  | `/api/manifest`  | UI build manifest                              |
+
+**Agents:**
+
+| Method   | Path                                    | Description                           |
+| -------- | --------------------------------------- | ------------------------------------- |
+| `POST`   | `/api/agents`                           | Hire a new agent                      |
+| `GET`    | `/api/agents/:name`                     | Get agent details                     |
+| `DELETE` | `/api/agents/:name`                     | Fire an agent                         |
+| `POST`   | `/api/send`                             | Send a message to an agent            |
+| `GET`    | `/api/agents/:name/inbox`               | Get agent inbox queue                 |
+| `GET`    | `/api/agents/:name/messages`            | Get agent DM history                  |
+| `DELETE` | `/api/agents/:name/messages`            | Clear agent DM history                |
+| `GET`    | `/api/agents/:name/files`               | List agent workspace files            |
+| `GET`    | `/api/agents/:name/files/content`       | Read a file from agent workspace      |
+| `PATCH`  | `/api/agents/:name/prompt`              | Set, append, or clear agent prompt    |
+| `PATCH`  | `/api/agents/:name/permissions`         | Update agent permissions              |
+| `PATCH`  | `/api/agents/:name/env`                 | Set or unset agent env var            |
+| `PATCH`  | `/api/agents/:name/secret-refs`         | Set or unset agent secret ref         |
+| `PATCH`  | `/api/agents/:name/manager`             | Set or clear agent manager            |
+| `PATCH`  | `/api/agents/:name/heartbeat`           | Set agent heartbeat config            |
+| `DELETE` | `/api/agents/:name/heartbeat`           | Clear agent heartbeat config          |
+| `GET`    | `/api/agents/:name/skills`              | List agent installed skills           |
+| `GET`    | `/api/agents/:name/skills/search`       | Search skills registry                |
+| `POST`   | `/api/agents/:name/skills/install`      | Install a skill for an agent          |
+| `DELETE` | `/api/agents/:name/skills/:skill`       | Remove an installed skill             |
+
+**Cron:**
+
+| Method   | Path                                  | Description                         |
+| -------- | ------------------------------------- | ----------------------------------- |
+| `GET`    | `/api/cron`                           | List all cron jobs                  |
+| `POST`   | `/api/agents/:name/cron`              | Add a cron job for an agent         |
+| `DELETE` | `/api/agents/:name/cron/:job`         | Remove an agent cron job            |
+| `PATCH`  | `/api/agents/:name/cron/:job`         | Enable or disable an agent cron job |
+| `POST`   | `/api/agents/:name/cron/:job/trigger` | Trigger an agent cron job           |
+| `POST`   | `/api/cron/office`                    | Add an office-level cron job        |
+| `DELETE` | `/api/cron/office/:job`               | Remove an office-level cron job     |
+| `POST`   | `/api/cron/office/:job/trigger`       | Trigger an office-level cron job    |
+
+**Tasks:**
+
+| Method  | Path               | Description              |
+| ------- | ------------------ | ------------------------ |
+| `GET`   | `/api/tasks`       | List tasks with filters  |
+| `POST`  | `/api/tasks`       | Create a task            |
+| `GET`   | `/api/tasks/board` | Get Kanban board data    |
+| `GET`   | `/api/tasks/:id`   | Get task details         |
+| `PATCH` | `/api/tasks/:id`   | Update task status/data  |
+
+**Channels:**
+
+| Method   | Path                             | Description                      |
+| -------- | -------------------------------- | -------------------------------- |
+| `POST`   | `/api/channels`                  | Create a channel                 |
+| `PATCH`  | `/api/channels/:name`            | Update channel members/desc      |
+| `DELETE` | `/api/channels/:name`            | Delete a channel                 |
+| `POST`   | `/api/channels/:name/send`       | Send a message to a channel      |
+| `GET`    | `/api/channels/:name/messages`   | Get channel message history      |
+| `DELETE` | `/api/channels/:name/messages`   | Clear channel history            |
+
+**Office & Scheduler:**
+
+| Method | Path                             | Description                            |
+| ------ | -------------------------------- | -------------------------------------- |
+| `POST` | `/api/office/apply`              | Apply office.yaml changes              |
+| `GET`  | `/api/office/validate`           | Validate office.yaml                   |
+| `GET`  | `/api/office/path`               | Get office.yaml file path              |
+| `POST` | `/api/scheduler/start`           | Start the scheduler                    |
+| `POST` | `/api/scheduler/stop`            | Stop the scheduler                     |
+
+**Metrics:**
+
+| Method  | Path                             | Description                            |
+| ------- | -------------------------------- | -------------------------------------- |
+| `GET`   | `/api/cost`                      | Cost and token usage data              |
+| `GET`   | `/api/collaboration/metrics`     | Collaboration observability snapshot   |
+| `PATCH` | `/api/collaboration/policy`      | Update collaboration policy            |
+
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), and task tools (`task_create`, `task_update`, `task_list`, `task_get`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
+Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), task tools (`task_create`, `task_update`, `task_list`, `task_get`), and skill tools (`read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
 
 ### Task Event Notifications
 
@@ -850,7 +981,7 @@ Discover all agents in the workspace with their name, status, and description. A
 
 Send a message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]` and a footer `[To reply, call message_agent with to="sender"]`. Use `__broadcast__` to message all agents.
 
-**Reply-routing:** When an agent calls `message_agent` from a DM session (e.g. `dm:pm`), the system records a one-shot reply session. When the recipient replies, the reply is routed back into the originating DM session instead of the default `internal:*` session, keeping the conversation in the user-facing context.
+**Channel context:** Messages delivered through public channels include channel context: `[Posted in #channel. Other members: agent1, agent2]`. This lets agents know they're in a shared conversation and who else can see the message. Channel replies use `[To reply in #channel, post in the channel]` instead of the direct `message_agent` footer.
 
 Optional parameters:
 
@@ -1114,6 +1245,54 @@ agent calls read_skill:
 -> Errors with list of available skill names if not found
 ```
 
+### `skill_search`
+
+Search the skills.sh registry for installable packages.
+
+```
+agent calls skill_search:
+  query: "web scraping"
+  limit: 5
+
+-> Returns matching packages in owner/repo@skill-name format
+```
+
+### `skill_install`
+
+Install a skills.sh package into the agent's skills directory.
+
+```
+agent calls skill_install:
+  package: "owner/repo@skill-name"
+
+-> Skill installed to agents/<agent>/skills/<skill-name>
+```
+
+### `skill_remove`
+
+Remove a project-installed skill by name. Legacy GitHub-sourced skills must be removed via the CLI `skill remove` command.
+
+```
+agent calls skill_remove:
+  name: "skill-name"
+
+-> Skill removed from agents/<agent>/skills/
+```
+
+### `skill_create`
+
+Create a new custom skill scaffold in the agent's skills directory.
+
+```
+agent calls skill_create:
+  name: "my-skill"
+  description: "Short trigger description"
+  instructions: "Step-by-step workflow"
+  when_to_use: "When the user asks for X"
+
+-> Skill scaffold created at agents/<agent>/skills/my-skill/
+```
+
 ### `task_create`
 
 Create a task with title, description, and assignee. Optional `dependsOn` array specifies task IDs that must complete first.
@@ -1145,7 +1324,7 @@ agent calls task_update:
 
 ### `task_list`
 
-List tasks with optional filters by assignee, status, or creator.
+List tasks with optional filters by assignee, status, or priority.
 
 ```
 agent calls task_list:
@@ -1171,7 +1350,7 @@ agent calls task_get:
 src/agent/tools/
   contracts.ts              Single source of truth (name, label, description, parameters)
   fetch-helpers.ts          Shared SSRF protection, URL validation, auth header builder
-  message-agent.ts           Host implementation (bus.send + policy check + obligation tracking)
+  message-agent.ts          Host implementation (bus.send + policy check + obligation tracking)
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
@@ -1182,8 +1361,19 @@ src/agent/tools/
   task-list.ts              task_list — host implementation
   task-get.ts               task_get — host implementation
   task-impl.ts              Shared task tool logic
+  read-skill.ts             read_skill — host implementation
+  skill-search.ts           skill_search — host implementation
+  skill-install.ts          skill_install — host implementation
+  skill-remove.ts           skill_remove — host implementation
+  skill-create.ts           skill_create — host implementation
+  skill-impl.ts             Shared skill tool logic
+  cron-add.ts               cron_add — host implementation
+  cron-remove.ts            cron_remove — host implementation
+  cron-list.ts              cron_list — host implementation
+  cron-impl.ts              Shared cron tool logic
+  policy.ts                 Tool policy (allow/deny filtering)
   proxy/
-    message-agent.ts         Sandbox implementation (HTTP POST /api/message-agent)
+    message-agent.ts        Sandbox implementation (HTTP POST /api/message-agent)
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
     read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
     authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
@@ -1193,6 +1383,14 @@ src/agent/tools/
     task-update.ts          task_update — proxy implementation (HTTP)
     task-list.ts            task_list — proxy implementation (HTTP)
     task-get.ts             task_get — proxy implementation (HTTP)
+    read-skill.ts           read_skill — proxy implementation (HTTP)
+    skill-search.ts         skill_search — proxy implementation (HTTP)
+    skill-install.ts        skill_install — proxy implementation (HTTP)
+    skill-remove.ts         skill_remove — proxy implementation (HTTP)
+    skill-create.ts         skill_create — proxy implementation (HTTP)
+    cron-add.ts             cron_add — proxy implementation (HTTP)
+    cron-remove.ts          cron_remove — proxy implementation (HTTP)
+    cron-list.ts            cron_list — proxy implementation (HTTP)
     index.ts                Barrel export + HostFetch type
 ```
 
@@ -1446,24 +1644,9 @@ Watchdog behavior is configurable via `WorkspaceConfig.watchdog` (all fields opt
 | `maxRestarts`      | `5`      | Max restarts before marking agent as dead           |
 | `healthyResetMs`   | `600000` | Time healthy before resetting restart counter       |
 
-### Resource Guards
-
-Mutex and semaphore primitives for coordinating shared resource access:
-
-```ts
-// Mutex — one holder at a time
-const release = await workspace.mutex.acquire("database", "agent-a");
-release();
-
-// Semaphore — N concurrent holders
-workspace.semaphore.create("api-rate-limit", 3);
-const release = await workspace.semaphore.acquire("api-rate-limit");
-release();
-```
-
 ### Message Persistence
 
-Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). DM conversations are **dual-written** to both SQLite (`dm_messages` table) and JSONL session files — SQLite is the primary source for UI display and agent context hydration, while JSONL enables agent self-service lookup via `read_file`/`grep`. Inter-agent and channel messages are JSONL-only (see [Session History](#session-history)).
+Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). DM conversations are **dual-written** to both SQLite (`dm_messages` table) and JSONL session files — SQLite is the primary source for UI DM display, while JSONL enables agent self-service lookup via `read_file`/`grep`. Inter-agent and channel messages are JSONL-only (see [Session History](#session-history)).
 
 | What        | DB location                            | Behavior                                                                                                 |
 | ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -1473,23 +1656,7 @@ Inbox queues and DM records are persisted to SQLite so they survive process rest
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 
-The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking. A one-shot `replySessionMap` routes inter-agent replies back to the originating DM session (see [message_agent](#message_agent)).
-
-#### DM Context Replay
-
-On agent startup (and watchdog restart), the last **50** DM turns are replayed
-into the agent's conversation context as a single summary preamble. This enables
-the model to reference prior turns and maintain conversational continuity across
-process restarts.
-
-| Aspect            | Behavior                                                   |
-| ----------------- | ---------------------------------------------------------- |
-| Trigger           | `init()` in `spawn()` and `handleStuck()`                  |
-| Window            | Last 50 DM records (user + assistant)                      |
-| Format            | Single `[Prior conversation context]` UserMessage preamble |
-| Dedup             | Pending inbox user prompts excluded by requestId or text   |
-| Sandbox agents    | Not supported (sandbox manages own state lifecycle)        |
-| In-process agents | Full support — replayed via `Agent.replaceMessages()`      |
+The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking.
 
 #### Session History
 
@@ -1505,7 +1672,7 @@ Each line is a JSON object: `{"ts":"ISO8601","role":"user|assistant","from":"sen
 
 **Dual write (inter-agent):** Inter-agent messages are written to both the sender's and receiver's session directories, so each agent has a complete local copy of the conversation.
 
-**Dual write (DMs):** User-agent DM conversations are written to both SQLite (`dm_messages` table) and JSONL (`user-dm.jsonl`). SQLite serves as the primary source for UI DM display (`GET /api/agents/:name/messages`) and agent context hydration on startup. JSONL enables agents to search and read their DM history via `read_file`/`grep`.
+**Dual write (DMs):** User-agent DM conversations are written to both SQLite (`dm_messages` table) and JSONL (`user-dm.jsonl`). SQLite serves as the primary source for UI DM display (`GET /api/agents/:name/messages`). JSONL enables agents to search and read their DM history via `read_file`/`grep`.
 
 **Rotation:** Session files are rotated at 500 lines, keeping the last 400 lines to prevent unbounded growth.
 
@@ -1617,10 +1784,11 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 
 ### Features
 
-- **Slack-style layout** — sidebar with channels (#general, #cron), direct messages per agent, and a Tasks Kanban view
+- **Slack-style layout** — sidebar with channels (#general), direct messages per agent, Cron management, and a Tasks Kanban view
 - **Kanban board** — task board with columns (backlog → todo → in_progress → review → done) and per-agent filter
-- **Agent DMs** — conversation threads per agent with message input, tool call display, and thread drawer
-- **Cron channel** — dedicated #cron channel view for cron job events
+- **Agent DMs** — conversation threads per agent with message input, tool call display, thread drawer, and clear history via three-dot menu
+- **Agent detail** — skills tab for viewing installed skills per agent
+- **Cron management** — top-level sidebar item with dedicated cron view, human-friendly schedule builder (hourly/daily/weekly/custom), report channel selector, loading states, and delete confirmation
 - **Debug logs** — live event capture panel with source/kind/agent filters, preset views (All, Errors, Tools, Messages, Task/Cron), group-by-agent mode, and JSONL export
 - **Org chart** — interactive hierarchy modal
 - **Cost dashboard** — per-agent token usage and cost breakdown
@@ -1786,8 +1954,10 @@ src/
 
   config/
     office-yaml.ts            Office loader, validator, mutations, env/secret merge
+    office-yaml-mutations.ts  Office YAML mutation helpers (add/remove agents, cron, etc.)
     yaml-utils.ts             Shared validation, cron extraction, atomic writes
-    agents-yaml.ts            Legacy YAML support (kept for migration)
+    yaml-validation.ts        YAML schema validation (agent names, office IDs, cron fields)
+    hierarchy.ts              Agent hierarchy helpers (manager lookup, org traversal)
     env-substitution.ts       ${VAR} env ref resolution with validation
     lock.ts                   Two-layer lock (in-process queue + cross-process file lock)
 
@@ -1796,9 +1966,11 @@ src/
 
   skills/
     fetch.ts                  Skill fetching, source map, reverse lookup
+    registry.ts               Skills registry (install/remove/search/list)
 
   agent/
     handle.ts                 Agent lifecycle (init, prompt, steer, abort, destroy)
+    handle-init.ts            initInProcessAgent / initSandboxAgent factory functions
     prompt.ts                 Convenience wrapper over prompt-manager
     memory/
       search.ts              Memory search/get utility (path guards, size limits)
@@ -1818,7 +1990,7 @@ src/
       contracts.ts            Shared tool metadata (name, label, description, parameters)
       fetch-helpers.ts        Shared SSRF, URL validation, auth header builder
       index.ts                Barrel re-export for host-side tools
-      message-agent.ts         message_agent — host implementation (bus.send + policy check + obligation tracking)
+      message-agent.ts        message_agent — host implementation (bus.send + policy check + obligation tracking)
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
@@ -1831,13 +2003,18 @@ src/
       task-impl.ts            Shared task tool logic
       policy.ts               Tool policy (allow/deny filtering)
       read-skill.ts           read_skill — host implementation
+      skill-create.ts         skill_create — host implementation
+      skill-install.ts        skill_install — host implementation
+      skill-remove.ts         skill_remove — host implementation
+      skill-search.ts         skill_search — host implementation
+      skill-impl.ts           Shared skill tool logic
       cron-impl.ts            Shared cron tool logic (add/remove/list)
       cron-add.ts             cron_add — host implementation
       cron-remove.ts          cron_remove — host implementation
       cron-list.ts            cron_list — host implementation
       proxy/
         index.ts              Barrel + HostFetch type
-        message-agent.ts       message_agent — proxy implementation (HTTP)
+        message-agent.ts      message_agent — proxy implementation (HTTP)
         list-agents.ts        list_agents — proxy implementation (HTTP)
         read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
@@ -1851,10 +2028,16 @@ src/
         cron-remove.ts        cron_remove — proxy implementation (HTTP)
         cron-list.ts          cron_list — proxy implementation (HTTP)
         read-skill.ts         read_skill — proxy implementation (HTTP)
+        skill-create.ts       skill_create — proxy implementation (HTTP)
+        skill-install.ts      skill_install — proxy implementation (HTTP)
+        skill-remove.ts       skill_remove — proxy implementation (HTTP)
+        skill-search.ts       skill_search — proxy implementation (HTTP)
 
   sandbox/
     types.ts                  SandboxProvider interface, SandboxMode, SandboxStartOpts
     host-api.ts               HTTP server for sandbox-to-host communication
+    host-api-handlers.ts      Core Host API route handlers (tools, prompt, secrets)
+    host-api-ext-handlers.ts  Extended Host API handlers (tasks, cron, skills)
     docker-provider.ts        Docker container lifecycle (build, run, stop, health)
     Dockerfile                Container image definition (node:22-slim, non-root)
     package.json              Sandbox-specific npm dependencies
@@ -1876,10 +2059,12 @@ src/
   scheduler/
     scheduler.ts              Tick-based priority scheduler
     watchdog.ts               Heartbeat monitor + stuck detection
+    heartbeat.ts              Heartbeat system (periodic proactive agent wake-up)
 
   messages/
     types.ts                  PersistedInbox, DmRecord interfaces
     message-store.ts          SQLite-backed inbox + DM + obligation persistence (node:sqlite, Node 22+)
+    session-key.ts            Session key helpers (sessionKey, parseSessionKey)
 
   sessions/
     session-writer.ts         JSONL append + rotation utility (500 lines max, keeps last 400)
@@ -1912,57 +2097,76 @@ src/
     deadlock-detector.ts    Stall detection (idle agents, no progress, overdue obligations)
     policy-service.ts       Collaboration policy enforcement (off/warn/enforce modes)
 
+  ui/
+    server.ts               HTTP server (:3847), SSE streaming, static file serving
+    routes.ts               REST API route definitions (typed endpoints)
+    types.ts                UI-specific type definitions
+    command-parser.ts       Chat command parser (slash commands, natural language)
+    command-intent.ts       Command intent resolution (parsed command → action)
+    command-dispatch-sub.ts Command dispatch subscriber (wires intents to workspace)
+    event-buffer.ts         SSE event buffering and batching
+    manifest.ts             UI build manifest loader
+
 test/
   office-yaml.test.ts        Office config: officeId validation, load, validate, merge, mutations, lock
-  agents-yaml.test.ts        Legacy YAML config tests
-  agent-config.test.ts        Per-agent env/secret-ref/prompt CLI commands + config show
-  env-substitution.test.ts    ${VAR} resolution, missing vars, reserved keys
-  redact.test.ts              Secret redaction (text, deep objects, edge cases)
-  docker-provider.test.ts     Docker provider (mocked execFile + fetch)
+  agent-config.test.ts       Per-agent env/secret-ref/prompt CLI commands + config show
+  env-substitution.test.ts   ${VAR} resolution, missing vars, reserved keys
+  hierarchy.test.ts          Agent hierarchy helpers, manager lookup
+  redact.test.ts             Secret redaction (text, deep objects, edge cases)
+  docker-provider.test.ts    Docker provider (mocked execFile + fetch)
   authenticated-fetch.test.ts  authenticated_fetch tool + SSRF + auth modes + redaction
-  host-api.test.ts            Host API endpoints, auth, secrets, prompt correlation
-  tool-contracts.test.ts      Verifies host + proxy tools share contracts
-  sandbox-validation.test.ts  CLI --sandbox option validation
-  tools.test.ts               Host-side tool behavior
-  scheduler.test.ts           Tick loop, priority ordering
-  watchdog.test.ts            Heartbeat, stuck detection, restart
-  message-bus.test.ts         Inbox routing, rate limiting
+  host-api.test.ts           Host API endpoints, auth, secrets, prompt correlation
+  host-api-cron.test.ts      Host API cron endpoints: auth, isolation, parity
+  host-api-tasks.test.ts     Task proxy Host API endpoints (create/update/list/get)
+  tool-contracts.test.ts     Verifies host + proxy tools share contracts
+  tool-policy.test.ts        Tool policy allow/deny filtering + server-side enforcement
+  sandbox-validation.test.ts CLI --sandbox option validation
+  tools.test.ts              Host-side tool behavior
+  skill-tools.test.ts        Skill tool behavior (create, install, remove, search)
+  skills-registry.test.ts    Skills registry (install, remove, search, list)
+  scheduler.test.ts          Tick loop, priority ordering
+  watchdog.test.ts           Heartbeat, stuck detection, restart
+  heartbeat.test.ts          Heartbeat system (interval, active hours, dispatch)
+  message-bus.test.ts        Inbox routing, rate limiting
   message-bus-persistence.test.ts  SQLite persist/restore, pop, purge
-  message-store.test.ts       MessageStore CRUD, ordering, pagination
-  dm-hydration.test.ts        Baseline/live merge dedup (requestId, fingerprint)
-  local-transport.test.ts     Priority queue ordering
-  handle-skills.test.ts       Skill paths for in-process + sandbox agents
-  cron-parser.test.ts         Cron expression parsing, timezone, describeCron
-  cron-store.test.ts          State persistence round-trip, atomic writes
-  cron-service.test.ts        Timer lifecycle, catch-up, dispatch cap, busy skip
-  cron-commands.test.ts       Cron CLI add/remove/enable/disable + validation
-  prompt.test.ts              System prompt composition
-  prompt-manager.test.ts      Prompt composition, layering, hashing, office block, determinism
-  prompt-loader.test.ts       Prompt source resolution (inline, file, path safety)
-  effective-prompt.test.ts    Effective prompt snapshot generation
-  memory-search.test.ts       Memory search/get utility, path traversal, size guards
-  memory-tools.test.ts        Memory tool execution, citation modes
-  office-cron.test.ts         Office-level cron lifecycle, targets, broadcast, state keys
-  cron-tools.test.ts          Cron tool impl: validation, scopes, permissions, audit, limits
-  host-api-cron.test.ts       Host API cron endpoints: auth, isolation, parity
-  task-service.test.ts        Task creation, status transitions, dependencies, notifications
-  task-store.test.ts          Task persistence, filtering
-  task-tools.test.ts          Task tool behavior + audit
-  bootstrap.test.ts           Bootstrap file loading, truncation, prompt injection
-  truncate.test.ts            Prompt truncation (head/tail split, per-block limits)
-  tool-policy.test.ts         Tool policy allow/deny filtering + server-side enforcement
-  on-demand-skills.test.ts    Skill summaries, read_skill tool, proxy
-  prompt-report.test.ts       Prompt report command output
-  usage-tracker.test.ts       Usage JSONL recording, reading, filtering
-  cost-commands.test.ts       Cost status/today/report formatting
-  cli-behavior.test.ts        CLI flag/option validation
+  message-store.test.ts      MessageStore CRUD, ordering, pagination
+  local-transport.test.ts    Priority queue ordering
+  handle-skills.test.ts      Skill paths for in-process + sandbox agents
+  cron-parser.test.ts        Cron expression parsing, timezone, describeCron
+  cron-store.test.ts         State persistence round-trip, atomic writes
+  cron-service.test.ts       Timer lifecycle, catch-up, dispatch cap, busy skip
+  cron-commands.test.ts      Cron CLI add/remove/enable/disable + validation
+  cron-tools.test.ts         Cron tool impl: validation, scopes, permissions, audit, limits
+  prompt.test.ts             System prompt composition
+  prompt-manager.test.ts     Prompt composition, layering, hashing, office block, determinism
+  prompt-loader.test.ts      Prompt source resolution (inline, file, path safety)
+  effective-prompt.test.ts   Effective prompt snapshot generation
+  bootstrap.test.ts          Bootstrap file loading, truncation, prompt injection
+  truncate.test.ts           Prompt truncation (head/tail split, per-block limits)
+  memory-search.test.ts      Memory search/get utility, path traversal, size guards
+  memory-tools.test.ts       Memory tool execution, citation modes
+  office-cron.test.ts        Office-level cron lifecycle, targets, broadcast, state keys
+  task-service.test.ts       Task creation, status transitions, dependencies, notifications
+  task-store.test.ts         Task persistence, filtering
+  task-tools.test.ts         Task tool behavior + audit
+  on-demand-skills.test.ts   Skill summaries, read_skill tool, proxy
+  prompt-report.test.ts      Prompt report command output
+  usage-tracker.test.ts      Usage JSONL recording, reading, filtering
+  cost-commands.test.ts      Cost status/today/report formatting
+  cli-behavior.test.ts       CLI flag/option validation
   collaboration-metrics.test.ts  Collaboration snapshot shape, obligation counts, ages
-  deadlock-detector.test.ts      Stall detection signals, cooldown, nudge, incidents
-  obligation-store.test.ts       Obligation CRUD, overdue detection, persistence
-  policy-service.test.ts         Policy modes (off/warn/enforce), override, heuristic
-  host-api-tasks.test.ts         Task proxy Host API endpoints (create/update/list/get)
-  session-context.test.ts        Session key helpers (sessionKey, parseSessionKey)
-  chat-feed-routing.test.ts      SSE event routing (chat-relevant vs suppressed)
+  deadlock-detector.test.ts  Stall detection signals, cooldown, nudge, incidents
+  obligation-store.test.ts   Obligation CRUD, overdue detection, persistence
+  policy-service.test.ts     Policy modes (off/warn/enforce), override, heuristic
+  session-context.test.ts    Session key helpers (sessionKey, parseSessionKey)
+  chat-feed-routing.test.ts  SSE event routing (chat-relevant vs suppressed)
+  command-parser.test.ts     Chat command parsing (slash commands, natural language)
+  debug-capture-store.test.ts  Debug capture store (event buffering, filtering)
+  debug-helpers.test.ts      Debug helper utilities
+  ui-parity.test.ts          UI API parity (REST endpoints match command coverage)
+  ui-send-message.test.ts    UI send message endpoint behavior
+  ui-server.test.ts          UI HTTP server lifecycle, routes, SSE
+  no-ui-option.test.ts       --no-ui CLI option behavior
 ```
 
 ## Dependencies
@@ -1984,9 +2188,9 @@ test/
 
 ```bash
 pnpm install          # Install dependencies
-pnpm build            # TypeScript type check (tsc --noEmit)
+pnpm build            # TypeScript type check (tsc --noEmit) + UI build (Vite)
 pnpm lint:check       # ESLint
-pnpm test             # Run test suite (vitest) — ~980 tests
+pnpm test             # Run test suite (vitest) — ~1000 tests
 pnpm test:watch       # Run tests in watch mode
 pnpm dev start        # Run in dev mode (tsx)
 ```
