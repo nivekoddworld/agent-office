@@ -4,7 +4,7 @@ import type { Node, Edge } from "@xyflow/react";
 import type { AgentInfo, AgentHierarchy } from "../../api/types.js";
 
 const NODE_WIDTH = 200;
-const NODE_HEIGHT = 80;
+const NODE_HEIGHT = 100;
 const ROOT_ID = "__user__";
 
 export type OrgNode = Record<string, unknown> & {

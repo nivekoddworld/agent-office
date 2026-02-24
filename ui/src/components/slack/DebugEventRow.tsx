@@ -3,7 +3,7 @@ import { Box, Text, Group, Badge, ActionIcon, Divider } from "@mantine/core";
 import { IconCopy } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
-import { agentHue } from "./channel-helpers.js";
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import {
   formatTs,
   eventBadgeColor,
@@ -52,15 +52,12 @@ export const DebugEventRow = memo(function DebugEventRow({
             {formatTs(row.timestamp)}
           </Text>
           {showAgent && row.agent && (
-            <Badge
-              size="xs"
-              style={{
-                backgroundColor: `hsl(${agentHue(row.agent)}, 50%, 35%)`,
-                color: "#fff",
-              }}
-            >
-              {row.agent}
-            </Badge>
+            <Group gap={4} wrap="nowrap">
+              <AgentAvatar name={row.agent} size={16} />
+              <Badge size="xs" variant="light" color="gray">
+                {row.agent}
+              </Badge>
+            </Group>
           )}
           <Badge size="xs" color={eventBadgeColor(row.kind)} variant="light">
             {row.type}

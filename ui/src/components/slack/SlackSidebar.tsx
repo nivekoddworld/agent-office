@@ -7,11 +7,6 @@ import {
   Badge,
   Tooltip,
   ActionIcon,
-  Modal,
-  Stack,
-  TextInput,
-  MultiSelect,
-  Button,
 } from "@mantine/core";
 import {
   IconHash,
@@ -28,13 +23,37 @@ import {
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
-import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
 import { SidebarSection } from "./SidebarSection.js";
-import { UserPresence } from "./UserPresence.js";
-import { apiFetch, ApiError } from "../../api/client.js";
+import { CreateChannelModal } from "./CreateChannelModal.js";
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { AgentInfo } from "../../api/types.js";
+
+const STATUS_COLORS: Record<string, string> = {
+  idle: slack.onlineGreen,
+  running: slack.accentBlue,
+  dead: slack.textMuted,
+};
+
+function SidebarAvatar({ agent }: { agent: AgentInfo }) {
+  return (
+    <Box style={{ position: "relative", flexShrink: 0 }}>
+      <AgentAvatar name={agent.name} size={20} agentName={agent.name} />
+      <Box
+        style={{
+          position: "absolute",
+          bottom: -1,
+          right: -1,
+          width: 7,
+          height: 7,
+          borderRadius: "50%",
+          backgroundColor: STATUS_COLORS[agent.status] ?? slack.textMuted,
+          border: `1.5px solid ${slack.sidebarBg}`,
+        }}
+      />
+    </Box>
+  );
+}
 
 interface SlackSidebarProps {
   officeName: string;
@@ -107,45 +126,10 @@ export function SlackSidebar({
 }: SlackSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const queryClient = useQueryClient();
   const runningCount = agents.filter((a) => a.status === "running").length;
   const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newMembers, setNewMembers] = useState<string[]>([]);
-  const [newDescription, setNewDescription] = useState("");
-  const [creating, setCreating] = useState(false);
-  const memberOptions = agents.map((a) => ({ value: a.name, label: a.name }));
 
   const isActive = (path: string) => location.pathname === path;
-
-  const handleCreateChannel = async () => {
-    setCreating(true);
-    try {
-      await apiFetch("/api/channels", {
-        method: "POST",
-        body: JSON.stringify({
-          name: newName,
-          members: newMembers,
-          description: newDescription || undefined,
-        }),
-      });
-      const createdName = newName;
-      setCreateOpen(false);
-      setNewName("");
-      setNewMembers([]);
-      setNewDescription("");
-      await queryClient.invalidateQueries({ queryKey: ["state"] });
-      navigate(`/channels/${encodeURIComponent(createdName)}`);
-    } catch (err) {
-      notifications.show({
-        title: "Create failed",
-        message: err instanceof ApiError ? err.message : "Unknown error",
-        color: "red",
-      });
-    } finally {
-      setCreating(false);
-    }
-  };
 
   return (
     <Box
@@ -208,7 +192,7 @@ export function SlackSidebar({
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
         <Box py={6}>
-          {/* Tasks & Cron — top-level items above channels */}
+          {/* Tasks & Cron */}
           <Box px="xs" mb={4}>
             <SidebarItem
               icon={<IconLayoutKanban size={15} color={slack.accentBlue} />}
@@ -224,7 +208,7 @@ export function SlackSidebar({
             />
           </Box>
 
-          {/* Channels — driven from office config + cron */}
+          {/* Channels */}
           <SidebarSection
             label="Channels"
             rightSection={
@@ -244,7 +228,6 @@ export function SlackSidebar({
               </Tooltip>
             }
           >
-            {/* Config-defined conversation channels */}
             {Object.keys(channels).map((ch) => (
               <SidebarItem
                 key={ch}
@@ -278,12 +261,7 @@ export function SlackSidebar({
               return (
                 <SidebarItem
                   key={agent.name}
-                  icon={
-                    <UserPresence
-                      status={agent.status}
-                      agentName={agent.name}
-                    />
-                  }
+                  icon={<SidebarAvatar agent={agent} />}
                   label={agent.name}
                   active={isActive(`/dm/${encodeURIComponent(agent.name)}`)}
                   bold={unread > 0}
@@ -349,60 +327,11 @@ export function SlackSidebar({
         </Box>
       </ScrollArea>
 
-      <Modal
+      <CreateChannelModal
         opened={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Create Channel"
-        centered
-        styles={{
-          content: { backgroundColor: slack.mainBg },
-          header: {
-            backgroundColor: slack.mainBg,
-            borderBottom: `1px solid ${slack.borderColor}`,
-          },
-          title: { color: "#fff", fontWeight: 700 },
-        }}
-      >
-        <Stack gap="xs" py="xs">
-          <TextInput
-            size="xs"
-            label="Channel name"
-            placeholder="e.g. engineering"
-            value={newName}
-            onChange={(e) => setNewName(e.currentTarget.value)}
-            disabled={creating}
-          />
-          <MultiSelect
-            size="xs"
-            label="Members"
-            data={memberOptions}
-            value={newMembers}
-            onChange={setNewMembers}
-            disabled={creating}
-          />
-          <TextInput
-            size="xs"
-            label="Description (optional)"
-            value={newDescription}
-            onChange={(e) => setNewDescription(e.currentTarget.value)}
-            disabled={creating}
-          />
-          <Group justify="flex-end" gap="xs" mt={4}>
-            <Button
-              size="xs"
-              variant="subtle"
-              color="gray"
-              onClick={() => setCreateOpen(false)}
-              disabled={creating}
-            >
-              Cancel
-            </Button>
-            <Button size="xs" loading={creating} onClick={handleCreateChannel}>
-              Create
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
+        agentNames={agents.map((a) => a.name)}
+      />
     </Box>
   );
 }

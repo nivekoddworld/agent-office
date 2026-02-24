@@ -18,14 +18,13 @@ import {
   IconClock,
   IconChecklist,
   IconCoin,
-  IconRobot,
   IconHeartbeat,
 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { useAgentActivityFor } from "../../store/agent-activity-store.js";
 import { UserPresence } from "../slack/UserPresence.js";
-import { agentHue } from "../slack/channel-helpers.js";
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import { ConfigSection } from "./ConfigSection.js";
 import { PermissionsEditor } from "./PermissionsEditor.js";
 import { EnvEditor } from "./EnvEditor.js";
@@ -105,20 +104,7 @@ export function AgentConfigPanel({
         }}
       >
         <Group gap="md" align="flex-start">
-          <Box
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 10,
-              backgroundColor: `hsl(${agentHue(agent.name)}, 45%, 35%)`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <IconRobot size={28} color="#fff" />
-          </Box>
+          <AgentAvatar name={agent.name} size={56} />
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <Group gap={8} align="center">

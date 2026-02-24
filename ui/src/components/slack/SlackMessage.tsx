@@ -10,13 +10,13 @@ import {
 import {
   IconCopy,
   IconArrowForwardUp,
-  IconRobot,
   IconUser,
   IconBolt,
 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { MarkdownContent } from "./MarkdownContent.js";
-import { formatTime, agentHue } from "./channel-helpers.js";
+import { formatTime } from "./channel-helpers.js";
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { SlackMessageData } from "./types.js";
 export type { MessageUsage, SlackMessageData } from "./types.js";
 
@@ -27,7 +27,7 @@ interface SlackMessageProps {
   compact?: boolean;
 }
 
-function AgentAvatar({
+function MessageAvatar({
   name,
   isBot,
   onClick,
@@ -36,24 +36,26 @@ function AgentAvatar({
   isBot: boolean;
   onClick?: () => void;
 }) {
-  const hue = agentHue(name);
-
   return (
     <UnstyledButton
       onClick={onClick}
       style={{
-        width: 36,
-        height: 36,
-        borderRadius: 8,
-        backgroundColor: `hsl(${hue}, 45%, 35%)`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         flexShrink: 0,
+        ...(isBot
+          ? {}
+          : {
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              backgroundColor: slack.accentPurple,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }),
       }}
     >
       {isBot ? (
-        <IconRobot size={18} color="#fff" />
+        <AgentAvatar name={name} size={36} />
       ) : (
         <IconUser size={18} color="#fff" />
       )}
@@ -153,7 +155,7 @@ export function SlackMessage({
 
       <Group gap="sm" align="flex-start" wrap="nowrap">
         {!compact && (
-          <AgentAvatar
+          <MessageAvatar
             name={message.sender}
             isBot={message.isBot}
             onClick={

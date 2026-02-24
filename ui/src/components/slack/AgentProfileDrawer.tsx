@@ -16,12 +16,11 @@ import {
   IconSparkles,
   IconFileText,
   IconBolt,
-  IconRobot,
   IconSend,
   IconInbox,
 } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
-import { agentHue } from "./channel-helpers.js";
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { UserPresence } from "./UserPresence.js";
 import { useAgentActivityFor } from "../../store/agent-activity-store.js";
@@ -89,19 +88,7 @@ export function AgentProfileDrawer({
 
             <Group gap="md" align="flex-start">
               {/* Avatar */}
-              <Box
-                style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 12,
-                  backgroundColor: `hsl(${agentHue(agent.name)}, 45%, 35%)`,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <IconRobot size={36} color="#fff" />
-              </Box>
+              <AgentAvatar name={agent.name} size={72} />
 
               <Stack gap={4} style={{ flex: 1 }}>
                 <Text fw={700} size="xl" style={{ color: "#fff" }}>

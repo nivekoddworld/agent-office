@@ -13,7 +13,7 @@ import {
 import {
   IconBuilding,
   IconClock,
-  IconRobot,
+  IconUsers,
   IconCalendarEvent,
   IconRefresh,
   IconCheck,
@@ -248,7 +248,7 @@ export function SettingsPanel() {
           {/* Agents Summary */}
           <Box>
             <SectionHeader
-              icon={<IconRobot size={16} color={slack.accentGreen} />}
+              icon={<IconUsers size={16} color={slack.accentGreen} />}
               label="Agents"
             />
             <Box

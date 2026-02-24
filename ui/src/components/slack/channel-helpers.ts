@@ -17,10 +17,6 @@ export function formatTime(ts: number): string {
   });
 }
 
-export function agentHue(name: string): number {
-  return name.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360;
-}
-
 export function isSameDay(a: number, b: number): boolean {
   return new Date(a).toDateString() === new Date(b).toDateString();
 }

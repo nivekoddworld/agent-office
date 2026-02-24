@@ -1,7 +1,8 @@
 import { Box, Text, Group, Tooltip } from "@mantine/core";
-import { IconArrowRight, IconLink } from "@tabler/icons-react";
+import { IconLink } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
 import { PriorityBadge } from "../shared/PriorityBadge.js";
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { Task } from "../../api/types.js";
 
 interface TaskCardProps {
@@ -44,12 +45,14 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
       </Text>
 
       <Group gap={6} mt={8} justify="space-between">
-        <Group gap={4}>
-          <IconArrowRight size={12} color={slack.textMuted} />
-          <Text size="xs" style={{ color: slack.textSecondary }}>
-            {task.assignee}
-          </Text>
-        </Group>
+        {task.assignee && (
+          <Group gap={4}>
+            <AgentAvatar name={task.assignee} size={18} />
+            <Text size="xs" style={{ color: slack.textSecondary }}>
+              {task.assignee}
+            </Text>
+          </Group>
+        )}
         {task.dependsOn.length > 0 && (
           <Tooltip label={`Depends on: ${task.dependsOn.join(", ")}`} withArrow>
             <Group gap={2}>

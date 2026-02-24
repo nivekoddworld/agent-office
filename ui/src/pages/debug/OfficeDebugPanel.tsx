@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Box, Text, Group, Badge, Button } from "@mantine/core";
 import { slack } from "../../theme/slack-theme.js";
-import { agentHue } from "../../components/slack/channel-helpers.js";
+import { AgentAvatar } from "../../components/shared/AgentAvatar.js";
 import {
   filterContextString,
   PRESET_LABELS,
@@ -355,13 +355,8 @@ export function OfficeDebugPanel() {
             [...grouped.entries()].map(([agent, agentRows]) => (
               <Box key={agent} mb="md">
                 <Group gap={6} mb={4}>
-                  <Badge
-                    size="xs"
-                    style={{
-                      backgroundColor: `hsl(${agentHue(agent)}, 60%, 40%)`,
-                      color: "#fff",
-                    }}
-                  >
+                  <AgentAvatar name={agent} size={16} />
+                  <Badge size="xs" variant="light" color="gray">
                     {agent}
                   </Badge>
                   <Text size="xs" style={{ color: slack.textMuted }}>
