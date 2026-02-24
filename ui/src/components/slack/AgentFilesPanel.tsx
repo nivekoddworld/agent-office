@@ -26,8 +26,10 @@ import {
   IconBraces,
   IconTerminal,
   IconBrandPython,
+  IconExternalLink,
+  IconTrash,
 } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { slack } from "../../theme/slack-theme.js";
 import { apiFetch } from "../../api/client.js";
 
@@ -153,13 +155,18 @@ function formatDate(ms: number): string {
 function FileTreeItem({
   node,
   depth,
+  agentName,
   onSelect,
+  onDelete,
 }: {
   node: TreeNode;
   depth: number;
+  agentName: string;
   onSelect: (path: string) => void;
+  onDelete: (path: string, name: string, isDirectory: boolean) => void;
 }) {
   const [expanded, setExpanded] = useState(depth < 1);
+  const [hovered, setHovered] = useState(false);
 
   if (node.isDirectory) {
     return (
@@ -171,9 +178,11 @@ function FileTreeItem({
           style={{ borderRadius: 4 }}
           onMouseEnter={(e) => {
             e.currentTarget.style.backgroundColor = slack.sidebarHover;
+            setHovered(true);
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.backgroundColor = "transparent";
+            setHovered(false);
           }}
           onClick={() => setExpanded((v) => !v)}
         >
@@ -191,16 +200,30 @@ function FileTreeItem({
             <Text size="sm" style={{ color: slack.textPrimary }} truncate>
               {node.name}
             </Text>
-            <Text
-              size="xs"
-              style={{
-                color: slack.textMuted,
-                marginLeft: "auto",
-                flexShrink: 0,
-              }}
+            <Group
+              gap={4}
+              wrap="nowrap"
+              style={{ marginLeft: "auto", flexShrink: 0 }}
             >
-              {node.children.length} item{node.children.length !== 1 ? "s" : ""}
-            </Text>
+              {hovered && (
+                <Tooltip label="Delete folder">
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    size="xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(node.path, node.name, true);
+                    }}
+                  >
+                    <IconTrash size={13} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+              <Text size="xs" style={{ color: slack.textMuted }}>
+                {node.children.length} item{node.children.length !== 1 ? "s" : ""}
+              </Text>
+            </Group>
           </Group>
         </UnstyledButton>
         {expanded &&
@@ -209,7 +232,9 @@ function FileTreeItem({
               key={child.path}
               node={child}
               depth={depth + 1}
+              agentName={agentName}
               onSelect={onSelect}
+              onDelete={onDelete}
             />
           ))}
       </>
@@ -224,9 +249,11 @@ function FileTreeItem({
       style={{ borderRadius: 4 }}
       onMouseEnter={(e) => {
         e.currentTarget.style.backgroundColor = slack.sidebarHover;
+        setHovered(true);
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.backgroundColor = "transparent";
+        setHovered(false);
       }}
       onClick={() => onSelect(node.path)}
     >
@@ -236,10 +263,25 @@ function FileTreeItem({
           {node.name}
         </Text>
         <Group
-          gap={8}
+          gap={4}
           wrap="nowrap"
           style={{ marginLeft: "auto", flexShrink: 0 }}
         >
+          {hovered && (
+            <Tooltip label="Delete file">
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(node.path, node.name, false);
+                }}
+              >
+                <IconTrash size={13} />
+              </ActionIcon>
+            </Tooltip>
+          )}
           <Text size="xs" style={{ color: slack.textMuted }}>
             {formatSize(node.size)}
           </Text>
@@ -268,6 +310,16 @@ function FileViewer({
         `/api/agents/${encodeURIComponent(agentName)}/files/content?path=${encodeURIComponent(filePath)}`,
       ),
   });
+
+  const openFile = useCallback(
+    (reveal: boolean) => {
+      apiFetch(
+        `/api/agents/${encodeURIComponent(agentName)}/files/open`,
+        { method: "POST", body: JSON.stringify({ path: filePath, reveal }) },
+      ).catch(() => {});
+    },
+    [agentName, filePath],
+  );
 
   return (
     <Modal
@@ -310,9 +362,31 @@ function FileViewer({
               </Badge>
             )}
           </Group>
-          <ActionIcon variant="subtle" color="gray" size="sm" onClick={onClose}>
-            <IconX size={16} />
-          </ActionIcon>
+          <Group gap={4} wrap="nowrap">
+            <Tooltip label="Open file">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={() => openFile(false)}
+              >
+                <IconExternalLink size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="Reveal in file manager">
+              <ActionIcon
+                variant="subtle"
+                color="gray"
+                size="sm"
+                onClick={() => openFile(true)}
+              >
+                <IconFolderOpen size={16} />
+              </ActionIcon>
+            </Tooltip>
+            <ActionIcon variant="subtle" color="gray" size="sm" onClick={onClose}>
+              <IconX size={16} />
+            </ActionIcon>
+          </Group>
         </Group>
       </Box>
 
@@ -354,6 +428,13 @@ interface AgentFilesPanelProps {
 
 export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    path: string;
+    name: string;
+    isDirectory: boolean;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["agent-files", agentName],
@@ -374,6 +455,32 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
   const handleSelect = useCallback((path: string) => {
     setSelectedFile(path);
   }, []);
+
+  const handleDeleteRequest = useCallback(
+    (path: string, name: string, isDirectory: boolean) => {
+      setDeleteTarget({ path, name, isDirectory });
+    },
+    [],
+  );
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await apiFetch(
+        `/api/agents/${encodeURIComponent(agentName)}/files?path=${encodeURIComponent(deleteTarget.path)}`,
+        { method: "DELETE" },
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["agent-files", agentName],
+      });
+    } catch {
+      // best-effort
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  }, [agentName, deleteTarget, queryClient]);
 
   return (
     <Box style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -438,7 +545,9 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
             key={node.path}
             node={node}
             depth={0}
+            agentName={agentName}
             onSelect={handleSelect}
+            onDelete={handleDeleteRequest}
           />
         ))}
       </ScrollArea>
@@ -450,6 +559,62 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
           onClose={() => setSelectedFile(null)}
         />
       )}
+
+      {/* Delete confirmation modal */}
+      <Modal
+        opened={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title={null}
+        size="sm"
+        padding={0}
+        withCloseButton={false}
+        overlayProps={{ backgroundOpacity: 0.5, blur: 2 }}
+        styles={{
+          content: {
+            backgroundColor: slack.mainBg,
+            border: `1px solid ${slack.borderColor}`,
+          },
+        }}
+      >
+        <Stack gap="md" p="md">
+          <Text size="sm" style={{ color: slack.textPrimary }}>
+            Delete{" "}
+            <Text span fw={600}>
+              {deleteTarget?.name}
+            </Text>
+            {deleteTarget?.isDirectory ? " and all its contents" : ""}?
+          </Text>
+          <Group justify="flex-end" gap={8}>
+            <UnstyledButton
+              px="sm"
+              py={6}
+              style={{
+                borderRadius: 4,
+                color: slack.textMuted,
+                fontSize: 13,
+              }}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Cancel
+            </UnstyledButton>
+            <UnstyledButton
+              px="sm"
+              py={6}
+              style={{
+                borderRadius: 4,
+                backgroundColor: slack.accentRed,
+                color: "#fff",
+                fontSize: 13,
+                opacity: deleting ? 0.6 : 1,
+              }}
+              onClick={handleDeleteConfirm}
+              disabled={deleting}
+            >
+              {deleting ? "Deleting..." : "Delete"}
+            </UnstyledButton>
+          </Group>
+        </Stack>
+      </Modal>
     </Box>
   );
 }

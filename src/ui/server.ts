@@ -21,6 +21,8 @@ import {
   getAgentDetail,
   getAgentFileContent,
   getAgentFiles,
+  openAgentFile,
+  deleteAgentFile,
   getBootstrapState,
   getCollaborationMetrics,
   getCostSummary,
@@ -659,6 +661,50 @@ export async function startUiServer(
       const filePath = url.searchParams.get("path");
       if (!filePath) return json(res, 400, { error: "missing_path" });
       const result = await getAgentFileContent(handle, filePath);
+      if ("error" in result) return json(res, 400, result);
+      return json(res, 200, result);
+    }
+
+    // --- POST /api/agents/:name/files/open ---
+    const fileOpenMatch = path.match(
+      /^\/api\/agents\/([^/]+)\/files\/open$/,
+    );
+    if (fileOpenMatch && method === "POST") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const name = fileOpenMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      const body = await readBody(req);
+      let parsed: { path?: string; reveal?: boolean };
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: "invalid_body" });
+      }
+
+      if (!parsed.path) return json(res, 400, { error: "missing_path" });
+      const result = await openAgentFile(handle, parsed.path, parsed.reveal);
+      if ("error" in result) return json(res, 400, result);
+      return json(res, 200, result);
+    }
+
+    // --- DELETE /api/agents/:name/files?path=... ---
+    if (filesMatch && method === "DELETE") {
+      if (!checkCsrf(req, boundPort)) return json(res, 403, { error: "csrf" });
+      const xrw = req.headers["x-requested-with"];
+      if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
+
+      const name = filesMatch[1]!;
+      const handle = workspace.getAgent(name);
+      if (!handle) return json(res, 404, { error: "agent_not_found" });
+
+      const filePath = url.searchParams.get("path");
+      if (!filePath) return json(res, 400, { error: "missing_path" });
+      const result = await deleteAgentFile(handle, filePath);
       if ("error" in result) return json(res, 400, result);
       return json(res, 200, result);
     }

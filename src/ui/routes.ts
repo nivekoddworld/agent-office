@@ -1,5 +1,7 @@
-import { readdir, stat, readFile, realpath } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { readdir, stat, readFile, realpath, rm } from "node:fs/promises";
+import { join, relative, sep, dirname } from "node:path";
+import { execFile } from "node:child_process";
+import { platform } from "node:process";
 import type { Workspace } from "../workspace.js";
 import type { Priority } from "../types.js";
 import type { AgentHandle } from "../agent/handle.js";
@@ -332,6 +334,84 @@ export async function getAgentFileContent(
     return { content, size: s.size };
   } catch {
     return { error: "file_not_found" };
+  }
+}
+
+// --- Open agent file in system ---
+
+function resolveAgentPath(
+  handle: AgentHandle,
+  filePath: string,
+): { abs: string } | { error: string } {
+  if (filePath.includes("..") || filePath.startsWith("/")) {
+    return { error: "invalid_path" };
+  }
+  const abs = join(handle.cwd, filePath);
+  const resolved = relative(handle.cwd, abs);
+  if (resolved.startsWith("..")) return { error: "path_traversal" };
+  return { abs };
+}
+
+export async function openAgentFile(
+  handle: AgentHandle,
+  filePath: string,
+  reveal = false,
+): Promise<{ ok: true } | { error: string }> {
+  const result = resolveAgentPath(handle, filePath);
+  if ("error" in result) return result;
+  const abs = result.abs;
+
+  try {
+    const real = await realpath(abs);
+    if (!real.startsWith(handle.cwd)) return { error: "path_traversal" };
+
+    return new Promise((resolve) => {
+      let cmd: string;
+      let args: string[];
+
+      if (platform === "darwin") {
+        cmd = "open";
+        args = reveal ? ["-R", real] : [real];
+      } else if (platform === "win32") {
+        if (reveal) {
+          cmd = "explorer";
+          args = [`/select,${real}`];
+        } else {
+          cmd = "cmd";
+          args = ["/c", "start", "", real];
+        }
+      } else {
+        cmd = "xdg-open";
+        args = reveal ? [dirname(real)] : [real];
+      }
+
+      execFile(cmd, args, { timeout: 10_000 }, (err) => {
+        if (err) resolve({ error: `open_failed: ${err.message}` });
+        else resolve({ ok: true });
+      });
+    });
+  } catch {
+    return { error: "file_not_found" };
+  }
+}
+
+// --- Delete agent file ---
+
+export async function deleteAgentFile(
+  handle: AgentHandle,
+  filePath: string,
+): Promise<{ ok: true } | { error: string }> {
+  const result = resolveAgentPath(handle, filePath);
+  if ("error" in result) return result;
+  const abs = result.abs;
+
+  try {
+    const real = await realpath(abs);
+    if (!real.startsWith(handle.cwd)) return { error: "path_traversal" };
+    await rm(real, { recursive: true });
+    return { ok: true };
+  } catch {
+    return { error: "delete_failed" };
   }
 }
 
