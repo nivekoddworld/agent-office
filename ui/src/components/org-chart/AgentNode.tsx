@@ -1,21 +1,15 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Paper, Text, Group, Stack, Box } from "@mantine/core";
+import { Badge, Paper, Text, Box } from "@mantine/core";
 import { IconUser } from "@tabler/icons-react";
 import { StatusBadge } from "../shared/StatusBadge.js";
 import { PriorityBadge } from "../shared/PriorityBadge.js";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { OrgNode } from "./use-org-layout.js";
 
-const STATUS_DOT: Record<string, string> = {
-  idle: "var(--mantine-color-green-6)",
-  running: "var(--mantine-color-blue-6)",
-  dead: "var(--mantine-color-red-6)",
-  root: "var(--mantine-color-violet-6)",
-};
-
 export function AgentNode({ data }: NodeProps) {
   const d = data as unknown as OrgNode;
   const isRoot = d.agentName === null;
+  const showBadges = !isRoot && (d.status !== "idle" || d.priority === 4);
 
   return (
     <>
@@ -27,74 +21,77 @@ export function AgentNode({ data }: NodeProps) {
       <Paper
         shadow="sm"
         radius="md"
-        p="xs"
+        px="md"
+        pt={isRoot ? "sm" : 4}
+        pb="sm"
         withBorder
         style={{
-          width: 200,
+          width: 230,
           cursor: "pointer",
           borderColor: isRoot ? "var(--mantine-color-violet-7)" : undefined,
           background: isRoot
             ? "var(--mantine-color-dark-7)"
             : "var(--mantine-color-dark-6)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
         }}
       >
-        <Stack gap={4}>
-          <Group gap="xs" wrap="nowrap">
-            {isRoot ? (
-              <Box
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "22%",
-                  backgroundColor: "var(--mantine-color-violet-8)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <IconUser size={18} color="#fff" />
-              </Box>
-            ) : (
-              <Box style={{ position: "relative", flexShrink: 0 }}>
-                <AgentAvatar name={d.agentName!} size={32} />
-                <Box
-                  style={{
-                    position: "absolute",
-                    bottom: -1,
-                    right: -1,
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    backgroundColor: STATUS_DOT[d.status] ?? "gray",
-                    border: "1.5px solid var(--mantine-color-dark-6)",
-                  }}
-                />
-              </Box>
-            )}
-            <Text size="sm" fw={600} truncate>
-              {d.label}
-            </Text>
-          </Group>
+        {/* Avatar */}
+        {isRoot ? (
+          <Box
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "22%",
+              backgroundColor: "var(--mantine-color-violet-8)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 6,
+            }}
+          >
+            <IconUser size={22} color="#fff" />
+          </Box>
+        ) : (
+          <Box style={{ position: "relative", marginTop: -28, marginBottom: 6 }}>
+            <AgentAvatar name={d.agentName!} size={56} agentName={d.agentName!} />
+          </Box>
+        )}
 
-          {!isRoot && (
-            <Group gap="xs" wrap="nowrap">
-              <StatusBadge status={d.status} />
-              <PriorityBadge priority={d.priority} />
-              {d.queueDepth > 0 && (
-                <Text size="xs" c="dimmed">
-                  Q:{d.queueDepth}
-                </Text>
-              )}
-            </Group>
-          )}
+        {/* Name */}
+        <Text size="sm" fw={700} truncate ta="center" style={{ width: "100%" }}>
+          {d.label}
+        </Text>
 
-          {!isRoot && d.model && (
-            <Text size="xs" c="dimmed" truncate>
-              {d.model}
-            </Text>
-          )}
-        </Stack>
+        {/* Description — wraps up to 2 lines */}
+        {!isRoot && d.description && (
+          <Text
+            size="xs"
+            c="dimmed"
+            ta="center"
+            mt={4}
+            lineClamp={2}
+            style={{ width: "100%", lineHeight: 1.4 }}
+          >
+            {d.description}
+          </Text>
+        )}
+
+        {/* Model — subtle pill */}
+        {!isRoot && d.model && (
+          <Badge size="xs" variant="light" color="gray" mt={8} radius="sm">
+            {d.model}
+          </Badge>
+        )}
+
+        {/* Status + Priority — only when noteworthy */}
+        {showBadges && (
+          <Box mt={6} style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+            {d.status !== "idle" && <StatusBadge status={d.status} />}
+            {d.priority === 4 && <PriorityBadge priority={d.priority} />}
+          </Box>
+        )}
       </Paper>
       <Handle
         type="source"

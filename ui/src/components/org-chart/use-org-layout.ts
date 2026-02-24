@@ -3,8 +3,8 @@ import dagre from "dagre";
 import type { Node, Edge } from "@xyflow/react";
 import type { AgentInfo, AgentHierarchy } from "../../api/types.js";
 
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 100;
+const NODE_WIDTH = 230;
+const NODE_HEIGHT = 160;
 const ROOT_ID = "__user__";
 
 export type OrgNode = Record<string, unknown> & {
@@ -12,6 +12,7 @@ export type OrgNode = Record<string, unknown> & {
   label: string;
   status: "idle" | "running" | "dead" | "root";
   model: string;
+  description: string;
   priority: number;
   queueDepth: number;
 };
@@ -23,7 +24,7 @@ export function useOrgLayout(
 ) {
   return useMemo(() => {
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: "TB", nodesep: 40, ranksep: 60 });
+    g.setGraph({ rankdir: "TB", nodesep: 50, ranksep: 70 });
     g.setDefaultEdgeLabel(() => ({}));
 
     // Root "user" node
@@ -65,6 +66,7 @@ export function useOrgLayout(
           label: "You",
           status: "root",
           model: "",
+          description: "",
           priority: 0,
           queueDepth: 0,
         },
@@ -84,6 +86,7 @@ export function useOrgLayout(
           label: agent.name,
           status: agent.status,
           model: agent.model,
+          description: agent.description,
           priority: agent.priority,
           queueDepth: agent.queueDepth,
         },
