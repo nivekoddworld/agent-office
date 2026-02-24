@@ -6,7 +6,6 @@ import {
   IconArrowDown,
 } from "@tabler/icons-react";
 import { useSetManager } from "../../api/use-api-mutations.js";
-import { slack } from "../../theme/slack-theme.js";
 import type { AgentDetail } from "../../api/types.js";
 
 interface AgentHierarchySectionProps {
@@ -50,8 +49,8 @@ export function AgentHierarchySection({
   return (
     <Stack gap="sm">
       <Group gap="xs" align="center">
-        <IconArrowUp size={14} color={slack.textMuted} />
-        <Text size="xs" style={{ color: slack.textMuted }}>
+        <IconArrowUp size={14} color={"var(--ao-text-muted)"} />
+        <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
           Manager:
         </Text>
         {managerDisplay ? (
@@ -59,15 +58,15 @@ export function AgentHierarchySection({
             {managerDisplay}
           </Badge>
         ) : (
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             None
           </Text>
         )}
       </Group>
 
       <Group gap="xs" align="center">
-        <IconArrowsHorizontal size={14} color={slack.textMuted} />
-        <Text size="xs" style={{ color: slack.textMuted }}>
+        <IconArrowsHorizontal size={14} color={"var(--ao-text-muted)"} />
+        <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
           Peers:
         </Text>
         {peers.length > 0 ? (
@@ -77,15 +76,15 @@ export function AgentHierarchySection({
             </Badge>
           ))
         ) : (
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             None
           </Text>
         )}
       </Group>
 
       <Group gap="xs" align="center">
-        <IconArrowDown size={14} color={slack.textMuted} />
-        <Text size="xs" style={{ color: slack.textMuted }}>
+        <IconArrowDown size={14} color={"var(--ao-text-muted)"} />
+        <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
           Reports:
         </Text>
         {reports.length > 0 ? (
@@ -95,7 +94,7 @@ export function AgentHierarchySection({
             </Badge>
           ))
         ) : (
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             None
           </Text>
         )}

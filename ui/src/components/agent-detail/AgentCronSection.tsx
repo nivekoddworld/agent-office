@@ -9,7 +9,6 @@ import {
 } from "../../api/use-api-mutations.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { ApiError } from "../../api/client.js";
-import { slack } from "../../theme/slack-theme.js";
 import type { CronJobEntry } from "../../api/types.js";
 
 interface AgentCronSectionProps {
@@ -125,11 +124,15 @@ function AgentCronRow({
         gap="xs"
         py="xs"
         wrap="nowrap"
-        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
           <Group gap={4}>
-            <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
+            <Text
+              size="sm"
+              fw={500}
+              style={{ color: "var(--ao-text-primary)" }}
+            >
               {job.jobName}
             </Text>
             <Badge
@@ -140,13 +143,13 @@ function AgentCronRow({
               {job.scope}
             </Badge>
           </Group>
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             {job.config.schedule} — {job.config.tasks.length} task(s)
           </Text>
         </div>
 
         <div style={{ textAlign: "right", minWidth: 90, flexShrink: 0 }}>
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             Next: {formatTime(job.state.nextRunAt)}
           </Text>
           {job.state.lastStatus && (
@@ -221,7 +224,7 @@ export function AgentCronSection({
 
   if (agentJobs.length === 0) {
     return (
-      <Text size="xs" style={{ color: slack.textMuted }}>
+      <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
         No cron jobs for this agent
       </Text>
     );

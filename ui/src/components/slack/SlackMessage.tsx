@@ -14,7 +14,7 @@ import {
   IconBolt,
   IconCircleCheck,
 } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
+
 import { MarkdownContent } from "./MarkdownContent.js";
 import { formatTime } from "./channel-helpers.js";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
@@ -48,7 +48,7 @@ function MessageAvatar({
               width: 36,
               height: 36,
               borderRadius: 8,
-              backgroundColor: slack.accentPurple,
+              backgroundColor: "var(--mantine-color-violet-6)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -80,8 +80,8 @@ function HoverActions({
         position: "absolute",
         top: -12,
         right: 8,
-        backgroundColor: slack.hoverActionsBg,
-        border: `1px solid ${slack.borderColor}`,
+        backgroundColor: "var(--ao-bg-elevated)",
+        border: `1px solid var(--ao-border)`,
         borderRadius: 6,
         padding: 2,
       }}
@@ -89,7 +89,7 @@ function HoverActions({
       {onCopy && (
         <Tooltip label="Copy" position="top" withArrow>
           <ActionIcon size="sm" variant="subtle" color="gray" onClick={onCopy}>
-            <IconCopy size={16} color={slack.textSecondary} />
+            <IconCopy size={16} color={"var(--ao-text-secondary)"} />
           </ActionIcon>
         </Tooltip>
       )}
@@ -101,7 +101,7 @@ function HoverActions({
             color="gray"
             onClick={onResend}
           >
-            <IconArrowForwardUp size={16} color={slack.textSecondary} />
+            <IconArrowForwardUp size={16} color={"var(--ao-text-secondary)"} />
           </ActionIcon>
         </Tooltip>
       )}
@@ -112,7 +112,7 @@ function HoverActions({
           withArrow
         >
           <ActionIcon size="sm" variant="subtle" color="gray">
-            <IconBolt size={14} color={slack.textSecondary} />
+            <IconBolt size={14} color={"var(--ao-text-secondary)"} />
           </ActionIcon>
         </Tooltip>
       )}
@@ -130,7 +130,9 @@ export function SlackMessage({
   const isOperator = !message.isBot;
   const isTaskReport = message.kind === "task_report";
   const isCronReport = isTaskReport && !!message.jobName;
-  const reportColor = isCronReport ? slack.accentBlue : slack.accentGreen;
+  const reportColor = isCronReport
+    ? "var(--ao-accent-blue)"
+    : "var(--ao-accent-green)";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.text).catch(() => {});
@@ -144,7 +146,7 @@ export function SlackMessage({
       onMouseLeave={() => setHovered(false)}
       style={{
         position: "relative",
-        backgroundColor: hovered ? slack.messageHoverBg : "transparent",
+        backgroundColor: hovered ? "var(--ao-bg-surface-hover)" : "transparent",
         borderLeft: isTaskReport ? `3px solid ${reportColor}` : undefined,
         paddingLeft: isTaskReport
           ? "calc(var(--mantine-spacing-md) - 3px)"
@@ -198,7 +200,7 @@ export function SlackMessage({
                 size="sm"
                 fw={700}
                 style={{
-                  color: "#fff",
+                  color: "var(--ao-text-bright)",
                   cursor: message.isBot ? "pointer" : "default",
                 }}
                 onClick={
@@ -215,7 +217,7 @@ export function SlackMessage({
                   fw={600}
                   px={4}
                   style={{
-                    backgroundColor: slack.accentPurple,
+                    backgroundColor: "var(--mantine-color-violet-6)",
                     color: "#fff",
                     borderRadius: 3,
                     fontSize: 10,
@@ -224,7 +226,7 @@ export function SlackMessage({
                   OP
                 </Text>
               )}
-              <Text size="xs" style={{ color: slack.textMuted }}>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                 {formatTime(message.timestamp)}
               </Text>
             </Group>
@@ -235,7 +237,7 @@ export function SlackMessage({
               component="span"
               size="xs"
               mr={6}
-              style={{ color: slack.textMuted }}
+              style={{ color: "var(--ao-text-muted)" }}
             >
               {formatTime(message.timestamp)}
             </Text>
@@ -245,7 +247,10 @@ export function SlackMessage({
           ) : (
             <Text
               size="sm"
-              style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}
+              style={{
+                color: "var(--ao-text-primary)",
+                whiteSpace: "pre-wrap",
+              }}
             >
               {message.text}
             </Text>

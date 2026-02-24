@@ -20,7 +20,7 @@ import {
   IconCoin,
   IconHeartbeat,
 } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
+
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { useAgentActivityFor } from "../../store/agent-activity-store.js";
 import { UserPresence } from "../slack/UserPresence.js";
@@ -59,13 +59,13 @@ function SectionCard({
       p="md"
       radius="sm"
       style={{
-        backgroundColor: slack.messageBg,
-        border: `1px solid ${slack.borderColor}`,
+        backgroundColor: "var(--ao-bg-surface)",
+        border: `1px solid var(--ao-border)`,
       }}
     >
       <Group gap={6} mb="sm">
         {icon}
-        <Text size="sm" fw={600} style={{ color: slack.textPrimary }}>
+        <Text size="sm" fw={600} style={{ color: "var(--ao-text-primary)" }}>
           {title}
         </Text>
       </Group>
@@ -99,8 +99,8 @@ export function AgentConfigPanel({
         radius="sm"
         mb="md"
         style={{
-          backgroundColor: slack.messageBg,
-          border: `1px solid ${slack.borderColor}`,
+          backgroundColor: "var(--ao-bg-surface)",
+          border: `1px solid var(--ao-border)`,
         }}
       >
         <Group gap="md" align="flex-start">
@@ -108,7 +108,11 @@ export function AgentConfigPanel({
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <Group gap={8} align="center">
-              <Text fw={700} size="lg" style={{ color: "#fff" }}>
+              <Text
+                fw={700}
+                size="lg"
+                style={{ color: "var(--ao-text-bright)" }}
+              >
                 {agent.name}
               </Text>
               <UserPresence
@@ -116,7 +120,7 @@ export function AgentConfigPanel({
                 agentName={agent.name}
                 size={10}
               />
-              <Text size="sm" style={{ color: slack.textSecondary }}>
+              <Text size="sm" style={{ color: "var(--ao-text-secondary)" }}>
                 {activity.kind === "tool"
                   ? `Running: ${activity.toolName}`
                   : activity.kind === "thinking"
@@ -129,7 +133,7 @@ export function AgentConfigPanel({
               </Text>
             </Group>
             {agent.description && (
-              <Text size="sm" style={{ color: slack.textMuted }} mt={4}>
+              <Text size="sm" style={{ color: "var(--ao-text-muted)" }} mt={4}>
                 {agent.description}
               </Text>
             )}
@@ -153,42 +157,42 @@ export function AgentConfigPanel({
       {/* Two-column grid for smaller sections */}
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md" mb="md">
         <SectionCard
-          icon={<IconSettings size={16} color={slack.textMuted} />}
+          icon={<IconSettings size={16} color={"var(--ao-text-muted)"} />}
           title="Configuration"
         >
           <ConfigSection agent={agent} />
         </SectionCard>
 
         <SectionCard
-          icon={<IconHierarchy2 size={16} color={slack.textMuted} />}
+          icon={<IconHierarchy2 size={16} color={"var(--ao-text-muted)"} />}
           title="Hierarchy"
         >
           <AgentHierarchySection agent={agent} agentNames={agentNames} />
         </SectionCard>
 
         <SectionCard
-          icon={<IconShield size={16} color={slack.textMuted} />}
+          icon={<IconShield size={16} color={"var(--ao-text-muted)"} />}
           title="Permissions"
         >
           <PermissionsEditor agent={agent} />
         </SectionCard>
 
         <SectionCard
-          icon={<IconVariable size={16} color={slack.textMuted} />}
+          icon={<IconVariable size={16} color={"var(--ao-text-muted)"} />}
           title="Environment & Secrets"
         >
           <EnvEditor agent={agent} />
         </SectionCard>
 
         <SectionCard
-          icon={<IconCoin size={16} color={slack.textMuted} />}
+          icon={<IconCoin size={16} color={"var(--ao-text-muted)"} />}
           title="Cost (7 days)"
         >
           <AgentCostSection agentName={agentName} />
         </SectionCard>
 
         <SectionCard
-          icon={<IconHeartbeat size={16} color={slack.textMuted} />}
+          icon={<IconHeartbeat size={16} color={"var(--ao-text-muted)"} />}
           title="Heartbeat"
         >
           <HeartbeatEditor agent={agent} />
@@ -197,7 +201,7 @@ export function AgentConfigPanel({
 
       {/* Full-width sections */}
       <SectionCard
-        icon={<IconFileText size={16} color={slack.textMuted} />}
+        icon={<IconFileText size={16} color={"var(--ao-text-muted)"} />}
         title="System Prompt"
       >
         <PromptViewer agent={agent} />
@@ -205,7 +209,7 @@ export function AgentConfigPanel({
 
       <Box mt="md">
         <SectionCard
-          icon={<IconClock size={16} color={slack.textMuted} />}
+          icon={<IconClock size={16} color={"var(--ao-text-muted)"} />}
           title="Cron Jobs"
         >
           <AgentCronSection agentName={agentName} cronJobs={cronJobs} />
@@ -214,7 +218,7 @@ export function AgentConfigPanel({
 
       <Box mt="md">
         <SectionCard
-          icon={<IconChecklist size={16} color={slack.textMuted} />}
+          icon={<IconChecklist size={16} color={"var(--ao-text-muted)"} />}
           title="Tasks"
         >
           <AgentTasksSection agentName={agentName} tasks={tasks} />
@@ -223,7 +227,7 @@ export function AgentConfigPanel({
 
       <Box mt="md">
         <SectionCard
-          icon={<IconInbox size={16} color={slack.textMuted} />}
+          icon={<IconInbox size={16} color={"var(--ao-text-muted)"} />}
           title="Message Queue"
         >
           <QueuePreview agentName={agentName} />
@@ -232,7 +236,7 @@ export function AgentConfigPanel({
 
       <Box mt="md">
         <SectionCard
-          icon={<IconBolt size={16} color={slack.textMuted} />}
+          icon={<IconBolt size={16} color={"var(--ao-text-muted)"} />}
           title="Quick Actions"
         >
           <QuickActions agent={agent} />

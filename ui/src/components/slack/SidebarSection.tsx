@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { UnstyledButton, Group, Text, Box } from "@mantine/core";
 import { IconChevronDown, IconChevronRight } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
 
 interface SidebarSectionProps {
   label: string;
@@ -22,29 +21,33 @@ export function SidebarSection({
     <Box>
       <UnstyledButton
         onClick={() => setOpen((v) => !v)}
-        py={4}
+        py={5}
         px="sm"
         w="100%"
         style={{ display: "flex", alignItems: "center" }}
       >
         <Group gap={4} style={{ flex: 1 }}>
           {open ? (
-            <IconChevronDown size={12} color={slack.sidebarText} />
+            <IconChevronDown size={11} color={"var(--ao-text-muted)"} />
           ) : (
-            <IconChevronRight size={12} color={slack.sidebarText} />
+            <IconChevronRight size={11} color={"var(--ao-text-muted)"} />
           )}
           <Text
             size="xs"
             fw={600}
             tt="uppercase"
-            style={{ color: slack.sidebarText, letterSpacing: 0.5 }}
+            style={{
+              color: "var(--ao-text-sidebar)",
+              letterSpacing: "0.04em",
+              fontSize: 11,
+            }}
           >
             {label}
           </Text>
         </Group>
         {rightSection}
       </UnstyledButton>
-      {open && children}
+      {open && <Box px={4}>{children}</Box>}
     </Box>
   );
 }

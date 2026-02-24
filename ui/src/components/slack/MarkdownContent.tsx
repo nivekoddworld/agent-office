@@ -2,7 +2,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import { Box, Text } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
 
 interface MarkdownContentProps {
   content: string;
@@ -15,7 +14,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     return (
       <Text
         size="sm"
-        style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}
+        style={{ color: "var(--ao-text-primary)", whiteSpace: "pre-wrap" }}
       >
         {content}
       </Text>
@@ -26,7 +25,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
     <Box
       className="markdown-body"
       style={{
-        color: slack.textPrimary,
+        color: "var(--ao-text-primary)",
         fontSize: 14,
         lineHeight: 1.5,
       }}

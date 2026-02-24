@@ -1,27 +1,52 @@
-import { createTheme } from "@mantine/core";
+import { createTheme, virtualColor } from "@mantine/core";
+import { violet, coral, warmDark } from "./colors.js";
 
 export const theme = createTheme({
-  primaryColor: "blue",
-  defaultRadius: "sm",
+  primaryColor: "violet",
+  autoContrast: true,
+  defaultRadius: "lg",
   fontFamily:
-    "Lato, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    'Lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   colors: {
-    dark: [
-      "#d1d2d3",
-      "#ababad",
-      "#8e8e8e",
-      "#696969",
-      "#565856",
-      "#35373b",
-      "#222529",
-      "#1a1d21",
-      "#111315",
-      "#0b0d0e",
-    ],
+    dark: warmDark,
+    violet,
+    coral,
+    surface: virtualColor({
+      name: "surface",
+      dark: "dark",
+      light: "gray",
+    }),
   },
-  other: {
-    slackAccent: "#1d9bd1",
-    slackGreen: "#2bac76",
-    slackRed: "#e01e5a",
+  components: {
+    Paper: {
+      defaultProps: { radius: "lg" },
+    },
+    Modal: {
+      defaultProps: { radius: "lg" },
+    },
+    Badge: {
+      defaultProps: { radius: "lg" },
+    },
+    Button: {
+      defaultProps: { radius: "lg" },
+    },
+    ActionIcon: {
+      defaultProps: { radius: "lg" },
+    },
+    TextInput: {
+      defaultProps: { radius: "md" },
+    },
+    Select: {
+      defaultProps: { radius: "md" },
+    },
+    MultiSelect: {
+      defaultProps: { radius: "md" },
+    },
+    Drawer: {
+      defaultProps: { radius: "lg" },
+    },
+    Accordion: {
+      defaultProps: { radius: "lg" },
+    },
   },
 });

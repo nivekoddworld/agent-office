@@ -20,7 +20,6 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { slack } from "../../theme/slack-theme.js";
 import { apiFetch, ApiError } from "../../api/client.js";
 
 interface ChannelManagerProps {
@@ -127,8 +126,8 @@ export function ChannelManager({
   return (
     <Box>
       <Group gap={8} mb={6}>
-        <IconHash size={16} color={slack.accentBlue} />
-        <Text size="sm" fw={700} style={{ color: "#fff" }}>
+        <IconHash size={16} color={"var(--ao-accent-blue)"} />
+        <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
           Channels
         </Text>
         <Tooltip label="Add channel" withArrow>
@@ -149,9 +148,9 @@ export function ChannelManager({
             key={name}
             p="sm"
             style={{
-              backgroundColor: slack.messageBg,
+              backgroundColor: "var(--ao-bg-surface)",
               borderRadius: 8,
-              border: `1px solid ${slack.borderColor}`,
+              border: `1px solid var(--ao-border)`,
             }}
           >
             {editingName === name ? (
@@ -192,15 +191,19 @@ export function ChannelManager({
             ) : (
               <Group justify="space-between">
                 <Group gap={6}>
-                  <IconHash size={14} color={slack.textMuted} />
-                  <Text size="sm" fw={600} style={{ color: slack.textPrimary }}>
+                  <IconHash size={14} color={"var(--ao-text-muted)"} />
+                  <Text
+                    size="sm"
+                    fw={600}
+                    style={{ color: "var(--ao-text-primary)" }}
+                  >
                     {name}
                   </Text>
                   <Badge size="xs" variant="light" color="gray">
                     {cfg.members.length}
                   </Badge>
                   {cfg.description && (
-                    <Text size="xs" style={{ color: slack.textMuted }}>
+                    <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                       {cfg.description}
                     </Text>
                   )}
@@ -239,9 +242,9 @@ export function ChannelManager({
           <Box
             p="sm"
             style={{
-              backgroundColor: slack.messageBg,
+              backgroundColor: "var(--ao-bg-surface)",
               borderRadius: 8,
-              border: `1px solid ${slack.borderColor}`,
+              border: `1px solid var(--ao-border)`,
             }}
           >
             <Stack gap="xs">

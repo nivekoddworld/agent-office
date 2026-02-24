@@ -13,7 +13,7 @@ import {
 } from "@mantine/core";
 import { IconAt, IconSend2, IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { slack } from "../../theme/slack-theme.js";
+
 import {
   createClientRequestId,
   sendMessage,
@@ -122,9 +122,9 @@ export function MessageInput({
       mx="md"
       mb="md"
       style={{
-        border: `1px solid ${slack.inputBorder}`,
+        border: `1px solid var(--ao-border-input)`,
         borderRadius: 8,
-        backgroundColor: slack.inputBg,
+        backgroundColor: "var(--ao-bg-input)",
         overflow: "hidden",
       }}
     >
@@ -140,7 +140,7 @@ export function MessageInput({
           minHeight: 40,
           maxHeight: 120,
           padding: "8px 12px",
-          color: slack.textPrimary,
+          color: "var(--ao-text-primary)",
           backgroundColor: "transparent",
           border: "none",
           outline: "none",
@@ -171,7 +171,9 @@ export function MessageInput({
                     <IconAt
                       size={16}
                       color={
-                        selectedTarget ? slack.accentBlue : slack.textSecondary
+                        selectedTarget
+                          ? "var(--ao-accent-blue)"
+                          : "var(--ao-text-secondary)"
                       }
                     />
                   </ActionIcon>
@@ -180,8 +182,8 @@ export function MessageInput({
               <Popover.Dropdown
                 p={0}
                 style={{
-                  backgroundColor: slack.sidebarBg,
-                  borderColor: slack.borderColor,
+                  backgroundColor: "var(--ao-bg-sidebar)",
+                  borderColor: "var(--ao-border)",
                 }}
               >
                 <ScrollArea mah={200}>
@@ -194,13 +196,16 @@ export function MessageInput({
                         py={6}
                         onMouseEnter={(e) => {
                           e.currentTarget.style.backgroundColor =
-                            slack.sidebarHover;
+                            "var(--ao-bg-sidebar-hover)";
                         }}
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = "transparent";
                         }}
                       >
-                        <Text size="sm" style={{ color: slack.textPrimary }}>
+                        <Text
+                          size="sm"
+                          style={{ color: "var(--ao-text-primary)" }}
+                        >
                           @{name}
                         </Text>
                       </UnstyledButton>
@@ -229,13 +234,13 @@ export function MessageInput({
               >
                 @{selectedTarget}
               </Badge>
-              <Text size="xs" style={{ color: slack.textMuted }}>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                 Sending to @{selectedTarget}
               </Text>
             </Group>
           )}
           {!selectedTarget && !isDm && (
-            <Text size="xs" style={{ color: slack.textMuted }}>
+            <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
               Broadcast to channel
             </Text>
           )}

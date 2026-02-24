@@ -9,7 +9,6 @@ import {
 } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../../api/client.js";
-import { slack } from "../../theme/slack-theme.js";
 import { CostChart } from "../../components/cost/CostChart.js";
 import type { CostResponse } from "../../api/types.js";
 
@@ -28,9 +27,9 @@ export function CostPanel() {
         px="md"
         py="xs"
         justify="space-between"
-        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
-        <Text size="sm" fw={700} style={{ color: "#fff" }}>
+        <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
           Cost Dashboard
         </Text>
         <SegmentedControl
@@ -52,26 +51,38 @@ export function CostPanel() {
           <Stack gap="lg">
             <Group gap="xl">
               <div>
-                <Text size="xs" style={{ color: slack.textMuted }}>
+                <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                   Total Cost
                 </Text>
-                <Text size="xl" fw={700} style={{ color: "#fff" }}>
+                <Text
+                  size="xl"
+                  fw={700}
+                  style={{ color: "var(--ao-text-bright)" }}
+                >
                   ${data.summary.totalCost.toFixed(4)}
                 </Text>
               </div>
               <div>
-                <Text size="xs" style={{ color: slack.textMuted }}>
+                <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                   Total Tokens
                 </Text>
-                <Text size="xl" fw={700} style={{ color: "#fff" }}>
+                <Text
+                  size="xl"
+                  fw={700}
+                  style={{ color: "var(--ao-text-bright)" }}
+                >
                   {data.summary.totalTokens.toLocaleString()}
                 </Text>
               </div>
               <div>
-                <Text size="xs" style={{ color: slack.textMuted }}>
+                <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                   Requests
                 </Text>
-                <Text size="xl" fw={700} style={{ color: "#fff" }}>
+                <Text
+                  size="xl"
+                  fw={700}
+                  style={{ color: "var(--ao-text-bright)" }}
+                >
                   {data.recordCount}
                 </Text>
               </div>
@@ -82,7 +93,7 @@ export function CostPanel() {
                 size="sm"
                 fw={600}
                 mb="sm"
-                style={{ color: slack.textPrimary }}
+                style={{ color: "var(--ao-text-primary)" }}
               >
                 Per Agent
               </Text>
@@ -90,7 +101,7 @@ export function CostPanel() {
             </div>
           </Stack>
         ) : (
-          <Text size="sm" style={{ color: slack.textMuted }}>
+          <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
             No cost data available
           </Text>
         )}

@@ -23,32 +23,33 @@ import {
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { slack } from "../../theme/slack-theme.js";
+
 import { SidebarSection } from "./SidebarSection.js";
 import { CreateChannelModal } from "./CreateChannelModal.js";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { AgentInfo } from "../../api/types.js";
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: slack.onlineGreen,
-  running: slack.accentBlue,
-  dead: slack.textMuted,
+  idle: "var(--ao-online-green)",
+  running: "var(--ao-accent-blue)",
+  dead: "var(--ao-text-muted)",
 };
 
 function SidebarAvatar({ agent }: { agent: AgentInfo }) {
   return (
     <Box style={{ position: "relative", flexShrink: 0 }}>
-      <AgentAvatar name={agent.name} size={20} agentName={agent.name} />
+      <AgentAvatar name={agent.name} size={22} agentName={agent.name} />
       <Box
         style={{
           position: "absolute",
           bottom: -1,
           right: -1,
-          width: 7,
-          height: 7,
+          width: 8,
+          height: 8,
           borderRadius: "50%",
-          backgroundColor: STATUS_COLORS[agent.status] ?? slack.textMuted,
-          border: `1.5px solid ${slack.sidebarBg}`,
+          backgroundColor:
+            STATUS_COLORS[agent.status] ?? "var(--ao-text-muted)",
+          border: `2px solid var(--ao-bg-sidebar)`,
         }}
       />
     </Box>
@@ -84,17 +85,22 @@ function SidebarItem({
   return (
     <UnstyledButton
       onClick={onClick}
-      py={3}
+      py={5}
       px="sm"
       w="100%"
       style={{
-        borderRadius: 6,
-        backgroundColor: active ? slack.sidebarActive : "transparent",
+        borderRadius: 8,
+        borderLeft: active
+          ? "3px solid var(--mantine-color-violet-6)"
+          : "3px solid transparent",
+        backgroundColor: active ? "var(--ao-bg-sidebar-active)" : "transparent",
         display: "flex",
         alignItems: "center",
+        transition: "background-color 0.15s ease",
       }}
       onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.backgroundColor = slack.sidebarHover;
+        if (!active)
+          e.currentTarget.style.backgroundColor = "var(--ao-bg-sidebar-hover)";
       }}
       onMouseLeave={(e) => {
         if (!active) e.currentTarget.style.backgroundColor = "transparent";
@@ -104,9 +110,14 @@ function SidebarItem({
         {icon}
         <Text
           size="sm"
-          fw={bold ? 700 : undefined}
+          fw={active || bold ? 600 : undefined}
           truncate
-          style={{ color: active || bold ? "#fff" : slack.sidebarText }}
+          style={{
+            color:
+              active || bold
+                ? "var(--ao-text-bright)"
+                : "var(--ao-text-sidebar)",
+          }}
         >
           {label}
         </Text>
@@ -137,36 +148,36 @@ export function SlackSidebar({
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        backgroundColor: slack.sidebarBg,
+        backgroundColor: "var(--ao-bg-sidebar)",
       }}
     >
       <Box
         px="sm"
-        py="xs"
-        style={{ borderBottom: `1px solid ${slack.divider}` }}
+        py="sm"
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
-        <Group justify="space-between">
-          <Group gap={6}>
-            <Text fw={700} size="lg" style={{ color: "#fff" }}>
+        <Group justify="space-between" wrap="nowrap">
+          <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
+            <Text
+              fw={700}
+              size="lg"
+              truncate
+              style={{ color: "var(--ao-text-bright)" }}
+            >
               {officeName}
             </Text>
-            <Tooltip
-              label={
-                schedulerRunning ? "Scheduler running" : "Scheduler stopped"
-              }
-              withArrow
+            <Text
+              size="xs"
+              fw={500}
+              style={{
+                color: schedulerRunning
+                  ? "var(--ao-online-green)"
+                  : "var(--ao-text-muted)",
+                flexShrink: 0,
+              }}
             >
-              <Box
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  backgroundColor: schedulerRunning
-                    ? slack.onlineGreen
-                    : slack.textMuted,
-                }}
-              />
-            </Tooltip>
+              {schedulerRunning ? "Active" : "Paused"}
+            </Text>
           </Group>
           {onToggleScheduler && (
             <Tooltip
@@ -174,15 +185,18 @@ export function SlackSidebar({
               withArrow
             >
               <ActionIcon
-                size="xs"
+                size="sm"
                 variant="subtle"
                 color="gray"
                 onClick={onToggleScheduler}
               >
                 {schedulerRunning ? (
-                  <IconPlayerPause size={14} color={slack.textSecondary} />
+                  <IconPlayerPause
+                    size={14}
+                    color={"var(--ao-text-secondary)"}
+                  />
                 ) : (
-                  <IconPlayerPlay size={14} color={slack.accentGreen} />
+                  <IconPlayerPlay size={14} color={"var(--ao-accent-green)"} />
                 )}
               </ActionIcon>
             </Tooltip>
@@ -191,17 +205,19 @@ export function SlackSidebar({
       </Box>
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
-        <Box py={6}>
+        <Box py={8} px={4}>
           {/* Tasks & Cron */}
-          <Box px="xs" mb={4}>
+          <Box px={4} mb={6}>
             <SidebarItem
-              icon={<IconLayoutKanban size={15} color={slack.accentBlue} />}
+              icon={
+                <IconLayoutKanban size={16} color={"var(--ao-accent-blue)"} />
+              }
               label="Tasks"
               active={isActive("/tasks")}
               onClick={() => navigate("/tasks")}
             />
             <SidebarItem
-              icon={<IconClock size={15} color={slack.accentBlue} />}
+              icon={<IconClock size={16} color={"var(--ao-accent-blue)"} />}
               label="Cron"
               active={isActive("/cron")}
               onClick={() => navigate("/cron")}
@@ -231,7 +247,7 @@ export function SlackSidebar({
             {Object.keys(channels).map((ch) => (
               <SidebarItem
                 key={ch}
-                icon={<IconHash size={15} color={slack.channelHashColor} />}
+                icon={<IconHash size={16} color={"var(--ao-text-secondary)"} />}
                 label={ch}
                 active={isActive(`/channels/${encodeURIComponent(ch)}`)}
                 onClick={() => navigate(`/channels/${encodeURIComponent(ch)}`)}
@@ -240,6 +256,7 @@ export function SlackSidebar({
           </SidebarSection>
 
           {/* Direct Messages */}
+          <Box mt={4} />
           <SidebarSection
             label="Direct Messages"
             rightSection={
@@ -274,7 +291,7 @@ export function SlackSidebar({
                         size="xs"
                         variant="filled"
                         style={{
-                          backgroundColor: slack.mentionBadge,
+                          backgroundColor: "var(--ao-mention-badge)",
                           minWidth: 18,
                         }}
                       >
@@ -288,9 +305,10 @@ export function SlackSidebar({
           </SidebarSection>
 
           {/* Teams */}
+          <Box mt={4} />
           <SidebarSection label="Teams">
             <SidebarItem
-              icon={<IconSitemap size={15} color={slack.sidebarText} />}
+              icon={<IconSitemap size={16} color={"var(--ao-text-sidebar)"} />}
               label="Org Chart"
               active={isActive("/org-chart")}
               onClick={() => navigate("/org-chart")}
@@ -298,27 +316,33 @@ export function SlackSidebar({
           </SidebarSection>
 
           {/* Tools */}
+          <Box mt={4} />
           <SidebarSection label="Tools">
             <SidebarItem
-              icon={<IconBug size={15} color={slack.sidebarText} />}
+              icon={<IconBug size={16} color={"var(--ao-text-sidebar)"} />}
               label="Debug Logs"
               active={isActive("/debug")}
               onClick={() => navigate("/debug")}
             />
             <SidebarItem
-              icon={<IconCoin size={15} color={slack.sidebarText} />}
+              icon={<IconCoin size={16} color={"var(--ao-text-sidebar)"} />}
               label="Cost Dashboard"
               active={isActive("/cost")}
               onClick={() => navigate("/cost")}
             />
             <SidebarItem
-              icon={<IconHeartHandshake size={15} color={slack.sidebarText} />}
+              icon={
+                <IconHeartHandshake
+                  size={16}
+                  color={"var(--ao-text-sidebar)"}
+                />
+              }
               label="Collaboration"
               active={isActive("/collaboration")}
               onClick={() => navigate("/collaboration")}
             />
             <SidebarItem
-              icon={<IconSettings size={15} color={slack.sidebarText} />}
+              icon={<IconSettings size={16} color={"var(--ao-text-sidebar)"} />}
               label="Settings"
               active={isActive("/settings")}
               onClick={() => navigate("/settings")}

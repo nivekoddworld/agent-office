@@ -10,7 +10,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { slack } from "../../theme/slack-theme.js";
 import { apiFetch, ApiError } from "../../api/client.js";
 
 interface CreateChannelModalProps {
@@ -68,12 +67,12 @@ export function CreateChannelModal({
       title="Create Channel"
       centered
       styles={{
-        content: { backgroundColor: slack.mainBg },
+        content: { backgroundColor: "var(--ao-bg-body)" },
         header: {
-          backgroundColor: slack.mainBg,
-          borderBottom: `1px solid ${slack.borderColor}`,
+          backgroundColor: "var(--ao-bg-body)",
+          borderBottom: `1px solid var(--ao-border)`,
         },
-        title: { color: "#fff", fontWeight: 700 },
+        title: { color: "var(--ao-text-bright)", fontWeight: 700 },
       }}
     >
       <Stack gap="xs" py="xs">

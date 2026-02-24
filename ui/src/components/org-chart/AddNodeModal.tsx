@@ -213,7 +213,7 @@ export function AddNodeModal({
               overflow: "hidden",
               backgroundColor: name.trim()
                 ? undefined
-                : "var(--mantine-color-dark-4)",
+                : "var(--ao-bg-surface-hover)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

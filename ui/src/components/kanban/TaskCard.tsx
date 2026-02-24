@@ -1,6 +1,5 @@
 import { Box, Text, Group, Tooltip } from "@mantine/core";
 import { IconLink } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
 import { PriorityBadge } from "../shared/PriorityBadge.js";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { Task } from "../../api/types.js";
@@ -15,18 +14,18 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
     <Box
       onClick={() => onClick(task)}
       style={{
-        backgroundColor: slack.messageBg,
-        border: `1px solid ${slack.borderColor}`,
+        backgroundColor: "var(--ao-bg-surface)",
+        border: `1px solid var(--ao-border)`,
         borderRadius: 8,
         padding: "10px 12px",
         cursor: "pointer",
         transition: "background-color 0.15s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = slack.messageHoverBg;
+        e.currentTarget.style.backgroundColor = "var(--ao-bg-surface-hover)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.backgroundColor = slack.messageBg;
+        e.currentTarget.style.backgroundColor = "var(--ao-bg-surface)";
       }}
     >
       <Group gap={6} mb={4}>
@@ -38,7 +37,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
       <Text
         size="sm"
         fw={600}
-        style={{ color: slack.textPrimary }}
+        style={{ color: "var(--ao-text-primary)" }}
         lineClamp={2}
       >
         {task.title}
@@ -48,7 +47,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         {task.assignee && (
           <Group gap={4}>
             <AgentAvatar name={task.assignee} size={18} />
-            <Text size="xs" style={{ color: slack.textSecondary }}>
+            <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
               {task.assignee}
             </Text>
           </Group>
@@ -56,8 +55,8 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
         {task.dependsOn.length > 0 && (
           <Tooltip label={`Depends on: ${task.dependsOn.join(", ")}`} withArrow>
             <Group gap={2}>
-              <IconLink size={12} color={slack.textMuted} />
-              <Text size="xs" style={{ color: slack.textMuted }}>
+              <IconLink size={12} color={"var(--ao-text-muted)"} />
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                 {task.dependsOn.length}
               </Text>
             </Group>

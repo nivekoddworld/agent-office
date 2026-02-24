@@ -1,5 +1,4 @@
 import { Group, Text } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
 import { formatTime } from "./channel-helpers.js";
 
 export function SystemMessage({
@@ -11,12 +10,12 @@ export function SystemMessage({
 }) {
   return (
     <Group gap={6} px="md" py={2}>
-      <Text size="xs" style={{ color: slack.textMuted }}>
+      <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
         {formatTime(timestamp)}
       </Text>
       <Text
         size="xs"
-        style={{ color: slack.textSecondary, fontStyle: "italic" }}
+        style={{ color: "var(--ao-text-secondary)", fontStyle: "italic" }}
       >
         {text}
       </Text>

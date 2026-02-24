@@ -2,7 +2,7 @@ import { Box, Text, Group, Stack, Badge, Loader, Divider } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { IconMessage, IconAlertTriangle } from "@tabler/icons-react";
 import { apiFetch } from "../../api/client.js";
-import { slack } from "../../theme/slack-theme.js";
+
 import type { CollaborationSnapshot } from "../../api/types.js";
 
 function formatMs(ms: number): string {
@@ -28,7 +28,7 @@ function SectionHeader({
   return (
     <Group gap={8} mb={6}>
       {icon}
-      <Text size="sm" fw={700} style={{ color: "#fff" }}>
+      <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
         {label}
       </Text>
     </Group>
@@ -46,10 +46,14 @@ function StatCard({
 }) {
   return (
     <div>
-      <Text size="xs" style={{ color: slack.textMuted }}>
+      <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
         {label}
       </Text>
-      <Text size="xl" fw={700} style={{ color: color ?? "#fff" }}>
+      <Text
+        size="xl"
+        fw={700}
+        style={{ color: color ?? "var(--ao-text-bright)" }}
+      >
         {value}
       </Text>
     </div>
@@ -69,9 +73,9 @@ export function CollaborationPanel() {
       <Group
         px="md"
         py="xs"
-        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
-        <Text size="sm" fw={700} style={{ color: "#fff" }}>
+        <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
           Collaboration Health
         </Text>
       </Group>
@@ -90,7 +94,9 @@ export function CollaborationPanel() {
                 label="Overdue"
                 value={`${data.overdueObligationCount}`}
                 color={
-                  data.overdueObligationCount > 0 ? slack.accentRed : "#fff"
+                  data.overdueObligationCount > 0
+                    ? "var(--ao-accent-red)"
+                    : "var(--ao-text-bright)"
                 }
               />
               <StatCard
@@ -103,50 +109,66 @@ export function CollaborationPanel() {
               />
             </Group>
 
-            <Divider color={slack.borderColor} />
+            <Divider color={"var(--ao-border)"} />
 
             <Box>
               <SectionHeader
-                icon={<IconMessage size={16} color={slack.accentBlue} />}
+                icon={<IconMessage size={16} color={"var(--ao-accent-blue)"} />}
                 label="Message Volume"
               />
               <Box
                 p="sm"
                 style={{
-                  backgroundColor: slack.messageBg,
+                  backgroundColor: "var(--ao-bg-surface)",
                   borderRadius: 8,
-                  border: `1px solid ${slack.borderColor}`,
+                  border: `1px solid var(--ao-border)`,
                 }}
               >
                 <Group justify="space-between" py={4}>
-                  <Text size="sm" style={{ color: slack.textMuted }}>
+                  <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                     Total Messages
                   </Text>
-                  <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
+                  <Text
+                    size="sm"
+                    fw={500}
+                    style={{ color: "var(--ao-text-primary)" }}
+                  >
                     {data.currentWindow.totalMessages}
                   </Text>
                 </Group>
                 <Group justify="space-between" py={4}>
-                  <Text size="sm" style={{ color: slack.textMuted }}>
+                  <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                     Direct Messages
                   </Text>
-                  <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
+                  <Text
+                    size="sm"
+                    fw={500}
+                    style={{ color: "var(--ao-text-primary)" }}
+                  >
                     {data.currentWindow.directMessages}
                   </Text>
                 </Group>
                 <Group justify="space-between" py={4}>
-                  <Text size="sm" style={{ color: slack.textMuted }}>
+                  <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                     Task Messages
                   </Text>
-                  <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
+                  <Text
+                    size="sm"
+                    fw={500}
+                    style={{ color: "var(--ao-text-primary)" }}
+                  >
                     {data.currentWindow.taskMessages}
                   </Text>
                 </Group>
                 <Group justify="space-between" py={4}>
-                  <Text size="sm" style={{ color: slack.textMuted }}>
+                  <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                     Simple Work Ratio
                   </Text>
-                  <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
+                  <Text
+                    size="sm"
+                    fw={500}
+                    style={{ color: "var(--ao-text-primary)" }}
+                  >
                     {`${Math.round(data.simpleWorkRatio * 100)}%`}
                   </Text>
                 </Group>
@@ -155,21 +177,30 @@ export function CollaborationPanel() {
 
             {data.pendingReplyAges.length > 0 && (
               <>
-                <Divider color={slack.borderColor} />
+                <Divider color={"var(--ao-border)"} />
                 <Box>
                   <SectionHeader
                     icon={
-                      <IconAlertTriangle size={16} color={slack.accentRed} />
+                      <IconAlertTriangle
+                        size={16}
+                        color={"var(--ao-accent-red)"}
+                      />
                     }
                     label="Overdue Replies"
                   />
                   <Stack gap={4}>
                     {data.pendingReplyAges.map((r, i) => (
                       <Group key={i} justify="space-between" px="sm" py={4}>
-                        <Text size="sm" style={{ color: slack.textPrimary }}>
+                        <Text
+                          size="sm"
+                          style={{ color: "var(--ao-text-primary)" }}
+                        >
                           {r.from} → {r.to}
                         </Text>
-                        <Text size="xs" style={{ color: slack.accentRed }}>
+                        <Text
+                          size="xs"
+                          style={{ color: "var(--ao-accent-red)" }}
+                        >
                           {formatMs(r.ageMs)} overdue
                         </Text>
                       </Group>
@@ -181,11 +212,14 @@ export function CollaborationPanel() {
 
             {data.recentStallIncidents.length > 0 && (
               <>
-                <Divider color={slack.borderColor} />
+                <Divider color={"var(--ao-border)"} />
                 <Box>
                   <SectionHeader
                     icon={
-                      <IconAlertTriangle size={16} color={slack.accentYellow} />
+                      <IconAlertTriangle
+                        size={16}
+                        color={"var(--ao-accent-yellow)"}
+                      />
                     }
                     label="Recent Stall Incidents"
                   />
@@ -201,7 +235,10 @@ export function CollaborationPanel() {
                           <Badge size="xs" variant="light" color="yellow">
                             {incident.type}
                           </Badge>
-                          <Text size="xs" style={{ color: slack.textMuted }}>
+                          <Text
+                            size="xs"
+                            style={{ color: "var(--ao-text-muted)" }}
+                          >
                             {formatTimeAgo(incident.timestamp)}
                           </Text>
                         </Group>
@@ -220,7 +257,7 @@ export function CollaborationPanel() {
             )}
           </Stack>
         ) : (
-          <Text size="sm" style={{ color: slack.textMuted }}>
+          <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
             No collaboration data available
           </Text>
         )}

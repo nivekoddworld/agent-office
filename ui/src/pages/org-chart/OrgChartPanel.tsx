@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Box, Group, Text, useMantineTheme } from "@mantine/core";
+import { Box, Group, Text } from "@mantine/core";
 import { ReactFlowProvider } from "@xyflow/react";
 import { OrgChart } from "../../components/org-chart/OrgChart.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
@@ -8,9 +8,6 @@ import { useAppActions } from "../../components/layout/app-actions-context.js";
 export function OrgChartPanel() {
   const state = useAppState();
   const { openAgentProfile } = useAppActions();
-  const theme = useMantineTheme();
-  const borderColor = theme.colors.dark[6];
-
   const handleSelectAgent = useCallback(
     (name: string | null) => {
       if (name) openAgentProfile(name);
@@ -23,9 +20,9 @@ export function OrgChartPanel() {
       <Group
         px="md"
         py="xs"
-        style={{ borderBottom: `1px solid ${borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
-        <Text size="sm" fw={700} style={{ color: "#fff" }}>
+        <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
           Org Chart
         </Text>
       </Group>

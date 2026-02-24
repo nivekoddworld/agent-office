@@ -8,7 +8,8 @@ import {
   IconTrash,
   IconFileText,
 } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
+
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { ChannelId } from "./channel-types.js";
 
 interface ChannelHeaderProps {
@@ -40,16 +41,23 @@ export function ChannelHeader({
       px="md"
       py="xs"
       style={{
-        borderBottom: `1px solid ${slack.borderColor}`,
-        backgroundColor: slack.mainBg,
+        borderBottom: `1px solid var(--ao-border)`,
+        backgroundColor: "var(--ao-bg-body)",
       }}
     >
       <Group justify="space-between" wrap="nowrap">
         <Group gap={6} wrap="nowrap" style={{ minWidth: 0 }}>
-          {channel.kind === "conversation" && (
-            <IconHash size={18} color={slack.textSecondary} />
+          {channel.kind === "dm" ? (
+            <AgentAvatar name={channel.agentName} size={24} />
+          ) : (
+            <IconHash size={18} color={"var(--ao-text-secondary)"} />
           )}
-          <Text fw={700} size="md" style={{ color: "#fff" }} truncate>
+          <Text
+            fw={700}
+            size="md"
+            style={{ color: "var(--ao-text-bright)" }}
+            truncate
+          >
             {name}
           </Text>
           {desc && (
@@ -58,11 +66,15 @@ export function ChannelHeader({
                 style={{
                   width: 1,
                   height: 16,
-                  backgroundColor: slack.borderColor,
+                  backgroundColor: "var(--ao-border)",
                   flexShrink: 0,
                 }}
               />
-              <Text size="xs" style={{ color: slack.textMuted }} truncate>
+              <Text
+                size="xs"
+                style={{ color: "var(--ao-text-muted)" }}
+                truncate
+              >
                 {desc}
               </Text>
             </>
@@ -84,9 +96,9 @@ export function ChannelHeader({
                 onClick={onToggleSystemMessages}
               >
                 {showSystemMessages ? (
-                  <IconEye size={16} color={slack.textSecondary} />
+                  <IconEye size={16} color={"var(--ao-text-secondary)"} />
                 ) : (
-                  <IconEyeOff size={16} color={slack.textMuted} />
+                  <IconEyeOff size={16} color={"var(--ao-text-muted)"} />
                 )}
               </ActionIcon>
             </Tooltip>
@@ -96,8 +108,8 @@ export function ChannelHeader({
               label={`${activeCount ?? 0} active / ${agentCount} total agents`}
             >
               <Group gap={4} style={{ cursor: "default" }}>
-                <IconUsers size={16} color={slack.textSecondary} />
-                <Text size="xs" style={{ color: slack.textSecondary }}>
+                <IconUsers size={16} color={"var(--ao-text-secondary)"} />
+                <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
                   {agentCount}
                 </Text>
               </Group>
@@ -112,7 +124,7 @@ export function ChannelHeader({
                   size="sm"
                   loading={clearLoading}
                 >
-                  <IconDots size={16} color={slack.textSecondary} />
+                  <IconDots size={16} color={"var(--ao-text-secondary)"} />
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>

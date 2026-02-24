@@ -1,5 +1,4 @@
 import { Text, Group, Stack, Box } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
 import { StatusBadge } from "../shared/StatusBadge.js";
 import { PriorityBadge } from "../shared/PriorityBadge.js";
 import type { Task } from "../../api/types.js";
@@ -15,18 +14,18 @@ function TaskRow({ task }: { task: Task }) {
       gap="xs"
       py={6}
       wrap="nowrap"
-      style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+      style={{ borderBottom: `1px solid var(--ao-border)` }}
     >
       <Text
         size="xs"
         ff="monospace"
-        style={{ color: slack.textMuted, flexShrink: 0 }}
+        style={{ color: "var(--ao-text-muted)", flexShrink: 0 }}
       >
         {task.id}
       </Text>
       <Text
         size="sm"
-        style={{ color: slack.textPrimary, flex: 1, minWidth: 0 }}
+        style={{ color: "var(--ao-text-primary)", flex: 1, minWidth: 0 }}
         lineClamp={1}
       >
         {task.title}
@@ -48,7 +47,7 @@ export function AgentTasksSection({
 
   if (assigned.length === 0 && created.length === 0) {
     return (
-      <Text size="xs" style={{ color: slack.textMuted }}>
+      <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
         No tasks for this agent
       </Text>
     );
@@ -61,7 +60,7 @@ export function AgentTasksSection({
           <Text
             size="xs"
             fw={600}
-            style={{ color: slack.textSecondary }}
+            style={{ color: "var(--ao-text-secondary)" }}
             mb={4}
           >
             Assigned ({assigned.length})
@@ -79,7 +78,7 @@ export function AgentTasksSection({
           <Text
             size="xs"
             fw={600}
-            style={{ color: slack.textSecondary }}
+            style={{ color: "var(--ao-text-secondary)" }}
             mb={4}
           >
             Created by this agent ({created.length})

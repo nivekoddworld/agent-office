@@ -1,6 +1,5 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Box, Text, Group, Badge, Button } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
 import { AgentAvatar } from "../../components/shared/AgentAvatar.js";
 import {
   filterContextString,
@@ -42,9 +41,9 @@ function DebugSelect({
         height: 24,
         fontSize: 12,
         borderRadius: 6,
-        border: `1px solid ${slack.borderColor}`,
-        backgroundColor: slack.inputBg,
-        color: slack.textPrimary,
+        border: `1px solid var(--ao-border)`,
+        backgroundColor: "var(--ao-bg-input)",
+        color: "var(--ao-text-primary)",
         padding: "0 8px",
       }}
     >
@@ -195,10 +194,10 @@ export function OfficeDebugPanel() {
         px="md"
         py="xs"
         justify="space-between"
-        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
         <Group gap={8}>
-          <Text size="sm" fw={700} style={{ color: "#fff" }}>
+          <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
             Debug Logs
           </Text>
           {capture.isCapturing ? (
@@ -210,7 +209,7 @@ export function OfficeDebugPanel() {
               stopped
             </Badge>
           )}
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             {displayRows.length} / {capture.rows.length}
           </Text>
           {capture.droppedCount > 0 && (
@@ -241,7 +240,7 @@ export function OfficeDebugPanel() {
         px="md"
         py={4}
         gap={8}
-        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
         <DebugSelect
           value={agentFilter}
@@ -279,7 +278,7 @@ export function OfficeDebugPanel() {
             display: "flex",
             alignItems: "center",
             gap: 6,
-            color: slack.textSecondary,
+            color: "var(--ao-text-secondary)",
             fontSize: 12,
           }}
         >
@@ -345,7 +344,7 @@ export function OfficeDebugPanel() {
         <Box px="md" py="sm">
           {displayRows.length === 0 ? (
             <Box py="xl">
-              <Text size="sm" style={{ color: slack.textMuted }}>
+              <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                 {capture.isCapturing
                   ? "Waiting for events..."
                   : "Click Start to begin capturing debug events."}
@@ -359,7 +358,7 @@ export function OfficeDebugPanel() {
                   <Badge size="xs" variant="light" color="gray">
                     {agent}
                   </Badge>
-                  <Text size="xs" style={{ color: slack.textMuted }}>
+                  <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                     {agentRows.length} events
                   </Text>
                 </Group>

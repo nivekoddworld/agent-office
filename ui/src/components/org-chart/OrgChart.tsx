@@ -126,7 +126,7 @@ export function OrgChart({ agents, hierarchy, onSelectAgent }: OrgChartProps) {
         proOptions={{ hideAttribution: true }}
         style={{ height: "100%", width: "100%" }}
       >
-        <Background gap={16} size={1} color="var(--mantine-color-dark-5)" />
+        <Background gap={16} size={1} color="var(--ao-border)" />
         <Controls showInteractive={false} />
         <Panel position="top-right">
           <ActionIcon

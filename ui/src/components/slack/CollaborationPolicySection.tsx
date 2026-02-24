@@ -11,7 +11,6 @@ import {
 import { notifications } from "@mantine/notifications";
 import { IconHeartHandshake } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { slack } from "../../theme/slack-theme.js";
 import { apiFetch } from "../../api/client.js";
 import type {
   CollaborationMode,
@@ -28,7 +27,7 @@ function SectionHeader({
   return (
     <Group gap={8} mb={6}>
       {icon}
-      <Text size="sm" fw={700} style={{ color: "#fff" }}>
+      <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
         {label}
       </Text>
     </Group>
@@ -95,19 +94,19 @@ export function CollaborationPolicySection({
   return (
     <Box>
       <SectionHeader
-        icon={<IconHeartHandshake size={16} color={slack.accentGreen} />}
+        icon={<IconHeartHandshake size={16} color={"var(--ao-accent-green)"} />}
         label="Collaboration Policy"
       />
       <Box
         p="sm"
         style={{
-          backgroundColor: slack.messageBg,
+          backgroundColor: "var(--ao-bg-surface)",
           borderRadius: 8,
-          border: `1px solid ${slack.borderColor}`,
+          border: `1px solid var(--ao-border)`,
         }}
       >
         <Group justify="space-between" py={4}>
-          <Text size="sm" style={{ color: slack.textMuted }}>
+          <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
             Mode
           </Text>
           <SegmentedControl

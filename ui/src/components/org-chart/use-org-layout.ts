@@ -99,7 +99,7 @@ export function useOrgLayout(
       target: e.w!,
       type: "smoothstep",
       animated: false,
-      style: { stroke: "var(--mantine-color-dark-4)" },
+      style: { stroke: "var(--ao-border)" },
     }));
 
     return { nodes, edges };

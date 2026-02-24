@@ -9,6 +9,8 @@ import {
   ActionIcon,
   Tooltip,
   CopyButton,
+  SegmentedControl,
+  useMantineColorScheme,
 } from "@mantine/core";
 import {
   IconBuilding,
@@ -20,10 +22,11 @@ import {
   IconCopy,
   IconPlayerPlay,
   IconPlayerPause,
+  IconPalette,
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
-import { slack } from "../../theme/slack-theme.js";
+
 import {
   useSchedulerAction,
   useOfficeApply,
@@ -44,11 +47,11 @@ function InfoRow({
 }) {
   return (
     <Group justify="space-between" py={4}>
-      <Text size="sm" style={{ color: slack.textMuted }}>
+      <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
         {label}
       </Text>
       <Group gap={6}>
-        <Text size="sm" fw={500} style={{ color: slack.textPrimary }}>
+        <Text size="sm" fw={500} style={{ color: "var(--ao-text-primary)" }}>
           {value}
         </Text>
         {copyable && (
@@ -62,9 +65,9 @@ function InfoRow({
                   onClick={copy}
                 >
                   {copied ? (
-                    <IconCheck size={12} color={slack.accentGreen} />
+                    <IconCheck size={12} color={"var(--ao-accent-green)"} />
                   ) : (
-                    <IconCopy size={12} color={slack.textMuted} />
+                    <IconCopy size={12} color={"var(--ao-text-muted)"} />
                   )}
                 </ActionIcon>
               </Tooltip>
@@ -86,7 +89,7 @@ function SectionHeader({
   return (
     <Group gap={8} mb={6}>
       {icon}
-      <Text size="sm" fw={700} style={{ color: "#fff" }}>
+      <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
         {label}
       </Text>
     </Group>
@@ -95,6 +98,7 @@ function SectionHeader({
 
 export function SettingsPanel() {
   const state = useAppState();
+  const { colorScheme, setColorScheme } = useMantineColorScheme();
   const schedulerAction = useSchedulerAction();
   const officeApply = useOfficeApply();
   const officeValidate = useOfficeValidate();
@@ -159,9 +163,9 @@ export function SettingsPanel() {
       <Group
         px="md"
         py="xs"
-        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
-        <Text size="sm" fw={700} style={{ color: "#fff" }}>
+        <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
           Office Settings
         </Text>
       </Group>
@@ -171,15 +175,15 @@ export function SettingsPanel() {
           {/* Office Info */}
           <Box>
             <SectionHeader
-              icon={<IconBuilding size={16} color={slack.accentBlue} />}
+              icon={<IconBuilding size={16} color={"var(--ao-accent-blue)"} />}
               label="Office"
             />
             <Box
               p="sm"
               style={{
-                backgroundColor: slack.messageBg,
+                backgroundColor: "var(--ao-bg-surface)",
                 borderRadius: 8,
-                border: `1px solid ${slack.borderColor}`,
+                border: `1px solid var(--ao-border)`,
               }}
             >
               <InfoRow label="Name" value={state.officeName} />
@@ -192,24 +196,57 @@ export function SettingsPanel() {
             </Box>
           </Box>
 
-          <Divider color={slack.borderColor} />
+          <Divider color={"var(--ao-border)"} />
+
+          {/* Appearance */}
+          <Box>
+            <SectionHeader
+              icon={<IconPalette size={16} color={"var(--ao-accent-purple)"} />}
+              label="Appearance"
+            />
+            <Group
+              justify="space-between"
+              p="sm"
+              style={{
+                backgroundColor: "var(--ao-bg-surface)",
+                borderRadius: 8,
+                border: `1px solid var(--ao-border)`,
+              }}
+            >
+              <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
+                Color Scheme
+              </Text>
+              <SegmentedControl
+                size="xs"
+                value={colorScheme}
+                onChange={(v) => setColorScheme(v as "light" | "dark" | "auto")}
+                data={[
+                  { value: "auto", label: "Auto" },
+                  { value: "light", label: "Light" },
+                  { value: "dark", label: "Dark" },
+                ]}
+              />
+            </Group>
+          </Box>
+
+          <Divider color={"var(--ao-border)"} />
 
           {/* Scheduler */}
           <Box>
             <SectionHeader
-              icon={<IconClock size={16} color={slack.accentYellow} />}
+              icon={<IconClock size={16} color={"var(--ao-accent-yellow)"} />}
               label="Scheduler"
             />
             <Box
               p="sm"
               style={{
-                backgroundColor: slack.messageBg,
+                backgroundColor: "var(--ao-bg-surface)",
                 borderRadius: 8,
-                border: `1px solid ${slack.borderColor}`,
+                border: `1px solid var(--ao-border)`,
               }}
             >
               <Group justify="space-between" py={4}>
-                <Text size="sm" style={{ color: slack.textMuted }}>
+                <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                   Status
                 </Text>
                 <Group gap={8}>
@@ -243,25 +280,25 @@ export function SettingsPanel() {
             </Box>
           </Box>
 
-          <Divider color={slack.borderColor} />
+          <Divider color={"var(--ao-border)"} />
 
           {/* Agents Summary */}
           <Box>
             <SectionHeader
-              icon={<IconUsers size={16} color={slack.accentGreen} />}
+              icon={<IconUsers size={16} color={"var(--ao-accent-green)"} />}
               label="Agents"
             />
             <Box
               p="sm"
               style={{
-                backgroundColor: slack.messageBg,
+                backgroundColor: "var(--ao-bg-surface)",
                 borderRadius: 8,
-                border: `1px solid ${slack.borderColor}`,
+                border: `1px solid var(--ao-border)`,
               }}
             >
               <InfoRow label="Total" value={`${state.agents.length}`} />
               <Group justify="space-between" py={4}>
-                <Text size="sm" style={{ color: slack.textMuted }}>
+                <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                   Breakdown
                 </Text>
                 <Group gap={6}>
@@ -283,7 +320,7 @@ export function SettingsPanel() {
                 </Group>
               </Group>
               <Group justify="space-between" py={4}>
-                <Text size="sm" style={{ color: slack.textMuted }}>
+                <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                   Models
                 </Text>
                 <Group gap={4}>
@@ -297,20 +334,25 @@ export function SettingsPanel() {
             </Box>
           </Box>
 
-          <Divider color={slack.borderColor} />
+          <Divider color={"var(--ao-border)"} />
 
           {/* Cron Summary */}
           <Box>
             <SectionHeader
-              icon={<IconCalendarEvent size={16} color={slack.accentPurple} />}
+              icon={
+                <IconCalendarEvent
+                  size={16}
+                  color={"var(--ao-accent-purple)"}
+                />
+              }
               label="Cron Jobs"
             />
             <Box
               p="sm"
               style={{
-                backgroundColor: slack.messageBg,
+                backgroundColor: "var(--ao-bg-surface)",
                 borderRadius: 8,
-                border: `1px solid ${slack.borderColor}`,
+                border: `1px solid var(--ao-border)`,
               }}
             >
               <InfoRow label="Total jobs" value={`${state.cronJobs.length}`} />
@@ -318,11 +360,11 @@ export function SettingsPanel() {
             </Box>
           </Box>
 
-          <Divider color={slack.borderColor} />
+          <Divider color={"var(--ao-border)"} />
 
           <CollaborationPolicySection policy={state.collaborationPolicy} />
 
-          <Divider color={slack.borderColor} />
+          <Divider color={"var(--ao-border)"} />
 
           <ChannelManager
             channels={state.channels}
@@ -333,11 +375,16 @@ export function SettingsPanel() {
             }
           />
 
-          <Divider color={slack.borderColor} />
+          <Divider color={"var(--ao-border)"} />
 
           {/* Quick Actions */}
           <Box>
-            <Text size="sm" fw={700} style={{ color: "#fff" }} mb={8}>
+            <Text
+              size="sm"
+              fw={700}
+              style={{ color: "var(--ao-text-bright)" }}
+              mb={8}
+            >
               Quick Actions
             </Text>
             <Group gap="sm">
@@ -352,7 +399,7 @@ export function SettingsPanel() {
                   <IconRefresh size={18} />
                 </ActionIcon>
               </Tooltip>
-              <Text size="xs" style={{ color: slack.textMuted }}>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                 Reload Config
               </Text>
 
@@ -369,7 +416,7 @@ export function SettingsPanel() {
                   <IconCheck size={18} />
                 </ActionIcon>
               </Tooltip>
-              <Text size="xs" style={{ color: slack.textMuted }}>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                 Validate Config
               </Text>
             </Group>

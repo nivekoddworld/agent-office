@@ -11,7 +11,7 @@ import {
   IconSparkles,
 } from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
-import { slack } from "../../theme/slack-theme.js";
+
 import { apiFetch } from "../../api/client.js";
 import { ChannelHeader } from "./ChannelHeader.js";
 import { SlackMessage } from "./SlackMessage.js";
@@ -293,7 +293,7 @@ export function ChannelView({
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        backgroundColor: slack.mainBg,
+        backgroundColor: "var(--ao-bg-body)",
       }}
     >
       <ChannelHeader
@@ -337,7 +337,7 @@ export function ChannelView({
       {isDm && (
         <Box
           style={{
-            borderBottom: `1px solid ${slack.borderColor}`,
+            borderBottom: `1px solid var(--ao-border)`,
             flexShrink: 0,
           }}
         >
@@ -350,31 +350,41 @@ export function ChannelView({
                 messages: (
                   <IconMessages
                     size={15}
-                    color={active ? slack.accentBlue : slack.textMuted}
+                    color={
+                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                    }
                   />
                 ),
                 files: (
                   <IconFiles
                     size={15}
-                    color={active ? slack.accentBlue : slack.textMuted}
+                    color={
+                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                    }
                   />
                 ),
                 prompt: (
                   <IconFileText
                     size={15}
-                    color={active ? slack.accentBlue : slack.textMuted}
+                    color={
+                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                    }
                   />
                 ),
                 skills: (
                   <IconSparkles
                     size={15}
-                    color={active ? slack.accentBlue : slack.textMuted}
+                    color={
+                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                    }
                   />
                 ),
                 configure: (
                   <IconSettings
                     size={15}
-                    color={active ? slack.accentBlue : slack.textMuted}
+                    color={
+                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                    }
                   />
                 ),
               };
@@ -394,7 +404,7 @@ export function ChannelView({
                   py={8}
                   onClick={() => setDmTab(tab)}
                   style={{
-                    borderBottom: `2px solid ${active ? slack.accentBlue : "transparent"}`,
+                    borderBottom: `2px solid ${active ? "var(--ao-accent-blue)" : "transparent"}`,
                     marginBottom: -1,
                   }}
                 >
@@ -403,7 +413,11 @@ export function ChannelView({
                     <Text
                       size="sm"
                       fw={active ? 600 : 400}
-                      style={{ color: active ? "#fff" : slack.textMuted }}
+                      style={{
+                        color: active
+                          ? "var(--ao-text-bright)"
+                          : "var(--ao-text-muted)",
+                      }}
                     >
                       {label}
                     </Text>
@@ -437,14 +451,19 @@ export function ChannelView({
           >
             {displayItems.length === 0 ? (
               <Box p="xl" style={{ textAlign: "center" }}>
-                <Text size="lg" fw={700} style={{ color: "#fff" }} mb={4}>
+                <Text
+                  size="lg"
+                  fw={700}
+                  style={{ color: "var(--ao-text-bright)" }}
+                  mb={4}
+                >
                   {channel.kind === "conversation"
                     ? `Welcome to #${channel.name}`
                     : channel.kind === "dm"
                       ? `Conversation with ${channel.agentName}`
                       : channel.name}
                 </Text>
-                <Text size="sm" style={{ color: slack.textMuted }}>
+                <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                   {channel.kind === "conversation"
                     ? "This is the start of the channel. Activity will appear here in real time."
                     : "Send a message to start the conversation."}

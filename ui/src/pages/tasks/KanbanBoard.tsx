@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Box, Button, Group, Text, SegmentedControl } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
+
 import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
 import { KanbanColumn } from "../../components/kanban/KanbanColumn.js";
 import { TaskDetailModal } from "../../components/kanban/TaskDetailModal.js";
@@ -75,7 +75,7 @@ export function KanbanBoard() {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        backgroundColor: slack.mainBg,
+        backgroundColor: "var(--ao-bg-body)",
       }}
     >
       <ChannelHeader
@@ -87,7 +87,7 @@ export function KanbanBoard() {
         px="md"
         py="xs"
         style={{
-          borderBottom: `1px solid ${slack.borderColor}`,
+          borderBottom: `1px solid var(--ao-border)`,
           flexShrink: 0,
         }}
       >
@@ -104,7 +104,7 @@ export function KanbanBoard() {
             />
           </Group>
           <Group gap="sm">
-            <Text size="xs" style={{ color: slack.textMuted }}>
+            <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
               {filtered.length} task{filtered.length !== 1 ? "s" : ""}
             </Text>
             <Button

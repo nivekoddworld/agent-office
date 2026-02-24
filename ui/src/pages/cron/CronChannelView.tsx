@@ -8,7 +8,6 @@ import {
   SegmentedControl,
 } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
 import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
 import { CronJobRow } from "../../components/cron/CronJobRow.js";
 import { CronAddForm } from "../../components/cron/CronAddForm.js";
@@ -40,7 +39,7 @@ export function CronChannelView() {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        backgroundColor: slack.mainBg,
+        backgroundColor: "var(--ao-bg-body)",
       }}
     >
       <ChannelHeader
@@ -72,7 +71,7 @@ export function CronChannelView() {
 
         {filtered.length === 0 ? (
           <Box py="xl" style={{ textAlign: "center" }}>
-            <Text size="sm" style={{ color: slack.textMuted }}>
+            <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
               No cron jobs configured
             </Text>
           </Box>

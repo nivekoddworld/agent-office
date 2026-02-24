@@ -31,7 +31,6 @@ import { notifications } from "@mantine/notifications";
 import { useSetPrompt, useOfficeApply } from "../../api/use-api-mutations.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
-import { slack } from "../../theme/slack-theme.js";
 
 interface AgentPromptPanelProps {
   agentName: string;
@@ -205,8 +204,8 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
         px="sm"
         py={6}
         style={{
-          borderBottom: `1px solid ${slack.borderColor}`,
-          backgroundColor: slack.messageBg,
+          borderBottom: `1px solid var(--ao-border)`,
+          backgroundColor: "var(--ao-bg-surface)",
           flexShrink: 0,
         }}
       >
@@ -243,7 +242,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               style={{
                 width: 1,
                 height: 18,
-                backgroundColor: slack.borderColor,
+                backgroundColor: "var(--ao-border)",
               }}
               mx={4}
             />
@@ -335,7 +334,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               display: "flex",
               flexDirection: "column",
               borderRight: showPreview
-                ? `1px solid ${slack.borderColor}`
+                ? `1px solid var(--ao-border)`
                 : undefined,
               overflow: "hidden",
             }}
@@ -350,10 +349,10 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
                 wrapper: { flex: 1, display: "flex" },
                 input: {
                   flex: 1,
-                  backgroundColor: slack.mainBg,
+                  backgroundColor: "var(--ao-bg-body)",
                   border: "none",
                   borderRadius: 0,
-                  color: slack.textPrimary,
+                  color: "var(--ao-text-primary)",
                   fontFamily: "monospace",
                   fontSize: 13,
                   lineHeight: 1.6,
@@ -370,14 +369,14 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               flex: 1,
               overflow: "auto",
               padding: 16,
-              backgroundColor: slack.mainBg,
+              backgroundColor: "var(--ao-bg-body)",
             }}
           >
             {promptText.trim() ? (
               <Box
                 className="markdown-body"
                 style={{
-                  color: slack.textPrimary,
+                  color: "var(--ao-text-primary)",
                   fontSize: 14,
                   lineHeight: 1.6,
                 }}
@@ -392,7 +391,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
             ) : (
               <Text
                 size="sm"
-                style={{ color: slack.textMuted, fontStyle: "italic" }}
+                style={{ color: "var(--ao-text-muted)", fontStyle: "italic" }}
               >
                 Markdown preview will appear here...
               </Text>
@@ -406,8 +405,8 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
         px="sm"
         py={8}
         style={{
-          borderTop: `1px solid ${slack.borderColor}`,
-          backgroundColor: slack.messageBg,
+          borderTop: `1px solid var(--ao-border)`,
+          backgroundColor: "var(--ao-bg-surface)",
           flexShrink: 0,
         }}
       >
@@ -436,7 +435,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
           </Group>
 
           <Group gap="xs">
-            <Text size="xs" style={{ color: slack.textMuted }}>
+            <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
               Custom block: {customChars.toLocaleString()} chars
             </Text>
             <Button

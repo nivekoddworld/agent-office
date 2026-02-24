@@ -1,15 +1,15 @@
 import { Modal, Text, Group, Badge, Stack, Divider, Box } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
+
 import { PriorityBadge } from "../shared/PriorityBadge.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  backlog: slack.textMuted,
-  todo: slack.accentBlue,
-  in_progress: slack.accentYellow,
-  review: slack.accentPurple,
-  done: slack.accentGreen,
-  cancelled: slack.accentRed,
+  backlog: "var(--ao-text-muted)",
+  todo: "var(--ao-accent-blue)",
+  in_progress: "var(--ao-accent-yellow)",
+  review: "var(--ao-accent-purple)",
+  done: "var(--ao-accent-green)",
+  cancelled: "var(--ao-accent-red)",
 };
 
 interface TaskDetailModalProps {
@@ -46,11 +46,11 @@ export function TaskDetailModal({
       size="lg"
       styles={{
         header: {
-          backgroundColor: slack.mainBg,
-          borderBottom: `1px solid ${slack.borderColor}`,
+          backgroundColor: "var(--ao-bg-body)",
+          borderBottom: `1px solid var(--ao-border)`,
         },
-        body: { backgroundColor: slack.mainBg },
-        content: { backgroundColor: slack.mainBg },
+        body: { backgroundColor: "var(--ao-bg-body)" },
+        content: { backgroundColor: "var(--ao-bg-body)" },
       }}
     >
       <Stack gap="md">
@@ -65,13 +65,13 @@ export function TaskDetailModal({
           <PriorityBadge priority={task.priority} />
         </Group>
 
-        <Divider color={slack.borderColor} />
+        <Divider color={"var(--ao-border)"} />
 
         <Box>
           <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
             Assignee
           </Text>
-          <Text size="sm" style={{ color: slack.textPrimary }}>
+          <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
             {task.assignee}
           </Text>
         </Box>
@@ -80,7 +80,7 @@ export function TaskDetailModal({
           <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
             Created by
           </Text>
-          <Text size="sm" style={{ color: slack.textPrimary }}>
+          <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
             {task.createdBy}
           </Text>
         </Box>
@@ -93,9 +93,9 @@ export function TaskDetailModal({
             <Text
               size="sm"
               style={{
-                color: slack.textPrimary,
+                color: "var(--ao-text-primary)",
                 whiteSpace: "pre-wrap",
-                backgroundColor: slack.messageBg,
+                backgroundColor: "var(--ao-bg-surface)",
                 padding: 12,
                 borderRadius: 6,
               }}
@@ -128,9 +128,9 @@ export function TaskDetailModal({
             <Text
               size="sm"
               style={{
-                color: slack.textPrimary,
+                color: "var(--ao-text-primary)",
                 whiteSpace: "pre-wrap",
-                backgroundColor: slack.messageBg,
+                backgroundColor: "var(--ao-bg-surface)",
                 padding: 12,
                 borderRadius: 6,
               }}
@@ -140,14 +140,14 @@ export function TaskDetailModal({
           </Box>
         )}
 
-        <Divider color={slack.borderColor} />
+        <Divider color={"var(--ao-border)"} />
 
         <Group gap="xl">
           <Box>
             <Text size="xs" c="dimmed">
               Created
             </Text>
-            <Text size="xs" style={{ color: slack.textSecondary }}>
+            <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
               {formatDate(task.createdAt)}
             </Text>
           </Box>
@@ -155,7 +155,7 @@ export function TaskDetailModal({
             <Text size="xs" c="dimmed">
               Updated
             </Text>
-            <Text size="xs" style={{ color: slack.textSecondary }}>
+            <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
               {formatDate(task.updatedAt)}
             </Text>
           </Box>
@@ -164,7 +164,7 @@ export function TaskDetailModal({
               <Text size="xs" c="dimmed">
                 Started
               </Text>
-              <Text size="xs" style={{ color: slack.textSecondary }}>
+              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
                 {formatDate(task.startedAt)}
               </Text>
             </Box>
@@ -174,7 +174,7 @@ export function TaskDetailModal({
               <Text size="xs" c="dimmed">
                 Completed
               </Text>
-              <Text size="xs" style={{ color: slack.textSecondary }}>
+              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
                 {formatDate(task.completedAt)}
               </Text>
             </Box>

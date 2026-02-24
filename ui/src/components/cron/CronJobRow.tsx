@@ -114,7 +114,7 @@ export function CronJobRow({ job }: CronJobRowProps) {
         gap="xs"
         p="xs"
         wrap="nowrap"
-        style={{ borderBottom: "1px solid var(--mantine-color-dark-5)" }}
+        style={{ borderBottom: "1px solid var(--ao-border)" }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
           <Group gap={4}>

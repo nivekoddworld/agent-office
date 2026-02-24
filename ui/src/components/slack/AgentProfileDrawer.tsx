@@ -19,7 +19,7 @@ import {
   IconSend,
   IconInbox,
 } from "@tabler/icons-react";
-import { slack } from "../../theme/slack-theme.js";
+
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { UserPresence } from "./UserPresence.js";
@@ -59,8 +59,8 @@ export function AgentProfileDrawer({
       withCloseButton={false}
       overlayProps={{ backgroundOpacity: 0.3, blur: 1 }}
       styles={{
-        content: { backgroundColor: slack.mainBg },
-        header: { backgroundColor: slack.mainBg },
+        content: { backgroundColor: "var(--ao-bg-body)" },
+        header: { backgroundColor: "var(--ao-bg-body)" },
       }}
     >
       {isLoading || !agent ? (
@@ -74,12 +74,12 @@ export function AgentProfileDrawer({
             px="lg"
             pt="lg"
             pb="md"
-            style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+            style={{ borderBottom: `1px solid var(--ao-border)` }}
           >
             <Group justify="space-between" mb="sm">
               <Text
                 size="xs"
-                style={{ color: slack.textMuted, cursor: "pointer" }}
+                style={{ color: "var(--ao-text-muted)", cursor: "pointer" }}
                 onClick={onClose}
               >
                 Close
@@ -91,7 +91,11 @@ export function AgentProfileDrawer({
               <AgentAvatar name={agent.name} size={72} />
 
               <Stack gap={4} style={{ flex: 1 }}>
-                <Text fw={700} size="xl" style={{ color: "#fff" }}>
+                <Text
+                  fw={700}
+                  size="xl"
+                  style={{ color: "var(--ao-text-bright)" }}
+                >
                   {agent.name}
                 </Text>
                 <Group gap={6}>
@@ -100,7 +104,7 @@ export function AgentProfileDrawer({
                     agentName={agent.name}
                     size={10}
                   />
-                  <Text size="sm" style={{ color: slack.textSecondary }}>
+                  <Text size="sm" style={{ color: "var(--ao-text-secondary)" }}>
                     {activity.kind === "tool"
                       ? `Running: ${activity.toolName}`
                       : activity.kind === "thinking"
@@ -113,7 +117,7 @@ export function AgentProfileDrawer({
                   </Text>
                 </Group>
                 {agent.description && (
-                  <Text size="sm" style={{ color: slack.textMuted }}>
+                  <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                     {agent.description}
                   </Text>
                 )}
@@ -150,10 +154,10 @@ export function AgentProfileDrawer({
             mt="sm"
             styles={{
               item: {
-                backgroundColor: slack.messageBg,
-                borderColor: slack.borderColor,
+                backgroundColor: "var(--ao-bg-surface)",
+                borderColor: "var(--ao-border)",
               },
-              control: { color: slack.textPrimary },
+              control: { color: "var(--ao-text-primary)" },
             }}
           >
             <Accordion.Item value="queue">

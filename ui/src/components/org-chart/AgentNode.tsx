@@ -28,10 +28,8 @@ export function AgentNode({ data }: NodeProps) {
         style={{
           width: 230,
           cursor: "pointer",
-          borderColor: isRoot ? "var(--mantine-color-violet-7)" : undefined,
-          background: isRoot
-            ? "var(--mantine-color-dark-7)"
-            : "var(--mantine-color-dark-6)",
+          borderColor: isRoot ? "var(--mantine-color-violet-7)" : "var(--ao-border)",
+          background: "var(--ao-bg-surface)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -51,11 +49,17 @@ export function AgentNode({ data }: NodeProps) {
               marginBottom: 6,
             }}
           >
-            <IconUser size={22} color="#fff" />
+            <IconUser size={22} color="var(--ao-text-bright)" />
           </Box>
         ) : (
-          <Box style={{ position: "relative", marginTop: -28, marginBottom: 6 }}>
-            <AgentAvatar name={d.agentName!} size={56} agentName={d.agentName!} />
+          <Box
+            style={{ position: "relative", marginTop: -28, marginBottom: 6 }}
+          >
+            <AgentAvatar
+              name={d.agentName!}
+              size={56}
+              agentName={d.agentName!}
+            />
           </Box>
         )}
 
@@ -87,7 +91,10 @@ export function AgentNode({ data }: NodeProps) {
 
         {/* Status + Priority — only when noteworthy */}
         {showBadges && (
-          <Box mt={6} style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+          <Box
+            mt={6}
+            style={{ display: "flex", gap: 4, justifyContent: "center" }}
+          >
             {d.status !== "idle" && <StatusBadge status={d.status} />}
             {d.priority === 4 && <PriorityBadge priority={d.priority} />}
           </Box>

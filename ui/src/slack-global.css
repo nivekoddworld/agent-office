@@ -1,4 +1,4 @@
-/* Slack Dark Theme Global Styles */
+/* Agent Office Global Styles */
 
 html,
 body,
@@ -6,7 +6,7 @@ body,
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: #1a1d21;
+  background-color: var(--ao-bg-body);
 }
 
 /* Pulse animation for active agents */
@@ -31,18 +31,18 @@ body,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #565856;
+  background: var(--ao-border);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #8e8e8e;
+  background: var(--ao-text-muted);
 }
 
 /* ContentEditable placeholder */
 [contenteditable][data-placeholder]:empty::before {
   content: attr(data-placeholder);
-  color: #696969;
+  color: var(--ao-text-muted);
   pointer-events: none;
 }
 
@@ -53,7 +53,10 @@ body,
 
 /* Selection color */
 ::selection {
-  background-color: rgba(29, 155, 209, 0.3);
+  background-color: light-dark(
+    rgba(112, 72, 232, 0.2),
+    rgba(112, 72, 232, 0.3)
+  );
 }
 
 /* Markdown content styles */
@@ -63,7 +66,7 @@ body,
 .markdown-body h4,
 .markdown-body h5,
 .markdown-body h6 {
-  color: #fff;
+  color: var(--ao-text-bright);
   margin: 0.5em 0 0.25em;
   line-height: 1.3;
 }
@@ -80,16 +83,16 @@ body,
   margin: 0.25em 0;
 }
 .markdown-body code {
-  background-color: #2d2d2d;
-  color: #e6db74;
+  background-color: var(--ao-bg-code);
+  color: light-dark(#b35309, #e6db74);
   padding: 0.15em 0.35em;
   border-radius: 3px;
   font-size: 0.9em;
-  font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+  font-family: var(--ao-font-mono);
 }
 .markdown-body pre {
-  background-color: #1e1e1e;
-  border: 1px solid #3a3a3a;
+  background-color: var(--ao-bg-code-block);
+  border: 1px solid var(--ao-border);
   border-radius: 6px;
   padding: 0.75em;
   margin: 0.5em 0;
@@ -98,7 +101,7 @@ body,
 .markdown-body pre code {
   background: none;
   padding: 0;
-  color: #d4d4d4;
+  color: var(--ao-text-primary);
   font-size: 0.85em;
   line-height: 1.5;
 }
@@ -111,10 +114,10 @@ body,
   margin: 0.15em 0;
 }
 .markdown-body blockquote {
-  border-left: 3px solid #565856;
+  border-left: 3px solid var(--ao-border);
   margin: 0.5em 0;
   padding: 0.25em 0.75em;
-  color: #ababad;
+  color: var(--ao-text-secondary);
 }
 .markdown-body table {
   border-collapse: collapse;
@@ -123,15 +126,15 @@ body,
 }
 .markdown-body th,
 .markdown-body td {
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--ao-border);
   padding: 0.35em 0.75em;
 }
 .markdown-body th {
-  background-color: #2d2d2d;
-  color: #fff;
+  background-color: var(--ao-bg-code);
+  color: var(--ao-text-bright);
 }
 .markdown-body a {
-  color: #1d9bd1;
+  color: var(--ao-accent-blue);
   text-decoration: none;
 }
 .markdown-body a:hover {
@@ -139,14 +142,14 @@ body,
 }
 .markdown-body hr {
   border: none;
-  border-top: 1px solid #3a3a3a;
+  border-top: 1px solid var(--ao-border);
   margin: 0.75em 0;
 }
 .markdown-body strong {
-  color: #fff;
+  color: var(--ao-text-bright);
 }
 
-/* Syntax highlighting (highlight.js dark) */
+/* Syntax highlighting (dark-only — code blocks always use dark bg) */
 .hljs {
   color: #d4d4d4;
 }

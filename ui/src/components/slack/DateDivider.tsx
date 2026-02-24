@@ -1,5 +1,4 @@
 import { Box, Text, Group } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
 
 function formatDate(ts: number): string {
   const d = new Date(ts);
@@ -18,11 +17,15 @@ function formatDate(ts: number): string {
 export function DateDivider({ timestamp }: { timestamp: number }) {
   return (
     <Group gap="xs" px="md" py="sm" justify="center">
-      <Box style={{ flex: 1, height: 1, backgroundColor: slack.divider }} />
-      <Text size="xs" fw={600} style={{ color: slack.textSecondary }}>
+      <Box
+        style={{ flex: 1, height: 1, backgroundColor: "var(--ao-border)" }}
+      />
+      <Text size="xs" fw={600} style={{ color: "var(--ao-text-secondary)" }}>
         {formatDate(timestamp)}
       </Text>
-      <Box style={{ flex: 1, height: 1, backgroundColor: slack.divider }} />
+      <Box
+        style={{ flex: 1, height: 1, backgroundColor: "var(--ao-border)" }}
+      />
     </Group>
   );
 }

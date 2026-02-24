@@ -11,7 +11,6 @@ import { debugCaptureStore } from "../../store/debug-capture-store.js";
 import { isChatRelevantSSE } from "../slack/debug-helpers.js";
 import { extractText, isDmSessionForAgent } from "../slack/channel-helpers.js";
 import { useSchedulerAction } from "../../api/use-api-mutations.js";
-import { slack } from "../../theme/slack-theme.js";
 import { SlackSidebar } from "../slack/SlackSidebar.js";
 import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
 import { AppStateContext } from "./app-state-context.js";
@@ -149,14 +148,14 @@ export function RootLayout() {
           style={{
             height: "100vh",
             display: "flex",
-            backgroundColor: slack.mainBg,
+            backgroundColor: "var(--ao-bg-body)",
           }}
         >
           <Box
             style={{
               width: 260,
               flexShrink: 0,
-              borderRight: `1px solid ${slack.borderColor}`,
+              borderRight: `1px solid var(--ao-border)`,
             }}
           >
             <SlackSidebar

@@ -2,7 +2,7 @@ import { memo, useState } from "react";
 import { Box, Text, Group, Badge, ActionIcon, Divider } from "@mantine/core";
 import { IconCopy } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
-import { slack } from "../../theme/slack-theme.js";
+
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import {
   formatTs,
@@ -41,14 +41,14 @@ export const DebugEventRow = memo(function DebugEventRow({
       mb="sm"
       p="sm"
       style={{
-        border: `1px solid ${slack.borderColor}`,
+        border: `1px solid var(--ao-border)`,
         borderRadius: 8,
-        backgroundColor: slack.sidebarBg,
+        backgroundColor: "var(--ao-bg-sidebar)",
       }}
     >
       <Group justify="space-between" align="flex-start" wrap="nowrap">
         <Group gap={6} wrap="wrap">
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             {formatTs(row.timestamp)}
           </Text>
           {showAgent && row.agent && (
@@ -81,32 +81,32 @@ export const DebugEventRow = memo(function DebugEventRow({
             void copyRaw(row);
           }}
         >
-          <IconCopy size={14} color={slack.textMuted} />
+          <IconCopy size={14} color={"var(--ao-text-muted)"} />
         </ActionIcon>
       </Group>
 
       <Text
         size="sm"
         mt={6}
-        style={{ color: slack.textPrimary, whiteSpace: "pre-wrap" }}
+        style={{ color: "var(--ao-text-primary)", whiteSpace: "pre-wrap" }}
       >
         {row.summary}
       </Text>
 
       <Group gap={10} mt={6} wrap="wrap">
         {row.sessionKey && (
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             session: {row.sessionKey}
           </Text>
         )}
         {row.requestId && (
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             request: {row.requestId}
           </Text>
         )}
       </Group>
 
-      <Divider my={8} color={slack.borderColor} />
+      <Divider my={8} color={"var(--ao-border)"} />
 
       <details
         onToggle={(e) =>
@@ -114,7 +114,11 @@ export const DebugEventRow = memo(function DebugEventRow({
         }
       >
         <summary
-          style={{ color: slack.textMuted, cursor: "pointer", fontSize: 12 }}
+          style={{
+            color: "var(--ao-text-muted)",
+            cursor: "pointer",
+            fontSize: 12,
+          }}
         >
           Raw event
         </summary>
@@ -125,9 +129,9 @@ export const DebugEventRow = memo(function DebugEventRow({
               padding: 8,
               borderRadius: 6,
               overflowX: "auto",
-              border: `1px solid ${slack.borderColor}`,
-              backgroundColor: slack.hoverActionsBg,
-              color: slack.textSecondary,
+              border: `1px solid var(--ao-border)`,
+              backgroundColor: "var(--ao-bg-elevated)",
+              color: "var(--ao-text-secondary)",
               fontSize: 12,
               lineHeight: 1.35,
             }}

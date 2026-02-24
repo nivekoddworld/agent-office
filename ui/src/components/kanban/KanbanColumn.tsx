@@ -1,5 +1,4 @@
 import { Box, Text, Badge, Stack, ScrollArea } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
 import { TaskCard } from "./TaskCard.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
@@ -12,13 +11,13 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   cancelled: "Cancelled",
 };
 
-const STATUS_COLORS: Record<TaskStatus, string> = {
-  backlog: slack.textMuted,
-  todo: slack.accentBlue,
-  in_progress: slack.accentYellow,
-  review: slack.accentPurple,
-  done: slack.accentGreen,
-  cancelled: slack.accentRed,
+const STATUS_GRADIENTS: Record<TaskStatus, string> = {
+  backlog: "linear-gradient(90deg, #a8a29e, #78716c)",
+  todo: "linear-gradient(90deg, #228be6, #7048e8)",
+  in_progress: "linear-gradient(90deg, #e67700, #e8764b)",
+  review: "linear-gradient(90deg, #7048e8, #be4bdb)",
+  done: "linear-gradient(90deg, #2f9e44, #12b886)",
+  cancelled: "linear-gradient(90deg, #e03131, #c92a2a)",
 };
 
 interface KanbanColumnProps {
@@ -43,23 +42,26 @@ export function KanbanColumn({
         height: "100%",
       }}
     >
-      <Box
-        px="sm"
-        py={8}
-        style={{
-          borderBottom: `2px solid ${STATUS_COLORS[status]}`,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          flexShrink: 0,
-        }}
-      >
-        <Text size="sm" fw={700} style={{ color: slack.textPrimary }}>
-          {STATUS_LABELS[status]}
-        </Text>
-        <Badge size="sm" variant="filled" color="gray" circle>
-          {tasks.length}
-        </Badge>
+      <Box style={{ flexShrink: 0 }}>
+        <Box
+          px="sm"
+          py={8}
+          style={{ display: "flex", alignItems: "center", gap: 8 }}
+        >
+          <Text size="sm" fw={700} style={{ color: "var(--ao-text-primary)" }}>
+            {STATUS_LABELS[status]}
+          </Text>
+          <Badge size="sm" variant="filled" color="gray" circle>
+            {tasks.length}
+          </Badge>
+        </Box>
+        <Box
+          style={{
+            height: 3,
+            borderRadius: 3,
+            background: STATUS_GRADIENTS[status],
+          }}
+        />
       </Box>
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
@@ -69,7 +71,7 @@ export function KanbanColumn({
               size="xs"
               ta="center"
               py="lg"
-              style={{ color: slack.textMuted }}
+              style={{ color: "var(--ao-text-muted)" }}
             >
               No tasks
             </Text>

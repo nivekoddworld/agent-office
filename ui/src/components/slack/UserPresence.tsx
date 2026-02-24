@@ -1,5 +1,4 @@
 import { Box, Tooltip } from "@mantine/core";
-import { slack } from "../../theme/slack-theme.js";
 import {
   useAgentActivityFor,
   type AgentActivity,
@@ -19,9 +18,9 @@ function activityLabel(activity: AgentActivity, status: string): string {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: slack.onlineGreen,
-  running: slack.accentBlue,
-  dead: slack.textMuted,
+  idle: "var(--ao-online-green)",
+  running: "var(--ao-accent-blue)",
+  dead: "var(--ao-text-muted)",
 };
 
 export function UserPresence({
@@ -35,9 +34,9 @@ export function UserPresence({
   const isRunningTool = activity.kind === "tool";
   const isThinking = activity.kind === "thinking";
 
-  let color = STATUS_COLORS[status] ?? slack.textMuted;
-  if (isRunningTool) color = slack.accentYellow;
-  else if (isThinking) color = slack.accentBlue;
+  let color = STATUS_COLORS[status] ?? "var(--ao-text-muted)";
+  if (isRunningTool) color = "var(--ao-accent-yellow)";
+  else if (isThinking) color = "var(--ao-accent-blue)";
 
   const label = activityLabel(activity, status);
   const pulsing = isThinking || isRunningTool;
@@ -50,7 +49,7 @@ export function UserPresence({
           height: size,
           borderRadius: "50%",
           backgroundColor: isOnline ? color : "transparent",
-          border: isOnline ? "none" : `1.5px solid ${slack.textMuted}`,
+          border: isOnline ? "none" : `1.5px solid var(--ao-text-muted)`,
           flexShrink: 0,
           animation: pulsing ? "pulse 1.5s ease-in-out infinite" : undefined,
         }}

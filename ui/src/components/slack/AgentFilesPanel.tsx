@@ -30,7 +30,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { slack } from "../../theme/slack-theme.js";
+
 import { apiFetch } from "../../api/client.js";
 
 interface FileEntry {
@@ -104,7 +104,7 @@ function getFileIcon(name: string) {
   const size = 16;
   switch (ext) {
     case "md":
-      return <IconMarkdown size={size} color={slack.accentBlue} />;
+      return <IconMarkdown size={size} color={"var(--ao-accent-blue)"} />;
     case "ts":
     case "tsx":
       return <IconCode size={size} color="#3178c6" />;
@@ -119,18 +119,18 @@ function getFileIcon(name: string) {
       return <IconCode size={size} color="#264de4" />;
     case "json":
     case "jsonl":
-      return <IconBraces size={size} color={slack.accentYellow} />;
+      return <IconBraces size={size} color={"var(--ao-accent-yellow)"} />;
     case "py":
       return <IconBrandPython size={size} color="#3776ab" />;
     case "sh":
     case "bash":
     case "zsh":
-      return <IconTerminal size={size} color={slack.accentGreen} />;
+      return <IconTerminal size={size} color={"var(--ao-accent-green)"} />;
     case "yaml":
     case "yml":
-      return <IconFile size={size} color={slack.accentPurple} />;
+      return <IconFile size={size} color={"var(--ao-accent-purple)"} />;
     default:
-      return <IconFile size={size} color={slack.textMuted} />;
+      return <IconFile size={size} color={"var(--ao-text-muted)"} />;
   }
 }
 
@@ -177,7 +177,8 @@ function FileTreeItem({
           py={4}
           style={{ borderRadius: 4 }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = slack.sidebarHover;
+            e.currentTarget.style.backgroundColor =
+              "var(--ao-bg-sidebar-hover)";
             setHovered(true);
           }}
           onMouseLeave={(e) => {
@@ -188,16 +189,20 @@ function FileTreeItem({
         >
           <Group gap={4} wrap="nowrap" style={{ paddingLeft: depth * 16 }}>
             {expanded ? (
-              <IconChevronDown size={14} color={slack.textMuted} />
+              <IconChevronDown size={14} color={"var(--ao-text-muted)"} />
             ) : (
-              <IconChevronRight size={14} color={slack.textMuted} />
+              <IconChevronRight size={14} color={"var(--ao-text-muted)"} />
             )}
             {expanded ? (
-              <IconFolderOpen size={16} color={slack.accentYellow} />
+              <IconFolderOpen size={16} color={"var(--ao-accent-yellow)"} />
             ) : (
-              <IconFolder size={16} color={slack.accentYellow} />
+              <IconFolder size={16} color={"var(--ao-accent-yellow)"} />
             )}
-            <Text size="sm" style={{ color: slack.textPrimary }} truncate>
+            <Text
+              size="sm"
+              style={{ color: "var(--ao-text-primary)" }}
+              truncate
+            >
               {node.name}
             </Text>
             <Group
@@ -220,7 +225,7 @@ function FileTreeItem({
                   </ActionIcon>
                 </Tooltip>
               )}
-              <Text size="xs" style={{ color: slack.textMuted }}>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
                 {node.children.length} item
                 {node.children.length !== 1 ? "s" : ""}
               </Text>
@@ -249,7 +254,7 @@ function FileTreeItem({
       py={4}
       style={{ borderRadius: 4 }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.backgroundColor = slack.sidebarHover;
+        e.currentTarget.style.backgroundColor = "var(--ao-bg-sidebar-hover)";
         setHovered(true);
       }}
       onMouseLeave={(e) => {
@@ -260,7 +265,7 @@ function FileTreeItem({
     >
       <Group gap={6} wrap="nowrap" style={{ paddingLeft: depth * 16 + 18 }}>
         {getFileIcon(node.name)}
-        <Text size="sm" style={{ color: slack.textPrimary }} truncate>
+        <Text size="sm" style={{ color: "var(--ao-text-primary)" }} truncate>
           {node.name}
         </Text>
         <Group
@@ -283,10 +288,10 @@ function FileTreeItem({
               </ActionIcon>
             </Tooltip>
           )}
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             {formatSize(node.size)}
           </Text>
-          <Text size="xs" style={{ color: slack.textMuted }}>
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
             {formatDate(node.modifiedAt)}
           </Text>
         </Group>
@@ -333,15 +338,15 @@ function FileViewer({
       overlayProps={{ backgroundOpacity: 0.5, blur: 2 }}
       styles={{
         content: {
-          backgroundColor: slack.mainBg,
-          border: `1px solid ${slack.borderColor}`,
+          backgroundColor: "var(--ao-bg-body)",
+          border: `1px solid var(--ao-border)`,
         },
       }}
     >
       <Box
         px="md"
         py="sm"
-        style={{ borderBottom: `1px solid ${slack.borderColor}` }}
+        style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
         <Group justify="space-between" wrap="nowrap">
           <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
@@ -354,7 +359,12 @@ function FileViewer({
               <IconArrowLeft size={16} />
             </ActionIcon>
             {getFileIcon(filePath.split("/").pop() ?? "")}
-            <Text size="sm" fw={600} style={{ color: "#fff" }} truncate>
+            <Text
+              size="sm"
+              fw={600}
+              style={{ color: "var(--ao-text-bright)" }}
+              truncate
+            >
               {filePath}
             </Text>
             {data && (
@@ -403,7 +413,7 @@ function FileViewer({
           </Box>
         )}
         {error && (
-          <Text size="sm" style={{ color: slack.accentRed }}>
+          <Text size="sm" style={{ color: "var(--ao-accent-red)" }}>
             Failed to load file: {(error as Error).message}
           </Text>
         )}
@@ -414,7 +424,7 @@ function FileViewer({
               fontFamily: "monospace",
               fontSize: 13,
               lineHeight: 1.6,
-              color: slack.textPrimary,
+              color: "var(--ao-text-primary)",
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
               margin: 0,
@@ -494,13 +504,13 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
         px="md"
         py="xs"
         style={{
-          borderBottom: `1px solid ${slack.borderColor}`,
+          borderBottom: `1px solid var(--ao-border)`,
           flexShrink: 0,
         }}
       >
         <Group justify="space-between">
           <Group gap={8}>
-            <Text size="sm" fw={600} style={{ color: "#fff" }}>
+            <Text size="sm" fw={600} style={{ color: "var(--ao-text-bright)" }}>
               Workspace Files
             </Text>
             <Badge size="xs" variant="light" color="gray">
@@ -530,18 +540,18 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
         {isLoading && (
           <Box style={{ textAlign: "center" }} py="xl">
             <Loader size="sm" />
-            <Text size="sm" style={{ color: slack.textMuted }} mt="xs">
+            <Text size="sm" style={{ color: "var(--ao-text-muted)" }} mt="xs">
               Loading files...
             </Text>
           </Box>
         )}
         {!isLoading && tree.length === 0 && (
           <Stack align="center" py="xl" gap="xs">
-            <IconFolder size={40} color={slack.textMuted} />
-            <Text size="sm" style={{ color: slack.textMuted }}>
+            <IconFolder size={40} color={"var(--ao-text-muted)"} />
+            <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
               No files in workspace yet
             </Text>
-            <Text size="xs" style={{ color: slack.textMuted }}>
+            <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
               Files created by this agent will appear here.
             </Text>
           </Stack>
@@ -577,13 +587,13 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
         overlayProps={{ backgroundOpacity: 0.5, blur: 2 }}
         styles={{
           content: {
-            backgroundColor: slack.mainBg,
-            border: `1px solid ${slack.borderColor}`,
+            backgroundColor: "var(--ao-bg-body)",
+            border: `1px solid var(--ao-border)`,
           },
         }}
       >
         <Stack gap="md" p="md">
-          <Text size="sm" style={{ color: slack.textPrimary }}>
+          <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
             Delete{" "}
             <Text span fw={600}>
               {deleteTarget?.name}
@@ -596,7 +606,7 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
               py={6}
               style={{
                 borderRadius: 4,
-                color: slack.textMuted,
+                color: "var(--ao-text-muted)",
                 fontSize: 13,
               }}
               onClick={() => setDeleteTarget(null)}
@@ -608,8 +618,8 @@ export function AgentFilesPanel({ agentName }: AgentFilesPanelProps) {
               py={6}
               style={{
                 borderRadius: 4,
-                backgroundColor: slack.accentRed,
-                color: "#fff",
+                backgroundColor: "var(--ao-accent-red)",
+                color: "var(--ao-text-bright)",
                 fontSize: 13,
                 opacity: deleting ? 0.6 : 1,
               }}
