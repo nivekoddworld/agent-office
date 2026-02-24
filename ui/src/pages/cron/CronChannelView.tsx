@@ -9,22 +9,23 @@ import {
 } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
-import { ChannelHeader } from "./ChannelHeader.js";
-import { CronJobRow } from "../cron/CronJobRow.js";
-import { CronAddForm } from "../cron/CronAddForm.js";
-import type { CronJobEntry } from "../../api/types.js";
+import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
+import { CronJobRow } from "../../components/cron/CronJobRow.js";
+import { CronAddForm } from "../../components/cron/CronAddForm.js";
+import { useAppState } from "../../components/layout/app-state-context.js";
 
-interface CronChannelViewProps {
-  cronJobs: CronJobEntry[];
-  agentNames: string[];
-  channels?: string[];
-}
+export function CronChannelView() {
+  const state = useAppState();
+  const cronJobs = state.cronJobs;
+  const agentNames = useMemo(
+    () => state.agents.map((a) => a.name),
+    [state.agents],
+  );
+  const channels = useMemo(
+    () => Object.keys(state.channels ?? {}),
+    [state.channels],
+  );
 
-export function CronChannelView({
-  cronJobs,
-  agentNames,
-  channels = [],
-}: CronChannelViewProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [filter, setFilter] = useState("all");
 

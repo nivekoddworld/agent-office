@@ -29,13 +29,9 @@ import {
   useOfficeApply,
   useOfficeValidate,
 } from "../../api/use-api-mutations.js";
-import type { BootstrapState } from "../../api/types.js";
-import { ChannelManager } from "./ChannelManager.js";
-import { CollaborationPolicySection } from "./CollaborationPolicySection.js";
-
-interface SettingsPanelProps {
-  state: BootstrapState;
-}
+import { ChannelManager } from "../../components/slack/ChannelManager.js";
+import { CollaborationPolicySection } from "../../components/slack/CollaborationPolicySection.js";
+import { useAppState } from "../../components/layout/app-state-context.js";
 
 function InfoRow({
   label,
@@ -97,7 +93,8 @@ function SectionHeader({
   );
 }
 
-export function SettingsPanel({ state }: SettingsPanelProps) {
+export function SettingsPanel() {
+  const state = useAppState();
   const schedulerAction = useSchedulerAction();
   const officeApply = useOfficeApply();
   const officeValidate = useOfficeValidate();

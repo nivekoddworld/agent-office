@@ -1,7 +1,7 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { Box, Text, Group, Badge, Button } from "@mantine/core";
 import { slack } from "../../theme/slack-theme.js";
-import { agentHue } from "./channel-helpers.js";
+import { agentHue } from "../../components/slack/channel-helpers.js";
 import {
   filterContextString,
   PRESET_LABELS,
@@ -9,16 +9,13 @@ import {
   type SourceFilter,
   type KindFilter,
   type Preset,
-} from "./debug-helpers.js";
+} from "../../components/slack/debug-helpers.js";
 import {
   useDebugCaptureStore,
   debugCaptureStore,
 } from "../../store/debug-capture-store.js";
-import { DebugEventRow } from "./DebugEventRow.js";
-
-interface OfficeDebugPanelProps {
-  agentNames: string[];
-}
+import { DebugEventRow } from "../../components/slack/DebugEventRow.js";
+import { useAppState } from "../../components/layout/app-state-context.js";
 
 interface DebugSelectOption {
   value: string;
@@ -73,7 +70,13 @@ function downloadJsonl(rows: DebugRowData[], context: string) {
   URL.revokeObjectURL(url);
 }
 
-export function OfficeDebugPanel({ agentNames }: OfficeDebugPanelProps) {
+export function OfficeDebugPanel() {
+  const state = useAppState();
+  const agentNames = useMemo(
+    () => state.agents.map((a) => a.name),
+    [state.agents],
+  );
+
   const capture = useDebugCaptureStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastCountRef = useRef(0);
@@ -83,8 +86,6 @@ export function OfficeDebugPanel({ agentNames }: OfficeDebugPanelProps) {
   const [kindFilter, setKindFilter] = useState<KindFilter>("all");
   const [activePreset, setActivePreset] = useState<Preset | null>("all");
   const [groupByAgent, setGroupByAgent] = useState(false);
-
-  // Capture continues across tab switches — store is global singleton.
 
   const displayRows = useMemo(
     () =>

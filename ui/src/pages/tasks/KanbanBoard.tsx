@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { Box, Group, Text, SegmentedControl } from "@mantine/core";
 import { slack } from "../../theme/slack-theme.js";
-import { ChannelHeader } from "../slack/ChannelHeader.js";
-import { KanbanColumn } from "./KanbanColumn.js";
-import { TaskDetailModal } from "./TaskDetailModal.js";
+import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
+import { KanbanColumn } from "../../components/kanban/KanbanColumn.js";
+import { TaskDetailModal } from "../../components/kanban/TaskDetailModal.js";
+import { useAppState } from "../../components/layout/app-state-context.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const VISIBLE_COLUMNS: TaskStatus[] = [
@@ -14,19 +15,21 @@ const VISIBLE_COLUMNS: TaskStatus[] = [
   "done",
 ];
 
-interface KanbanBoardProps {
-  tasks: Task[];
-  agentNames: string[];
-}
+export function KanbanBoard() {
+  const state = useAppState();
+  const agentNames = useMemo(
+    () => state.agents.map((a) => a.name),
+    [state.agents],
+  );
 
-export function KanbanBoard({ tasks, agentNames }: KanbanBoardProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filter, setFilter] = useState("all");
 
   const filtered = useMemo(() => {
+    const tasks = state.tasks ?? [];
     if (filter === "all") return tasks;
     return tasks.filter((t) => t.assignee === filter);
-  }, [tasks, filter]);
+  }, [state.tasks, filter]);
 
   const board = useMemo(() => {
     const b: Record<TaskStatus, Task[]> = {

@@ -1,21 +1,22 @@
+import { useCallback } from "react";
 import { Box, Group, Text, useMantineTheme } from "@mantine/core";
 import { ReactFlowProvider } from "@xyflow/react";
-import { OrgChart } from "./OrgChart.js";
-import type { AgentInfo, AgentHierarchy } from "../../api/types.js";
+import { OrgChart } from "../../components/org-chart/OrgChart.js";
+import { useAppState } from "../../components/layout/app-state-context.js";
+import { useAppActions } from "../../components/layout/app-actions-context.js";
 
-interface OrgChartPanelProps {
-  agents: AgentInfo[];
-  hierarchy: Record<string, AgentHierarchy>;
-  onSelectAgent: (name: string | null) => void;
-}
-
-export function OrgChartPanel({
-  agents,
-  hierarchy,
-  onSelectAgent,
-}: OrgChartPanelProps) {
+export function OrgChartPanel() {
+  const state = useAppState();
+  const { openAgentProfile } = useAppActions();
   const theme = useMantineTheme();
   const borderColor = theme.colors.dark[6];
+
+  const handleSelectAgent = useCallback(
+    (name: string | null) => {
+      if (name) openAgentProfile(name);
+    },
+    [openAgentProfile],
+  );
 
   return (
     <Box style={{ height: "100%", display: "flex", flexDirection: "column" }}>
@@ -31,9 +32,9 @@ export function OrgChartPanel({
       <Box style={{ flex: 1, minWidth: 0 }}>
         <ReactFlowProvider>
           <OrgChart
-            agents={agents}
-            hierarchy={hierarchy}
-            onSelectAgent={onSelectAgent}
+            agents={state.agents}
+            hierarchy={state.hierarchy}
+            onSelectAgent={handleSelectAgent}
           />
         </ReactFlowProvider>
       </Box>

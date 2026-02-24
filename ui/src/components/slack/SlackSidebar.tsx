@@ -27,6 +27,7 @@ import {
   IconClock,
 } from "@tabler/icons-react";
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { slack } from "../../theme/slack-theme.js";
@@ -34,29 +35,14 @@ import { SidebarSection } from "./SidebarSection.js";
 import { UserPresence } from "./UserPresence.js";
 import { apiFetch, ApiError } from "../../api/client.js";
 import type { AgentInfo } from "../../api/types.js";
-import type { ChannelId } from "./channel-types.js";
-
-export type { ChannelId } from "./channel-types.js";
 
 interface SlackSidebarProps {
   officeName: string;
   agents: AgentInfo[];
-  activeChannel: ChannelId;
-  onSelectChannel: (ch: ChannelId) => void;
   schedulerRunning: boolean;
   onToggleScheduler?: () => void;
   unreadCounts?: Record<string, number>;
   channels?: Record<string, { members: string[]; description?: string }>;
-  onChannelCreated?: (name: string) => void;
-}
-
-function isActive(a: ChannelId, b: ChannelId): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.kind === "conversation" && b.kind === "conversation")
-    return a.name === b.name;
-  if (a.kind === "dm" && b.kind === "dm") return a.agentName === b.agentName;
-  if (a.kind === "system" && b.kind === "system") return a.name === b.name;
-  return false;
 }
 
 interface SidebarItemProps {
@@ -114,14 +100,13 @@ function SidebarItem({
 export function SlackSidebar({
   officeName,
   agents,
-  activeChannel,
-  onSelectChannel,
   schedulerRunning,
   onToggleScheduler,
   unreadCounts = {},
   channels = {},
-  onChannelCreated,
 }: SlackSidebarProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const runningCount = agents.filter((a) => a.status === "running").length;
   const [createOpen, setCreateOpen] = useState(false);
@@ -130,6 +115,8 @@ export function SlackSidebar({
   const [newDescription, setNewDescription] = useState("");
   const [creating, setCreating] = useState(false);
   const memberOptions = agents.map((a) => ({ value: a.name, label: a.name }));
+
+  const isActive = (path: string) => location.pathname === path;
 
   const handleCreateChannel = async () => {
     setCreating(true);
@@ -148,7 +135,7 @@ export function SlackSidebar({
       setNewMembers([]);
       setNewDescription("");
       await queryClient.invalidateQueries({ queryKey: ["state"] });
-      onChannelCreated?.(createdName);
+      navigate(`/channels/${encodeURIComponent(createdName)}`);
     } catch (err) {
       notifications.show({
         title: "Create failed",
@@ -226,20 +213,14 @@ export function SlackSidebar({
             <SidebarItem
               icon={<IconLayoutKanban size={15} color={slack.accentBlue} />}
               label="Tasks"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "tasks",
-              })}
-              onClick={() => onSelectChannel({ kind: "system", name: "tasks" })}
+              active={isActive("/tasks")}
+              onClick={() => navigate("/tasks")}
             />
             <SidebarItem
               icon={<IconClock size={15} color={slack.accentBlue} />}
               label="Cron"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "cron",
-              })}
-              onClick={() => onSelectChannel({ kind: "system", name: "cron" })}
+              active={isActive("/cron")}
+              onClick={() => navigate("/cron")}
             />
           </Box>
 
@@ -269,13 +250,8 @@ export function SlackSidebar({
                 key={ch}
                 icon={<IconHash size={15} color={slack.channelHashColor} />}
                 label={ch}
-                active={isActive(activeChannel, {
-                  kind: "conversation",
-                  name: ch,
-                })}
-                onClick={() =>
-                  onSelectChannel({ kind: "conversation", name: ch })
-                }
+                active={isActive(`/channels/${encodeURIComponent(ch)}`)}
+                onClick={() => navigate(`/channels/${encodeURIComponent(ch)}`)}
               />
             ))}
           </SidebarSection>
@@ -309,13 +285,10 @@ export function SlackSidebar({
                     />
                   }
                   label={agent.name}
-                  active={isActive(activeChannel, {
-                    kind: "dm",
-                    agentName: agent.name,
-                  })}
+                  active={isActive(`/dm/${encodeURIComponent(agent.name)}`)}
                   bold={unread > 0}
                   onClick={() =>
-                    onSelectChannel({ kind: "dm", agentName: agent.name })
+                    navigate(`/dm/${encodeURIComponent(agent.name)}`)
                   }
                   rightSection={
                     unread > 0 ? (
@@ -341,13 +314,8 @@ export function SlackSidebar({
             <SidebarItem
               icon={<IconSitemap size={15} color={slack.sidebarText} />}
               label="Org Chart"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "org-chart",
-              })}
-              onClick={() =>
-                onSelectChannel({ kind: "system", name: "org-chart" })
-              }
+              active={isActive("/org-chart")}
+              onClick={() => navigate("/org-chart")}
             />
           </SidebarSection>
 
@@ -356,42 +324,26 @@ export function SlackSidebar({
             <SidebarItem
               icon={<IconBug size={15} color={slack.sidebarText} />}
               label="Debug Logs"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "debug",
-              })}
-              onClick={() => onSelectChannel({ kind: "system", name: "debug" })}
+              active={isActive("/debug")}
+              onClick={() => navigate("/debug")}
             />
             <SidebarItem
               icon={<IconCoin size={15} color={slack.sidebarText} />}
               label="Cost Dashboard"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "cost",
-              })}
-              onClick={() => onSelectChannel({ kind: "system", name: "cost" })}
+              active={isActive("/cost")}
+              onClick={() => navigate("/cost")}
             />
             <SidebarItem
               icon={<IconHeartHandshake size={15} color={slack.sidebarText} />}
               label="Collaboration"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "collaboration",
-              })}
-              onClick={() =>
-                onSelectChannel({ kind: "system", name: "collaboration" })
-              }
+              active={isActive("/collaboration")}
+              onClick={() => navigate("/collaboration")}
             />
             <SidebarItem
               icon={<IconSettings size={15} color={slack.sidebarText} />}
               label="Settings"
-              active={isActive(activeChannel, {
-                kind: "system",
-                name: "settings",
-              })}
-              onClick={() =>
-                onSelectChannel({ kind: "system", name: "settings" })
-              }
+              active={isActive("/settings")}
+              onClick={() => navigate("/settings")}
             />
           </SidebarSection>
         </Box>

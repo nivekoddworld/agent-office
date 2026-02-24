@@ -10,7 +10,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../../api/client.js";
 import { slack } from "../../theme/slack-theme.js";
-import { CostChart } from "../cost/CostChart.js";
+import { CostChart } from "../../components/cost/CostChart.js";
 import type { CostResponse } from "../../api/types.js";
 
 export function CostPanel() {
