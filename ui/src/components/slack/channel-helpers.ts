@@ -50,10 +50,12 @@ export function eventToMessages(
   isDefaultChannel = false,
   allowedRequestIds?: Set<string>,
   excludedRequestIds?: Set<string>,
+  since = 0,
 ): SlackMessageData[] {
   const msgs: SlackMessageData[] = [];
 
   for (const event of events) {
+    if (since > 0 && event.timestamp < since) continue;
     const d = event.data as Record<string, unknown>;
     const type = (d.type as string) ?? event.type;
     const agent = (d.agent as string) ?? "";

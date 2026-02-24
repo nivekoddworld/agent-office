@@ -16,7 +16,11 @@ import type {
   WorkspaceConfig,
 } from "./types.js";
 import { sessionKey } from "./messages/session-key.js";
-import { appendSession, sessionFilename } from "./sessions/session-writer.js";
+import {
+  appendSession,
+  sessionFilename,
+  type SessionEntry,
+} from "./sessions/session-writer.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
@@ -85,33 +89,52 @@ export class Workspace {
       (name) => this.handleStuck(name),
       config.watchdog,
     );
-    const cronChannelFanout: CronChannelFanout = (channelName, message) => {
+    const cronChannelFanout: CronChannelFanout = (
+      channelName,
+      message,
+      options,
+    ) => {
       const cfg = this.office.channels.get(channelName);
       if (!cfg) return;
       const sk = sessionKey("channel", channelName);
       const filename = sessionFilename(sk);
-      const entry = {
+      const entry: SessionEntry = {
         ts: new Date().toISOString(),
-        role: "user" as const,
-        from: "__cron__",
+        role: "assistant",
+        from: options?.sender ?? "__cron__",
         text: message,
+        kind: options?.kind,
+        jobName: options?.jobName,
       };
       for (const member of cfg.members) {
         appendSession(this.office.dir, member, filename, entry);
       }
     };
-    this.cron = new CronService(
-      this.bus,
-      this.agents,
-      new CronStore(join(this.office.dir, "cron")),
-      cronChannelFanout,
-    );
     this.tasks = new TaskService(
       new TaskStore(join(this.office.dir, "tasks")),
       this.bus,
       this.office.dir,
       (name) => this.agents.has(name),
     );
+    this.cron = new CronService(
+      this.bus,
+      this.agents,
+      new CronStore(join(this.office.dir, "cron")),
+      cronChannelFanout,
+      this.tasks,
+    );
+    this.tasks.setDoneHook((task) => {
+      this.cron.handleTaskDone(task);
+      if (!task.reportChannel) return;
+      if (!this.office.channels.has(task.reportChannel)) return;
+      const message = task.result?.trim()
+        ? task.result.trim()
+        : `Completed task: ${task.title}`;
+      cronChannelFanout(task.reportChannel, message, {
+        sender: task.assignee,
+        kind: "task_report",
+      });
+    });
 
     this.obligationStore = createObligationStore(
       join(this.office.dir, "obligations"),
@@ -165,6 +188,15 @@ export class Workspace {
       });
       this.hostApi.setTaskDeps({ taskService: this.tasks });
       this.sandboxProvider = new DockerProvider(this.hostApi, this.hostApiPort);
+    }
+  }
+
+  setTaskStateChangedCallback(cb: () => void): void {
+    // Register on TaskService directly so in-process agent tool calls also broadcast.
+    this.tasks.setStateChangedCallback(cb);
+    // Also register via hostApi for docker sandbox mode (agents running out-of-process).
+    if (this.hostApi) {
+      this.hostApi.setTaskDeps({ taskService: this.tasks, onStateChanged: cb });
     }
   }
 

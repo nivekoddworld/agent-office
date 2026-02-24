@@ -31,7 +31,13 @@ export interface AgentYamlEntry {
     string,
     {
       schedule: string;
-      message: string;
+      tasks: Array<{
+        title: string;
+        description?: string;
+        assignee: string;
+        parent_id?: string;
+        report_channel?: string;
+      }>;
       timezone?: string;
       catch_up?: string;
       enabled?: boolean;
@@ -100,7 +106,13 @@ export function extractCronJobs(
       if (raw.enabled === false) continue;
       jobs[name] = {
         schedule: raw.schedule,
-        message: raw.message,
+        tasks: (Array.isArray(raw.tasks) ? raw.tasks : []).map((t) => ({
+          title: t.title,
+          description: t.description,
+          assignee: t.assignee,
+          ...(t.parent_id ? { parentId: t.parent_id } : {}),
+          ...(t.report_channel ? { reportChannel: t.report_channel } : {}),
+        })),
         timezone: raw.timezone,
         catchUp: (raw.catch_up as "skip" | "once") ?? "skip",
         enabled: raw.enabled ?? true,
@@ -120,14 +132,19 @@ export function extractOfficeCronJobs(
   for (const [name, raw] of Object.entries(cron)) {
     if (!raw || typeof raw !== "object") continue;
     if (raw.enabled === false) continue;
-    if (!Array.isArray(raw.targets) || raw.targets.length === 0) continue;
+    if (!Array.isArray(raw.tasks) || raw.tasks.length === 0) continue;
     result[name] = {
       schedule: raw.schedule,
-      message: raw.message,
+      tasks: raw.tasks.map((t) => ({
+        title: t.title,
+        description: t.description,
+        assignee: t.assignee,
+        ...(t.parent_id ? { parentId: t.parent_id } : {}),
+        ...(t.report_channel ? { reportChannel: t.report_channel } : {}),
+      })),
       timezone: raw.timezone,
       catchUp: (raw.catch_up as "skip" | "once") ?? "skip",
       enabled: raw.enabled ?? true,
-      targets: raw.targets,
       reportChannel: raw.report_channel,
     };
   }

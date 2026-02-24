@@ -12,6 +12,8 @@ export interface SessionEntry {
   role: "user" | "assistant";
   from: string;
   text: string;
+  kind?: string;
+  jobName?: string;
 }
 
 const MAX_LINES = 500;

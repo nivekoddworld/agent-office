@@ -1,9 +1,21 @@
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
-import { sessionKey } from "../messages/session-key.js";
+import type { TaskService } from "../tasks/task-service.js";
+import { Priority } from "../types.js";
+
+/** Options for a channel fanout message. */
+export interface CronChannelFanoutOptions {
+  sender: string;
+  kind?: string;
+  jobName?: string;
+}
 
 /** Callback to persist a cron trigger to a report channel's JSONL session. */
-export type CronChannelFanout = (channelName: string, message: string) => void;
+export type CronChannelFanout = (
+  channelName: string,
+  message: string,
+  options?: CronChannelFanoutOptions,
+) => void;
 import type {
   CronJobConfig,
   CronJobState,
@@ -12,7 +24,6 @@ import type {
 } from "./types.js";
 import type { CronStore } from "./cron-store.js";
 import { nextFireTime, prevFireTime } from "./cron-parser.js";
-import { Priority } from "../types.js";
 
 const MAX_TIMEOUT = 2_147_483_647; // 2^31 - 1
 const DISPATCH_CAP = 60;
@@ -35,29 +46,39 @@ interface ActiveOfficeJob {
 
 const OFFICE_KEY_PREFIX = "__office__";
 
+interface CompletionTracker {
+  jobName: string;
+  reportChannel: string;
+  taskTitle: string;
+  assignee: string;
+}
+
 /**
  * CronService — manages per-agent cron jobs with setTimeout-based timers.
  * Follows Watchdog lifecycle: constructor → start → stop.
  */
 export class CronService {
   private bus: MessageBus;
-  private agents: Map<string, AgentHandle>;
   private store: CronStore;
   private channelFanout: CronChannelFanout | undefined;
+  private taskService: TaskService | undefined;
   private jobs = new Map<string, ActiveJob>(); // key: "agent:job"
   private officeJobs = new Map<string, ActiveOfficeJob>(); // key: jobName
   private dispatchLog: number[] = []; // timestamps of recent dispatches
+  /** Tracks the final task ID of each cron job chain for completion reporting. */
+  private completionTrackers = new Map<string, CompletionTracker>(); // key: last taskId
 
   constructor(
     bus: MessageBus,
-    agents: Map<string, AgentHandle>,
+    _agents: Map<string, AgentHandle>,
     store: CronStore,
     channelFanout?: CronChannelFanout,
+    taskService?: TaskService,
   ) {
     this.bus = bus;
-    this.agents = agents;
     this.store = store;
     this.channelFanout = channelFanout;
+    this.taskService = taskService;
   }
 
   /** Load persisted state and start timers for all jobs. */
@@ -110,7 +131,6 @@ export class CronService {
         nextRunAt: nextFireTime(config.schedule, config.timezone).getTime(),
         attemptCount: 0,
         sentCount: 0,
-        skippedBusyCount: 0,
         skippedCapCount: 0,
         lastStatus: null,
         lastError: null,
@@ -166,7 +186,6 @@ export class CronService {
       config: j.config,
       state: { ...j.state },
       scope: "office" as const,
-      targets: j.config.targets,
     }));
     return [...agent, ...office];
   }
@@ -201,7 +220,6 @@ export class CronService {
         nextRunAt: nextFireTime(config.schedule, config.timezone).getTime(),
         attemptCount: 0,
         sentCount: 0,
-        skippedBusyCount: 0,
         skippedCapCount: 0,
         lastStatus: null,
         lastError: null,
@@ -233,15 +251,6 @@ export class CronService {
     this.fireOfficeJob(job);
   }
 
-  /** Resolve target list — expand __broadcast__ to all agent names. */
-  private resolveTargets(targets: string[]): string[] {
-    if (!Array.isArray(targets)) return [];
-    if (targets.includes("__broadcast__")) {
-      return [...this.agents.keys()];
-    }
-    return [...new Set(targets)];
-  }
-
   private scheduleNextOffice(job: ActiveOfficeJob): void {
     if (job.timer) {
       clearTimeout(job.timer);
@@ -271,72 +280,80 @@ export class CronService {
 
   private fireOfficeJob(job: ActiveOfficeJob): void {
     const now = Date.now();
-    const resolved = this.resolveTargets(job.config.targets);
-    let sent = 0;
-    let skippedCap = 0;
-    let skippedBusy = 0;
 
-    for (const target of resolved) {
-      // Global dispatch cap
-      this.dispatchLog = this.dispatchLog.filter(
-        (t) => now - t < DISPATCH_WINDOW_MS,
+    // Global dispatch cap
+    this.dispatchLog = this.dispatchLog.filter(
+      (t) => now - t < DISPATCH_WINDOW_MS,
+    );
+    if (this.dispatchLog.length >= DISPATCH_CAP) {
+      console.warn(
+        `[cron] Global dispatch cap reached (${DISPATCH_CAP}/min) — skipping office:${job.jobName}`,
       );
-      if (this.dispatchLog.length >= DISPATCH_CAP) {
-        console.warn(
-          `[cron] Global dispatch cap reached (${DISPATCH_CAP}/min) — skipping office:${job.jobName} → ${target}`,
-        );
-        skippedCap++;
-        continue;
-      }
+      job.state.lastRunAt = now;
+      job.state.attemptCount++;
+      job.state.skippedCapCount++;
+      job.state.lastStatus = "skipped_cap";
+      this.persistState();
+      return;
+    }
 
-      // Skip busy agents
-      const handle = this.agents.get(target);
-      if (handle && handle.status === "running") {
-        console.warn(
-          `[cron] Agent "${target}" busy — skipping office:${job.jobName}`,
-        );
-        skippedBusy++;
-        continue;
-      }
-
-      try {
-        const rc = job.config.reportChannel;
-        this.bus.send({
-          from: "__cron__",
-          to: target,
-          type: "prompt",
-          payload: job.config.message,
-          priority: Priority.NORMAL,
-          sessionKey: rc
-            ? sessionKey("channel", rc)
-            : sessionKey("internal", target),
-          sourceKind: rc ? "channel" : "internal",
-          channel: rc,
-        });
-        this.dispatchLog.push(now);
-        sent++;
-      } catch {
-        // individual target failure doesn't stop others
-      }
+    if (!this.taskService) {
+      console.error(
+        `[cron] No TaskService available — cannot create tasks for office:${job.jobName}`,
+      );
+      job.state.lastRunAt = now;
+      job.state.attemptCount++;
+      job.state.lastStatus = "error";
+      job.state.lastError = "TaskService not available";
+      this.persistState();
+      return;
     }
 
     job.state.lastRunAt = now;
     job.state.attemptCount++;
-    job.state.sentCount += sent;
-    job.state.skippedCapCount += skippedCap;
-    job.state.skippedBusyCount += skippedBusy;
-    job.state.lastStatus =
-      sent > 0
-        ? "ok"
-        : skippedCap > 0
-          ? "skipped_cap"
-          : skippedBusy > 0
-            ? "skipped_busy"
-            : "error";
-    job.state.lastError = null;
-    if (sent > 0 && job.config.reportChannel) {
-      this.channelFanout?.(job.config.reportChannel, job.config.message);
+
+    try {
+      let prevTaskId: string | undefined;
+      const createdTasks: Array<{
+        id: string;
+        title: string;
+        assignee: string;
+      }> = [];
+      for (const template of job.config.tasks) {
+        const result = this.taskService.create("__cron__", {
+          ...template,
+          priority: Priority.CRITICAL,
+          dependsOn: prevTaskId ? [prevTaskId] : [],
+        });
+        if (typeof result === "string") {
+          throw new Error(result);
+        }
+        prevTaskId = result.id;
+        createdTasks.push({
+          id: result.id,
+          title: template.title,
+          assignee: template.assignee,
+        });
+      }
+      this.dispatchLog.push(now);
+      job.state.sentCount++;
+      job.state.lastStatus = "ok";
+      job.state.lastError = null;
+      if (job.config.reportChannel) {
+        for (const t of createdTasks) {
+          this.completionTrackers.set(t.id, {
+            jobName: job.jobName,
+            reportChannel: job.config.reportChannel,
+            taskTitle: t.title,
+            assignee: t.assignee,
+          });
+        }
+      }
+    } catch (err) {
+      job.state.lastStatus = "error";
+      job.state.lastError = err instanceof Error ? err.message : String(err);
     }
+
     this.persistState();
   }
 
@@ -388,44 +405,75 @@ export class CronService {
       return;
     }
 
-    // Check if agent is running (busy)
-    const handle = this.agents.get(job.agentName);
-    if (handle && handle.status === "running") {
-      console.warn(
-        `[cron] Agent "${job.agentName}" busy — skipping ${job.jobName}`,
+    if (!this.taskService) {
+      console.error(
+        `[cron] No TaskService available — cannot create tasks for ${job.agentName}:${job.jobName}`,
       );
-      job.state.skippedBusyCount++;
-      job.state.lastStatus = "skipped_busy";
+      job.state.lastStatus = "error";
+      job.state.lastError = "TaskService not available";
       this.persistState();
       return;
     }
 
-    // Dispatch
+    // Create task chain
     try {
-      const rc = job.config.reportChannel;
-      this.bus.send({
-        from: "__cron__",
-        to: job.agentName,
-        type: "prompt",
-        payload: job.config.message,
-        priority: Priority.NORMAL,
-        sessionKey: rc
-          ? sessionKey("channel", rc)
-          : sessionKey("internal", job.agentName),
-        sourceKind: rc ? "channel" : "internal",
-        channel: rc,
-      });
-      if (rc) this.channelFanout?.(rc, job.config.message);
+      let prevTaskId: string | undefined;
+      const createdTasks: Array<{
+        id: string;
+        title: string;
+        assignee: string;
+      }> = [];
+      for (const template of job.config.tasks) {
+        const result = this.taskService.create("__cron__", {
+          ...template,
+          priority: Priority.CRITICAL,
+          dependsOn: prevTaskId ? [prevTaskId] : [],
+        });
+        if (typeof result === "string") {
+          throw new Error(result);
+        }
+        prevTaskId = result.id;
+        createdTasks.push({
+          id: result.id,
+          title: template.title,
+          assignee: template.assignee,
+        });
+      }
       this.dispatchLog.push(now);
       job.state.sentCount++;
       job.state.lastStatus = "ok";
       job.state.lastError = null;
+      if (job.config.reportChannel) {
+        for (const t of createdTasks) {
+          this.completionTrackers.set(t.id, {
+            jobName: job.jobName,
+            reportChannel: job.config.reportChannel,
+            taskTitle: t.title,
+            assignee: t.assignee,
+          });
+        }
+      }
     } catch (err) {
       job.state.lastStatus = "error";
       job.state.lastError = err instanceof Error ? err.message : String(err);
     }
 
     this.persistState();
+  }
+
+  /** Called by TaskService when a task transitions to done. */
+  handleTaskDone(task: { id: string; result?: string }): void {
+    const tracker = this.completionTrackers.get(task.id);
+    if (!tracker || !this.channelFanout) return;
+    this.completionTrackers.delete(task.id);
+    const message = task.result?.trim()
+      ? task.result.trim()
+      : `Completed task: ${tracker.taskTitle}`;
+    this.channelFanout(tracker.reportChannel, message, {
+      sender: tracker.assignee,
+      kind: "task_report",
+      jobName: tracker.jobName,
+    });
   }
 
   private persistState(): void {

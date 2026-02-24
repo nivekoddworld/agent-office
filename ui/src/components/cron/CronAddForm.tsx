@@ -10,8 +10,13 @@ import {
   NumberInput,
   Text,
   Checkbox,
+  ActionIcon,
+  Paper,
+  Badge,
 } from "@mantine/core";
+import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useCronAdd } from "../../api/use-api-mutations.js";
+import type { CronTaskTemplate } from "../../api/types.js";
 
 interface CronAddFormProps {
   opened: boolean;
@@ -52,16 +57,23 @@ function buildSchedule(
   return `${minute} ${hour} * * ${dow}`;
 }
 
+function emptyTask(defaultAssignee: string): CronTaskTemplate {
+  return { title: "", assignee: defaultAssignee, description: "" };
+}
+
 export function CronAddForm({
   opened,
   onClose,
   agentNames,
   channels = [],
 }: CronAddFormProps) {
-  const [scope, setScope] = useState<string | null>("agent");
-  const [agent, setAgent] = useState<string | null>(agentNames[0] ?? null);
   const [jobName, setJobName] = useState("");
-  const [message, setMessage] = useState("");
+
+  // Tasks list
+  const defaultAssignee = agentNames[0] ?? "";
+  const [tasks, setTasks] = useState<CronTaskTemplate[]>([
+    emptyTask(defaultAssignee),
+  ]);
 
   // Schedule builder
   const [frequency, setFrequency] = useState<Frequency>("daily");
@@ -94,37 +106,48 @@ export function CronAddForm({
     (customSchedule.trim().split(/\s+/).length === 5 &&
       customSchedule.trim().length > 0);
 
-  const canSubmit =
-    jobName.trim() &&
-    message.trim() &&
-    scheduleValid &&
-    (scope !== "agent" || !!agent);
+  const tasksValid =
+    tasks.length > 0 &&
+    tasks.every((t) => t.title.trim() !== "" && t.assignee.trim() !== "");
+
+  const canSubmit = jobName.trim() && tasksValid && scheduleValid;
+
+  const addTask = () => {
+    const lastAssignee = tasks[tasks.length - 1]?.assignee ?? defaultAssignee;
+    setTasks((prev) => [...prev, emptyTask(lastAssignee)]);
+  };
+
+  const removeTask = (idx: number) => {
+    setTasks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateTask = (idx: number, patch: Partial<CronTaskTemplate>) => {
+    setTasks((prev) =>
+      prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)),
+    );
+  };
 
   const handleSubmit = () => {
     if (!canSubmit) return;
 
+    const cleanTasks = tasks.map((t) => ({
+      title: t.title.trim(),
+      assignee: t.assignee,
+      ...(t.description?.trim() ? { description: t.description.trim() } : {}),
+    }));
+
     cronAdd.mutate(
-      scope === "office"
-        ? {
-            scope: "office",
-            jobName: jobName.trim(),
-            schedule,
-            message: message.trim(),
-            targets: agentNames,
-            reportChannel: reportChannel || undefined,
-          }
-        : {
-            scope: "agent",
-            agentName: agent!,
-            jobName: jobName.trim(),
-            schedule,
-            message: message.trim(),
-            reportChannel: reportChannel || undefined,
-          },
+      {
+        scope: "office",
+        jobName: jobName.trim(),
+        schedule,
+        tasks: cleanTasks,
+        reportChannel: reportChannel || undefined,
+      },
       {
         onSuccess: () => {
           setJobName("");
-          setMessage("");
+          setTasks([emptyTask(defaultAssignee)]);
           setFrequency("daily");
           setMinute(0);
           setHour(9);
@@ -152,30 +175,10 @@ export function CronAddForm({
       opened={opened}
       onClose={onClose}
       title="Add Cron Job"
-      size="md"
+      size="lg"
       centered
     >
       <Stack gap="sm">
-        {/* Scope */}
-        <Select
-          label="Scope"
-          data={[
-            { value: "agent", label: "Agent" },
-            { value: "office", label: "Office (all agents)" },
-          ]}
-          value={scope}
-          onChange={setScope}
-        />
-        {scope === "agent" && (
-          <Select
-            label="Agent"
-            data={agentNames}
-            value={agent}
-            onChange={setAgent}
-            required
-          />
-        )}
-
         {/* Job Name */}
         <TextInput
           label="Job Name"
@@ -185,14 +188,94 @@ export function CronAddForm({
           required
         />
 
-        {/* Message */}
-        <TextInput
-          label="Message"
-          placeholder="Generate the daily report"
-          value={message}
-          onChange={(e) => setMessage(e.currentTarget.value)}
-          required
-        />
+        {/* Tasks */}
+        <div>
+          <Text size="sm" fw={500} mb={6}>
+            Tasks
+          </Text>
+          <Stack gap={6}>
+            {tasks.map((task, idx) => (
+              <div key={idx}>
+                {idx > 0 && (
+                  <Text size="xs" c="dimmed" mb={4} ml={4}>
+                    ↓ depends on previous
+                  </Text>
+                )}
+                <Paper withBorder p="xs" radius="sm">
+                  <Group gap="xs" wrap="nowrap" align="flex-start">
+                    <Badge
+                      size="xs"
+                      variant="light"
+                      color="blue"
+                      style={{ marginTop: 6, flexShrink: 0 }}
+                    >
+                      {idx + 1}
+                    </Badge>
+                    <Stack gap={4} style={{ flex: 1, minWidth: 0 }}>
+                      <Group gap="xs" grow>
+                        <TextInput
+                          placeholder="Task title"
+                          size="xs"
+                          value={task.title}
+                          onChange={(e) =>
+                            updateTask(idx, { title: e.currentTarget.value })
+                          }
+                          required
+                          error={
+                            task.title.trim() === "" ? "Required" : undefined
+                          }
+                        />
+                        <Select
+                          placeholder="Assignee"
+                          size="xs"
+                          data={agentNames}
+                          value={task.assignee || null}
+                          onChange={(v) =>
+                            updateTask(idx, { assignee: v ?? "" })
+                          }
+                          required
+                          error={
+                            task.assignee.trim() === "" ? "Required" : undefined
+                          }
+                        />
+                      </Group>
+                      <TextInput
+                        placeholder="Description (optional)"
+                        size="xs"
+                        value={task.description ?? ""}
+                        onChange={(e) =>
+                          updateTask(idx, {
+                            description: e.currentTarget.value,
+                          })
+                        }
+                      />
+                    </Stack>
+                    {tasks.length > 1 && (
+                      <ActionIcon
+                        size="sm"
+                        variant="subtle"
+                        color="red"
+                        onClick={() => removeTask(idx)}
+                        style={{ marginTop: 2, flexShrink: 0 }}
+                      >
+                        <IconTrash size={12} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                </Paper>
+              </div>
+            ))}
+          </Stack>
+          <Button
+            size="xs"
+            variant="subtle"
+            leftSection={<IconPlus size={12} />}
+            mt={6}
+            onClick={addTask}
+          >
+            Add Task
+          </Button>
+        </div>
 
         {/* Schedule */}
         <div>

@@ -216,8 +216,10 @@ office:
   cron:
     standup:
       schedule: "0 9 * * 1-5"
-      message: "Run standup"
-      targets: [pm, coder]
+      report_channel: general
+      tasks:
+        - title: "Daily standup"
+          assignee: pm
   collaborationPolicy:
     mode: off # off | warn | enforce
     sla:
@@ -402,7 +404,9 @@ office path                # Print path to office.yaml
 
 ### Cron Jobs
 
-Agents can run proactively on schedules via per-agent cron jobs. The host-side `CronService` manages timers and injects messages into the bus with `from: "__cron__"` — agents never see cron internals.
+Agents can run proactively on schedules via per-agent cron jobs. The host-side `CronService` manages timers and creates structured tasks via `TaskService` — giving cron-triggered work full Kanban visibility, dependency chaining, and completion reporting.
+
+> **Breaking change:** `message` and `targets` fields have been replaced by a `tasks` array. Each task requires `title` and `assignee`.
 
 ```yaml
 # In office.yaml under the agents section:
@@ -412,27 +416,42 @@ agents:
     cron:
       daily-standup:
         schedule: "0 9 * * 1-5" # 5-field only (min hour dom month dow)
-        message: "Run the daily standup"
         timezone: "America/New_York" # optional, default UTC
         catch_up: once # optional: "skip" (default) | "once"
         enabled: true # optional, default true
-        report_channel: general # optional, post trigger to this channel
+        report_channel: general # optional, post completion summary to this channel
+        tasks:
+          - title: "Daily standup report"
+            description: "Report your status for today's standup"
+            assignee: standup-bot
 ```
 
 | Field            | Required | Default  | Description                                                                 |
 | ---------------- | -------- | -------- | --------------------------------------------------------------------------- |
 | `schedule`       | yes      | —        | 5-field cron expression (`@daily`/`@hourly` rejected)                       |
-| `message`        | yes      | —        | Prompt text sent to the agent                                               |
+| `tasks`          | yes      | —        | Array of task templates; each requires `title` and `assignee`               |
 | `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                       |
-| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up task    |
 | `enabled`        | no       | `true`   | Set `false` to pause without removing                                       |
-| `report_channel` | no       | _(none)_ | Channel name to post the cron trigger to (visible in channel session)       |
+| `report_channel` | no       | _(none)_ | Channel name to post task completion summaries to                           |
 
-Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
+Each task in the `tasks` array supports:
 
-**Catch-up behavior:** On restart, if `catch_up: once` and a fire was missed since the last run, one immediate message is sent. First-ever run (no prior state) never catches up. State persists to `~/.agent-office/offices/<id>/cron/state.json`.
+| Field            | Required | Description                                                    |
+| ---------------- | -------- | -------------------------------------------------------------- |
+| `title`          | yes      | Task title shown in Kanban board                               |
+| `assignee`       | yes      | Agent name to assign the task to                               |
+| `description`    | no       | Detailed instructions for the assignee                         |
+| `parent_id`      | no       | Parent task ID (T-prefixed) to nest under                      |
+| `report_channel` | no       | Per-task channel override for completion notification          |
 
-**Safety guards:** Busy agents (status `running`) are skipped. A global dispatch cap of 60 cron messages per minute prevents misconfigured schedules from flooding the bus.
+Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs (max 10 per agent via tools).
+
+**Task chaining:** Multiple tasks in a single cron job are automatically chained — each task depends on the previous one completing. The chain fires with `CRITICAL` priority.
+
+**Catch-up behavior:** On restart, if `catch_up: once` and a fire was missed since the last run, one immediate task chain is created. First-ever run (no prior state) never catches up. State persists to `~/.agent-office/offices/<id>/cron/state.json`.
+
+**Safety guards:** Tasks are always created regardless of agent status — they queue in the agent's inbox. A global dispatch cap of 60 cron jobs per minute prevents misconfigured schedules from flooding the task queue.
 
 #### Cron Commands
 
@@ -440,7 +459,7 @@ Job names must match `[a-zA-Z0-9_-]+`. Each agent can have 0-N named jobs.
 # API command strings (UI has equivalent controls):
 cron list                                          # List all cron jobs
 cron status [agent]                                # Detailed job status
-cron add <agent> <job> "<schedule>" <message> [--apply]   # Add a job
+cron add <agent> <job> "<schedule>" [--apply]      # Add a job (prompts for task title/assignee)
 cron remove <agent> <job> [--apply]                # Remove a job
 cron trigger <agent> <job>                         # Fire immediately
 cron enable <agent> <job> [--apply]                # Re-enable a paused job
@@ -453,7 +472,7 @@ Change detection uses normalized config comparison (resolved model, numeric prio
 
 #### Office-Level Cron
 
-In addition to per-agent cron, you can define office-level cron jobs that dispatch messages to one or more target agents:
+In addition to per-agent cron, you can define office-level cron jobs that create task chains across multiple agents:
 
 ```yaml
 # In office.yaml under the office section:
@@ -461,29 +480,36 @@ office:
   cron:
     standup:
       schedule: "0 9 * * 1-5"
-      message: "Report your status for today's standup"
-      targets: [pm, coder, reviewer]
       timezone: "America/New_York"
+      report_channel: general
+      tasks:
+        - title: "Daily standup report"
+          description: "Report your status for today's standup"
+          assignee: pm
+        - title: "Standup review"
+          description: "Review and summarize the standup reports"
+          assignee: lead
     weekly-review:
       schedule: "0 17 * * 5"
-      message: "Summarize this week's progress"
-      targets: [__broadcast__] # sends to all agents
+      tasks:
+        - title: "Weekly progress summary"
+          description: "Summarize this week's progress"
+          assignee: pm
 ```
 
 | Field            | Required | Default  | Description                                                                 |
 | ---------------- | -------- | -------- | --------------------------------------------------------------------------- |
 | `schedule`       | yes      | —        | 5-field cron expression                                                     |
-| `message`        | yes      | —        | Prompt text sent to each target agent                                       |
-| `targets`        | yes      | —        | Agent names or `__broadcast__` (all agents)                                 |
+| `tasks`          | yes      | —        | Array of task templates; each requires `title` and `assignee`               |
 | `timezone`       | no       | `UTC`    | IANA timezone for schedule evaluation                                       |
-| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up message |
+| `catch_up`       | no       | `skip`   | `skip` = ignore missed fires on restart; `once` = fire one catch-up task    |
 | `enabled`        | no       | `true`   | Set `false` to pause without removing                                       |
-| `report_channel` | no       | _(none)_ | Channel name to post the cron trigger to (visible in channel session)       |
+| `report_channel` | no       | _(none)_ | Channel name to post task completion summaries to                           |
 
-Target agent names are validated at parse time. Typos fail fast:
+Assignee names are validated at parse time. Typos fail fast:
 
 ```
-[office] office.cron.standup: unknown target agent "codre"
+[office] office.cron.standup: unknown assignee agent "codre"
 ```
 
 **Activation:** YAML edits require `office reload` to take effect. Commands with `--apply` take effect immediately.
@@ -491,12 +517,12 @@ Target agent names are validated at parse time. Typos fail fast:
 Office cron commands:
 
 ```bash
-cron add office <job> "<schedule>" <message> --targets pm,coder
+cron add office <job> "<schedule>"           # prompts for task title/assignee
 cron remove office <job>
 cron trigger office <job>                    # fire immediately
 ```
 
-Office jobs appear in `cron list` with an `[office]` scope tag. The same safety guards apply: busy agents are skipped, and the global 60/minute dispatch cap counts each target dispatch.
+Office jobs appear in `cron list` with an `[office]` scope tag. The global 60/minute dispatch cap applies.
 
 #### Agent Cron Tools
 
@@ -508,27 +534,34 @@ In addition to operator-managed cron (Web UI/API), agents can self-manage cron j
 agent calls cron_add:
   name: "nightly-report"
   schedule: "0 22 * * *"
-  message: "Generate the nightly summary report"
+  tasks:
+    - title: "Generate nightly summary report"
+      assignee: "self"
 
 -> Cron job "nightly-report" saved and activated (At 10:00 PM).
 ```
 
-**Office scope** — requires `permissions: { office_cron: true }` in office.yaml. The `targets` field is required.
+**Office scope** — requires `permissions: { office_cron: true }` in office.yaml. Tasks can be assigned to any agent.
 
 ```
 agent calls cron_add:
   name: "standup"
   schedule: "0 9 * * 1-5"
-  message: "Report your status"
   scope: "office"
-  targets: ["pm", "coder"]
+  tasks:
+    - title: "PM standup report"
+      description: "Report your status"
+      assignee: "pm"
+    - title: "Coder standup report"
+      description: "Report your status"
+      assignee: "coder"
 
 -> Cron job "standup" saved and activated (At 09:00 AM, Monday through Friday).
 ```
 
 **Visibility:** `cron_list` shows all office-level jobs plus only the calling agent's own agent-scope jobs. No cross-agent visibility.
 
-**Error handling:** Malformed or invalid `office.yaml` returns a tool error — no silent success. Validation errors (bad schedule, unknown targets), parse failures, and permission denials all produce explicit error messages.
+**Error handling:** Malformed or invalid `office.yaml` returns a tool error — no silent success. Validation errors (bad schedule, unknown assignees), parse failures, and permission denials all produce explicit error messages.
 
 **Audit trail:** Every action (success, denial, or error) is logged to `<officeDir>/logs/cron-audit.jsonl` and printed to stdout with `[cron-audit]` prefix.
 
@@ -539,6 +572,8 @@ agent calls cron_add:
 Agents can create, assign, and track tasks through a shared Kanban-style task system. The `TaskService` manages task state, enforces status transitions, resolves dependency chains, and dispatches notifications via the message bus.
 
 Task tools (`task_create`, `task_update`, `task_list`, `task_get`) are registered as default tools for all agents. Restrict access per agent via `permissions.tools.deny`. Task proxy endpoints are available via Host API.
+
+**Cron integration:** Cron jobs now create tasks instead of sending messages. Tasks fired by cron are tagged with `createdBy: "__cron__"` and appear in the Kanban board with `CRITICAL` priority. Use `task_list` with `createdBy: "__cron__"` to query them. Task completion can trigger a channel notification via the `report_channel` field on the task or on the parent cron job definition.
 
 #### Task Lifecycle
 
@@ -1264,13 +1299,15 @@ agent calls authenticated_fetch:
 
 ### `cron_add`
 
-Add or update a cron job. Agent scope (default) manages the calling agent's own jobs. Office scope requires `office_cron` permission and a `targets` list.
+Add or update a cron job. Agent scope (default) manages the calling agent's own jobs. Office scope requires `office_cron` permission.
 
 ```
 agent calls cron_add:
   name: "daily-check"
   schedule: "0 9 * * *"
-  message: "Run daily health check"
+  tasks:
+    - title: "Run daily health check"
+      assignee: "self"
 
 -> Cron job "daily-check" saved and activated (At 09:00 AM).
 ```
@@ -1294,8 +1331,8 @@ List active cron jobs. Shows all office-level jobs plus only the calling agent's
 agent calls cron_list:
   scope: "all"
 
--> [agent] daily-check  0 9 * * * (At 09:00 AM)  next: 2025-01-15T09:00:00.000Z
-   [office] standup     0 9 * * 1-5 (...)         next: 2025-01-13T09:00:00.000Z → pm,coder
+-> [agent] daily-check  0 9 * * * (At 09:00 AM)   next: 2025-01-15T09:00:00.000Z  tasks: 1
+   [office] standup     0 9 * * 1-5 (...)          next: 2025-01-13T09:00:00.000Z  tasks: 2
 ```
 
 ### read_skill
@@ -1391,13 +1428,21 @@ agent calls task_update:
 
 ### `task_list`
 
-List tasks with optional filters by assignee, status, or priority.
+List tasks with optional filters by assignee, status, priority, or creator.
 
 ```
 agent calls task_list:
   assignee: "coder"
+  status: "in_progress"
 
--> Returns all tasks assigned to coder
+-> Returns in_progress tasks assigned to coder
+```
+
+```
+agent calls task_list:
+  createdBy: "__cron__"
+
+-> Returns all tasks created by cron jobs
 ```
 
 ### `task_get`

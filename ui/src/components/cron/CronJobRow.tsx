@@ -28,7 +28,6 @@ function formatTime(ts: number | null): string {
 const STATUS_COLORS: Record<string, string> = {
   ok: "green",
   error: "red",
-  skipped_busy: "yellow",
   skipped_cap: "orange",
 };
 
@@ -158,7 +157,7 @@ export function CronJobRow({ job }: CronJobRowProps) {
             </Text>
           </Group>
           <Text size="xs" c="dimmed">
-            skip b:{job.state.skippedBusyCount} c:{job.state.skippedCapCount}
+            skip c:{job.state.skippedCapCount}
           </Text>
         </div>
 

@@ -48,6 +48,7 @@ import {
   cronDisableCommand,
 } from "../src/commands/cron.js";
 import { loadOfficeYaml } from "../src/config/office-yaml.js";
+import type { CronTaskTemplate } from "../src/cron/types.js";
 
 function writeYaml(content: string): void {
   mkdirSync(OFFICE_DIR, { recursive: true });
@@ -73,6 +74,13 @@ function makeWorkspace(agents: string[] = []): any {
   };
 }
 
+function makeTasks(
+  title = "Run standup",
+  assignee = "bot",
+): CronTaskTemplate[] {
+  return [{ title, assignee }];
+}
+
 beforeEach(() => {
   mkdirSync(OFFICE_DIR, { recursive: true });
 });
@@ -85,7 +93,13 @@ describe("cronAddCommand", () => {
     writeYaml(
       "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:test-model\n",
     );
-    await cronAddCommand(OFFICE_ID, "bot", "daily", "0 9 * * *", "Run standup");
+    await cronAddCommand(
+      OFFICE_ID,
+      "bot",
+      "daily",
+      "0 9 * * *",
+      makeTasks("Run standup"),
+    );
     const yaml = readYaml();
     expect(yaml).toContain("daily");
     expect(yaml).toContain("0 9 * * *");
@@ -97,7 +111,7 @@ describe("cronAddCommand", () => {
       "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:test-model\n",
     );
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    await cronAddCommand(OFFICE_ID, "bot", "bad", "invalid", "msg");
+    await cronAddCommand(OFFICE_ID, "bot", "bad", "invalid", makeTasks());
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining("Invalid schedule"),
     );
@@ -109,7 +123,13 @@ describe("cronAddCommand", () => {
       "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:test-model\n",
     );
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    await cronAddCommand(OFFICE_ID, "bot", "bad name!", "0 9 * * *", "msg");
+    await cronAddCommand(
+      OFFICE_ID,
+      "bot",
+      "bad name!",
+      "0 9 * * *",
+      makeTasks(),
+    );
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining("Invalid job name"),
     );
@@ -121,7 +141,7 @@ describe("cronAddCommand", () => {
       "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:test-model\n",
     );
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    await cronAddCommand(OFFICE_ID, "bot", "daily", "0 9 * * *", "msg", {
+    await cronAddCommand(OFFICE_ID, "bot", "daily", "0 9 * * *", makeTasks(), {
       timezone: "Mars/Olympus",
     });
     expect(spy).toHaveBeenCalledWith(
@@ -135,7 +155,7 @@ describe("cronAddCommand", () => {
       "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:test-model\n",
     );
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    await cronAddCommand(OFFICE_ID, "bot", "daily", "0 9 * * *", "msg", {
+    await cronAddCommand(OFFICE_ID, "bot", "daily", "0 9 * * *", makeTasks(), {
       catchUp: "all",
     });
     expect(spy).toHaveBeenCalledWith(
@@ -144,15 +164,13 @@ describe("cronAddCommand", () => {
     spy.mockRestore();
   });
 
-  it("rejects empty message", async () => {
+  it("rejects empty tasks", async () => {
     writeYaml(
       "office:\n  name: Test\nagents:\n  bot:\n    model: anthropic:test-model\n",
     );
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    await cronAddCommand(OFFICE_ID, "bot", "daily", "0 9 * * *", "   ");
-    expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining("Message is required"),
-    );
+    await cronAddCommand(OFFICE_ID, "bot", "daily", "0 9 * * *", []);
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("task"));
     spy.mockRestore();
   });
 
@@ -162,7 +180,13 @@ describe("cronAddCommand", () => {
     );
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    await cronAddCommand(OFFICE_ID, "nonexistent", "daily", "0 9 * * *", "msg");
+    await cronAddCommand(
+      OFFICE_ID,
+      "nonexistent",
+      "daily",
+      "0 9 * * *",
+      makeTasks(),
+    );
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining("not found"));
     expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("Saved"));
     errSpy.mockRestore();
@@ -180,7 +204,7 @@ describe("cronAddCommand", () => {
       "bot",
       "daily",
       "0 9 * * *",
-      "Run standup",
+      makeTasks("Run standup"),
       {},
       ws,
     );
@@ -202,7 +226,7 @@ describe("cronAddCommand", () => {
       "bot",
       "daily",
       "0 9 * * *",
-      "Run standup",
+      makeTasks("Run standup"),
       {},
       ws,
     );
@@ -223,7 +247,9 @@ agents:
     cron:
       daily:
         schedule: "0 9 * * *"
-        message: Run standup
+        tasks:
+          - title: Run standup
+            assignee: bot
 `);
     await cronRemoveCommand(OFFICE_ID, "bot", "daily");
     const yaml = readYaml();
@@ -253,7 +279,9 @@ agents:
     cron:
       daily:
         schedule: "0 9 * * *"
-        message: Run standup
+        tasks:
+          - title: Run standup
+            assignee: bot
 `);
     const ws = makeWorkspace(["bot"]);
     await cronRemoveCommand(OFFICE_ID, "bot", "daily", ws);
@@ -271,7 +299,9 @@ agents:
     cron:
       daily:
         schedule: "0 9 * * *"
-        message: hi
+        tasks:
+          - title: hi
+            assignee: bot
         enabled: true
 `);
     await cronDisableCommand(OFFICE_ID, "bot", "daily");

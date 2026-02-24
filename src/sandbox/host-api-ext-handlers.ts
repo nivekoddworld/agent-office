@@ -406,6 +406,7 @@ export async function handleReadSkill(
 export interface TaskHandlerDeps {
   agentName: string;
   taskService: TaskService;
+  onStateChanged?: () => void;
 }
 
 async function parseTaskBody(
@@ -452,6 +453,7 @@ export async function handleTaskCreate(
   );
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result }));
+  parsed.deps.onStateChanged?.();
 }
 
 export async function handleTaskUpdate(
@@ -467,6 +469,7 @@ export async function handleTaskUpdate(
   );
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result }));
+  parsed.deps.onStateChanged?.();
 }
 
 export async function handleTaskList(

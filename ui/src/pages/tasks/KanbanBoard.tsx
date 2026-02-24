@@ -1,10 +1,18 @@
-import { useState, useMemo } from "react";
-import { Box, Group, Text, SegmentedControl } from "@mantine/core";
+import { useState, useMemo, useEffect } from "react";
+import { Box, Button, Group, Text, SegmentedControl } from "@mantine/core";
+import { IconPlus } from "@tabler/icons-react";
 import { slack } from "../../theme/slack-theme.js";
+<<<<<<< Updated upstream:ui/src/pages/tasks/KanbanBoard.tsx
 import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
 import { KanbanColumn } from "../../components/kanban/KanbanColumn.js";
 import { TaskDetailModal } from "../../components/kanban/TaskDetailModal.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
+=======
+import { ChannelHeader } from "../slack/ChannelHeader.js";
+import { KanbanColumn } from "./KanbanColumn.js";
+import { TaskDetailModal } from "./TaskDetailModal.js";
+import { TaskAddForm } from "./TaskAddForm.js";
+>>>>>>> Stashed changes:ui/src/components/kanban/KanbanBoard.tsx
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const VISIBLE_COLUMNS: TaskStatus[] = [
@@ -15,6 +23,7 @@ const VISIBLE_COLUMNS: TaskStatus[] = [
   "done",
 ];
 
+<<<<<<< Updated upstream:ui/src/pages/tasks/KanbanBoard.tsx
 export function KanbanBoard() {
   const state = useAppState();
   const agentNames = useMemo(
@@ -22,8 +31,25 @@ export function KanbanBoard() {
     [state.agents],
   );
 
+=======
+interface KanbanBoardProps {
+  tasks: Task[];
+  agentNames: string[];
+  channels?: string[];
+}
+
+export function KanbanBoard({ tasks, agentNames, channels = [] }: KanbanBoardProps) {
+>>>>>>> Stashed changes:ui/src/components/kanban/KanbanBoard.tsx
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filter, setFilter] = useState("all");
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Sync selectedTask when tasks prop updates (e.g. agent status change via SSE)
+  useEffect(() => {
+    if (!selectedTask) return;
+    const updated = tasks.find((t) => t.id === selectedTask.id);
+    if (updated) setSelectedTask(updated);
+  }, [tasks]);
 
   const filtered = useMemo(() => {
     const tasks = state.tasks ?? [];
@@ -88,9 +114,18 @@ export function KanbanBoard() {
               data={filterOptions}
             />
           </Group>
-          <Text size="xs" style={{ color: slack.textMuted }}>
-            {filtered.length} task{filtered.length !== 1 ? "s" : ""}
-          </Text>
+          <Group gap="sm">
+            <Text size="xs" style={{ color: slack.textMuted }}>
+              {filtered.length} task{filtered.length !== 1 ? "s" : ""}
+            </Text>
+            <Button
+              size="xs"
+              leftSection={<IconPlus size={14} />}
+              onClick={() => setAddOpen(true)}
+            >
+              New Task
+            </Button>
+          </Group>
         </Group>
       </Box>
 
@@ -118,6 +153,13 @@ export function KanbanBoard() {
         task={selectedTask}
         opened={selectedTask !== null}
         onClose={() => setSelectedTask(null)}
+      />
+
+      <TaskAddForm
+        opened={addOpen}
+        onClose={() => setAddOpen(false)}
+        agentNames={agentNames}
+        channels={channels}
       />
     </Box>
   );

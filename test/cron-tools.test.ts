@@ -97,7 +97,7 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(deps, {
       name: "daily",
       schedule: "0 9 * * *",
-      message: "good morning",
+      tasks: [{ title: "good morning", assignee: "bot" }],
     });
     expect(result).toContain("saved and activated");
     expect(readYaml()).toContain("daily");
@@ -109,7 +109,7 @@ describe("cronAddImpl", () => {
     await cronAddImpl(deps, {
       name: "tz-job",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
       timezone: "America/New_York",
       catch_up: "once",
     });
@@ -122,7 +122,7 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "bad name!",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     expect(result).toContain("Error");
     expect(result).toContain("invalid job name");
@@ -132,27 +132,27 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "job",
       schedule: "not-cron",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     expect(result).toContain("Error");
     expect(result).toContain("invalid schedule");
   });
 
-  it("rejects empty message", async () => {
+  it("rejects empty tasks", async () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "job",
       schedule: "0 9 * * *",
-      message: "   ",
+      tasks: [],
     });
     expect(result).toContain("Error");
-    expect(result).toContain("message is required");
+    expect(result).toContain("tasks");
   });
 
   it("rejects invalid timezone", async () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "job",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
       timezone: "Not/Real",
     });
     expect(result).toContain("Error");
@@ -163,7 +163,7 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "job",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
       catch_up: "always",
     });
     expect(result).toContain("Error");
@@ -175,7 +175,7 @@ describe("cronAddImpl", () => {
     const cronEntries = Array.from(
       { length: 10 },
       (_, i) =>
-        `      job${i}:\n        schedule: "0 ${i} * * *"\n        message: msg${i}`,
+        `      job${i}:\n        schedule: "0 ${i} * * *"\n        tasks:\n          - title: msg${i}\n            assignee: bot`,
     ).join("\n");
     writeYaml(
       `office:\n  name: Test\nagents:\n  bot:\n    cron:\n${cronEntries}\n`,
@@ -184,7 +184,7 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "extra",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     expect(result).toContain("Error");
     expect(result).toContain("limit reached");
@@ -194,7 +194,7 @@ describe("cronAddImpl", () => {
     const cronEntries = Array.from(
       { length: 10 },
       (_, i) =>
-        `      job${i}:\n        schedule: "0 ${i} * * *"\n        message: msg${i}`,
+        `      job${i}:\n        schedule: "0 ${i} * * *"\n        tasks:\n          - title: msg${i}\n            assignee: bot`,
     ).join("\n");
     writeYaml(
       `office:\n  name: Test\nagents:\n  bot:\n    cron:\n${cronEntries}\n`,
@@ -203,7 +203,7 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "job0",
       schedule: "30 9 * * *",
-      message: "updated",
+      tasks: [{ title: "updated", assignee: "bot" }],
     });
     expect(result).toContain("saved and activated");
   });
@@ -213,9 +213,8 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "office-job",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
       scope: "office",
-      targets: ["bot"],
     });
     expect(result).toContain("Error");
     expect(result).toContain("office_cron permission required");
@@ -226,61 +225,26 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(deps, {
       name: "standup",
       schedule: "0 9 * * 1-5",
-      message: "standup time",
+      tasks: [
+        { title: "standup time", assignee: "bot" },
+        { title: "follow up", assignee: "helper" },
+      ],
       scope: "office",
-      targets: ["bot", "helper"],
     });
     expect(result).toContain("saved and activated");
     expect(readYaml()).toContain("standup");
     expect(deps.cron!.setOfficeJobs).toHaveBeenCalled();
   });
 
-  it("rejects office-scope with unknown target", async () => {
-    const deps = makeDeps({ permissions: { office_cron: true } });
-    const result = await cronAddImpl(deps, {
-      name: "job",
-      schedule: "0 9 * * *",
-      message: "hi",
-      scope: "office",
-      targets: ["nonexistent"],
-    });
-    expect(result).toContain("Error");
-    expect(result).toContain('unknown target agent "nonexistent"');
-  });
-
-  it("allows __broadcast__ as target", async () => {
-    const deps = makeDeps({ permissions: { office_cron: true } });
-    const result = await cronAddImpl(deps, {
-      name: "broadcast-job",
-      schedule: "0 9 * * *",
-      message: "all hands",
-      scope: "office",
-      targets: ["__broadcast__"],
-    });
-    expect(result).toContain("saved and activated");
-  });
-
   it("rejects invalid scope value", async () => {
     const result = await cronAddImpl(makeDeps(), {
       name: "job",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
       scope: "foo",
     });
     expect(result).toContain("Error");
     expect(result).toContain('invalid scope "foo"');
-  });
-
-  it("requires targets for office scope", async () => {
-    const deps = makeDeps({ permissions: { office_cron: true } });
-    const result = await cronAddImpl(deps, {
-      name: "job",
-      schedule: "0 9 * * *",
-      message: "hi",
-      scope: "office",
-    });
-    expect(result).toContain("Error");
-    expect(result).toContain("targets required");
   });
 
   it("returns error for malformed YAML", async () => {
@@ -289,7 +253,7 @@ describe("cronAddImpl", () => {
     const result = await cronAddImpl(deps, {
       name: "daily",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     expect(result).toContain("Error");
     expect(result).toContain("parse errors");
@@ -301,7 +265,7 @@ describe("cronAddImpl", () => {
 describe("cronRemoveImpl", () => {
   it("removes agent-scope job", async () => {
     writeYaml(
-      `office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: "0 9 * * *"\n        message: hi\n`,
+      `office:\n  name: Test\nagents:\n  bot:\n    cron:\n      daily:\n        schedule: "0 9 * * *"\n        tasks:\n          - title: hi\n            assignee: bot\n`,
     );
     const deps = makeDeps();
     const result = await cronRemoveImpl(deps, { name: "daily" });
@@ -311,7 +275,7 @@ describe("cronRemoveImpl", () => {
 
   it("cleans up empty cron map", async () => {
     writeYaml(
-      `office:\n  name: Test\nagents:\n  bot:\n    cron:\n      only:\n        schedule: "0 9 * * *"\n        message: hi\n`,
+      `office:\n  name: Test\nagents:\n  bot:\n    cron:\n      only:\n        schedule: "0 9 * * *"\n        tasks:\n          - title: hi\n            assignee: bot\n`,
     );
     await cronRemoveImpl(makeDeps(), { name: "only" });
     expect(readYaml()).not.toContain("cron:");
@@ -351,7 +315,7 @@ describe("cronRemoveImpl", () => {
 
   it("removes office-scope job with permission", async () => {
     writeYaml(
-      `office:\n  name: Test\n  cron:\n    standup:\n      schedule: "0 9 * * 1-5"\n      message: go\n      targets:\n        - bot\nagents:\n  bot:\n    description: test\n`,
+      `office:\n  name: Test\n  cron:\n    standup:\n      schedule: "0 9 * * 1-5"\n      tasks:\n        - title: go\n          assignee: bot\nagents:\n  bot:\n    description: test\n`,
     );
     const deps = makeDeps({ permissions: { office_cron: true } });
     const result = await cronRemoveImpl(deps, {
@@ -379,14 +343,20 @@ describe("cronListImpl", () => {
       {
         agentName: "bot",
         jobName: "daily",
-        config: { schedule: "0 9 * * *", message: "hi" },
+        config: {
+          schedule: "0 9 * * *",
+          tasks: [{ title: "hi", assignee: "bot" }],
+        },
         state: { nextRunAt: Date.now() + 60000 },
         scope: "agent",
       },
       {
         agentName: "other",
         jobName: "other-job",
-        config: { schedule: "0 10 * * *", message: "bye" },
+        config: {
+          schedule: "0 10 * * *",
+          tasks: [{ title: "bye", assignee: "other" }],
+        },
         state: { nextRunAt: Date.now() + 60000 },
         scope: "agent",
       },
@@ -403,24 +373,32 @@ describe("cronListImpl", () => {
       {
         agentName: "bot",
         jobName: "mine",
-        config: { schedule: "0 9 * * *", message: "hi" },
+        config: {
+          schedule: "0 9 * * *",
+          tasks: [{ title: "hi", assignee: "bot" }],
+        },
         state: { nextRunAt: Date.now() + 60000 },
         scope: "agent",
       },
       {
         agentName: "other",
         jobName: "theirs",
-        config: { schedule: "0 10 * * *", message: "bye" },
+        config: {
+          schedule: "0 10 * * *",
+          tasks: [{ title: "bye", assignee: "other" }],
+        },
         state: { nextRunAt: Date.now() + 60000 },
         scope: "agent",
       },
       {
         agentName: "__office__",
         jobName: "shared",
-        config: { schedule: "0 12 * * *", message: "lunch" },
+        config: {
+          schedule: "0 12 * * *",
+          tasks: [{ title: "lunch", assignee: "bot" }],
+        },
         state: { nextRunAt: Date.now() + 60000 },
         scope: "office",
-        targets: ["bot", "other"],
       },
     ]);
     const deps = makeDeps({ cron });
@@ -436,16 +414,17 @@ describe("cronListImpl", () => {
       {
         agentName: "__office__",
         jobName: "standup",
-        config: { schedule: "0 9 * * 1-5", message: "go" },
+        config: {
+          schedule: "0 9 * * 1-5",
+          tasks: [{ title: "go", assignee: "bot" }],
+        },
         state: { nextRunAt: Date.now() + 60000 },
         scope: "office",
-        targets: ["bot"],
       },
     ]);
     const deps = makeDeps({ cron });
     const result = cronListImpl(deps, { scope: "office" });
     expect(result).toContain("[office] standup");
-    expect(result).toContain("bot");
   });
 });
 
@@ -456,7 +435,7 @@ describe("cron null guard", () => {
     const result = await cronAddImpl(makeDeps({ cron: null }), {
       name: "job",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     expect(result).toBe("Error: cron not initialized");
   });
@@ -482,7 +461,7 @@ describe("audit logging", () => {
     await cronAddImpl(deps, {
       name: "daily",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     const logPath = join(OFFICE_DIR, "logs", "cron-audit.jsonl");
     expect(existsSync(logPath)).toBe(true);
@@ -498,9 +477,8 @@ describe("audit logging", () => {
     await cronAddImpl(deps, {
       name: "job",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
       scope: "office",
-      targets: ["bot"],
     });
     const logPath = join(OFFICE_DIR, "logs", "cron-audit.jsonl");
     const lines = readFileSync(logPath, "utf-8").trim().split("\n");
@@ -513,7 +491,7 @@ describe("audit logging", () => {
     await cronAddImpl(deps, {
       name: "bad name!",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     const logPath = join(OFFICE_DIR, "logs", "cron-audit.jsonl");
     const lines = readFileSync(logPath, "utf-8").trim().split("\n");
@@ -527,7 +505,7 @@ describe("audit logging", () => {
     await cronAddImpl(deps, {
       name: "daily",
       schedule: "0 9 * * *",
-      message: "hi",
+      tasks: [{ title: "hi", assignee: "bot" }],
     });
     expect(existsSync(join(OFFICE_DIR, "logs", "cron-audit.jsonl"))).toBe(true);
   });

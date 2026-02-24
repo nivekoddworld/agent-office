@@ -90,7 +90,10 @@ export function ChannelView({
     setStickToBottom(true);
     setUnseenCount(0);
     lastCountRef.current = 0;
+    setClearedAt(0);
   }, [channelKey]);
+
+  const [clearedAt, setClearedAt] = useState(0);
 
   const dmAgent = channel.kind === "dm" ? channel.agentName : null;
   const conversationChannel =
@@ -124,15 +127,17 @@ export function ChannelView({
         timestamp: m.ts,
         isBot: m.role === "assistant",
         requestId: m.requestId ?? undefined,
+        kind: m.kind,
+        jobName: m.jobName,
       }));
     }
     return [];
   }, [baseline, channelBaseline, dmAgent, conversationChannel]);
 
   const liveMessages = useMemo(
-    () => eventToMessages(events, channel, isDefaultChannel),
+    () => eventToMessages(events, channel, isDefaultChannel, undefined, undefined, clearedAt),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [events, channelKey, isDefaultChannel],
+    [events, channelKey, isDefaultChannel, clearedAt],
   );
 
   const messages = useMemo(() => {
@@ -249,7 +254,11 @@ export function ChannelView({
           `/api/channels/${encodeURIComponent(channel.name)}/messages`,
           { method: "DELETE" },
         );
+        void queryClient.invalidateQueries({
+          queryKey: ["channel-messages", channel.name],
+        });
       }
+      setClearedAt(Date.now());
       notifications.show({
         title: "History cleared",
         message:

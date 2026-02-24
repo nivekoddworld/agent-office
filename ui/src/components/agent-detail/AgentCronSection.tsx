@@ -30,7 +30,6 @@ function formatTime(ts: number | null): string {
 const STATUS_COLORS: Record<string, string> = {
   ok: "green",
   error: "red",
-  skipped_busy: "yellow",
   skipped_cap: "orange",
 };
 
@@ -142,7 +141,7 @@ function AgentCronRow({
             </Badge>
           </Group>
           <Text size="xs" style={{ color: slack.textMuted }}>
-            {job.config.schedule} — {job.config.message}
+            {job.config.schedule} — {job.config.tasks.length} task(s)
           </Text>
         </div>
 
@@ -216,7 +215,8 @@ export function AgentCronSection({
   const agentJobs = cronJobs.filter(
     (j) =>
       (j.scope === "agent" && j.agentName === agentName) ||
-      (j.scope === "office" && j.targets?.includes(agentName)),
+      (j.scope === "office" &&
+        j.config.tasks.some((t) => t.assignee === agentName)),
   );
 
   if (agentJobs.length === 0) {

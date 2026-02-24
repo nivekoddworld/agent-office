@@ -39,6 +39,8 @@ export function useSSE(
       if (type === "snapshot" || type === "state_changed") {
         queryClient.setQueryData(["state"], data as BootstrapState);
         void queryClient.invalidateQueries({ queryKey: ["agent"] });
+        void queryClient.invalidateQueries({ queryKey: ["channel-messages"] });
+        void queryClient.invalidateQueries({ queryKey: ["agent-messages"] });
       }
       // state_changed is silent — don't push to event feed
       if (type !== "state_changed") {

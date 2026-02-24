@@ -262,12 +262,25 @@ export function validateAgentEntry(
         errors.push(
           `${p}: invalid schedule "${job.schedule ?? ""}" — must be a valid 5-field cron expression`,
         );
-      if (
-        !job.message ||
-        typeof job.message !== "string" ||
-        !job.message.trim()
-      )
-        errors.push(`${p}: message is required`);
+      if (!Array.isArray(job.tasks) || job.tasks.length === 0)
+        errors.push(`${p}: tasks is required and must be a non-empty array`);
+      else {
+        for (let i = 0; i < job.tasks.length; i++) {
+          const t = job.tasks[i];
+          if (!t || typeof t !== "object") {
+            errors.push(`${p}: tasks[${i}] must be an object`);
+          } else {
+            if (!t.title || typeof t.title !== "string" || !t.title.trim())
+              errors.push(`${p}: tasks[${i}].title is required`);
+            if (!t.assignee || typeof t.assignee !== "string" || !t.assignee.trim())
+              errors.push(`${p}: tasks[${i}].assignee is required`);
+            if (t.parent_id !== undefined && typeof t.parent_id !== "string")
+              errors.push(`${p}: tasks[${i}].parent_id must be a string`);
+            if (t.report_channel !== undefined && typeof t.report_channel !== "string")
+              errors.push(`${p}: tasks[${i}].report_channel must be a string`);
+          }
+        }
+      }
       if (job.timezone !== undefined && !isValidTimezone(job.timezone))
         errors.push(`${p}: invalid timezone "${job.timezone}"`);
       if (job.catch_up !== undefined && !VALID_CATCH_UP.includes(job.catch_up))
@@ -384,12 +397,6 @@ export function validateOfficeCronEntry(
     errors.push(
       `${p}: invalid schedule "${entry.schedule ?? ""}" — must be a valid 5-field cron expression`,
     );
-  if (
-    !entry.message ||
-    typeof entry.message !== "string" ||
-    !entry.message.trim()
-  )
-    errors.push(`${p}: message is required`);
   if (entry.timezone !== undefined && !isValidTimezone(entry.timezone))
     errors.push(`${p}: invalid timezone "${entry.timezone}"`);
   if (entry.catch_up !== undefined && !VALID_CATCH_UP.includes(entry.catch_up))
@@ -397,17 +404,25 @@ export function validateOfficeCronEntry(
   if (entry.enabled !== undefined && typeof entry.enabled !== "boolean")
     errors.push(`${p}: enabled must be a boolean`);
 
-  if (
-    !entry.targets ||
-    !Array.isArray(entry.targets) ||
-    entry.targets.length === 0
-  )
-    errors.push(`${p}: targets is required and must be a non-empty array`);
+  if (!Array.isArray(entry.tasks) || entry.tasks.length === 0)
+    errors.push(`${p}: tasks is required and must be a non-empty array`);
   else {
-    for (const t of entry.targets) {
-      if (t === "__broadcast__") continue;
-      if (!agentNames.includes(t))
-        errors.push(`${p}: unknown target agent "${t}"`);
+    for (let i = 0; i < entry.tasks.length; i++) {
+      const t = entry.tasks[i];
+      if (!t || typeof t !== "object") {
+        errors.push(`${p}: tasks[${i}] must be an object`);
+      } else {
+        if (!t.title || typeof t.title !== "string" || !t.title.trim())
+          errors.push(`${p}: tasks[${i}].title is required`);
+        if (!t.assignee || typeof t.assignee !== "string" || !t.assignee.trim())
+          errors.push(`${p}: tasks[${i}].assignee is required`);
+        else if (t.assignee !== "__broadcast__" && !agentNames.includes(t.assignee))
+          errors.push(`${p}: tasks[${i}]: unknown assignee "${t.assignee}"`);
+        if (t.parent_id !== undefined && typeof t.parent_id !== "string")
+          errors.push(`${p}: tasks[${i}].parent_id must be a string`);
+        if (t.report_channel !== undefined && typeof t.report_channel !== "string")
+          errors.push(`${p}: tasks[${i}].report_channel must be a string`);
+      }
     }
   }
 

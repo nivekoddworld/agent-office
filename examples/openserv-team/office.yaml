@@ -24,8 +24,11 @@ agents:
     cron:
       fetch-ideas:
         schedule: "0 */4 * * *"
-        message: "Fetch new ideas from the Ideaboard and share a summary with lead"
         enabled: true
+        tasks:
+          - title: "Fetch ideas from Ideaboard"
+            description: "Fetch new ideas from the Ideaboard and share a summary with lead"
+            assignee: scout
 
   lead:
     model: openai:gpt-5.2-codex

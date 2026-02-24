@@ -11,6 +11,7 @@ import {
 } from "../config/yaml-utils.js";
 import { withOfficeLock } from "../config/lock.js";
 import { isValidCron, describeCron } from "../cron/cron-parser.js";
+import type { CronTaskTemplate } from "../cron/types.js";
 
 const JOB_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 const VALID_CATCH_UP = ["skip", "once"];
@@ -25,11 +26,10 @@ export function cronListCommand(workspace: Workspace): void {
     const next = new Date(j.state.nextRunAt).toISOString();
     const desc = describeCron(j.config.schedule);
     const scope = j.scope === "office" ? "[office]" : "[agent]";
-    const targets = j.targets ? ` → ${j.targets.join(",")}` : "";
     const label =
       j.scope === "office" ? j.jobName : `${j.agentName}:${j.jobName}`;
     console.log(
-      `  ${scope} ${label}  ${j.config.schedule} (${desc})  next: ${next}${targets}`,
+      `  ${scope} ${label}  ${j.config.schedule} (${desc})  next: ${next}  tasks: ${j.config.tasks.length}`,
     );
   }
 }
@@ -52,18 +52,18 @@ export function cronStatusCommand(
     console.log(
       `    schedule:  ${j.config.schedule} (${describeCron(j.config.schedule)})`,
     );
-    console.log(`    message:   ${j.config.message}`);
+    console.log(`    tasks:     ${j.config.tasks.length}`);
+    for (const t of j.config.tasks) {
+      console.log(`      - ${t.title} → ${t.assignee}`);
+    }
     console.log(`    timezone:  ${j.config.timezone ?? "UTC"}`);
-    if (j.targets) console.log(`    targets:   ${j.targets.join(", ")}`);
     console.log(`    next run:  ${new Date(j.state.nextRunAt).toISOString()}`);
     console.log(
       `    last run:  ${j.state.lastRunAt ? new Date(j.state.lastRunAt).toISOString() : "never"}`,
     );
     console.log(`    attempts: ${j.state.attemptCount}`);
     console.log(`    sent:     ${j.state.sentCount}`);
-    console.log(
-      `    skipped:  busy=${j.state.skippedBusyCount}, cap=${j.state.skippedCapCount}`,
-    );
+    console.log(`    skipped:  cap=${j.state.skippedCapCount}`);
     console.log(`    status:    ${j.state.lastStatus ?? "pending"}`);
     if (j.state.lastError) console.log(`    error:     ${j.state.lastError}`);
   }
@@ -83,7 +83,7 @@ export async function cronAddCommand(
   agentName: string,
   jobName: string,
   schedule: string,
-  message: string,
+  tasks: CronTaskTemplate[],
   opts?: { timezone?: string; catchUp?: string; reportChannel?: string },
   workspace?: Workspace,
 ): Promise<boolean> {
@@ -97,8 +97,8 @@ export async function cronAddCommand(
     console.error(`[cron] Invalid schedule: "${schedule}"`);
     return false;
   }
-  if (!message || !message.trim()) {
-    console.error(`[cron] Message is required`);
+  if (!tasks || tasks.length === 0) {
+    console.error(`[cron] At least one task is required`);
     return false;
   }
   if (opts?.timezone && !isValidTimezone(opts.timezone)) {
@@ -125,7 +125,12 @@ export async function cronAddCommand(
       return;
     }
 
-    const entry: Record<string, unknown> = { schedule, message };
+    const tasksYaml = tasks.map((t) => {
+      const obj: Record<string, unknown> = { title: t.title, assignee: t.assignee };
+      if (t.description) obj.description = t.description;
+      return obj;
+    });
+    const entry: Record<string, unknown> = { schedule, tasks: tasksYaml };
     if (opts?.timezone) entry.timezone = opts.timezone;
     if (opts?.catchUp) entry.catch_up = opts.catchUp;
     if (opts?.reportChannel) entry.report_channel = opts.reportChannel;
@@ -287,8 +292,7 @@ export async function cronAddOfficeCommand(
   officeId: string,
   jobName: string,
   schedule: string,
-  message: string,
-  targets: string[],
+  tasks: CronTaskTemplate[],
   opts?: { timezone?: string; catchUp?: string; reportChannel?: string },
   workspace?: Workspace,
 ): Promise<boolean> {
@@ -302,12 +306,8 @@ export async function cronAddOfficeCommand(
     console.error(`[cron] Invalid schedule: "${schedule}"`);
     return false;
   }
-  if (!message || !message.trim()) {
-    console.error(`[cron] Message is required`);
-    return false;
-  }
-  if (!targets || targets.length === 0) {
-    console.error(`[cron] At least one target is required`);
+  if (!tasks || tasks.length === 0) {
+    console.error(`[cron] At least one task is required`);
     return false;
   }
   if (opts?.timezone && !isValidTimezone(opts.timezone)) {
@@ -319,21 +319,6 @@ export async function cronAddOfficeCommand(
     return false;
   }
 
-  // Validate targets against roster
-  const yaml = loadOfficeYaml(officeId);
-  if (yaml) {
-    const agentNames = Object.keys(yaml.agents);
-    for (const t of targets) {
-      if (t === "__broadcast__") continue;
-      if (!agentNames.includes(t)) {
-        console.error(
-          `[cron] Unknown target agent "${t}" — not in office roster`,
-        );
-        return false;
-      }
-    }
-  }
-
   let written = false;
   await withOfficeLock(officeId, async () => {
     const path = officeYamlPath(officeId);
@@ -342,7 +327,12 @@ export async function cronAddOfficeCommand(
       return;
     }
     const doc = parseDocument(readFileSync(path, "utf-8"));
-    const entry: Record<string, unknown> = { schedule, message, targets };
+    const tasksYaml = tasks.map((t) => {
+      const obj: Record<string, unknown> = { title: t.title, assignee: t.assignee };
+      if (t.description) obj.description = t.description;
+      return obj;
+    });
+    const entry: Record<string, unknown> = { schedule, tasks: tasksYaml };
     if (opts?.timezone) entry.timezone = opts.timezone;
     if (opts?.catchUp) entry.catch_up = opts.catchUp;
     if (opts?.reportChannel) entry.report_channel = opts.reportChannel;

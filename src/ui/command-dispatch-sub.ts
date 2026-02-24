@@ -211,26 +211,25 @@ export async function dispatchCronSubcommand(
       );
       return "noop";
     }
-    const targetsIdx = parts.indexOf("--targets");
-    if (targetsIdx === -1 || !parts[targetsIdx + 1]) {
-      console.log("Error: --targets is required for office cron");
+    const assigneeIdx = parts.indexOf("--assignee");
+    if (assigneeIdx === -1 || !parts[assigneeIdx + 1]) {
+      console.log("Error: --assignee is required for office cron");
       return "noop";
     }
-    const targets = parts[targetsIdx + 1]!.split(",");
+    const assignee = parts[assigneeIdx + 1]!;
     const optStart = parts.findIndex((p, i) => i >= 5 && p.startsWith("--"));
-    const msgEnd = optStart === -1 ? parts.length : optStart;
-    const message = parts.slice(5, msgEnd).join(" ");
-    if (!message) {
-      console.log("Error: message is required");
+    const titleEnd = optStart === -1 ? parts.length : optStart;
+    const title = parts.slice(5, titleEnd).join(" ");
+    if (!title) {
+      console.log("Error: task title is required");
       return "noop";
     }
-    const cronOpts = parseCronAddOpts(parts.slice(msgEnd));
+    const cronOpts = parseCronAddOpts(parts.slice(titleEnd));
     const ok = await cronAddOfficeCommand(
       officeId,
       parts[3],
       schedule,
-      message,
-      targets,
+      [{ title, assignee }],
       cronOpts,
       workspace,
     );
@@ -245,25 +244,27 @@ export async function dispatchCronSubcommand(
     const fieldCount = schedule.split(/\s+/).length;
     if (fieldCount !== 5) {
       console.log(
-        `Error: schedule must be a quoted 5-field cron expression (got ${fieldCount} field${fieldCount !== 1 ? "s" : ""}). Example: cron add mybot daily "0 9 * * 1-5" Run standup`,
+        `Error: schedule must be a quoted 5-field cron expression (got ${fieldCount} field${fieldCount !== 1 ? "s" : ""}). Example: cron add mybot daily "0 9 * * 1-5" Run standup --assignee mybot`,
       );
       return "noop";
     }
     const apply = parts.includes("--apply");
+    const assigneeIdx = parts.indexOf("--assignee");
+    const assignee = assigneeIdx !== -1 ? parts[assigneeIdx + 1] : parts[2];
     const optStart = parts.findIndex((p, i) => i >= 5 && p.startsWith("--"));
-    const msgEnd = optStart === -1 ? parts.length : optStart;
-    const message = parts.slice(5, msgEnd).join(" ");
-    if (!message) {
-      console.log("Error: message is required");
+    const titleEnd = optStart === -1 ? parts.length : optStart;
+    const title = parts.slice(5, titleEnd).join(" ");
+    if (!title) {
+      console.log("Error: task title is required");
       return "noop";
     }
-    const cronOpts = parseCronAddOpts(parts.slice(msgEnd));
+    const cronOpts = parseCronAddOpts(parts.slice(titleEnd));
     const ok = await cronAddCommand(
       officeId,
       parts[2],
       parts[3],
       schedule,
-      message,
+      [{ title, assignee: assignee ?? parts[2]! }],
       cronOpts,
       apply ? workspace : undefined,
     );
