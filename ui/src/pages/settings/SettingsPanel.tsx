@@ -8,6 +8,8 @@ import {
   ActionIcon,
   Tooltip,
   CopyButton,
+  SegmentedControl,
+  useMantineColorScheme,
 } from "@mantine/core";
 import {
   IconBuilding,
@@ -19,6 +21,7 @@ import {
   IconCopy,
   IconPlayerPlay,
   IconPlayerPause,
+  IconPalette,
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
@@ -80,6 +83,7 @@ function InfoRow({
 
 export function SettingsPanel() {
   const state = useAppState();
+  const { colorScheme, setColorScheme } = useMantineColorScheme();
   const schedulerAction = useSchedulerAction();
   const officeApply = useOfficeApply();
   const officeValidate = useOfficeValidate();
@@ -156,6 +160,31 @@ export function SettingsPanel() {
               value={`~/.agent-office/offices/${state.officeId}`}
               copyable
             />
+          </Surface>
+        </Box>
+
+        {/* Appearance */}
+        <Box>
+          <SectionHeader
+            icon={<IconPalette size={16} color={"var(--ao-accent-purple)"} />}
+            label="Appearance"
+          />
+          <Surface>
+            <Group justify="space-between">
+              <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
+                Color Scheme
+              </Text>
+              <SegmentedControl
+                size="xs"
+                value={colorScheme}
+                onChange={(v) => setColorScheme(v as "light" | "dark" | "auto")}
+                data={[
+                  { value: "auto", label: "Auto" },
+                  { value: "light", label: "Light" },
+                  { value: "dark", label: "Dark" },
+                ]}
+              />
+            </Group>
           </Surface>
         </Box>
 

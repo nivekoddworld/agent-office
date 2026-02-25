@@ -26,10 +26,10 @@ body,
 @keyframes ao-glow-pulse {
   0%,
   100% {
-    box-shadow: 0 0 4px var(--ao-glow-primary);
+    box-shadow: 0 0 4px rgba(112, 72, 232, 0.15);
   }
   50% {
-    box-shadow: 0 0 8px var(--ao-glow-primary);
+    box-shadow: 0 0 8px rgba(112, 72, 232, 0.15);
   }
 }
 

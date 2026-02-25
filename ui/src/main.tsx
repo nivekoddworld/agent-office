@@ -21,8 +21,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <MantineProvider
       theme={theme}
-      defaultColorScheme="dark"
-      forceColorScheme="dark"
+      defaultColorScheme="auto"
       cssVariablesResolver={cssVariablesResolver}
     >
       <Notifications position="top-right" />
