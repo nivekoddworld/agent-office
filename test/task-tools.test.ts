@@ -10,6 +10,7 @@ import {
   taskUpdateImpl,
   taskListImpl,
   taskGetImpl,
+  taskDeleteImpl,
   type TaskToolDeps,
 } from "../src/agent/tools/task-impl.js";
 
@@ -53,7 +54,7 @@ describe("Task tool implementations", () => {
     expect(result).toContain("[todo]");
   });
 
-  it("taskCreateImpl shows backlog when dependencies set", () => {
+  it("taskCreateImpl shows waiting when dependencies set", () => {
     const first = taskCreateImpl(deps, {
       title: "Code",
       assignee: "coder",
@@ -66,7 +67,7 @@ describe("Task tool implementations", () => {
       assignee: "reviewer",
       dependsOn: [id],
     });
-    expect(second).toContain("[backlog]");
+    expect(second).toContain("[waiting]");
     expect(second).toContain("blocked by");
   });
 
@@ -118,6 +119,24 @@ describe("Task tool implementations", () => {
     expect(result).toContain("cannot transition");
   });
 
+  it("taskUpdateImpl transitions to failed", () => {
+    const createResult = taskCreateImpl(deps, {
+      title: "Fail work",
+      assignee: "coder",
+    });
+    const id = createResult.match(/#(T-\w+)/)?.[1] ?? "";
+
+    const coderDeps = { agentName: "coder", taskService: service };
+    taskUpdateImpl(coderDeps, { id, status: "in_progress" });
+    const result = taskUpdateImpl(coderDeps, {
+      id,
+      status: "failed",
+      result: "Cannot complete",
+    });
+    expect(result).toContain("updated");
+    expect(result).toContain("[failed]");
+  });
+
   it("taskUpdateImpl requires at least one field", () => {
     const result = taskUpdateImpl(deps, { id: "T-xxx" });
     expect(result).toContain("Error");
@@ -163,5 +182,31 @@ describe("Task tool implementations", () => {
     const result = taskGetImpl(deps, { id: "T-missing" });
     expect(result).toContain("Error");
     expect(result).toContain("not found");
+  });
+
+  // --- task_delete ---
+
+  it("taskDeleteImpl deletes a task and returns confirmation", () => {
+    const createResult = taskCreateImpl(deps, {
+      title: "Delete me",
+      assignee: "coder",
+    });
+    const id = createResult.match(/#(T-\w+)/)?.[1] ?? "";
+
+    const result = taskDeleteImpl(deps, { id });
+    expect(result).toContain("deleted");
+    expect(result).toContain(id);
+  });
+
+  it("taskDeleteImpl returns error for unknown task", () => {
+    const result = taskDeleteImpl(deps, { id: "T-missing" });
+    expect(result).toContain("Error");
+    expect(result).toContain("not found");
+  });
+
+  it("taskDeleteImpl returns error when service is null", () => {
+    const nullDeps = { agentName: "pm", taskService: null };
+    const result = taskDeleteImpl(nullDeps, { id: "T-xxx" });
+    expect(result).toContain("Error");
   });
 });

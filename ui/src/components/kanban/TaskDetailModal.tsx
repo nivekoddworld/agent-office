@@ -1,21 +1,32 @@
-import { Modal, Text, Group, Badge, Stack, Divider, Box } from "@mantine/core";
+import { useState } from "react";
+import {
+  Modal,
+  Text,
+  Group,
+  Badge,
+  Stack,
+  Divider,
+  Box,
+  Button,
+} from "@mantine/core";
+import { IconTrash } from "@tabler/icons-react";
 
 import { PriorityBadge } from "../shared/PriorityBadge.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const STATUS_COLORS: Record<TaskStatus, string> = {
-  backlog: "var(--ao-text-muted)",
+  waiting: "var(--ao-text-muted)",
   todo: "var(--ao-accent-blue)",
   in_progress: "var(--ao-accent-yellow)",
-  review: "var(--ao-accent-purple)",
   done: "var(--ao-accent-green)",
-  cancelled: "var(--ao-accent-red)",
+  failed: "var(--ao-accent-red, #e03131)",
 };
 
 interface TaskDetailModalProps {
   task: Task | null;
   opened: boolean;
   onClose: () => void;
+  onDelete?: (taskId: string) => void;
 }
 
 function formatDate(ts: number): string {
@@ -26,13 +37,31 @@ export function TaskDetailModal({
   task,
   opened,
   onClose,
+  onDelete,
 }: TaskDetailModalProps) {
+  const [confirming, setConfirming] = useState(false);
+
   if (!task) return null;
+
+  const handleDelete = () => {
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+    onDelete?.(task.id);
+    setConfirming(false);
+    onClose();
+  };
+
+  const handleClose = () => {
+    setConfirming(false);
+    onClose();
+  };
 
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={handleClose}
       title={
         <Group gap={8}>
           <Text size="sm" ff="monospace" c="dimmed">
@@ -180,6 +209,23 @@ export function TaskDetailModal({
             </Box>
           )}
         </Group>
+
+        {onDelete && (
+          <>
+            <Divider color={"var(--ao-border)"} />
+            <Group justify="flex-end">
+              <Button
+                size="xs"
+                color="red"
+                variant={confirming ? "filled" : "subtle"}
+                leftSection={<IconTrash size={14} />}
+                onClick={handleDelete}
+              >
+                {confirming ? "Confirm Delete" : "Delete Task"}
+              </Button>
+            </Group>
+          </>
+        )}
       </Stack>
     </Modal>
   );

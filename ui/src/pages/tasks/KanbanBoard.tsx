@@ -7,14 +7,15 @@ import { KanbanColumn } from "../../components/kanban/KanbanColumn.js";
 import { TaskDetailModal } from "../../components/kanban/TaskDetailModal.js";
 import { TaskAddForm } from "../../components/kanban/TaskAddForm.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
+import { useTaskDelete } from "../../api/use-api-mutations.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const VISIBLE_COLUMNS: TaskStatus[] = [
-  "backlog",
+  "waiting",
   "todo",
   "in_progress",
-  "review",
   "done",
+  "failed",
 ];
 
 export function KanbanBoard() {
@@ -32,6 +33,7 @@ export function KanbanBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [filter, setFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
+  const deleteTask = useTaskDelete();
 
   // Sync selectedTask when tasks prop updates (e.g. agent status change via SSE)
   useEffect(() => {
@@ -48,12 +50,11 @@ export function KanbanBoard() {
 
   const board = useMemo(() => {
     const b: Record<TaskStatus, Task[]> = {
-      backlog: [],
+      waiting: [],
       todo: [],
       in_progress: [],
-      review: [],
       done: [],
-      cancelled: [],
+      failed: [],
     };
     for (const task of filtered) {
       b[task.status].push(task);
@@ -142,6 +143,10 @@ export function KanbanBoard() {
         task={selectedTask}
         opened={selectedTask !== null}
         onClose={() => setSelectedTask(null)}
+        onDelete={(taskId) => {
+          deleteTask.mutate(taskId);
+          setSelectedTask(null);
+        }}
       />
 
       <TaskAddForm

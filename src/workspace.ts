@@ -173,7 +173,7 @@ export class Workspace {
           .filter(
             (t) =>
               t.status !== "done" &&
-              t.status !== "cancelled" &&
+              t.status !== "failed" &&
               Date.now() - t.updatedAt > staleThresholdMs,
           ),
       getStallIncidents: () => this.deadlockDetector.getIncidents(),

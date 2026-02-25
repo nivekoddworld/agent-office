@@ -58,6 +58,7 @@ vi.mock("../src/agent/tools/index.js", () => ({
   createTaskUpdateTool: () => ({ name: "task_update", execute: vi.fn() }),
   createTaskListTool: () => ({ name: "task_list", execute: vi.fn() }),
   createTaskGetTool: () => ({ name: "task_get", execute: vi.fn() }),
+  createTaskDeleteTool: () => ({ name: "task_delete", execute: vi.fn() }),
 }));
 
 // Mock memory/search to avoid real disk access

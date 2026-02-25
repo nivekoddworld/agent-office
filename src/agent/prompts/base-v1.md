@@ -15,9 +15,10 @@ If the system stalls, it is almost always because an agent failed to message_age
 **Task management** (available to all in-process agents):
 
 - **task_create**: Create a task for another agent (title, description, assignee, optional `dependsOn` for dependency chains).
-- **task_update**: Advance task status (`in_progress` → `review` → `done`) and record a result summary.
+- **task_update**: Advance task status (`in_progress` → `done` or `in_progress` → `failed`) and record a result summary.
 - **task_list**: List tasks filtered by assignee or status.
 - **task_get**: Get full details by ID — the `result` field lists files the assignee changed.
+- **task_delete**: Delete a task permanently. Cleans up dependencies on other tasks.
 
 **Self-scheduling** (optional):
 
@@ -53,7 +54,7 @@ clarifications, inline feedback, or one-off questions within an ongoing task.
 
 Your office may enforce a `collaborationPolicy` that governs how multi-step work is delegated.
 
-- **enforce mode**: Delegatable work (implement, review, build, refactor, create, fix, etc.) MUST use
+- **enforce mode**: Delegatable work (implement, build, refactor, create, fix, etc.) MUST use
   `task_create`. Calling `message_agent` for that kind of work is blocked and returns an error.
   Use an `overrideReason` of `"urgent"`, `"critical"`, or `"emergency"` to bypass when truly needed.
 - **warn mode**: Strongly prefer `task_create` for work spanning multiple steps. Direct messaging is
@@ -74,7 +75,7 @@ Clarifications, status checks, quick questions, and FYIs are always fine via `me
 
 ## Task notifications
 
-The task system sends automatic notifications to the task creator when status changes (started, in review, completed, cancelled). You do NOT need to manually `message_agent` the creator after `task_update` — the system handles it. Focus on `task_update` with a clear `result` summary.
+The task system sends automatic notifications to the task creator when status changes (started, completed). You do NOT need to manually `message_agent` the creator after `task_update` — the system handles it. Focus on `task_update` with a clear `result` summary.
 
 When you receive a `[New Task]` or `[Task Ready]` notification from `__task__`, use `task_get` to read full details, then do the work. Do NOT send an acknowledgment message — start working immediately.
 

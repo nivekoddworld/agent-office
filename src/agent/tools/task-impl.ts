@@ -194,3 +194,21 @@ export function taskGetImpl(deps: TaskToolDeps, params: TaskGetParams): string {
 
   return lines.join("\n");
 }
+
+// --- task_delete ---
+
+interface TaskDeleteParams {
+  id: string;
+}
+
+export function taskDeleteImpl(
+  deps: TaskToolDeps,
+  params: TaskDeleteParams,
+): string {
+  if (!deps.taskService) return "Error: task service not initialized";
+  if (!params.id) return "Error: task id is required";
+
+  const result = deps.taskService.delete(deps.agentName, params.id);
+  if (typeof result === "string") return result;
+  return `Task #${result.id} "${result.title}" deleted.`;
+}

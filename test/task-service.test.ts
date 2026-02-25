@@ -52,7 +52,7 @@ describe("TaskService", () => {
     expect(task.id).toMatch(/^T-/);
   });
 
-  it("creates a task in backlog when dependencies are unmet", () => {
+  it("creates a task in waiting when dependencies are unmet", () => {
     const t1 = service.create("pm", {
       title: "Code it",
       assignee: "coder",
@@ -66,7 +66,7 @@ describe("TaskService", () => {
       priority: P,
     }) as Task;
 
-    expect(t2.status).toBe("backlog");
+    expect(t2.status).toBe("waiting");
   });
 
   it("sends notification to assignee on todo task", () => {
@@ -80,7 +80,7 @@ describe("TaskService", () => {
     expect(messages[0]!.payload).toContain("[New Task]");
   });
 
-  it("does NOT send notification for backlog task", () => {
+  it("does NOT send notification for waiting task", () => {
     const t1 = service.create("pm", {
       title: "First",
       assignee: "coder",
@@ -221,7 +221,7 @@ describe("TaskService", () => {
       priority: P,
     }) as Task;
 
-    expect(t2.status).toBe("backlog");
+    expect(t2.status).toBe("waiting");
 
     // Complete the dependency chain
     service.update("coder", t1.id, { status: "in_progress" });
@@ -258,7 +258,7 @@ describe("TaskService", () => {
     service.update("coder", t1.id, { status: "in_progress" });
     service.update("coder", t1.id, { status: "done" });
 
-    expect(service.get(t3.id)!.status).toBe("backlog");
+    expect(service.get(t3.id)!.status).toBe("waiting");
 
     // Complete t2 too
     service.update("coder", t2.id, { status: "in_progress" });
@@ -285,40 +285,6 @@ describe("TaskService", () => {
       true,
     );
     expect(messages.some((m) => m.payload.includes("Done"))).toBe(true);
-  });
-
-  it("notifies creator when task transitions to cancelled", () => {
-    const t = service.create("pm", {
-      title: "Cancel me",
-      assignee: "coder",
-      priority: P,
-    }) as Task;
-    bus.drain("pm");
-
-    service.update("coder", t.id, { status: "in_progress" });
-    service.update("coder", t.id, { status: "cancelled" });
-
-    const messages = bus.peekMessages("pm");
-    expect(messages.some((m) => m.payload.includes("[Task Cancelled]"))).toBe(
-      true,
-    );
-  });
-
-  it("notifies creator when task transitions to review", () => {
-    const t = service.create("pm", {
-      title: "Review me",
-      assignee: "coder",
-      priority: P,
-    }) as Task;
-    bus.drain("pm");
-
-    service.update("coder", t.id, { status: "in_progress" });
-    service.update("coder", t.id, { status: "review" });
-
-    const messages = bus.peekMessages("pm");
-    expect(messages.some((m) => m.payload.includes("[Task In Review]"))).toBe(
-      true,
-    );
   });
 
   it("notifies creator when task transitions to in_progress", () => {
@@ -370,6 +336,157 @@ describe("TaskService", () => {
         m.payload.includes("[Task Started]"),
     );
     expect(creatorNotifs.length).toBe(0);
+  });
+
+  // --- failed ---
+
+  it("transitions in_progress → failed", () => {
+    const t = service.create("pm", {
+      title: "Fail me",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    service.update("coder", t.id, { status: "in_progress" });
+    const failed = service.update("coder", t.id, {
+      status: "failed",
+      result: "Could not complete",
+    }) as Task;
+
+    expect(failed.status).toBe("failed");
+    expect(failed.result).toBe("Could not complete");
+    expect(failed.completedAt).toBeDefined();
+  });
+
+  it("rejects todo → failed (must go through in_progress first)", () => {
+    const t = service.create("pm", {
+      title: "Skip",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    const result = service.update("coder", t.id, { status: "failed" });
+    expect(typeof result).toBe("string");
+    expect(result).toContain("cannot transition");
+  });
+
+  it("failed is terminal — cannot transition out", () => {
+    const t = service.create("pm", {
+      title: "Terminal",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    service.update("coder", t.id, { status: "in_progress" });
+    service.update("coder", t.id, { status: "failed" });
+
+    const result = service.update("coder", t.id, { status: "todo" });
+    expect(typeof result).toBe("string");
+    expect(result).toContain("cannot transition");
+  });
+
+  it("notifies creator when task fails", () => {
+    const t = service.create("pm", {
+      title: "Fail notify",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    bus.drain("pm");
+
+    service.update("coder", t.id, { status: "in_progress" });
+    service.update("coder", t.id, {
+      status: "failed",
+      result: "Blocked by API",
+    });
+
+    const messages = bus.peekMessages("pm");
+    expect(messages.some((m) => m.payload.includes("[Task Failed]"))).toBe(
+      true,
+    );
+  });
+
+  // --- delete ---
+
+  it("deletes a task", () => {
+    const t = service.create("pm", {
+      title: "Delete me",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    const result = service.delete("pm", t.id);
+    expect(typeof result).not.toBe("string");
+    expect((result as Task).id).toBe(t.id);
+    expect(service.get(t.id)).toBeUndefined();
+  });
+
+  it("returns error when deleting unknown task", () => {
+    const result = service.delete("pm", "T-unknown");
+    expect(typeof result).toBe("string");
+    expect(result).toContain("not found");
+  });
+
+  it("cleans up dependsOn references when deleting a task", () => {
+    const t1 = service.create("pm", {
+      title: "Dep",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    const t2 = service.create("pm", {
+      title: "Blocked",
+      assignee: "reviewer",
+      dependsOn: [t1.id],
+      priority: P,
+    }) as Task;
+
+    expect(t2.dependsOn).toContain(t1.id);
+
+    service.delete("pm", t1.id);
+
+    const updated = service.get(t2.id)!;
+    expect(updated.dependsOn).not.toContain(t1.id);
+  });
+
+  it("auto-unblocks waiting task when its only dependency is deleted", () => {
+    const t1 = service.create("pm", {
+      title: "Dep",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    const t2 = service.create("pm", {
+      title: "Blocked",
+      assignee: "reviewer",
+      dependsOn: [t1.id],
+      priority: P,
+    }) as Task;
+
+    expect(t2.status).toBe("waiting");
+
+    service.delete("pm", t1.id);
+
+    const updated = service.get(t2.id)!;
+    expect(updated.status).toBe("todo");
+  });
+
+  it("clears parentId when parent task is deleted", () => {
+    const parent = service.create("pm", {
+      title: "Parent",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    const child = service.create("pm", {
+      title: "Child",
+      assignee: "coder",
+      parentId: parent.id,
+      priority: P,
+    }) as Task;
+
+    expect(child.parentId).toBe(parent.id);
+
+    service.delete("pm", parent.id);
+
+    const updated = service.get(child.id)!;
+    expect(updated.parentId).toBeUndefined();
   });
 
   // --- list / filter ---

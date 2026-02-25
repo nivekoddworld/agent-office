@@ -55,12 +55,11 @@ export interface CronJobEntry {
 }
 
 export type TaskStatus =
-  | "backlog"
+  | "waiting"
   | "todo"
   | "in_progress"
-  | "review"
   | "done"
-  | "cancelled";
+  | "failed";
 
 export interface Task {
   id: string;

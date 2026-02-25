@@ -114,7 +114,7 @@ export class TaskService {
 
     const now = Date.now();
     const hasUnmetDeps = deps.some((id) => this.tasks[id]?.status !== "done");
-    const initialStatus: TaskStatus = hasUnmetDeps ? "backlog" : "todo";
+    const initialStatus: TaskStatus = hasUnmetDeps ? "waiting" : "todo";
 
     const task: Task = {
       id: shortId(),
@@ -199,7 +199,7 @@ export class TaskService {
       task.startedAt = now;
     }
     if (
-      (task.status === "done" || task.status === "cancelled") &&
+      (task.status === "done" || task.status === "failed") &&
       !task.completedAt
     ) {
       task.completedAt = now;
@@ -229,6 +229,58 @@ export class TaskService {
       this.resolveDependencies(task.id);
       this.doneHook?.(task);
     }
+
+    return task;
+  }
+
+  /** Delete a task, clean up dependencies and parent references. */
+  delete(deletedBy: string, taskId: string): Task | string {
+    const task = this.tasks[taskId];
+    if (!task) return `Error: task "${taskId}" not found`;
+
+    // Remove from dependsOn arrays of other tasks
+    for (const other of Object.values(this.tasks)) {
+      if (other.dependsOn.includes(taskId)) {
+        other.dependsOn = other.dependsOn.filter((id) => id !== taskId);
+      }
+      if (other.parentId === taskId) {
+        other.parentId = undefined;
+      }
+    }
+
+    delete this.tasks[taskId];
+    this.persist();
+
+    // Auto-unblock: waiting tasks whose deps are now all done
+    for (const other of Object.values(this.tasks)) {
+      if (other.status !== "waiting") continue;
+      if (other.dependsOn.length === 0) {
+        other.status = "todo";
+        other.updatedAt = Date.now();
+        this.notifyAssignee(other, "ready");
+        continue;
+      }
+      const allDone = other.dependsOn.every(
+        (id) => this.tasks[id]?.status === "done",
+      );
+      if (allDone) {
+        other.status = "todo";
+        other.updatedAt = Date.now();
+        this.notifyAssignee(other, "ready");
+      }
+    }
+    this.persist();
+
+    this.stateChangedCallback?.();
+
+    auditTaskAction(this.officeDir, {
+      ts: new Date().toISOString(),
+      agent: deletedBy,
+      action: "delete",
+      taskId: task.id,
+      result: "ok",
+      details: { title: task.title, assignee: task.assignee },
+    });
 
     return task;
   }
@@ -263,12 +315,11 @@ export class TaskService {
   /** Get all tasks grouped by status (for Kanban board). */
   board(): Record<TaskStatus, Task[]> {
     const board: Record<TaskStatus, Task[]> = {
-      backlog: [],
+      waiting: [],
       todo: [],
       in_progress: [],
-      review: [],
       done: [],
-      cancelled: [],
+      failed: [],
     };
     for (const task of Object.values(this.tasks)) {
       board[task.status].push(task);
@@ -283,7 +334,7 @@ export class TaskService {
 
   private resolveDependencies(completedTaskId: string): void {
     for (const task of Object.values(this.tasks)) {
-      if (task.status !== "backlog") continue;
+      if (task.status !== "waiting") continue;
       if (!task.dependsOn.includes(completedTaskId)) continue;
 
       const allDone = task.dependsOn.every(
@@ -301,7 +352,7 @@ export class TaskService {
         taskId: task.id,
         result: "ok",
         details: {
-          from: "backlog",
+          from: "waiting",
           to: "todo",
           reason: "all dependencies resolved",
           resolvedBy: completedTaskId,
@@ -319,9 +370,8 @@ export class TaskService {
 
     const labels: Partial<Record<TaskStatus, string>> = {
       in_progress: "[Task Started]",
-      review: "[Task In Review]",
       done: "[Task Completed]",
-      cancelled: "[Task Cancelled]",
+      failed: "[Task Failed]",
     };
     const label = labels[task.status];
     if (!label) return;

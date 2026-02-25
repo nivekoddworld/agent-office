@@ -294,6 +294,17 @@ export function useTaskCreate() {
   });
 }
 
+export function useTaskDelete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      apiFetch<Task>(`/api/tasks/${encodeURIComponent(taskId)}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
 export function useSetSecretRef() {
   const queryClient = useQueryClient();
   return useMutation({

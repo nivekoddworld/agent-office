@@ -35,13 +35,7 @@ export function taskListCommand(
 
 export function taskBoardCommand(workspace: Workspace): void {
   const board = workspace.tasks.board();
-  const columns: TaskStatus[] = [
-    "backlog",
-    "todo",
-    "in_progress",
-    "review",
-    "done",
-  ];
+  const columns: TaskStatus[] = ["waiting", "todo", "in_progress", "done", "failed"];
   for (const col of columns) {
     const tasks = board[col];
     console.log(`\n--- ${col.toUpperCase()} (${tasks.length}) ---`);

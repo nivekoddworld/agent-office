@@ -119,7 +119,7 @@ describe("PolicyService — isSimpleWorkCandidate", () => {
       svc.isSimpleWorkCandidate("Please implement the auth module", 1),
     ).toBe(true);
     expect(
-      svc.isSimpleWorkCandidate("Review the PR for the feature branch", 1),
+      svc.isSimpleWorkCandidate("Fix the bug in the login module", 1),
     ).toBe(true);
     expect(
       svc.isSimpleWorkCandidate("Build the Docker image and push it", 1),

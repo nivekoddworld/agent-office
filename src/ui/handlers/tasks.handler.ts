@@ -88,5 +88,18 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         return json(res, 200, result);
       },
     },
+    {
+      method: "DELETE",
+      pattern: /^\/api\/tasks\/([^/]+)$/,
+      paramNames: ["id"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const result = workspace.tasks.delete("__user__", params.id!);
+        if (typeof result === "string")
+          return json(res, 400, { ok: false, error: result });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, result);
+      },
+    },
   ];
 }

@@ -36,6 +36,7 @@ import {
   handleTaskUpdate,
   handleTaskList,
   handleTaskGet,
+  handleTaskDelete,
   type CronHandlerDeps,
   type TaskHandlerDeps,
 } from "./host-api-ext-handlers.js";
@@ -326,6 +327,9 @@ export class HostApi {
       } else if (req.method === "POST" && path === "/api/task-get") {
         if (this.checkToolPolicy(path, agentName, res))
           await handleTaskGet(req, res, this.buildTaskDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/task-delete") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleTaskDelete(req, res, this.buildTaskDeps(agentName));
       } else if (req.method === "POST" && path === "/api/tool-count") {
         await handleToolCount(req, res, agentName, this.agentToolCounts);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
@@ -356,6 +360,7 @@ export class HostApi {
     "/api/task-update": "task_update",
     "/api/task-list": "task_list",
     "/api/task-get": "task_get",
+    "/api/task-delete": "task_delete",
   };
 
   private checkToolPolicy(

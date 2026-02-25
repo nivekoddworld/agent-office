@@ -46,7 +46,6 @@ export class PolicyService {
     const actionVerbs = [
       "create",
       "update",
-      "review",
       "implement",
       "build",
       "fix",

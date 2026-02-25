@@ -305,7 +305,7 @@ export const TASK_CREATE = {
   name: "task_create" as const,
   label: "Task Create",
   description:
-    "Create a new task and assign it to an agent. If dependsOn IDs are set and those tasks are not yet done, the new task starts in 'backlog' and the assignee is notified only when all dependencies complete.",
+    "Create a new task and assign it to an agent. If dependsOn IDs are set and those tasks are not yet done, the new task starts in 'waiting' and the assignee is notified only when all dependencies complete.",
   parameters: Type.Object({
     title: Type.String({ description: "Short task title" }),
     description: Type.Optional(
@@ -341,13 +341,13 @@ export const TASK_UPDATE = {
   name: "task_update" as const,
   label: "Task Update",
   description:
-    "Update a task's status, result, assignee, or priority. Status transitions: backlog→todo, todo→in_progress, in_progress→review/done, review→in_progress/done, cancelled→backlog. Completing a task auto-unblocks dependent tasks.",
+    "Update a task's status, result, assignee, or priority. Status transitions: waiting→todo, todo→in_progress, in_progress→done, in_progress→failed. Completing a task auto-unblocks dependent tasks. Use task_delete to remove unwanted tasks.",
   parameters: Type.Object({
     id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
     status: Type.Optional(
       Type.Unsafe<string>({
         type: "string",
-        enum: ["backlog", "todo", "in_progress", "review", "done", "cancelled"],
+        enum: ["waiting", "todo", "in_progress", "done", "failed"],
         description: "New status",
       }),
     ),
@@ -384,7 +384,7 @@ export const TASK_LIST = {
     status: Type.Optional(
       Type.Unsafe<string>({
         type: "string",
-        enum: ["backlog", "todo", "in_progress", "review", "done", "cancelled"],
+        enum: ["waiting", "todo", "in_progress", "done", "failed"],
         description: "Filter by status",
       }),
     ),
@@ -403,6 +403,16 @@ export const TASK_GET = {
   label: "Task Get",
   description:
     "Get full details of a single task by ID, including description, dependencies, and result.",
+  parameters: Type.Object({
+    id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
+  }),
+};
+
+export const TASK_DELETE = {
+  name: "task_delete" as const,
+  label: "Task Delete",
+  description:
+    "Delete a task permanently. Cleans up dependencies — any task that depended on the deleted task will have that dependency removed and may auto-unblock.",
   parameters: Type.Object({
     id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
   }),

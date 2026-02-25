@@ -32,6 +32,7 @@ import {
   createTaskUpdateTool,
   createTaskListTool,
   createTaskGetTool,
+  createTaskDeleteTool,
 } from "./tools/index.js";
 import { appendSession } from "../sessions/session-writer.js";
 import {
@@ -254,6 +255,7 @@ export async function initInProcessAgent(
     createTaskUpdateTool(taskDeps),
     createTaskListTool(taskDeps),
     createTaskGetTool(taskDeps),
+    createTaskDeleteTool(taskDeps),
     createSkillSearchTool(skillDeps),
     createSkillInstallTool(skillDeps),
     createSkillRemoveTool(skillDeps),

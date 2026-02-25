@@ -1,30 +1,27 @@
 import type { Priority } from "../types.js";
 
 export type TaskStatus =
-  | "backlog"
+  | "waiting"
   | "todo"
   | "in_progress"
-  | "review"
   | "done"
-  | "cancelled";
+  | "failed";
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
-  "backlog",
+  "waiting",
   "todo",
   "in_progress",
-  "review",
   "done",
-  "cancelled",
+  "failed",
 ] as const;
 
 /** Allowed status transitions. */
 export const STATUS_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
-  backlog: ["todo", "cancelled"],
-  todo: ["in_progress", "cancelled"],
-  in_progress: ["review", "done", "cancelled"],
-  review: ["in_progress", "done", "cancelled"],
+  waiting: ["todo"],
+  todo: ["in_progress"],
+  in_progress: ["done", "failed"],
   done: [],
-  cancelled: ["backlog"],
+  failed: [],
 };
 
 export interface Task {

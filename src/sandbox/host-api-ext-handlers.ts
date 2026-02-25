@@ -28,6 +28,7 @@ import {
   taskUpdateImpl,
   taskListImpl,
   taskGetImpl,
+  taskDeleteImpl,
   type TaskToolDeps,
 } from "../agent/tools/task-impl.js";
 import type { CronService } from "../cron/cron-service.js";
@@ -492,6 +493,27 @@ export async function handleTaskGet(
   const parsed = await parseTaskBody(req, res, deps);
   if (!parsed) return;
   const result = taskGetImpl(makeTaskDeps(parsed.deps), parsed.params as any);
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ result }));
+}
+
+export async function handleTaskDelete(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: TaskHandlerDeps | null,
+): Promise<void> {
+  const parsed = await parseTaskBody(req, res, deps);
+  if (!parsed) return;
+  const result = taskDeleteImpl(
+    makeTaskDeps(parsed.deps),
+    parsed.params as any,
+  );
+  if (result.startsWith("Error:")) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: result }));
+    return;
+  }
+  parsed.deps.onStateChanged?.();
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result }));
 }

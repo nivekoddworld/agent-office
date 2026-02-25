@@ -580,21 +580,21 @@ Task tools (`task_create`, `task_update`, `task_list`, `task_get`) are registere
 Tasks follow a Kanban status flow with enforced transitions:
 
 ```
-backlog → todo → in_progress → review → done
-                                  ↓
-                              cancelled
+waiting → todo → in_progress → done
+                             → failed
 ```
 
-| Status        | Allowed transitions                |
-| ------------- | ---------------------------------- |
-| `backlog`     | `todo`, `cancelled`                |
-| `todo`        | `in_progress`, `cancelled`         |
-| `in_progress` | `review`, `done`, `cancelled`      |
-| `review`      | `in_progress`, `done`, `cancelled` |
-| `done`        | _(terminal)_                       |
-| `cancelled`   | `backlog`                          |
+| Status        | Allowed transitions  |
+| ------------- | -------------------- |
+| `waiting`     | `todo`               |
+| `todo`        | `in_progress`        |
+| `in_progress` | `done`, `failed`     |
+| `done`        | _(terminal)_         |
+| `failed`      | _(terminal)_         |
 
-**Dependency behavior:** Tasks created with `dependsOn` start in `backlog` regardless of the requested status. When all dependencies reach `done`, the `TaskService` auto-transitions the blocked task to `todo` and sends a `[Task Ready]` notification to the assignee.
+Tasks can be deleted from any state. Deleting a task cleans up dependency references and auto-unblocks dependent tasks.
+
+**Dependency behavior:** Tasks created with `dependsOn` start in `waiting` regardless of the requested status. When all dependencies reach `done`, the `TaskService` auto-transitions the blocked task to `todo` and sends a `[Task Ready]` notification to the assignee.
 
 **Notifications:** New task assignments dispatch `[New Task]` messages. Dependency resolution dispatches `[Task Ready]` messages. Both are sent from `__task__` via the message bus.
 The message bus applies a dedicated higher limit for `__task__` notifications (`40` messages / `30s`) so task events are less likely to be dropped under bursty updates.
@@ -653,7 +653,7 @@ task get <id>                                         # Show task details
 
 #### Kanban Board
 
-The Web UI includes a Kanban board accessible from the sidebar "Tasks" item. Columns: backlog, todo, in_progress, review, done. Filter by agent using the segmented control. Click a task card to view full details.
+The Web UI includes a Kanban board accessible from the sidebar "Tasks" item. Columns: waiting, todo, in_progress, done. Filter by agent using the segmented control. Click a task card to view full details or delete it.
 
 ### Migration from `agents.yaml`
 
@@ -1069,7 +1069,6 @@ The task system automatically notifies the task creator when a task's status cha
 | `in_progress` | `[Task Started]` — creator knows work has begun      |
 | `review`      | `[Task In Review]` — creator knows review is pending |
 | `done`        | `[Task Completed]` — creator receives result summary |
-| `cancelled`   | `[Task Cancelled]` — creator is informed             |
 
 Notifications are skipped when the creator is a system address (`__user__`, `__cron__`, etc.) or when the creator and assignee are the same agent.
 
@@ -1408,10 +1407,10 @@ agent calls task_create:
   assignee: "coder"
   dependsOn: ["T-abc123"]
 
--> Created T-def456 (status: backlog — waiting on T-abc123)
+-> Created T-def456 (status: waiting — waiting on T-abc123)
 ```
 
-Tasks with unmet dependencies start as `backlog`. Tasks with no dependencies start as `todo`.
+Tasks with unmet dependencies start as `waiting`. Tasks with no dependencies start as `todo`.
 
 ### `task_update`
 
@@ -1897,7 +1896,7 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 ### Features
 
 - **Slack-style layout** — sidebar with channels (#general), direct messages per agent, Cron management, and a Tasks Kanban view
-- **Kanban board** — task board with columns (backlog → todo → in_progress → review → done) and per-agent filter
+- **Kanban board** — task board with columns (waiting → todo → in_progress → done), per-agent filter, and task deletion from detail view
 - **Agent DMs** — conversation threads per agent with message input, tool call display, thread drawer, and clear history via three-dot menu
 - **Agent detail** — skills tab for viewing installed skills per agent
 - **Dynamic model selection** — Hire modal displays all 700+ available models from pi-ai, grouped by provider with metadata (reasoning capability, context window, costs). Auto-updates when pi-ai upgrades.
@@ -2050,7 +2049,7 @@ What happens:
 
 1. **task-manager** creates two tasks with dependencies:
    - `T-xxx`: "Implement login page" → assigned to **coder** (status: `todo`)
-   - `T-yyy`: "Review login page" → assigned to **reviewer**, `dependsOn: [T-xxx]` (status: `backlog`)
+   - `T-yyy`: "Review login page" → assigned to **reviewer**, `dependsOn: [T-xxx]` (status: `waiting`)
 2. **coder** receives `[New Task]` notification, implements the feature, marks task `done`
 3. **TaskService** detects dependency resolved → moves review task to `todo`
 4. **reviewer** receives `[Task Ready]` notification, reviews code, marks task `done`

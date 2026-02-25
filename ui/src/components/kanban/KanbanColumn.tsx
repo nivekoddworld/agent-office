@@ -3,21 +3,19 @@ import { TaskCard } from "./TaskCard.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
-  backlog: "Backlog",
+  waiting: "Waiting",
   todo: "To Do",
   in_progress: "In Progress",
-  review: "Review",
   done: "Done",
-  cancelled: "Cancelled",
+  failed: "Failed",
 };
 
 const STATUS_GRADIENTS: Record<TaskStatus, string> = {
-  backlog: "linear-gradient(90deg, #a8a29e, #78716c)",
+  waiting: "linear-gradient(90deg, #a8a29e, #78716c)",
   todo: "linear-gradient(90deg, #228be6, #7048e8)",
   in_progress: "linear-gradient(90deg, #e67700, #e8764b)",
-  review: "linear-gradient(90deg, #7048e8, #be4bdb)",
   done: "linear-gradient(90deg, #2f9e44, #12b886)",
-  cancelled: "linear-gradient(90deg, #e03131, #c92a2a)",
+  failed: "linear-gradient(90deg, #e03131, #c92a2a)",
 };
 
 interface KanbanColumnProps {
