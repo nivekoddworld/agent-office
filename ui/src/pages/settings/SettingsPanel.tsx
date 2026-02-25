@@ -22,6 +22,7 @@ import {
   IconPlayerPlay,
   IconPlayerPause,
   IconPalette,
+  IconEye,
 } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
@@ -37,6 +38,10 @@ import { useAppState } from "../../components/layout/app-state-context.js";
 import { SectionHeader } from "../../components/shared/SectionHeader.js";
 import { PageShell } from "../../components/shared/PageShell.js";
 import { Surface } from "../../components/shared/Surface.js";
+import {
+  usePreferences,
+  preferencesStore,
+} from "../../store/preferences-store.js";
 
 function InfoRow({
   label,
@@ -83,6 +88,7 @@ function InfoRow({
 
 export function SettingsPanel() {
   const state = useAppState();
+  const prefs = usePreferences();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
   const schedulerAction = useSchedulerAction();
   const officeApply = useOfficeApply();
@@ -162,7 +168,32 @@ export function SettingsPanel() {
             />
           </Surface>
         </Box>
-
+        {/* Display */}
+        <Box>
+          <SectionHeader
+            icon={<IconEye size={16} color={"var(--ao-accent-blue)"} />}
+            label="Display"
+          />
+          <Surface>
+            <Group justify="space-between" py={4}>
+              <Box>
+                <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
+                  Show system events
+                </Text>
+                <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                  Display tool executions and agent lifecycle events in channels
+                  and DMs
+                </Text>
+              </Box>
+              <Switch
+                size="sm"
+                checked={prefs.showSystemEvents}
+                onChange={() => preferencesStore.toggleShowSystemEvents()}
+                color="cyan"
+              />
+            </Group>
+          </Surface>
+        </Box>
         {/* Appearance */}
         <Box>
           <SectionHeader

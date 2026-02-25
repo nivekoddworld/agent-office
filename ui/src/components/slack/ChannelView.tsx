@@ -40,6 +40,7 @@ import type {
 } from "../../api/types.js";
 import { useAgentMessages } from "../../api/use-agent-messages.js";
 import { useChannelMessages } from "../../api/use-channel-messages.js";
+import { usePreferences } from "../../store/preferences-store.js";
 
 type DmTab = "messages" | "files" | "prompt" | "skills" | "configure";
 
@@ -70,7 +71,7 @@ export function ChannelView({
   const [stickToBottom, setStickToBottom] = useState(true);
   const lastCountRef = useRef(0);
   const [unseenCount, setUnseenCount] = useState(0);
-  const [showSystemMessages, setShowSystemMessages] = useState(true);
+  const prefs = usePreferences();
   const [dmTab, setDmTab] = useState<DmTab>("messages");
 
   const isDefaultChannel =
@@ -307,10 +308,6 @@ export function ChannelView({
             ? channels?.[channel.name]?.description
             : undefined
         }
-        showSystemMessages={isDefaultChannel ? showSystemMessages : undefined}
-        onToggleSystemMessages={
-          isDefaultChannel ? () => setShowSystemMessages((v) => !v) : undefined
-        }
         onClearHistory={
           isDm || channel.kind === "conversation"
             ? () => setClearConfirm(true)
@@ -481,7 +478,7 @@ export function ChannelView({
                     );
                   }
                   if (item.kind === "system") {
-                    if (!showSystemMessages) return null;
+                    if (!prefs.showSystemEvents) return null;
                     return (
                       <SystemMessage
                         key={item.data.id}

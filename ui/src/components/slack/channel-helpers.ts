@@ -63,15 +63,32 @@ export function eventToMessages(
       if (!isDmSessionForAgent(d.sessionKey, channel.agentName)) continue;
     }
     if (channel.kind === "conversation") {
-      // For system events in default channel, allow them through without session key
       const isSystemEvent =
         type === "agent_end" ||
         type === "tool_execution_start" ||
         type === "tool_execution_end" ||
         type === "turn_start" ||
         type === "turn_end";
-      if (!isSystemEvent && !isChannelSession(d.sessionKey, channel.name))
-        continue;
+
+      if (isSystemEvent) {
+        const sk = typeof d.sessionKey === "string" ? d.sessionKey : "";
+        const rc =
+          typeof d.reportChannel === "string" ? d.reportChannel : "";
+        if (sk.startsWith("ch:")) {
+          if (!isChannelSession(d.sessionKey, channel.name)) continue;
+        } else if (sk.startsWith("dm:")) {
+          continue;
+        } else {
+          // internal or missing sessionKey → use reportChannel, fallback to default channel
+          if (rc) {
+            if (rc !== channel.name) continue;
+          } else {
+            if (!isDefaultChannel) continue;
+          }
+        }
+      } else {
+        if (!isChannelSession(d.sessionKey, channel.name)) continue;
+      }
     }
 
     if (type === "message_end") {
@@ -117,7 +134,7 @@ export function eventToMessages(
         usage,
         requestId,
       });
-    } else if (isDefaultChannel) {
+    } else {
       let systemText = "";
       if (type === "tool_execution_start") {
         systemText = `${agent} started tool: ${d.toolName as string}`;

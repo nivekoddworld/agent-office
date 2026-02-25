@@ -2,8 +2,6 @@ import { Group, Text, Box, Tooltip, ActionIcon, Menu } from "@mantine/core";
 import {
   IconHash,
   IconUsers,
-  IconEye,
-  IconEyeOff,
   IconDots,
   IconTrash,
   IconFileText,
@@ -17,8 +15,6 @@ interface ChannelHeaderProps {
   agentCount?: number;
   activeCount?: number;
   description?: string;
-  showSystemMessages?: boolean;
-  onToggleSystemMessages?: () => void;
   onClearHistory?: () => void;
   clearLoading?: boolean;
 }
@@ -28,8 +24,6 @@ export function ChannelHeader({
   agentCount,
   activeCount,
   description,
-  showSystemMessages,
-  onToggleSystemMessages,
   onClearHistory,
   clearLoading,
 }: ChannelHeaderProps) {
@@ -82,27 +76,6 @@ export function ChannelHeader({
         </Group>
 
         <Group gap={6}>
-          {onToggleSystemMessages != null && (
-            <Tooltip
-              label={
-                showSystemMessages ? "Hide system events" : "Show system events"
-              }
-              withArrow
-            >
-              <ActionIcon
-                variant="subtle"
-                color="gray"
-                size="sm"
-                onClick={onToggleSystemMessages}
-              >
-                {showSystemMessages ? (
-                  <IconEye size={16} color={"var(--ao-text-secondary)"} />
-                ) : (
-                  <IconEyeOff size={16} color={"var(--ao-text-muted)"} />
-                )}
-              </ActionIcon>
-            </Tooltip>
-          )}
           {agentCount != null && (
             <Tooltip
               label={`${activeCount ?? 0} active / ${agentCount} total agents`}

@@ -92,6 +92,7 @@ export class Scheduler {
       handle.setActiveConversationPeer(
         msg.sourceKind === "internal" ? msg.from : undefined,
       );
+      handle.setActiveOriginTaskId(msg.originTaskId);
 
       const payload = formatMessagePayload(msg, this._channels);
       const dispatch =

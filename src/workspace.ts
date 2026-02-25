@@ -391,11 +391,20 @@ export class Workspace {
           : sk?.startsWith("internal:")
             ? "internal"
             : undefined;
+      // Lookup reportChannel for task-triggered events
+      let reportChannel: string | undefined;
+      const originTaskId = handle.getActiveOriginTaskId();
+      if (originTaskId) {
+        const task = this.tasks.get(originTaskId);
+        if (task?.reportChannel) reportChannel = task.reportChannel;
+      }
+
       const event = {
         ...e,
         ...(requestId ? { requestId } : {}),
         ...(sk ? { sessionKey: sk } : {}),
         ...(sourceKind ? { sourceKind } : {}),
+        ...(reportChannel ? { reportChannel } : {}),
       } as unknown as AgentEvent;
 
       if (event.type === "message_start") {

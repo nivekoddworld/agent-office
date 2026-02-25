@@ -80,6 +80,7 @@ export class AgentHandle {
   private _activeRequestId: string | undefined;
   private _activeSessionKey: string | undefined;
   private _activeConversationPeer: string | undefined;
+  private _activeOriginTaskId: string | undefined;
   private baseDir: string;
   private officeId: string;
   private officeName: string;
@@ -165,6 +166,14 @@ export class AgentHandle {
 
   getActiveConversationPeer(): string | undefined {
     return this._activeConversationPeer;
+  }
+
+  setActiveOriginTaskId(id: string | undefined): void {
+    this._activeOriginTaskId = id;
+  }
+
+  getActiveOriginTaskId(): string | undefined {
+    return this._activeOriginTaskId;
   }
 
   setLastScheduledHeartbeatTs(ts: number): void {
