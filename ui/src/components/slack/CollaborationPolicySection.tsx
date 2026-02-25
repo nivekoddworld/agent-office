@@ -12,27 +12,11 @@ import { notifications } from "@mantine/notifications";
 import { IconHeartHandshake } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../../api/client.js";
+import { SectionHeader } from "../shared/SectionHeader.js";
 import type {
   CollaborationMode,
   CollaborationPolicy,
 } from "../../api/types.js";
-
-function SectionHeader({
-  icon,
-  label,
-}: {
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <Group gap={8} mb={6}>
-      {icon}
-      <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
-        {label}
-      </Text>
-    </Group>
-  );
-}
 
 interface CollaborationPolicySectionProps {
   policy?: CollaborationPolicy;

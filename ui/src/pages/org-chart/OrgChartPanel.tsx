@@ -1,9 +1,10 @@
 import { useCallback } from "react";
-import { Box, Group, Text } from "@mantine/core";
+import { Box } from "@mantine/core";
 import { ReactFlowProvider } from "@xyflow/react";
 import { OrgChart } from "../../components/org-chart/OrgChart.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
 import { useAppActions } from "../../components/layout/app-actions-context.js";
+import { PageShell } from "../../components/shared/PageShell.js";
 
 export function OrgChartPanel() {
   const state = useAppState();
@@ -16,16 +17,7 @@ export function OrgChartPanel() {
   );
 
   return (
-    <Box style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <Group
-        px="md"
-        py="xs"
-        style={{ borderBottom: `1px solid var(--ao-border)` }}
-      >
-        <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
-          Org Chart
-        </Text>
-      </Group>
+    <PageShell title="Org Chart" noPadding fullHeight>
       <Box style={{ flex: 1, minWidth: 0 }}>
         <ReactFlowProvider>
           <OrgChart
@@ -35,6 +27,6 @@ export function OrgChartPanel() {
           />
         </ReactFlowProvider>
       </Box>
-    </Box>
+    </PageShell>
   );
 }

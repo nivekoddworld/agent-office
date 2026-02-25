@@ -21,7 +21,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
     },
     {
       method: "POST",
-      pattern: /^\/api\/cron\/office$/,
+      pattern: /^\/api\/cron$/,
       handler: async (req, res) => {
         if (requireMutation(req, res, getPort())) return;
         const body = await readBody(req);
@@ -102,7 +102,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
     },
     {
       method: "DELETE",
-      pattern: /^\/api\/cron\/office\/([^/]+)$/,
+      pattern: /^\/api\/cron\/([^/]+)$/,
       paramNames: ["job"],
       handler: async (req, res, _url, params) => {
         if (requireMutation(req, res, getPort())) return;
@@ -127,7 +127,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
     },
     {
       method: "POST",
-      pattern: /^\/api\/cron\/office\/([^/]+)\/trigger$/,
+      pattern: /^\/api\/cron\/([^/]+)\/trigger$/,
       paramNames: ["job"],
       handler: (req, res, _url, params) => {
         if (requireMutation(req, res, getPort())) return;

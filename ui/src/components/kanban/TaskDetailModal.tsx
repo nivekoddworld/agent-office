@@ -8,19 +8,21 @@ import {
   Divider,
   Box,
   Button,
+  Tooltip,
 } from "@mantine/core";
-import { IconTrash } from "@tabler/icons-react";
+import {
+  IconTrash,
+  IconMessageCircle,
+  IconUser,
+  IconClock,
+} from "@tabler/icons-react";
+import { useNavigate } from "react-router-dom";
 
+import { AgentAvatar } from "../shared/AgentAvatar.js";
 import { PriorityBadge } from "../shared/PriorityBadge.js";
-import type { Task, TaskStatus } from "../../api/types.js";
-
-const STATUS_COLORS: Record<TaskStatus, string> = {
-  waiting: "var(--ao-text-muted)",
-  todo: "var(--ao-accent-blue)",
-  in_progress: "var(--ao-accent-yellow)",
-  done: "var(--ao-accent-green)",
-  failed: "var(--ao-accent-red, #e03131)",
-};
+import { StatusBadge } from "../shared/StatusBadge.js";
+import { MarkdownContent } from "../slack/MarkdownContent.js";
+import type { Task } from "../../api/types.js";
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -33,6 +35,14 @@ function formatDate(ts: number): string {
   return new Date(ts).toLocaleString();
 }
 
+function formatTimeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
 export function TaskDetailModal({
   task,
   opened,
@@ -40,6 +50,7 @@ export function TaskDetailModal({
   onDelete,
 }: TaskDetailModalProps) {
   const [confirming, setConfirming] = useState(false);
+  const navigate = useNavigate();
 
   if (!task) return null;
 
@@ -58,60 +69,93 @@ export function TaskDetailModal({
     onClose();
   };
 
+  const handleDm = () => {
+    onClose();
+    navigate(`/dm/${encodeURIComponent(task.assignee)}`);
+  };
+
   return (
     <Modal
       opened={opened}
       onClose={handleClose}
       title={
-        <Group gap={8}>
-          <Text size="sm" ff="monospace" c="dimmed">
-            {task.id}
-          </Text>
-          <Text size="lg" fw={700}>
-            {task.title}
-          </Text>
-        </Group>
+        <Text size="lg" fw={700} style={{ color: "var(--ao-text-primary)" }}>
+          {task.title}
+        </Text>
       }
       size="lg"
       styles={{
         header: {
-          backgroundColor: "var(--ao-bg-body)",
+          backgroundColor: "var(--ao-bg-elevated)",
           borderBottom: `1px solid var(--ao-border)`,
         },
-        body: { backgroundColor: "var(--ao-bg-body)" },
-        content: { backgroundColor: "var(--ao-bg-body)" },
+        body: { backgroundColor: "var(--ao-bg-elevated)" },
+        content: { backgroundColor: "var(--ao-bg-elevated)" },
       }}
     >
       <Stack gap="md">
-        <Group gap={8}>
-          <Badge
-            size="lg"
-            variant="filled"
-            style={{ backgroundColor: STATUS_COLORS[task.status] }}
+        <Group gap={8} mt="xs" justify="space-between">
+          <Group gap={8}>
+            <StatusBadge status={task.status} size="sm" />
+            <PriorityBadge priority={task.priority} size="sm" />
+          </Group>
+          <Text
+            size="xs"
+            ff="monospace"
+            style={{ color: "var(--ao-text-muted)" }}
           >
-            {task.status.replace("_", " ")}
-          </Badge>
-          <PriorityBadge priority={task.priority} />
+            {task.id}
+          </Text>
         </Group>
 
-        <Divider color={"var(--ao-border)"} />
+        <Divider color="var(--ao-border)" />
 
-        <Box>
-          <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
-            Assignee
-          </Text>
-          <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
-            {task.assignee}
-          </Text>
-        </Box>
+        <Group justify="space-between">
+          <Box>
+            <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
+              Assignee
+            </Text>
+            <Group gap={6}>
+              <AgentAvatar name={task.assignee} size={22} />
+              <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
+                {task.assignee}
+              </Text>
+            </Group>
+          </Box>
+          {task.assignee && (
+            <Tooltip label={`Send DM to ${task.assignee}`} withArrow>
+              <Button
+                size="xs"
+                variant="light"
+                leftSection={<IconMessageCircle size={14} />}
+                onClick={handleDm}
+              >
+                Message
+              </Button>
+            </Tooltip>
+          )}
+        </Group>
 
         <Box>
           <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
             Created by
           </Text>
-          <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
-            {task.createdBy}
-          </Text>
+          <Group gap={6}>
+            {task.createdBy === "__user__" ? (
+              <IconUser size={18} color="var(--ao-accent-blue)" />
+            ) : task.createdBy === "__cron__" ? (
+              <IconClock size={18} color="var(--ao-accent-purple)" />
+            ) : (
+              <AgentAvatar name={task.createdBy} size={22} />
+            )}
+            <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
+              {task.createdBy === "__user__"
+                ? "User"
+                : task.createdBy === "__cron__"
+                  ? "Cron Job"
+                  : task.createdBy}
+            </Text>
+          </Group>
         </Box>
 
         {task.description && (
@@ -119,18 +163,15 @@ export function TaskDetailModal({
             <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
               Description
             </Text>
-            <Text
-              size="sm"
+            <Box
               style={{
-                color: "var(--ao-text-primary)",
-                whiteSpace: "pre-wrap",
                 backgroundColor: "var(--ao-bg-surface)",
                 padding: 12,
                 borderRadius: 6,
               }}
             >
-              {task.description}
-            </Text>
+              <MarkdownContent content={task.description} />
+            </Box>
           </Box>
         )}
 
@@ -154,48 +195,51 @@ export function TaskDetailModal({
             <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
               Result
             </Text>
-            <Text
-              size="sm"
+            <Box
               style={{
-                color: "var(--ao-text-primary)",
-                whiteSpace: "pre-wrap",
                 backgroundColor: "var(--ao-bg-surface)",
                 padding: 12,
                 borderRadius: 6,
               }}
             >
-              {task.result}
-            </Text>
+              <MarkdownContent content={task.result} />
+            </Box>
           </Box>
         )}
 
-        <Divider color={"var(--ao-border)"} />
+        <Divider color="var(--ao-border)" />
 
         <Group gap="xl">
           <Box>
             <Text size="xs" c="dimmed">
               Created
             </Text>
-            <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
-              {formatDate(task.createdAt)}
-            </Text>
+            <Tooltip label={formatDate(task.createdAt)} withArrow>
+              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
+                {formatTimeAgo(task.createdAt)}
+              </Text>
+            </Tooltip>
           </Box>
           <Box>
             <Text size="xs" c="dimmed">
               Updated
             </Text>
-            <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
-              {formatDate(task.updatedAt)}
-            </Text>
+            <Tooltip label={formatDate(task.updatedAt)} withArrow>
+              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
+                {formatTimeAgo(task.updatedAt)}
+              </Text>
+            </Tooltip>
           </Box>
           {task.startedAt && (
             <Box>
               <Text size="xs" c="dimmed">
                 Started
               </Text>
-              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
-                {formatDate(task.startedAt)}
-              </Text>
+              <Tooltip label={formatDate(task.startedAt)} withArrow>
+                <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
+                  {formatTimeAgo(task.startedAt)}
+                </Text>
+              </Tooltip>
             </Box>
           )}
           {task.completedAt && (
@@ -203,21 +247,23 @@ export function TaskDetailModal({
               <Text size="xs" c="dimmed">
                 Completed
               </Text>
-              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
-                {formatDate(task.completedAt)}
-              </Text>
+              <Tooltip label={formatDate(task.completedAt)} withArrow>
+                <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
+                  {formatTimeAgo(task.completedAt)}
+                </Text>
+              </Tooltip>
             </Box>
           )}
         </Group>
 
         {onDelete && (
           <>
-            <Divider color={"var(--ao-border)"} />
+            <Divider color="var(--ao-border)" />
             <Group justify="flex-end">
               <Button
                 size="xs"
                 color="red"
-                variant={confirming ? "filled" : "subtle"}
+                variant={confirming ? "filled" : "light"}
                 leftSection={<IconTrash size={14} />}
                 onClick={handleDelete}
               >

@@ -50,11 +50,7 @@ function AgentCronRow({
 
   const trigger = () => {
     cronTrigger.mutate(
-      {
-        scope: job.scope,
-        agentName: job.agentName,
-        jobName: job.jobName,
-      },
+      { jobName: job.jobName },
       {
         onSuccess: () =>
           notifications.show({
@@ -74,11 +70,7 @@ function AgentCronRow({
 
   const remove = () => {
     cronRemove.mutate(
-      {
-        scope: job.scope,
-        agentName: job.agentName,
-        jobName: job.jobName,
-      },
+      { jobName: job.jobName },
       {
         onSuccess: () => {
           setConfirmRemove(false);

@@ -94,43 +94,24 @@ export function useCronAdd() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (args: {
-      scope: "agent" | "office";
-      agentName?: string;
       jobName: string;
       schedule: string;
       tasks: CronTaskTemplate[];
       timezone?: string;
       catchUp?: string;
       reportChannel?: string;
-    }) => {
-      if (args.scope === "office") {
-        return apiFetch<{ ok: boolean }>("/api/cron/office", {
-          method: "POST",
-          body: JSON.stringify({
-            jobName: args.jobName,
-            schedule: args.schedule,
-            tasks: args.tasks,
-            timezone: args.timezone,
-            catchUp: args.catchUp,
-            reportChannel: args.reportChannel || undefined,
-          }),
-        });
-      }
-      return apiFetch<{ ok: boolean }>(
-        `/api/agents/${encodeURIComponent(args.agentName!)}/cron`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            jobName: args.jobName,
-            schedule: args.schedule,
-            tasks: args.tasks,
-            timezone: args.timezone,
-            catchUp: args.catchUp,
-            reportChannel: args.reportChannel || undefined,
-          }),
-        },
-      );
-    },
+    }) =>
+      apiFetch<{ ok: boolean }>("/api/cron", {
+        method: "POST",
+        body: JSON.stringify({
+          jobName: args.jobName,
+          schedule: args.schedule,
+          tasks: args.tasks,
+          timezone: args.timezone,
+          catchUp: args.catchUp,
+          reportChannel: args.reportChannel || undefined,
+        }),
+      }),
     onSuccess: () => invalidateState(queryClient),
   });
 }
@@ -138,26 +119,11 @@ export function useCronAdd() {
 export function useCronRemove() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      scope,
-      agentName,
-      jobName,
-    }: {
-      scope: "agent" | "office";
-      agentName: string;
-      jobName: string;
-    }) => {
-      if (scope === "office") {
-        return apiFetch<{ ok: boolean }>(
-          `/api/cron/office/${encodeURIComponent(jobName)}`,
-          { method: "DELETE" },
-        );
-      }
-      return apiFetch<{ ok: boolean }>(
-        `/api/agents/${encodeURIComponent(agentName)}/cron/${encodeURIComponent(jobName)}`,
+    mutationFn: ({ jobName }: { jobName: string }) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/cron/${encodeURIComponent(jobName)}`,
         { method: "DELETE" },
-      );
-    },
+      ),
     onSuccess: () => invalidateState(queryClient),
   });
 }
@@ -188,26 +154,11 @@ export function useCronToggle() {
 export function useCronTrigger() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      scope,
-      agentName,
-      jobName,
-    }: {
-      scope: "agent" | "office";
-      agentName: string;
-      jobName: string;
-    }) => {
-      if (scope === "office") {
-        return apiFetch<{ ok: boolean }>(
-          `/api/cron/office/${encodeURIComponent(jobName)}/trigger`,
-          { method: "POST" },
-        );
-      }
-      return apiFetch<{ ok: boolean }>(
-        `/api/agents/${encodeURIComponent(agentName)}/cron/${encodeURIComponent(jobName)}/trigger`,
+    mutationFn: ({ jobName }: { jobName: string }) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/cron/${encodeURIComponent(jobName)}/trigger`,
         { method: "POST" },
-      );
-    },
+      ),
     onSuccess: () => invalidateState(queryClient),
   });
 }
@@ -288,6 +239,27 @@ export function useTaskCreate() {
     mutationFn: (body: TaskCreateBody) =>
       apiFetch<Task>("/api/tasks", {
         method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
+export function useTaskUpdate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      ...body
+    }: {
+      taskId: string;
+      status?: string;
+      result?: string;
+      assignee?: string;
+      priority?: string;
+    }) =>
+      apiFetch<Task>(`/api/tasks/${encodeURIComponent(taskId)}`, {
+        method: "PATCH",
         body: JSON.stringify(body),
       }),
     onSuccess: () => invalidateState(queryClient),

@@ -1,17 +1,12 @@
 import { useState, useMemo } from "react";
-import {
-  Box,
-  Stack,
-  Text,
-  Group,
-  Button,
-  SegmentedControl,
-} from "@mantine/core";
-import { IconPlus } from "@tabler/icons-react";
-import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
+import { Stack, Button } from "@mantine/core";
+import { IconPlus, IconCalendarTime } from "@tabler/icons-react";
+import { EmptyState } from "../../components/shared/EmptyState.js";
+import { PageShell } from "../../components/shared/PageShell.js";
 import { CronJobRow } from "../../components/cron/CronJobRow.js";
 import { CronAddForm } from "../../components/cron/CronAddForm.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
+import type { CronJobEntry } from "../../api/types.js";
 
 export function CronChannelView() {
   const state = useAppState();
@@ -25,71 +20,62 @@ export function CronChannelView() {
     [state.channels],
   );
 
-  const [addOpen, setAddOpen] = useState(false);
-  const [filter, setFilter] = useState("all");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<CronJobEntry | null>(null);
 
-  const filtered = useMemo(() => {
-    if (filter === "all") return cronJobs;
-    return cronJobs.filter((j) => j.scope === filter);
-  }, [cronJobs, filter]);
+  const openAdd = () => {
+    setEditingJob(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (job: CronJobEntry) => {
+    setEditingJob(job);
+    setFormOpen(true);
+  };
+
+  const closeForm = () => {
+    setFormOpen(false);
+    setEditingJob(null);
+  };
 
   return (
-    <Box
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        backgroundColor: "var(--ao-bg-body)",
-      }}
+    <PageShell
+      title="Cron"
+      headerRight={
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconPlus size={14} />}
+          onClick={openAdd}
+        >
+          Add Job
+        </Button>
+      }
     >
-      <ChannelHeader
-        channel={{ kind: "system", name: "cron" }}
-        description="Scheduled jobs and cron tasks"
-      />
-
-      <Box p="md" style={{ flex: 1, overflow: "auto" }}>
-        <Group justify="space-between" mb="md">
-          <SegmentedControl
-            size="xs"
-            value={filter}
-            onChange={setFilter}
-            data={[
-              { value: "all", label: "All" },
-              { value: "agent", label: "Agent" },
-              { value: "office", label: "Office" },
-            ]}
-          />
-          <Button
-            size="xs"
-            variant="light"
-            leftSection={<IconPlus size={14} />}
-            onClick={() => setAddOpen(true)}
-          >
-            Add Job
-          </Button>
-        </Group>
-
-        {filtered.length === 0 ? (
-          <Box py="xl" style={{ textAlign: "center" }}>
-            <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
-              No cron jobs configured
-            </Text>
-          </Box>
-        ) : (
-          <Stack gap={0}>
-            {filtered.map((job) => (
-              <CronJobRow key={`${job.agentName}:${job.jobName}`} job={job} />
-            ))}
-          </Stack>
-        )}
-      </Box>
+      {cronJobs.length === 0 ? (
+        <EmptyState
+          icon={<IconCalendarTime size={32} />}
+          message="No cron jobs configured"
+        />
+      ) : (
+        <Stack gap={8}>
+          {cronJobs.map((job) => (
+            <CronJobRow
+              key={job.jobName}
+              job={job}
+              onEdit={openEdit}
+            />
+          ))}
+        </Stack>
+      )}
 
       <CronAddForm
-        opened={addOpen}
-        onClose={() => setAddOpen(false)}
+        opened={formOpen}
+        onClose={closeForm}
         agentNames={agentNames}
         channels={channels}
+        editJob={editingJob}
       />
-    </Box>
+    </PageShell>
   );
 }

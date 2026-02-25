@@ -1,6 +1,8 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
-import { Box, Text, Group, Badge, Button } from "@mantine/core";
+import { Box, Text, Group, Badge, Button, Select, Switch } from "@mantine/core";
 import { AgentAvatar } from "../../components/shared/AgentAvatar.js";
+import { EmptyState } from "../../components/shared/EmptyState.js";
+import { PageShell } from "../../components/shared/PageShell.js";
 import {
   filterContextString,
   PRESET_LABELS,
@@ -15,46 +17,6 @@ import {
 } from "../../store/debug-capture-store.js";
 import { DebugEventRow } from "../../components/slack/DebugEventRow.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
-
-interface DebugSelectOption {
-  value: string;
-  label: string;
-}
-
-function DebugSelect({
-  value,
-  options,
-  onChange,
-  width = 130,
-}: {
-  value: string;
-  options: DebugSelectOption[];
-  onChange: (value: string) => void;
-  width?: number;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.currentTarget.value)}
-      style={{
-        width,
-        height: 24,
-        fontSize: 12,
-        borderRadius: 6,
-        border: `1px solid var(--ao-border)`,
-        backgroundColor: "var(--ao-bg-input)",
-        color: "var(--ao-text-primary)",
-        padding: "0 8px",
-      }}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 function downloadJsonl(rows: DebugRowData[], context: string) {
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
@@ -189,17 +151,10 @@ export function OfficeDebugPanel() {
   }
 
   return (
-    <Box style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <Group
-        px="md"
-        py="xs"
-        justify="space-between"
-        style={{ borderBottom: `1px solid var(--ao-border)` }}
-      >
-        <Group gap={8}>
-          <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
-            Debug Logs
-          </Text>
+    <PageShell
+      title="Debug Logs"
+      titleExtra={
+        <>
           {capture.isCapturing ? (
             <Badge size="xs" variant="dot" color="green">
               live
@@ -217,7 +172,9 @@ export function OfficeDebugPanel() {
               {capture.droppedCount} dropped
             </Badge>
           )}
-        </Group>
+        </>
+      }
+      headerRight={
         <Group gap={4}>
           {(["all", "errors", "tools", "messages", "task-cron"] as const).map(
             (p) => (
@@ -225,7 +182,7 @@ export function OfficeDebugPanel() {
                 key={p}
                 size="xs"
                 variant={activePreset === p ? "filled" : "outline"}
-                color={activePreset === p ? "blue" : "gray"}
+                color={activePreset === p ? "cyan" : "gray"}
                 style={{ cursor: "pointer" }}
                 onClick={() => applyPreset(p)}
               >
@@ -234,108 +191,107 @@ export function OfficeDebugPanel() {
             ),
           )}
         </Group>
-      </Group>
-
-      <Group
-        px="md"
-        py={4}
-        gap={8}
-        style={{ borderBottom: `1px solid var(--ao-border)` }}
-      >
-        <DebugSelect
-          value={agentFilter}
-          onChange={(v) => handleAgentFilter(v)}
-          options={[
-            { value: "all", label: "All agents" },
-            ...agentNames.map((n) => ({ value: n, label: n })),
-          ]}
-        />
-        <DebugSelect
-          value={kindFilter}
-          onChange={(v) => handleKindFilter((v as KindFilter) ?? "all")}
-          options={[
-            { value: "all", label: "All kinds" },
-            { value: "message", label: "Messages" },
-            { value: "tool", label: "Tools" },
-            { value: "turn", label: "Turns" },
-            { value: "lifecycle", label: "Lifecycle" },
-            { value: "other", label: "Other" },
-          ]}
-        />
-        <DebugSelect
-          value={sourceFilter}
-          onChange={(v) => handleSourceFilter((v as SourceFilter) ?? "all")}
-          options={[
-            { value: "all", label: "All sources" },
-            { value: "dm", label: "DM" },
-            { value: "channel", label: "Channel" },
-            { value: "internal", label: "Internal" },
-            { value: "other", label: "Other" },
-          ]}
-        />
-        <label
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            color: "var(--ao-text-secondary)",
-            fontSize: 12,
-          }}
-        >
-          <input
-            type="checkbox"
+      }
+      toolbar={
+        <Group gap={8}>
+          <Select
+            size="xs"
+            w={140}
+            value={agentFilter}
+            onChange={(v) => handleAgentFilter(v ?? "all")}
+            data={[
+              { value: "all", label: "All agents" },
+              ...agentNames.map((n) => ({ value: n, label: n })),
+            ]}
+            allowDeselect={false}
+          />
+          <Select
+            size="xs"
+            w={140}
+            value={kindFilter}
+            onChange={(v) => handleKindFilter((v as KindFilter) ?? "all")}
+            data={[
+              { value: "all", label: "All kinds" },
+              { value: "message", label: "Messages" },
+              { value: "tool", label: "Tools" },
+              { value: "turn", label: "Turns" },
+              { value: "lifecycle", label: "Lifecycle" },
+              { value: "other", label: "Other" },
+            ]}
+            allowDeselect={false}
+          />
+          <Select
+            size="xs"
+            w={140}
+            value={sourceFilter}
+            onChange={(v) => handleSourceFilter((v as SourceFilter) ?? "all")}
+            data={[
+              { value: "all", label: "All sources" },
+              { value: "dm", label: "DM" },
+              { value: "channel", label: "Channel" },
+              { value: "internal", label: "Internal" },
+              { value: "other", label: "Other" },
+            ]}
+            allowDeselect={false}
+          />
+          <Switch
+            size="xs"
+            label="Group by agent"
             checked={groupByAgent}
             onChange={(e) => setGroupByAgent(e.currentTarget.checked)}
-          />
-          Group by agent
-        </label>
-        <Box style={{ flex: 1 }} />
-        {capture.isCapturing ? (
-          <Button
-            size="compact-xs"
-            variant="light"
-            color="red"
-            onClick={() => debugCaptureStore.stopCapture()}
-          >
-            Stop
-          </Button>
-        ) : (
-          <Button
-            size="compact-xs"
-            variant="light"
-            color="green"
-            onClick={() => {
-              debugCaptureStore.setDraftFilter({
-                agent: agentFilter,
-                source: sourceFilter,
-                kind: kindFilter,
-                errorsOnly: activePreset === "errors",
-              });
-              debugCaptureStore.startCapture();
+            styles={{
+              label: { color: "var(--ao-text-secondary)", fontSize: 12 },
             }}
+          />
+          <Box style={{ flex: 1 }} />
+          {capture.isCapturing ? (
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="red"
+              onClick={() => debugCaptureStore.stopCapture()}
+            >
+              Stop
+            </Button>
+          ) : (
+            <Button
+              size="compact-xs"
+              variant="light"
+              color="green"
+              onClick={() => {
+                debugCaptureStore.setDraftFilter({
+                  agent: agentFilter,
+                  source: sourceFilter,
+                  kind: kindFilter,
+                  errorsOnly: activePreset === "errors",
+                });
+                debugCaptureStore.startCapture();
+              }}
+            >
+              Start
+            </Button>
+          )}
+          <Button
+            size="compact-xs"
+            variant="light"
+            color="gray"
+            onClick={() => debugCaptureStore.clearBuffer()}
           >
-            Start
+            Clear
           </Button>
-        )}
-        <Button
-          size="compact-xs"
-          variant="light"
-          color="gray"
-          onClick={() => debugCaptureStore.clearBuffer()}
-        >
-          Clear
-        </Button>
-        <Button
-          size="compact-xs"
-          variant="light"
-          color="blue"
-          disabled={displayRows.length === 0}
-          onClick={handleExport}
-        >
-          Export
-        </Button>
-      </Group>
-
+          <Button
+            size="compact-xs"
+            variant="light"
+            color="cyan"
+            disabled={displayRows.length === 0}
+            onClick={handleExport}
+          >
+            Export
+          </Button>
+        </Group>
+      }
+      noPadding
+    >
       <Box
         ref={scrollRef}
         onScroll={handleScroll}
@@ -343,13 +299,13 @@ export function OfficeDebugPanel() {
       >
         <Box px="md" py="sm">
           {displayRows.length === 0 ? (
-            <Box py="xl">
-              <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
-                {capture.isCapturing
+            <EmptyState
+              message={
+                capture.isCapturing
                   ? "Waiting for events..."
-                  : "Click Start to begin capturing debug events."}
-              </Text>
-            </Box>
+                  : "Click Start to begin capturing debug events."
+              }
+            />
           ) : groupByAgent && grouped ? (
             [...grouped.entries()].map(([agent, agentRows]) => (
               <Box key={agent} mb="md">
@@ -374,6 +330,6 @@ export function OfficeDebugPanel() {
           )}
         </Box>
       </Box>
-    </Box>
+    </PageShell>
   );
 }

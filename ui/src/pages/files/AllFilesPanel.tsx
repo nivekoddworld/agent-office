@@ -7,7 +7,6 @@ import {
   UnstyledButton,
   Badge,
   ScrollArea,
-  Stack,
 } from "@mantine/core";
 import {
   IconSearch,
@@ -18,6 +17,8 @@ import {
 
 import { useAppState } from "../../components/layout/app-state-context.js";
 import { AgentAvatar } from "../../components/shared/AgentAvatar.js";
+import { EmptyState } from "../../components/shared/EmptyState.js";
+import { PageShell } from "../../components/shared/PageShell.js";
 import { AgentFilesPanel } from "../../components/slack/AgentFilesPanel.js";
 
 export function AllFilesPanel() {
@@ -37,64 +38,34 @@ export function AllFilesPanel() {
 
   if (agents.length === 0) {
     return (
-      <Box
-        style={{
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          backgroundColor: "var(--ao-bg-body)",
-        }}
-      >
+      <PageShell title="Files">
         <Box
-          px="md"
-          py="sm"
-          style={{ borderBottom: "1px solid var(--ao-border)" }}
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
-          <Text fw={700} size="lg" style={{ color: "var(--ao-text-bright)" }}>
-            Files
-          </Text>
+          <EmptyState
+            icon={<IconFolder size={48} color="var(--ao-text-muted)" />}
+            message="No agents in this office yet."
+          />
         </Box>
-        <Stack align="center" justify="center" style={{ flex: 1 }} gap="xs">
-          <IconFolder size={48} color="var(--ao-text-muted)" />
-          <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
-            No agents in this office yet.
-          </Text>
-        </Stack>
-      </Box>
+      </PageShell>
     );
   }
 
   return (
-    <Box
-      style={{
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        backgroundColor: "var(--ao-bg-body)",
-      }}
-    >
-      {/* Header */}
-      <Box
-        px="md"
-        py="sm"
-        style={{ borderBottom: "1px solid var(--ao-border)", flexShrink: 0 }}
-      >
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap={8}>
-            <Text
-              fw={700}
-              size="lg"
-              style={{ color: "var(--ao-text-bright)" }}
-            >
-              Files
-            </Text>
-            <Badge size="sm" variant="light" color="gray">
-              {agents.length} agent{agents.length !== 1 ? "s" : ""}
-            </Badge>
-          </Group>
-        </Group>
+    <PageShell
+      title="Files"
+      titleExtra={
+        <Badge size="sm" variant="light" color="gray">
+          {agents.length} agent{agents.length !== 1 ? "s" : ""}
+        </Badge>
+      }
+      toolbar={
         <TextInput
-          mt="xs"
           placeholder="Filter agents..."
           leftSection={
             <IconSearch size={14} color="var(--ao-text-muted)" />
@@ -111,16 +82,12 @@ export function AllFilesPanel() {
             },
           }}
         />
-      </Box>
-
-      {/* Agent sections */}
+      }
+      noPadding
+    >
       <ScrollArea style={{ flex: 1 }}>
         {filtered.length === 0 && (
-          <Stack align="center" py="xl" gap="xs">
-            <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
-              No agents match "{search}"
-            </Text>
-          </Stack>
+          <EmptyState message={`No agents match "${search}"`} />
         )}
         {filtered.map((agent) => {
           const isOpen = expanded[agent.name] ?? false;
@@ -172,7 +139,7 @@ export function AllFilesPanel() {
                     variant="dot"
                     color={
                       agent.status === "running"
-                        ? "blue"
+                        ? "cyan"
                         : agent.status === "idle"
                           ? "green"
                           : "gray"
@@ -191,6 +158,6 @@ export function AllFilesPanel() {
           );
         })}
       </ScrollArea>
-    </Box>
+    </PageShell>
   );
 }

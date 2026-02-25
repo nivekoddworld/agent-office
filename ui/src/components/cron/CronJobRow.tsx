@@ -1,18 +1,20 @@
-import { useState } from "react";
-import { Group, Text, Badge, Switch, ActionIcon } from "@mantine/core";
+import { useState, useMemo } from "react";
+import { Group, Text, Badge, ActionIcon, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { IconPlayerPlay, IconTrash } from "@tabler/icons-react";
+import { IconPlayerPlay, IconTrash, IconPencil } from "@tabler/icons-react";
 import {
   useCronTrigger,
   useCronRemove,
-  useCronToggle,
 } from "../../api/use-api-mutations.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
+import { Surface } from "../shared/Surface.js";
 import { ApiError } from "../../api/client.js";
+import { humanReadableCron } from "../../utils/cron-human.js";
 import type { CronJobEntry } from "../../api/types.js";
 
 interface CronJobRowProps {
   job: CronJobEntry;
+  onEdit?: (job: CronJobEntry) => void;
 }
 
 function formatTime(ts: number | null): string {
@@ -28,23 +30,27 @@ function formatTime(ts: number | null): string {
 const STATUS_COLORS: Record<string, string> = {
   ok: "green",
   error: "red",
-  skipped_cap: "orange",
 };
 
-export function CronJobRow({ job }: CronJobRowProps) {
+function getAgentDisplay(job: CronJobEntry): string {
+  const assignees = job.config.tasks
+    .map((t) => t.assignee?.trim())
+    .filter(Boolean);
+  if (assignees.length === 0) return "All Agents";
+  const unique = [...new Set(assignees)];
+  return unique.join(", ");
+}
+
+export function CronJobRow({ job, onEdit }: CronJobRowProps) {
   const cronTrigger = useCronTrigger();
   const cronRemove = useCronRemove();
-  const cronToggle = useCronToggle();
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const enabled = job.config.enabled !== false;
+
+  const displayAgent = useMemo(() => getAgentDisplay(job), [job]);
 
   const trigger = () => {
     cronTrigger.mutate(
-      {
-        scope: job.scope,
-        agentName: job.agentName,
-        jobName: job.jobName,
-      },
+      { jobName: job.jobName },
       {
         onSuccess: () =>
           notifications.show({
@@ -64,11 +70,7 @@ export function CronJobRow({ job }: CronJobRowProps) {
 
   const remove = () => {
     cronRemove.mutate(
-      {
-        scope: job.scope,
-        agentName: job.agentName,
-        jobName: job.jobName,
-      },
+      { jobName: job.jobName },
       {
         onSuccess: () => {
           setConfirmRemove(false);
@@ -90,108 +92,97 @@ export function CronJobRow({ job }: CronJobRowProps) {
     );
   };
 
-  const toggleEnable = () => {
-    cronToggle.mutate(
-      {
-        agentName: job.agentName,
-        jobName: job.jobName,
-        enabled: !enabled,
-      },
-      {
-        onError: (err) =>
-          notifications.show({
-            title: "Toggle failed",
-            message: err instanceof ApiError ? err.message : "Unknown error",
-            color: "red",
-          }),
-      },
-    );
-  };
-
   return (
     <>
-      <Group
-        gap="xs"
-        p="xs"
-        wrap="nowrap"
-        style={{ borderBottom: "1px solid var(--ao-border)" }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Group gap={4}>
-            <Text size="sm" fw={500}>
+      <Surface>
+        <Group gap="xs" wrap="nowrap" justify="space-between">
+          {/* Left: info */}
+          <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+            <Text size="sm" fw={600} style={{ color: "var(--ao-text-bright)" }}>
               {job.jobName}
             </Text>
-            <Badge
-              size="xs"
-              variant="light"
-              color={job.scope === "office" ? "violet" : "blue"}
+
+            <Group gap={4} wrap="wrap">
+              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
+                {humanReadableCron(job.config.schedule)}
+              </Text>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                ·
+              </Text>
+              <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
+                {displayAgent}
+              </Text>
+              {job.config.reportChannel && (
+                <>
+                  <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                    ·
+                  </Text>
+                  <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                    → #{job.config.reportChannel}
+                  </Text>
+                </>
+              )}
+            </Group>
+
+            <Group gap="md">
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                Last: {formatTime(job.state.lastRunAt)}
+                {job.state.lastStatus && (
+                  <Badge
+                    size="xs"
+                    variant="dot"
+                    color={STATUS_COLORS[job.state.lastStatus] ?? "gray"}
+                    ml={4}
+                  >
+                    {job.state.lastStatus}
+                  </Badge>
+                )}
+              </Text>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                Next: {formatTime(job.state.nextRunAt)}
+              </Text>
+              <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                Runs: {job.state.sentCount}
+              </Text>
+            </Group>
+          </Stack>
+
+          {/* Right: actions */}
+          <Group gap={6} wrap="nowrap">
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              onClick={trigger}
+              title="Trigger now"
+              loading={cronTrigger.isPending}
+              disabled={cronRemove.isPending}
             >
-              {job.scope}
-            </Badge>
-          </Group>
-          <Text size="xs" c="dimmed">
-            {job.agentName} — {job.config.schedule}
-          </Text>
-          {job.config.reportChannel && (
-            <Text size="xs" c="dimmed">
-              → #{job.config.reportChannel}
-            </Text>
-          )}
-        </div>
-
-        <div style={{ textAlign: "right", minWidth: 100 }}>
-          <Text size="xs" c="dimmed">
-            Next: {formatTime(job.state.nextRunAt)}
-          </Text>
-          <Group gap={4} justify="flex-end">
-            {job.state.lastStatus && (
-              <Badge
-                size="xs"
-                color={STATUS_COLORS[job.state.lastStatus] ?? "gray"}
+              <IconPlayerPlay size={14} />
+            </ActionIcon>
+            {onEdit && (
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => onEdit(job)}
+                title="Edit"
               >
-                {job.state.lastStatus}
-              </Badge>
+                <IconPencil size={14} />
+              </ActionIcon>
             )}
-            <Text size="xs" c="dimmed">
-              {job.state.sentCount}/{job.state.attemptCount}
-            </Text>
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              color="red"
+              onClick={() => setConfirmRemove(true)}
+              title="Remove"
+              loading={cronRemove.isPending}
+              disabled={cronTrigger.isPending}
+            >
+              <IconTrash size={14} />
+            </ActionIcon>
           </Group>
-          <Text size="xs" c="dimmed">
-            skip c:{job.state.skippedCapCount}
-          </Text>
-        </div>
-
-        {job.scope === "agent" && (
-          <Switch
-            size="xs"
-            checked={enabled}
-            onChange={toggleEnable}
-            disabled={cronToggle.isPending}
-          />
-        )}
-
-        <ActionIcon
-          size="sm"
-          variant="subtle"
-          onClick={trigger}
-          title="Trigger now"
-          loading={cronTrigger.isPending}
-          disabled={cronRemove.isPending}
-        >
-          <IconPlayerPlay size={14} />
-        </ActionIcon>
-        <ActionIcon
-          size="sm"
-          variant="subtle"
-          color="red"
-          onClick={() => setConfirmRemove(true)}
-          title="Remove"
-          loading={cronRemove.isPending}
-          disabled={cronTrigger.isPending}
-        >
-          <IconTrash size={14} />
-        </ActionIcon>
-      </Group>
+        </Group>
+      </Surface>
 
       <ConfirmDialog
         opened={confirmRemove}

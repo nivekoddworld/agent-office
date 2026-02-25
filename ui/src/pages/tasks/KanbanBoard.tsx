@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { Box, Button, Group, Text, SegmentedControl } from "@mantine/core";
-import { IconPlus } from "@tabler/icons-react";
+import { IconPlus, IconChecklist } from "@tabler/icons-react";
 
-import { ChannelHeader } from "../../components/slack/ChannelHeader.js";
 import { KanbanColumn } from "../../components/kanban/KanbanColumn.js";
 import { TaskDetailModal } from "../../components/kanban/TaskDetailModal.js";
 import { TaskAddForm } from "../../components/kanban/TaskAddForm.js";
+import { EmptyState } from "../../components/shared/EmptyState.js";
+import { PageShell } from "../../components/shared/PageShell.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
 import { useTaskDelete } from "../../api/use-api-mutations.js";
 import type { Task, TaskStatus } from "../../api/types.js";
@@ -71,73 +72,90 @@ export function KanbanBoard() {
   );
 
   return (
-    <Box
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
-        backgroundColor: "var(--ao-bg-body)",
-      }}
-    >
-      <ChannelHeader
-        channel={{ kind: "system", name: "tasks" }}
-        description="Task board — Kanban view of all tasks"
-      />
-
-      <Box
-        px="md"
-        py="xs"
-        style={{
-          borderBottom: `1px solid var(--ao-border)`,
-          flexShrink: 0,
-        }}
-      >
-        <Group justify="space-between">
-          <Group gap="sm">
-            <Text size="xs" c="dimmed">
-              Filter:
-            </Text>
-            <SegmentedControl
-              size="xs"
-              value={filter}
-              onChange={setFilter}
-              data={filterOptions}
-            />
-          </Group>
-          <Group gap="sm">
-            <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
-              {filtered.length} task{filtered.length !== 1 ? "s" : ""}
-            </Text>
-            <Button
-              size="xs"
-              leftSection={<IconPlus size={14} />}
-              onClick={() => setAddOpen(true)}
-            >
-              New Task
-            </Button>
-          </Group>
-        </Group>
-      </Box>
-
-      <Box
-        style={{
-          flex: 1,
-          display: "flex",
-          gap: 12,
-          overflowX: "auto",
-          padding: 12,
-          minHeight: 0,
-        }}
-      >
-        {VISIBLE_COLUMNS.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            tasks={board[status]}
-            onTaskClick={setSelectedTask}
+    <PageShell
+      title="Tasks"
+      titleExtra={
+        <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+          {filtered.length} task{filtered.length !== 1 ? "s" : ""}
+        </Text>
+      }
+      headerRight={
+        <Button
+          size="xs"
+          variant="light"
+          leftSection={<IconPlus size={14} />}
+          onClick={() => setAddOpen(true)}
+        >
+          New Task
+        </Button>
+      }
+      toolbar={
+        <Group gap="sm">
+          <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+            Filter:
+          </Text>
+          <SegmentedControl
+            size="xs"
+            value={filter}
+            onChange={setFilter}
+            data={filterOptions}
           />
-        ))}
-      </Box>
+        </Group>
+      }
+      noPadding
+      fullHeight
+    >
+      {filtered.length === 0 ? (
+        <Box
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <EmptyState
+            icon={<IconChecklist size={48} color="var(--ao-text-muted)" />}
+            message={
+              filter === "all"
+                ? "No tasks yet"
+                : `No tasks assigned to ${filter}`
+            }
+            action={
+              filter === "all" ? (
+                <Button
+                  size="xs"
+                  variant="light"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={() => setAddOpen(true)}
+                >
+                  Create your first task
+                </Button>
+              ) : undefined
+            }
+          />
+        </Box>
+      ) : (
+        <Box
+          style={{
+            flex: 1,
+            display: "flex",
+            gap: "var(--mantine-spacing-sm)",
+            overflowX: "auto",
+            minHeight: 0,
+          }}
+          p="sm"
+        >
+          {VISIBLE_COLUMNS.map((status) => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              tasks={board[status]}
+              onTaskClick={setSelectedTask}
+            />
+          ))}
+        </Box>
+      )}
 
       <TaskDetailModal
         task={selectedTask}
@@ -155,6 +173,6 @@ export function KanbanBoard() {
         agentNames={agentNames}
         channels={channels}
       />
-    </Box>
+    </PageShell>
   );
 }

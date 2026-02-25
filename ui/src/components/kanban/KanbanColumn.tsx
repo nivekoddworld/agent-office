@@ -10,12 +10,12 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
   failed: "Failed",
 };
 
-const STATUS_GRADIENTS: Record<TaskStatus, string> = {
-  waiting: "linear-gradient(90deg, #a8a29e, #78716c)",
-  todo: "linear-gradient(90deg, #228be6, #7048e8)",
-  in_progress: "linear-gradient(90deg, #e67700, #e8764b)",
-  done: "linear-gradient(90deg, #2f9e44, #12b886)",
-  failed: "linear-gradient(90deg, #e03131, #c92a2a)",
+const STATUS_COLORS: Record<TaskStatus, string> = {
+  waiting: "var(--ao-text-muted)",
+  todo: "var(--ao-accent-blue)",
+  in_progress: "var(--ao-accent-yellow)",
+  done: "var(--ao-accent-green)",
+  failed: "var(--ao-accent-red)",
 };
 
 interface KanbanColumnProps {
@@ -32,9 +32,9 @@ export function KanbanColumn({
   return (
     <Box
       style={{
+        width: 260,
         minWidth: 260,
-        maxWidth: 300,
-        flex: "1 1 260px",
+        flex: "0 0 260px",
         display: "flex",
         flexDirection: "column",
         height: "100%",
@@ -44,22 +44,25 @@ export function KanbanColumn({
         <Box
           px="sm"
           py={8}
-          style={{ display: "flex", alignItems: "center", gap: 8 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            whiteSpace: "nowrap",
+            borderBottom: `2px solid ${STATUS_COLORS[status]}`,
+          }}
         >
-          <Text size="sm" fw={700} style={{ color: "var(--ao-text-primary)" }}>
+          <Text
+            size="sm"
+            fw={700}
+            style={{ color: "var(--ao-text-primary)" }}
+          >
             {STATUS_LABELS[status]}
           </Text>
           <Badge size="sm" variant="filled" color="gray" circle>
             {tasks.length}
           </Badge>
         </Box>
-        <Box
-          style={{
-            height: 3,
-            borderRadius: 3,
-            background: STATUS_GRADIENTS[status],
-          }}
-        />
       </Box>
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
@@ -69,9 +72,9 @@ export function KanbanColumn({
               size="xs"
               ta="center"
               py="lg"
-              style={{ color: "var(--ao-text-muted)" }}
+              style={{ color: "var(--ao-text-muted)", opacity: 0.5 }}
             >
-              No tasks
+              Empty
             </Text>
           ) : (
             tasks.map((task) => (

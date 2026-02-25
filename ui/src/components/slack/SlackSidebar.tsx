@@ -37,6 +37,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function SidebarAvatar({ agent }: { agent: AgentInfo }) {
+  const isRunning = agent.status === "running";
   return (
     <Box style={{ position: "relative", flexShrink: 0 }}>
       <AgentAvatar name={agent.name} size={22} agentName={agent.name} />
@@ -51,6 +52,9 @@ function SidebarAvatar({ agent }: { agent: AgentInfo }) {
           backgroundColor:
             STATUS_COLORS[agent.status] ?? "var(--ao-text-muted)",
           border: `2px solid var(--ao-bg-sidebar)`,
+          ...(isRunning
+            ? { animation: "ao-status-pulse 2s ease-in-out infinite" }
+            : {}),
         }}
       />
     </Box>
@@ -91,9 +95,6 @@ function SidebarItem({
       w="100%"
       style={{
         borderRadius: 8,
-        borderLeft: active
-          ? "3px solid var(--mantine-color-violet-6)"
-          : "3px solid transparent",
         backgroundColor: active ? "var(--ao-bg-sidebar-active)" : "transparent",
         display: "flex",
         alignItems: "center",
@@ -163,7 +164,9 @@ export function SlackSidebar({
               fw={700}
               size="lg"
               truncate
-              style={{ color: "var(--ao-text-bright)" }}
+              style={{
+                color: "var(--ao-text-bright)",
+              }}
             >
               {officeName}
             </Text>
@@ -211,20 +214,20 @@ export function SlackSidebar({
           <Box px={4} mb={6}>
             <SidebarItem
               icon={
-                <IconLayoutKanban size={16} color={"var(--ao-accent-blue)"} />
+                <IconLayoutKanban size={16} color={"var(--ao-text-secondary)"} />
               }
               label="Tasks"
               active={isActive("/tasks")}
               onClick={() => navigate("/tasks")}
             />
             <SidebarItem
-              icon={<IconClock size={16} color={"var(--ao-accent-blue)"} />}
+              icon={<IconClock size={16} color={"var(--ao-text-secondary)"} />}
               label="Cron"
               active={isActive("/cron")}
               onClick={() => navigate("/cron")}
             />
             <SidebarItem
-              icon={<IconFiles size={16} color={"var(--ao-accent-blue)"} />}
+              icon={<IconFiles size={16} color={"var(--ao-text-secondary)"} />}
               label="Files"
               active={isActive("/files")}
               onClick={() => navigate("/files")}
@@ -300,6 +303,7 @@ export function SlackSidebar({
                         style={{
                           backgroundColor: "var(--ao-mention-badge)",
                           minWidth: 18,
+                          boxShadow: "0 0 6px rgba(255, 51, 102, 0.4)",
                         }}
                       >
                         {unread}

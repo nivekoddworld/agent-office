@@ -238,6 +238,10 @@ export async function startUiServer(
 export function stopUiServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!instance) return resolve();
+    // Destroy all active SSE connections so server.close() can complete.
+    // server.close() only stops accepting new connections — existing
+    // keep-alive/SSE sockets block it indefinitely.
+    instance.server.closeAllConnections();
     instance.server.close((err) => (err ? reject(err) : resolve()));
   });
 }

@@ -125,7 +125,7 @@ export function RootLayout() {
           <Text size="lg" fw={600}>
             Session Expired
           </Text>
-          <Text c="dimmed" size="sm">
+          <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
             Restart the server to get a fresh dashboard link.
           </Text>
         </Stack>

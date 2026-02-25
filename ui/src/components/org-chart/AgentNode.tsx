@@ -28,7 +28,7 @@ export function AgentNode({ data }: NodeProps) {
         style={{
           width: 230,
           cursor: "pointer",
-          borderColor: isRoot ? "var(--mantine-color-violet-7)" : "var(--ao-border)",
+          borderColor: isRoot ? "var(--ao-text-secondary)" : "var(--ao-border)",
           background: "var(--ao-bg-surface)",
           display: "flex",
           flexDirection: "column",
@@ -42,7 +42,7 @@ export function AgentNode({ data }: NodeProps) {
               width: 40,
               height: 40,
               borderRadius: "22%",
-              backgroundColor: "var(--mantine-color-violet-8)",
+              backgroundColor: "var(--ao-accent-purple)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

@@ -1,4 +1,4 @@
-/* Agent Office Global Styles */
+/* Agent Office Global Styles — Cyberpunk Dark */
 
 html,
 body,
@@ -8,6 +8,8 @@ body,
   padding: 0;
   background-color: var(--ao-bg-body);
 }
+
+/* ─── Animations ─── */
 
 /* Pulse animation for active agents */
 @keyframes pulse {
@@ -20,7 +22,43 @@ body,
   }
 }
 
-/* Scrollbar styling */
+/* Subtle glow pulse for active elements */
+@keyframes ao-glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 4px var(--ao-glow-primary);
+  }
+  50% {
+    box-shadow: 0 0 8px var(--ao-glow-primary);
+  }
+}
+
+/* Status indicator pulse (running agents) */
+@keyframes ao-status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0);
+  }
+}
+
+/* Subtle icon pulse for empty states */
+@keyframes ao-pulse-subtle {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
+/* ─── Scrollbar ─── */
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -36,30 +74,94 @@ body,
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--ao-text-muted);
+  background: rgba(255, 255, 255, 0.15);
 }
 
-/* ContentEditable placeholder */
+/* ─── ContentEditable ─── */
+
 [contenteditable][data-placeholder]:empty::before {
   content: attr(data-placeholder);
   color: var(--ao-text-muted);
   pointer-events: none;
 }
 
-/* Remove default focus outline on contentEditable */
 [contenteditable]:focus {
   outline: none;
 }
 
-/* Selection color */
+/* ─── Selection ─── */
+
 ::selection {
-  background-color: light-dark(
-    rgba(112, 72, 232, 0.2),
-    rgba(112, 72, 232, 0.3)
-  );
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
-/* Markdown content styles */
+/* ─── PageShell ─── */
+
+.ao-page-shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--ao-bg-body);
+}
+
+.ao-page-shell-header {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--ao-border);
+}
+
+.ao-page-shell-toolbar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--ao-border);
+}
+
+.ao-page-shell-content {
+  flex: 1;
+  overflow: auto;
+}
+
+/* ─── Surface ─── */
+
+.ao-surface {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ao-surface--glow:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Empty state ─── */
+
+.ao-empty-icon {
+  opacity: 0.4;
+  animation: ao-pulse-subtle 3s ease-in-out infinite;
+}
+
+/* ─── TaskCard ─── */
+
+.ao-task-card {
+  background-color: var(--ao-bg-surface);
+  border: 1px solid var(--ao-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.ao-task-card:hover {
+  background-color: var(--ao-bg-surface-hover);
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.ao-task-card--stale {
+  border-left: 3px solid var(--ao-accent-yellow);
+}
+
+/* ─── Markdown content styles ─── */
+
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,
@@ -84,7 +186,7 @@ body,
 }
 .markdown-body code {
   background-color: var(--ao-bg-code);
-  color: light-dark(#b35309, #e6db74);
+  color: #00ff88;
   padding: 0.15em 0.35em;
   border-radius: 3px;
   font-size: 0.9em;
@@ -114,7 +216,7 @@ body,
   margin: 0.15em 0;
 }
 .markdown-body blockquote {
-  border-left: 3px solid var(--ao-border);
+  border-left: 3px solid var(--ao-accent-purple);
   margin: 0.5em 0;
   padding: 0.25em 0.75em;
   color: var(--ao-text-secondary);
@@ -149,38 +251,39 @@ body,
   color: var(--ao-text-bright);
 }
 
-/* Syntax highlighting (dark-only — code blocks always use dark bg) */
+/* ─── Syntax highlighting (cyberpunk neon) ─── */
+
 .hljs {
-  color: #d4d4d4;
+  color: #c9d1d9;
 }
 .hljs-keyword,
 .hljs-selector-tag {
-  color: #c586c0;
+  color: #a855f7;
 }
 .hljs-string,
 .hljs-attr {
-  color: #ce9178;
+  color: #fbbf24;
 }
 .hljs-number,
 .hljs-literal {
-  color: #b5cea8;
+  color: #00ff88;
 }
 .hljs-comment {
-  color: #6a9955;
+  color: #484f58;
   font-style: italic;
 }
 .hljs-function,
 .hljs-title {
-  color: #dcdcaa;
+  color: #00d4ff;
 }
 .hljs-type,
 .hljs-built_in {
-  color: #4ec9b0;
+  color: #00ff88;
 }
 .hljs-variable,
 .hljs-params {
-  color: #9cdcfe;
+  color: #7dd3fc;
 }
 .hljs-meta {
-  color: #569cd6;
+  color: #a855f7;
 }

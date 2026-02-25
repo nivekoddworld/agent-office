@@ -196,6 +196,14 @@ program
         if (stopping) return;
         stopping = true;
         console.log("\n[shutdown] Stopping...");
+
+        // Safety net: force exit if graceful shutdown takes too long
+        const forceTimer = setTimeout(() => {
+          console.error("[shutdown] Timed out — forcing exit");
+          process.exit(1);
+        }, 10_000);
+        forceTimer.unref();
+
         let failed = false;
         try {
           await stopUiServer();

@@ -1,15 +1,14 @@
 import { useState } from "react";
-import {
-  Box,
-  Text,
-  Group,
-  SegmentedControl,
-  Stack,
-  Loader,
-} from "@mantine/core";
+import { Box, Group, SegmentedControl, Stack, Loader } from "@mantine/core";
+import { IconUsers } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../../api/client.js";
 import { CostChart } from "../../components/cost/CostChart.js";
+import { SectionHeader } from "../../components/shared/SectionHeader.js";
+import { StatCard } from "../../components/shared/StatCard.js";
+import { EmptyState } from "../../components/shared/EmptyState.js";
+import { PageShell } from "../../components/shared/PageShell.js";
+import { Surface } from "../../components/shared/Surface.js";
 import type { CostResponse } from "../../api/types.js";
 
 export function CostPanel() {
@@ -22,16 +21,9 @@ export function CostPanel() {
   });
 
   return (
-    <Box style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <Group
-        px="md"
-        py="xs"
-        justify="space-between"
-        style={{ borderBottom: `1px solid var(--ao-border)` }}
-      >
-        <Text size="sm" fw={700} style={{ color: "var(--ao-text-bright)" }}>
-          Cost Dashboard
-        </Text>
+    <PageShell
+      title="Cost Dashboard"
+      headerRight={
         <SegmentedControl
           size="xs"
           value={days}
@@ -42,70 +34,39 @@ export function CostPanel() {
             { value: "30", label: "30 days" },
           ]}
         />
-      </Group>
-
-      <Box style={{ flex: 1, overflow: "auto" }} px="md" py="md">
-        {isLoading ? (
+      }
+    >
+      {isLoading ? (
+        <Stack align="center" py="xl">
           <Loader size="sm" />
-        ) : data ? (
-          <Stack gap="lg">
-            <Group gap="xl">
-              <div>
-                <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
-                  Total Cost
-                </Text>
-                <Text
-                  size="xl"
-                  fw={700}
-                  style={{ color: "var(--ao-text-bright)" }}
-                >
-                  ${data.summary.totalCost.toFixed(4)}
-                </Text>
-              </div>
-              <div>
-                <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
-                  Total Tokens
-                </Text>
-                <Text
-                  size="xl"
-                  fw={700}
-                  style={{ color: "var(--ao-text-bright)" }}
-                >
-                  {data.summary.totalTokens.toLocaleString()}
-                </Text>
-              </div>
-              <div>
-                <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
-                  Requests
-                </Text>
-                <Text
-                  size="xl"
-                  fw={700}
-                  style={{ color: "var(--ao-text-bright)" }}
-                >
-                  {data.recordCount}
-                </Text>
-              </div>
-            </Group>
+        </Stack>
+      ) : data ? (
+        <Stack gap="lg">
+          <Group gap="xl">
+            <StatCard
+              label="Total Cost"
+              value={`$${data.summary.totalCost.toFixed(4)}`}
+            />
+            <StatCard
+              label="Total Tokens"
+              value={data.summary.totalTokens.toLocaleString()}
+            />
+            <StatCard label="Requests" value={`${data.recordCount}`} />
+          </Group>
 
-            <div>
-              <Text
-                size="sm"
-                fw={600}
-                mb="sm"
-                style={{ color: "var(--ao-text-primary)" }}
-              >
-                Per Agent
-              </Text>
+          <Box>
+            <SectionHeader
+              icon={<IconUsers size={16} color={"var(--ao-accent-blue)"} />}
+              label="Per Agent"
+            />
+            <Surface>
               <CostChart byAgent={data.byAgent} />
-            </div>
-          </Stack>
-        ) : (
-          <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
-            No cost data available
-          </Text>
-        )}
-      </Box>
-    </Box>
+            </Surface>
+          </Box>
+        </Stack>
+      ) : (
+        <EmptyState message="No cost data available" />
+      )}
+    </PageShell>
   );
 }

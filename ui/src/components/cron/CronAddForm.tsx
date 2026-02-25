@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Modal,
   TextInput,
@@ -16,14 +16,16 @@ import {
   Switch,
 } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
-import { useCronAdd } from "../../api/use-api-mutations.js";
-import type { CronTaskTemplate } from "../../api/types.js";
+import { useCronAdd, useCronRemove } from "../../api/use-api-mutations.js";
+import { parseCronToFields } from "../../utils/cron-human.js";
+import type { CronTaskTemplate, CronJobEntry } from "../../api/types.js";
 
 interface CronAddFormProps {
   opened: boolean;
   onClose: () => void;
   agentNames: string[];
   channels?: string[];
+  editJob?: CronJobEntry | null;
 }
 
 type Frequency = "hourly" | "daily" | "weekly" | "custom";
@@ -53,7 +55,6 @@ function buildSchedule(
   if (freq === "custom") return custom.trim();
   if (freq === "hourly") return `${minute} * * * *`;
   if (freq === "daily") return `${minute} ${hour} * * *`;
-  // weekly
   const dow = days.length > 0 ? days.join(",") : "*";
   return `${minute} ${hour} * * ${dow}`;
 }
@@ -67,36 +68,76 @@ export function CronAddForm({
   onClose,
   agentNames,
   channels = [],
+  editJob,
 }: CronAddFormProps) {
+  const isEdit = !!editJob;
+
+  const defaultAssignee = agentNames[0] ?? "";
+
   const [jobName, setJobName] = useState("");
   const [isOfficeJob, setIsOfficeJob] = useState(false);
-
-  // Tasks list
-  const defaultAssignee = agentNames[0] ?? "";
   const [tasks, setTasks] = useState<CronTaskTemplate[]>([
     emptyTask(defaultAssignee),
   ]);
-
-  // Schedule builder
   const [frequency, setFrequency] = useState<Frequency>("daily");
   const [minute, setMinute] = useState<number>(0);
   const [hour, setHour] = useState<number>(9);
   const [selectedDays, setSelectedDays] = useState<string[]>([
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
+    "1", "2", "3", "4", "5",
   ]);
   const [customSchedule, setCustomSchedule] = useState("");
-
-  // Report channel
   const defaultChannel = channels[0] ?? "";
   const [reportChannel, setReportChannel] = useState<string | null>(
     defaultChannel || null,
   );
 
   const cronAdd = useCronAdd();
+  const cronRemove = useCronRemove();
+
+  // Prefill form when editing
+  useEffect(() => {
+    if (!opened) return;
+
+    if (editJob) {
+      setJobName(editJob.jobName);
+      const noAssignees = editJob.config.tasks.every(
+        (t) => !t.assignee?.trim(),
+      );
+      setIsOfficeJob(noAssignees);
+      setTasks(
+        editJob.config.tasks.length > 0
+          ? editJob.config.tasks.map((t) => ({ ...t }))
+          : [emptyTask(defaultAssignee)],
+      );
+      setReportChannel(editJob.config.reportChannel ?? null);
+
+      // Reverse-parse schedule into form fields
+      const parsed = parseCronToFields(editJob.config.schedule);
+      if (parsed) {
+        setFrequency(parsed.frequency);
+        setMinute(parsed.minute);
+        setHour(parsed.hour);
+        if (parsed.frequency === "weekly") {
+          setSelectedDays(parsed.days);
+        }
+        setCustomSchedule("");
+      } else {
+        setFrequency("custom");
+        setCustomSchedule(editJob.config.schedule);
+      }
+    } else {
+      // Reset for add mode
+      setJobName("");
+      setIsOfficeJob(false);
+      setTasks([emptyTask(defaultAssignee)]);
+      setFrequency("daily");
+      setMinute(0);
+      setHour(9);
+      setSelectedDays(["1", "2", "3", "4", "5"]);
+      setCustomSchedule("");
+      setReportChannel(defaultChannel || null);
+    }
+  }, [opened, editJob, defaultAssignee, defaultChannel]);
 
   const schedule = useMemo(
     () => buildSchedule(frequency, minute, hour, selectedDays, customSchedule),
@@ -142,28 +183,33 @@ export function CronAddForm({
       ...(t.description?.trim() ? { description: t.description.trim() } : {}),
     }));
 
-    cronAdd.mutate(
-      {
-        scope: "office",
-        jobName: jobName.trim(),
-        schedule,
-        tasks: cleanTasks,
-        reportChannel: reportChannel || undefined,
-      },
-      {
-        onSuccess: () => {
-          setJobName("");
-          setIsOfficeJob(false);
-          setTasks([emptyTask(defaultAssignee)]);
-          setFrequency("daily");
-          setMinute(0);
-          setHour(9);
-          setSelectedDays(["1", "2", "3", "4", "5"]);
-          setCustomSchedule("");
-          onClose();
+    const createJob = () => {
+      cronAdd.mutate(
+        {
+          jobName: jobName.trim(),
+          schedule,
+          tasks: cleanTasks,
+          reportChannel: reportChannel || undefined,
         },
-      },
-    );
+        { onSuccess: () => onClose() },
+      );
+    };
+
+    if (isEdit && editJob) {
+      // Edit = delete old + create new
+      cronRemove.mutate(
+        { jobName: editJob.jobName },
+        {
+          onSuccess: () => createJob(),
+          onError: () => {
+            // If delete fails, still try to create (job may already be gone)
+            createJob();
+          },
+        },
+      );
+    } else {
+      createJob();
+    }
   };
 
   const toggleDay = (val: string) => {
@@ -177,11 +223,13 @@ export function CronAddForm({
     ...channels.map((ch) => ({ value: ch, label: `#${ch}` })),
   ];
 
+  const isPending = cronAdd.isPending || cronRemove.isPending;
+
   return (
     <Modal
       opened={opened}
       onClose={onClose}
-      title="Add Cron Job"
+      title={isEdit ? "Edit Cron Job" : "Add Cron Job"}
       size="lg"
       centered
     >
@@ -193,6 +241,7 @@ export function CronAddForm({
           value={jobName}
           onChange={(e) => setJobName(e.currentTarget.value)}
           required
+          disabled={isEdit}
         />
 
         {/* Office Job toggle */}
@@ -421,9 +470,9 @@ export function CronAddForm({
           <Button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            loading={cronAdd.isPending}
+            loading={isPending}
           >
-            Add Job
+            {isEdit ? "Save Changes" : "Add Job"}
           </Button>
         </Group>
       </Stack>

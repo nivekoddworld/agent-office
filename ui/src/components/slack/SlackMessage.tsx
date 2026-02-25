@@ -48,7 +48,7 @@ function MessageAvatar({
               width: 36,
               height: 36,
               borderRadius: 8,
-              backgroundColor: "var(--mantine-color-violet-6)",
+              backgroundColor: "var(--ao-accent-purple)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -217,7 +217,7 @@ export function SlackMessage({
                   fw={600}
                   px={4}
                   style={{
-                    backgroundColor: "var(--mantine-color-violet-6)",
+                    backgroundColor: "var(--ao-accent-purple)",
                     color: "#fff",
                     borderRadius: 3,
                     fontSize: 10,

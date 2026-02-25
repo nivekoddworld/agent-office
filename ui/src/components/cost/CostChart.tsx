@@ -5,14 +5,14 @@ interface CostChartProps {
 }
 
 const COLORS = [
-  "blue",
-  "teal",
+  "cyan",
   "violet",
   "orange",
   "pink",
-  "cyan",
+  "teal",
   "green",
   "yellow",
+  "blue",
 ];
 
 export function CostChart({ byAgent }: CostChartProps) {
