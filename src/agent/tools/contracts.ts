@@ -5,11 +5,10 @@ import { Type } from "@sinclair/typebox";
 export const MESSAGE_AGENT = {
   name: "message_agent" as const,
   label: "Message Agent",
-  description:
-    "Send a message to another agent's inbox. Use '__broadcast__' to send to all agents.",
+  description: "Send a direct message to another agent's inbox.",
   parameters: Type.Object({
     to: Type.String({
-      description: "Target agent name (or '__broadcast__' for all)",
+      description: "Target agent name",
     }),
     message: Type.String({ description: "Message content" }),
     requiresReply: Type.Optional(

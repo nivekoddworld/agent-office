@@ -175,17 +175,17 @@ describe.skipIf(skipHostApi)("HostApi", () => {
     expect(data.error).toContain("system address");
   });
 
-  it("allows __broadcast__ as a valid send target", async () => {
+  it("rejects __broadcast__ as a reserved system address", async () => {
     const res = await postJson(
       port,
       "/api/message-agent",
       { to: "__broadcast__", payload: "hi", messageId: "r3" },
       token,
     );
-    expect(res.status).toBe(200);
-    expect(bus.send).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "__broadcast__" }),
-    );
+    expect(res.status).toBe(400);
+    const data = (await res.json()) as { error: string };
+    expect(data.error).toContain("system address");
+    expect(data.error).toContain("__broadcast__");
   });
 
   it("returns 404 with clear error for unknown inbox", async () => {

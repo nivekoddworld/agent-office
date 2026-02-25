@@ -157,39 +157,22 @@ describe("MessageBus persistence", () => {
     expect(msg?.requestId).toBe("req-42");
   });
 
-  it("broadcast persists per-recipient copies", () => {
+  it("rejects __broadcast__ — no messages persisted for any agent", () => {
     const bus = new MessageBus();
     bus.setStore(store);
     bus.register("alice");
     bus.register("bob");
-    bus.send({
-      from: "__user__",
-      to: "__broadcast__",
-      type: "steer",
-      payload: "everyone",
-      priority: Priority.NORMAL,
-    });
-    expect(store.loadInbox("alice")).toHaveLength(1);
-    expect(store.loadInbox("bob")).toHaveLength(1);
-  });
-
-  it("broadcast assigns per-recipient session keys", () => {
-    const bus = new MessageBus();
-    bus.setStore(store);
-    bus.register("alice");
-    bus.register("bob");
-    bus.send({
-      from: "__cron__",
-      to: "__broadcast__",
-      type: "prompt",
-      payload: "trigger",
-      priority: Priority.NORMAL,
-      sessionKey: "internal:__broadcast__",
-    });
-    const aliceMsg = bus.pop("alice");
-    const bobMsg = bus.pop("bob");
-    expect(aliceMsg?.sessionKey).toBe("internal:alice");
-    expect(bobMsg?.sessionKey).toBe("internal:bob");
+    expect(() =>
+      bus.send({
+        from: "__user__",
+        to: "__broadcast__",
+        type: "steer",
+        payload: "everyone",
+        priority: Priority.NORMAL,
+      }),
+    ).toThrow('No inbox for agent "__broadcast__"');
+    expect(store.loadInbox("alice")).toHaveLength(0);
+    expect(store.loadInbox("bob")).toHaveLength(0);
   });
 
   it("preserves channel through persist+restore cycle", () => {

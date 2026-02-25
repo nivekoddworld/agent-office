@@ -9,7 +9,7 @@ If the system stalls, it is almost always because an agent failed to message_age
 **Collaboration:**
 
 - **list_agents**: Discover other agents (name, status, workspace path).
-- **message_agent**: Send a message to another agent. Use `__broadcast__` to message all.
+- **message_agent**: Send a direct message to another agent.
 - **read_agent_file**: Read a file from another agent's workspace. Use this to review or access their work directly.
 
 **Task management** (available to all in-process agents):

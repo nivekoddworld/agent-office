@@ -311,13 +311,13 @@ describe("Office cron validation", () => {
     );
   });
 
-  it("allows __broadcast__ as assignee", () => {
+  it("rejects __broadcast__ as assignee", () => {
     const entry: OfficeCronYamlEntry = {
       schedule: "0 9 * * *",
       tasks: [{ title: "standup", assignee: "__broadcast__" }],
     };
     const errors = validateOfficeCronEntry("standup", entry, ["pm"]);
-    expect(errors).toHaveLength(0);
+    expect(errors.some((e) => e.includes("unknown assignee"))).toBe(true);
   });
 
   it("validates schedule and timezone", () => {

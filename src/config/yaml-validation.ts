@@ -423,10 +423,7 @@ export function validateOfficeCronEntry(
           errors.push(`${p}: tasks[${i}].title is required`);
         if (!t.assignee || typeof t.assignee !== "string" || !t.assignee.trim())
           errors.push(`${p}: tasks[${i}].assignee is required`);
-        else if (
-          t.assignee !== "__broadcast__" &&
-          !agentNames.includes(t.assignee)
-        )
+        else if (!agentNames.includes(t.assignee))
           errors.push(`${p}: tasks[${i}]: unknown assignee "${t.assignee}"`);
         if (t.parent_id !== undefined && typeof t.parent_id !== "string")
           errors.push(`${p}: tasks[${i}].parent_id must be a string`);

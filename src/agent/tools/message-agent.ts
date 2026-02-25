@@ -65,12 +65,19 @@ export function createMessageAgentTool(
         overrideReason?: "urgent" | "critical" | "emergency";
       },
     ) => {
+      const to = params.to.trim();
+      if (to.startsWith("__")) {
+        return textResult(
+          `Error: "${to}" is a reserved system address.`,
+        );
+      }
+
       let warnPrefix = "";
       const correlationId = randomUUID();
       try {
         // 1. Policy check
         if (policyService) {
-          const recipientCount = params.to === "__broadcast__" ? 2 : 1;
+          const recipientCount = 1;
           const check = policyService.checkMessagePolicy(
             params.message,
             recipientCount,

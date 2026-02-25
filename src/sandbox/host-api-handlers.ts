@@ -64,7 +64,7 @@ export async function handleMessageAgent(
   }
 
   const { to, payload, priority, messageId } = JSON.parse(body);
-  if (!to || !payload || !messageId) {
+  if (!to || typeof to !== "string" || !payload || !messageId) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
@@ -74,7 +74,8 @@ export async function handleMessageAgent(
     return;
   }
 
-  if (to === "__cron__" || to === "__user__") {
+  const trimmedTo = to.trim();
+  if (trimmedTo.startsWith("__")) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({

@@ -1080,7 +1080,7 @@ Discover all agents in the workspace with their name, status, and description. A
 
 ### `message_agent`
 
-Send a message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]` and a footer `[To reply, call message_agent with to="sender"]`. Use `__broadcast__` to message all agents.
+Send a direct message to another agent's inbox. Messages are delivered on the next scheduler tick as a new prompt prefixed with `[Message from sender]` and a footer `[To reply, call message_agent with to="sender"]`.
 
 **Channel context:** Messages delivered through public channels include channel context: `[Posted in #channel. Other members: agent1, agent2]`. This lets agents know they're in a shared conversation and who else can see the message. Channel replies use `[To reply in #channel, post in the channel]` instead of the direct `message_agent` footer.
 

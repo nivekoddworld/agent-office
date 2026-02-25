@@ -66,25 +66,23 @@ describe("LocalTransport", () => {
     expect(msgs.map((m) => m.payload)).toEqual(["critical", "normal", "low"]);
   });
 
-  it("broadcasts to all except sender", () => {
+  it("rejects __broadcast__ as a send target", () => {
     const t = new LocalTransport();
     t.register("a");
     t.register("b");
-    t.register("c");
 
-    t.send({
-      from: "a",
-      to: "__broadcast__",
-      type: "prompt",
-      payload: "hey all",
-      priority: Priority.NORMAL,
-    });
+    expect(() =>
+      t.send({
+        from: "a",
+        to: "__broadcast__",
+        type: "prompt",
+        payload: "hey all",
+        priority: Priority.NORMAL,
+      }),
+    ).toThrow('No inbox for agent "__broadcast__"');
 
-    expect(t.peek("a")).toBe(0); // sender excluded
-    expect(t.peek("b")).toBe(1);
-    expect(t.peek("c")).toBe(1);
-
-    expect(t.drain("b")[0]!.payload).toBe("hey all");
+    expect(t.peek("a")).toBe(0);
+    expect(t.peek("b")).toBe(0);
   });
 
   it("throws on send to unregistered agent", () => {

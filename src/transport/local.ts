@@ -24,23 +24,6 @@ export class LocalTransport {
   send(
     msg: Omit<InboxMessage, "id" | "timestamp"> & { priority: Priority },
   ): void {
-    if (msg.to === "__broadcast__") {
-      for (const [name, queue] of this.inboxes) {
-        if (name === msg.from) continue;
-        const copy: InboxMessage = {
-          ...msg,
-          id: randomUUID(),
-          to: name,
-          timestamp: Date.now(),
-          sessionKey: `internal:${name}`,
-        };
-        this.onBeforeEnqueue?.(copy);
-        queue.push(copy);
-        this.onAfterEnqueue?.(copy);
-      }
-      return;
-    }
-
     const queue = this.inboxes.get(msg.to);
     if (!queue) throw new Error(`No inbox for agent "${msg.to}"`);
     const full: InboxMessage = {
