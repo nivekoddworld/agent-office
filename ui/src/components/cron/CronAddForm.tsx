@@ -13,6 +13,7 @@ import {
   ActionIcon,
   Paper,
   Badge,
+  Switch,
 } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useCronAdd } from "../../api/use-api-mutations.js";
@@ -68,6 +69,7 @@ export function CronAddForm({
   channels = [],
 }: CronAddFormProps) {
   const [jobName, setJobName] = useState("");
+  const [isOfficeJob, setIsOfficeJob] = useState(false);
 
   // Tasks list
   const defaultAssignee = agentNames[0] ?? "";
@@ -108,7 +110,11 @@ export function CronAddForm({
 
   const tasksValid =
     tasks.length > 0 &&
-    tasks.every((t) => t.title.trim() !== "" && t.assignee.trim() !== "");
+    tasks.every(
+      (t) =>
+        t.title.trim() !== "" &&
+        (isOfficeJob || (t.assignee ?? "").trim() !== ""),
+    );
 
   const canSubmit = jobName.trim() && tasksValid && scheduleValid;
 
@@ -132,7 +138,7 @@ export function CronAddForm({
 
     const cleanTasks = tasks.map((t) => ({
       title: t.title.trim(),
-      assignee: t.assignee,
+      ...(isOfficeJob ? {} : { assignee: t.assignee }),
       ...(t.description?.trim() ? { description: t.description.trim() } : {}),
     }));
 
@@ -147,6 +153,7 @@ export function CronAddForm({
       {
         onSuccess: () => {
           setJobName("");
+          setIsOfficeJob(false);
           setTasks([emptyTask(defaultAssignee)]);
           setFrequency("daily");
           setMinute(0);
@@ -188,6 +195,14 @@ export function CronAddForm({
           required
         />
 
+        {/* Office Job toggle */}
+        <Switch
+          label="Office Job (all agents)"
+          description="Create task chain for every agent in the office"
+          checked={isOfficeJob}
+          onChange={(e) => setIsOfficeJob(e.currentTarget.checked)}
+        />
+
         {/* Tasks */}
         <div>
           <Text size="sm" fw={500} mb={6}>
@@ -225,19 +240,23 @@ export function CronAddForm({
                             task.title.trim() === "" ? "Required" : undefined
                           }
                         />
-                        <Select
-                          placeholder="Assignee"
-                          size="xs"
-                          data={agentNames}
-                          value={task.assignee || null}
-                          onChange={(v) =>
-                            updateTask(idx, { assignee: v ?? "" })
-                          }
-                          required
-                          error={
-                            task.assignee.trim() === "" ? "Required" : undefined
-                          }
-                        />
+                        {!isOfficeJob && (
+                          <Select
+                            placeholder="Assignee"
+                            size="xs"
+                            data={agentNames}
+                            value={task.assignee || null}
+                            onChange={(v) =>
+                              updateTask(idx, { assignee: v ?? "" })
+                            }
+                            required
+                            error={
+                              (task.assignee ?? "").trim() === ""
+                                ? "Required"
+                                : undefined
+                            }
+                          />
+                        )}
                       </Group>
                       <TextInput
                         placeholder="Description (optional)"

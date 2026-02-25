@@ -311,6 +311,15 @@ describe("Office cron validation", () => {
     );
   });
 
+  it("allows office job (tasks without assignee)", () => {
+    const entry: OfficeCronYamlEntry = {
+      schedule: "0 9 * * *",
+      tasks: [{ title: "standup" }, { title: "report" }],
+    };
+    const errors = validateOfficeCronEntry("standup", entry, ["pm"]);
+    expect(errors).toHaveLength(0);
+  });
+
   it("rejects __broadcast__ as assignee", () => {
     const entry: OfficeCronYamlEntry = {
       schedule: "0 9 * * *",
@@ -318,6 +327,18 @@ describe("Office cron validation", () => {
     };
     const errors = validateOfficeCronEntry("standup", entry, ["pm"]);
     expect(errors.some((e) => e.includes("unknown assignee"))).toBe(true);
+  });
+
+  it("rejects mixed assignee (some with, some without)", () => {
+    const entry: OfficeCronYamlEntry = {
+      schedule: "0 9 * * *",
+      tasks: [
+        { title: "standup", assignee: "pm" },
+        { title: "report" },
+      ],
+    };
+    const errors = validateOfficeCronEntry("mixed", entry, ["pm"]);
+    expect(errors.some((e) => e.includes("either all tasks"))).toBe(true);
   });
 
   it("validates schedule and timezone", () => {

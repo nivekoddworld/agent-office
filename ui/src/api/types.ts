@@ -27,7 +27,7 @@ export interface AgentHierarchy {
 export interface CronTaskTemplate {
   title: string;
   description?: string;
-  assignee: string;
+  assignee?: string;
   parentId?: string;
   reportChannel?: string;
 }
