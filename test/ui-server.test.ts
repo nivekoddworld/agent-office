@@ -12,14 +12,12 @@ import http from "node:http";
 // --- Mocks (hoisted) ---
 
 const {
-  mockDispatchCommand,
   mockSearchRegistrySkills,
   mockInstallRegistrySkillForAgent,
   mockListInstalledAgentSkills,
   mockRemoveProjectSkillForAgent,
   mockSkillRemoveCommand,
 } = vi.hoisted(() => ({
-  mockDispatchCommand: vi.fn(async () => "handled" as const),
   mockSearchRegistrySkills: vi.fn(async () => []),
   mockInstallRegistrySkillForAgent: vi.fn(async () => ({
     installed: [],
@@ -32,10 +30,6 @@ const {
     }),
   ),
   mockSkillRemoveCommand: vi.fn(async () => undefined),
-}));
-
-vi.mock("../src/ui/command-parser.js", () => ({
-  dispatchCommand: mockDispatchCommand,
 }));
 vi.mock("../src/skills/registry.js", () => ({
   searchRegistrySkills: mockSearchRegistrySkills,
@@ -136,7 +130,6 @@ function authHeaders(extra?: HeadersInit): HeadersInit {
 describe("UI server", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockDispatchCommand.mockResolvedValue("handled");
     mockSearchRegistrySkills.mockResolvedValue([]);
     mockInstallRegistrySkillForAgent.mockResolvedValue({
       installed: [],
