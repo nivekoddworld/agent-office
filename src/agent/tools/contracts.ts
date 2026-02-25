@@ -331,9 +331,12 @@ export const TASK_CREATE = {
           "Task priority (affects notification urgency). Default: normal",
       }),
     ),
-    reportChannel: Type.String({
-      description: "Channel to notify when this task completes",
-    }),
+    reportChannel: Type.Optional(
+      Type.String({
+        description:
+          "Channel or agent to notify when this task completes. Use channel name for channels, or @agent_name for agent DMs.",
+      }),
+    ),
   }),
 };
 

@@ -30,37 +30,6 @@ import { CreateChannelModal } from "./CreateChannelModal.js";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { AgentInfo } from "../../api/types.js";
 
-const STATUS_COLORS: Record<string, string> = {
-  idle: "var(--ao-online-green)",
-  running: "var(--ao-accent-blue)",
-  dead: "var(--ao-text-muted)",
-};
-
-function SidebarAvatar({ agent }: { agent: AgentInfo }) {
-  const isRunning = agent.status === "running";
-  return (
-    <Box style={{ position: "relative", flexShrink: 0 }}>
-      <AgentAvatar name={agent.name} size={22} agentName={agent.name} />
-      <Box
-        style={{
-          position: "absolute",
-          bottom: -1,
-          right: -1,
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          backgroundColor:
-            STATUS_COLORS[agent.status] ?? "var(--ao-text-muted)",
-          border: `2px solid var(--ao-bg-sidebar)`,
-          ...(isRunning
-            ? { animation: "ao-status-pulse 2s ease-in-out infinite" }
-            : {}),
-        }}
-      />
-    </Box>
-  );
-}
-
 interface SlackSidebarProps {
   officeName: string;
   agents: AgentInfo[];
@@ -139,7 +108,6 @@ export function SlackSidebar({
 }: SlackSidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const runningCount = agents.filter((a) => a.status === "running").length;
   const [createOpen, setCreateOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
@@ -254,41 +222,45 @@ export function SlackSidebar({
               </Tooltip>
             }
           >
-            {Object.keys(channels).map((ch) => (
-              <SidebarItem
-                key={ch}
-                icon={<IconHash size={16} color={"var(--ao-text-secondary)"} />}
-                label={ch}
-                active={isActive(`/channels/${encodeURIComponent(ch)}`)}
-                onClick={() => navigate(`/channels/${encodeURIComponent(ch)}`)}
-              />
-            ))}
+            {Object.keys(channels).map((ch) => {
+              const chUnread = unreadCounts[`ch:${ch}`] ?? 0;
+              return (
+                <SidebarItem
+                  key={ch}
+                  icon={<IconHash size={16} color={"var(--ao-text-secondary)"} />}
+                  label={ch}
+                  active={isActive(`/channels/${encodeURIComponent(ch)}`)}
+                  bold={chUnread > 0}
+                  onClick={() => navigate(`/channels/${encodeURIComponent(ch)}`)}
+                  rightSection={
+                    chUnread > 0 ? (
+                      <Badge
+                        size="xs"
+                        variant="filled"
+                        style={{
+                          backgroundColor: "var(--ao-mention-badge)",
+                          minWidth: 18,
+                          boxShadow: "0 0 6px rgba(255, 51, 102, 0.4)",
+                        }}
+                      >
+                        {chUnread}
+                      </Badge>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </SidebarSection>
 
           {/* Direct Messages */}
           <Box mt={4} />
-          <SidebarSection
-            label="Direct Messages"
-            rightSection={
-              runningCount > 0 ? (
-                <Badge
-                  size="xs"
-                  variant="filled"
-                  color="green"
-                  circle
-                  style={{ minWidth: 18 }}
-                >
-                  {runningCount}
-                </Badge>
-              ) : null
-            }
-          >
+          <SidebarSection label="Direct Messages">
             {agents.map((agent) => {
               const unread = unreadCounts[agent.name] ?? 0;
               return (
                 <SidebarItem
                   key={agent.name}
-                  icon={<SidebarAvatar agent={agent} />}
+                  icon={<AgentAvatar name={agent.name} size={22} agentName={agent.name} />}
                   label={agent.name}
                   active={isActive(`/dm/${encodeURIComponent(agent.name)}`)}
                   bold={unread > 0}

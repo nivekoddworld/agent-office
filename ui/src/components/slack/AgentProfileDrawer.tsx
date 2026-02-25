@@ -136,10 +136,24 @@ export function AgentProfileDrawer({
               >
                 Message
               </Button>
-              <Badge variant="light" color="blue" size="md">
+              <Badge
+                variant="light"
+                color="blue"
+                size="lg"
+                styles={{
+                  root: { height: 30, paddingInline: 14 },
+                }}
+              >
                 {agent.model}
               </Badge>
-              <Badge variant="light" color="gray" size="md">
+              <Badge
+                variant="light"
+                color="gray"
+                size="lg"
+                styles={{
+                  root: { height: 30, paddingInline: 14 },
+                }}
+              >
                 Priority: {agent.priority}
               </Badge>
             </Group>

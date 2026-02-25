@@ -190,6 +190,7 @@ export function taskGetImpl(deps: TaskToolDeps, params: TaskGetParams): string {
     lines.push(`Started: ${new Date(task.startedAt).toISOString()}`);
   if (task.completedAt)
     lines.push(`Completed: ${new Date(task.completedAt).toISOString()}`);
+  if (task.reportChannel) lines.push(`Report to: ${task.reportChannel}`);
   if (task.result) lines.push(`\nResult:\n${task.result}`);
 
   return lines.join("\n");

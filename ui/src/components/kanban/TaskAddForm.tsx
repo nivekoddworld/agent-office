@@ -42,14 +42,27 @@ export function TaskAddForm({
   const canSubmit = title.trim() !== "" && assignee !== null;
 
   const reportOptions = useMemo(() => {
-    const opts: { value: string; label: string }[] = [
-      { value: "", label: "None (no report)" },
-    ];
-    for (const ch of channels) {
-      opts.push({ value: ch, label: `#${ch}` });
+    const opts: (
+      | { value: string; label: string }
+      | { group: string; items: { value: string; label: string }[] }
+    )[] = [{ value: "", label: "None (no report)" }];
+    if (channels.length > 0) {
+      opts.push({
+        group: "Channels",
+        items: channels.map((ch) => ({ value: ch, label: `#${ch}` })),
+      });
+    }
+    if (agentNames.length > 0) {
+      opts.push({
+        group: "Agents (DM)",
+        items: agentNames.map((name) => ({
+          value: `@${name}`,
+          label: `@${name}`,
+        })),
+      });
     }
     return opts;
-  }, [channels]);
+  }, [channels, agentNames]);
 
   const handleClose = () => {
     setTitle("");
@@ -130,7 +143,7 @@ export function TaskAddForm({
 
         <Select
           label="Report when done"
-          description="Send a completion message to a channel"
+          description="Send a completion message to a channel or agent"
           data={reportOptions}
           value={reportChannel ?? ""}
           onChange={(v) => setReportChannel(v || null)}

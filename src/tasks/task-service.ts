@@ -30,7 +30,7 @@ export interface CreateTaskParams {
   dependsOn?: string[];
   parentId?: string;
   priority: Priority;
-  /** Channel name to notify when task is done. */
+  /** Channel name or @agent_name to notify when task is done. */
   reportChannel?: string;
 }
 

@@ -190,6 +190,19 @@ export function TaskDetailModal({
           </Box>
         )}
 
+        {task.reportChannel && (
+          <Box>
+            <Text size="xs" c="dimmed" tt="uppercase" mb={4}>
+              Report to
+            </Text>
+            <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
+              {task.reportChannel.startsWith("@")
+                ? task.reportChannel
+                : `#${task.reportChannel}`}
+            </Text>
+          </Box>
+        )}
+
         {task.result && (
           <Box>
             <Text size="xs" c="dimmed" tt="uppercase" mb={4}>

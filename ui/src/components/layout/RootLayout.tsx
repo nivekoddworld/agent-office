@@ -54,6 +54,10 @@ export function RootLayout() {
           if (isDmSessionForAgent(d.sessionKey, agent)) {
             unreadStore.increment(agent);
           }
+          const sk = typeof d.sessionKey === "string" ? d.sessionKey : "";
+          if (sk.startsWith("ch:")) {
+            unreadStore.increment(sk);
+          }
         }
       }
     }
@@ -63,11 +67,17 @@ export function RootLayout() {
 
   const { data: state, isLoading } = useBootstrapState(authed);
 
-  // Clear unread when navigating to a DM route
+  // Clear unread when navigating to a DM or channel route
   useEffect(() => {
-    const match = location.pathname.match(/^\/dm\/(.+)$/);
-    const agent = match?.[1];
-    unreadStore.setActiveAgent(agent ? decodeURIComponent(agent) : null);
+    const dmMatch = location.pathname.match(/^\/dm\/(.+)$/);
+    const chMatch = location.pathname.match(/^\/channels\/(.+)$/);
+    if (dmMatch?.[1]) {
+      unreadStore.setActive(decodeURIComponent(dmMatch[1]));
+    } else if (chMatch?.[1]) {
+      unreadStore.setActive(`ch:${decodeURIComponent(chMatch[1])}`);
+    } else {
+      unreadStore.setActive(null);
+    }
   }, [location.pathname]);
 
   // Redirect away from deleted channels

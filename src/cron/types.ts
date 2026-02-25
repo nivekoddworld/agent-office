@@ -20,7 +20,7 @@ export interface CronJobConfig {
   timezone?: string;
   catchUp?: "skip" | "once";
   enabled?: boolean;
-  /** Channel where the cron trigger is posted so results are visible there. */
+  /** Channel or @agent_name where the cron trigger result is reported. */
   reportChannel?: string;
 }
 

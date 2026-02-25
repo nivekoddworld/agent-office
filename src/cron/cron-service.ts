@@ -2,6 +2,7 @@ import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { TaskService } from "../tasks/task-service.js";
 import { Priority } from "../types.js";
+import { parseReportTarget } from "../tasks/types.js";
 
 /** Options for a channel fanout message. */
 export interface CronChannelFanoutOptions {
@@ -13,6 +14,13 @@ export interface CronChannelFanoutOptions {
 /** Callback to persist a cron trigger to a report channel's JSONL session. */
 export type CronChannelFanout = (
   channelName: string,
+  message: string,
+  options?: CronChannelFanoutOptions,
+) => void;
+
+/** Callback to send a report DM to an agent. */
+export type CronReportDm = (
+  agentName: string,
   message: string,
   options?: CronChannelFanoutOptions,
 ) => void;
@@ -62,6 +70,7 @@ export class CronService {
   private agents: Map<string, AgentHandle>;
   private store: CronStore;
   private channelFanout: CronChannelFanout | undefined;
+  private reportDm: CronReportDm | undefined;
   private taskService: TaskService | undefined;
   private jobs = new Map<string, ActiveJob>(); // key: "agent:job"
   private officeJobs = new Map<string, ActiveOfficeJob>(); // key: jobName
@@ -75,12 +84,14 @@ export class CronService {
     store: CronStore,
     channelFanout?: CronChannelFanout,
     taskService?: TaskService,
+    reportDm?: CronReportDm,
   ) {
     this.bus = bus;
     this.agents = agents;
     this.store = store;
     this.channelFanout = channelFanout;
     this.taskService = taskService;
+    this.reportDm = reportDm;
   }
 
   /** Load persisted state and start timers for all jobs. */
@@ -526,16 +537,22 @@ export class CronService {
   /** Called by TaskService when a task transitions to done. */
   handleTaskDone(task: { id: string; result?: string }): void {
     const tracker = this.completionTrackers.get(task.id);
-    if (!tracker || !this.channelFanout) return;
+    if (!tracker) return;
     this.completionTrackers.delete(task.id);
     const message = task.result?.trim()
       ? task.result.trim()
       : `Completed task: ${tracker.taskTitle}`;
-    this.channelFanout(tracker.reportChannel, message, {
+    const opts = {
       sender: tracker.assignee,
       kind: "task_report",
       jobName: tracker.jobName,
-    });
+    };
+    const target = parseReportTarget(tracker.reportChannel);
+    if (target.kind === "agent") {
+      this.reportDm?.(target.name, message, opts);
+    } else {
+      this.channelFanout?.(target.name, message, opts);
+    }
   }
 
   private persistState(): void {

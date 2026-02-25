@@ -25,10 +25,11 @@ import { resolveEnvRefs } from "./config/env-substitution.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
-import { CronService, type CronChannelFanout } from "./cron/cron-service.js";
+import { CronService, type CronChannelFanout, type CronReportDm } from "./cron/cron-service.js";
 import { CronStore } from "./cron/cron-store.js";
 import { TaskService } from "./tasks/task-service.js";
 import { TaskStore } from "./tasks/task-store.js";
+import { parseReportTarget } from "./tasks/types.js";
 import {
   createMessageStore,
   type MessageStore,
@@ -98,10 +99,11 @@ export class Workspace {
       if (!cfg) return;
       const sk = sessionKey("channel", channelName);
       const filename = sessionFilename(sk);
+      const sender = options?.sender ?? "__cron__";
       const entry: SessionEntry = {
         ts: new Date().toISOString(),
         role: "assistant",
-        from: options?.sender ?? "__cron__",
+        from: sender,
         text: message,
         kind: options?.kind,
         jobName: options?.jobName,
@@ -109,6 +111,14 @@ export class Workspace {
       for (const member of cfg.members) {
         appendSession(this.office.dir, member, filename, entry);
       }
+      // Emit SSE event so frontend can track channel unreads in real-time
+      const event = {
+        type: "message_end",
+        message: { role: "assistant", content: [{ type: "text", text: message }] },
+        sessionKey: sk,
+        sourceKind: "channel",
+      } as unknown as AgentEvent;
+      for (const fn of this.listeners) fn(sender, event);
     };
     this.tasks = new TaskService(
       new TaskStore(join(this.office.dir, "tasks")),
@@ -116,24 +126,52 @@ export class Workspace {
       this.office.dir,
       (name) => this.agents.has(name),
     );
+    const cronReportDm: CronReportDm = (agentName, message, options) => {
+      if (!this.agents.has(agentName)) return;
+      const sender = options?.sender ?? "__cron__";
+      this.bus.send({
+        from: sender,
+        to: agentName,
+        type: "prompt",
+        payload: `[Task Report] ${message}`,
+        priority: this.agents.get(agentName)!.config.priority,
+        sessionKey: sessionKey("internal", agentName),
+        sourceKind: "internal",
+      });
+    };
     this.cron = new CronService(
       this.bus,
       this.agents,
       new CronStore(join(this.office.dir, "cron")),
       cronChannelFanout,
       this.tasks,
+      cronReportDm,
     );
     this.tasks.setDoneHook((task) => {
       this.cron.handleTaskDone(task);
       if (!task.reportChannel) return;
-      if (!this.office.channels.has(task.reportChannel)) return;
       const message = task.result?.trim()
         ? task.result.trim()
         : `Completed task: ${task.title}`;
-      cronChannelFanout(task.reportChannel, message, {
-        sender: task.assignee,
-        kind: "task_report",
-      });
+      const target = parseReportTarget(task.reportChannel);
+      if (target.kind === "channel") {
+        if (!this.office.channels.has(target.name)) return;
+        cronChannelFanout(target.name, message, {
+          sender: task.assignee,
+          kind: "task_report",
+        });
+      } else {
+        if (!this.agents.has(target.name)) return;
+        this.bus.send({
+          from: task.assignee,
+          to: target.name,
+          type: "prompt",
+          payload: `[Task Report] #${task.id} "${task.title}"\n${message}`,
+          priority: task.priority,
+          sessionKey: sessionKey("internal", target.name),
+          sourceKind: "internal",
+        });
+      }
     });
 
     this.obligationStore = createObligationStore(

@@ -40,7 +40,7 @@ function LiveAvatar({
       colors={COLORS}
       enableBlink={active}
       onRenderMouth={
-        isRunningTool
+        active
           ? () => <Loader size={Math.max(size * 0.2, 8)} color="white" />
           : undefined
       }

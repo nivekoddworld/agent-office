@@ -33,7 +33,8 @@ export function useSSE(
       if (type === "scheduler_tick") {
         queryClient.setQueryData<BootstrapState>(["state"], (prev) => {
           if (!prev) return prev;
-          return { ...prev, scheduler: data as SchedulerState };
+          const sd = data as SchedulerState;
+          return { ...prev, agents: sd.agents, scheduler: sd };
         });
       }
       if (type === "snapshot" || type === "state_changed") {

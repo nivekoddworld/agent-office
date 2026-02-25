@@ -48,3 +48,13 @@ export interface TaskFilter {
   createdBy?: string;
   priority?: Priority;
 }
+
+/** Parse reportChannel into its target type and name. */
+export function parseReportTarget(reportChannel: string):
+  | { kind: "channel"; name: string }
+  | { kind: "agent"; name: string } {
+  if (reportChannel.startsWith("@")) {
+    return { kind: "agent", name: reportChannel.slice(1) };
+  }
+  return { kind: "channel", name: reportChannel };
+}
