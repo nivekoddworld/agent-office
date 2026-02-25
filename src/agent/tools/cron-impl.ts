@@ -38,7 +38,7 @@ function parseMutationScope(
 interface CronTaskTemplateParam {
   title: string;
   description?: string;
-  assignee: string;
+  assignee?: string;
   parent_id?: string;
   report_channel?: string;
 }
@@ -99,11 +99,15 @@ export async function cronAddImpl(
       return audit(deps, "add", scope, params.name, "error", {
         reason: "each task must have a non-empty title",
       });
-    if (!t.assignee?.trim())
-      return audit(deps, "add", scope, params.name, "error", {
-        reason: "each task must have a non-empty assignee",
-      });
   }
+  // All-or-nothing: either all tasks have assignee or none (office job)
+  const hasAssignee = params.tasks.some((t) => t.assignee?.trim());
+  const allHaveAssignee = params.tasks.every((t) => t.assignee?.trim());
+  if (hasAssignee && !allHaveAssignee)
+    return audit(deps, "add", scope, params.name, "error", {
+      reason:
+        "either all tasks must have an assignee or none (office job)",
+    });
   if (params.timezone && !isValidTimezone(params.timezone))
     return audit(deps, "add", scope, params.name, "error", {
       reason: `invalid timezone "${params.timezone}"`,
@@ -131,10 +135,8 @@ export async function cronAddImpl(
     }
 
     const tasksYaml = params.tasks.map((t) => {
-      const obj: Record<string, unknown> = {
-        title: t.title,
-        assignee: t.assignee,
-      };
+      const obj: Record<string, unknown> = { title: t.title };
+      if (t.assignee) obj.assignee = t.assignee;
       if (t.description) obj.description = t.description;
       if (t.parent_id) obj.parent_id = t.parent_id;
       if (t.report_channel) obj.report_channel = t.report_channel;

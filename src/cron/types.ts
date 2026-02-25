@@ -4,8 +4,14 @@ import type { CreateTaskParams } from "../tasks/task-service.js";
  * Task template for cron jobs — same shape as CreateTaskParams minus:
  * - priority: always CRITICAL (predefined at runtime)
  * - dependsOn: auto-chained to previous task in the job (predefined at runtime)
+ * - assignee: optional — omit for office jobs (task chain created for every agent)
  */
-export type CronTaskTemplate = Omit<CreateTaskParams, "priority" | "dependsOn">;
+export type CronTaskTemplate = Omit<
+  CreateTaskParams,
+  "priority" | "dependsOn" | "assignee"
+> & {
+  assignee?: string;
+};
 
 /** Cron job configuration as declared in office.yaml. */
 export interface CronJobConfig {

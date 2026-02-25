@@ -31,7 +31,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           tasks?: Array<{
             title: string;
             description?: string;
-            assignee: string;
+            assignee?: string;
           }>;
           timezone?: string;
           catchUp?: string;
@@ -54,11 +54,20 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           });
         }
         for (const t of parsed.tasks) {
-          if (!t.title?.trim() || !t.assignee?.trim()) {
+          if (!t.title?.trim()) {
             return json(res, 400, {
-              error: "each task must have a title and assignee",
+              error: "each task must have a title",
             });
           }
+        }
+        // All-or-nothing: either all tasks have assignee or none (office job)
+        const hasAssignee = parsed.tasks.some((t) => t.assignee?.trim());
+        const allHaveAssignee = parsed.tasks.every((t) => t.assignee?.trim());
+        if (hasAssignee && !allHaveAssignee) {
+          return json(res, 400, {
+            error:
+              "either all tasks must have an assignee or none (office job)",
+          });
         }
         const fieldCount = parsed.schedule.trim().split(/\s+/).length;
         if (fieldCount !== 5) {

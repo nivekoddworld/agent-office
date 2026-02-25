@@ -117,7 +117,7 @@ export interface OfficeCronYamlEntry {
   tasks: Array<{
     title: string;
     description?: string;
-    assignee: string;
+    assignee?: string;
     parent_id?: string;
     report_channel?: string;
   }>;

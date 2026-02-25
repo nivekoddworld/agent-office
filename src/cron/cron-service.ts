@@ -59,6 +59,7 @@ interface CompletionTracker {
  */
 export class CronService {
   private bus: MessageBus;
+  private agents: Map<string, AgentHandle>;
   private store: CronStore;
   private channelFanout: CronChannelFanout | undefined;
   private taskService: TaskService | undefined;
@@ -70,12 +71,13 @@ export class CronService {
 
   constructor(
     bus: MessageBus,
-    _agents: Map<string, AgentHandle>,
+    agents: Map<string, AgentHandle>,
     store: CronStore,
     channelFanout?: CronChannelFanout,
     taskService?: TaskService,
   ) {
     this.bus = bus;
+    this.agents = agents;
     this.store = store;
     this.channelFanout = channelFanout;
     this.taskService = taskService;
@@ -313,28 +315,58 @@ export class CronService {
     job.state.attemptCount++;
 
     try {
-      let prevTaskId: string | undefined;
       const createdTasks: Array<{
         id: string;
         title: string;
         assignee: string;
       }> = [];
-      for (const template of job.config.tasks) {
-        const result = this.taskService.create("__cron__", {
-          ...template,
-          priority: Priority.CRITICAL,
-          dependsOn: prevTaskId ? [prevTaskId] : [],
-        });
-        if (typeof result === "string") {
-          throw new Error(result);
+
+      const isOfficeJob = job.config.tasks.every((t) => !t.assignee);
+
+      if (isOfficeJob) {
+        // Office job: create independent chain per agent
+        for (const agentName of this.agents.keys()) {
+          let prevTaskId: string | undefined;
+          for (const template of job.config.tasks) {
+            const result = this.taskService.create("__cron__", {
+              ...template,
+              assignee: agentName,
+              priority: Priority.CRITICAL,
+              dependsOn: prevTaskId ? [prevTaskId] : [],
+            });
+            if (typeof result === "string") {
+              throw new Error(result);
+            }
+            prevTaskId = result.id;
+            createdTasks.push({
+              id: result.id,
+              title: template.title,
+              assignee: agentName,
+            });
+          }
         }
-        prevTaskId = result.id;
-        createdTasks.push({
-          id: result.id,
-          title: template.title,
-          assignee: template.assignee,
-        });
+      } else {
+        // Normal job: single chain with explicit assignees
+        let prevTaskId: string | undefined;
+        for (const template of job.config.tasks) {
+          const result = this.taskService.create("__cron__", {
+            ...template,
+            assignee: template.assignee!,
+            priority: Priority.CRITICAL,
+            dependsOn: prevTaskId ? [prevTaskId] : [],
+          });
+          if (typeof result === "string") {
+            throw new Error(result);
+          }
+          prevTaskId = result.id;
+          createdTasks.push({
+            id: result.id,
+            title: template.title,
+            assignee: template.assignee!,
+          });
+        }
       }
+
       this.dispatchLog.push(now);
       job.state.sentCount++;
       job.state.lastStatus = "ok";
@@ -417,28 +449,58 @@ export class CronService {
 
     // Create task chain
     try {
-      let prevTaskId: string | undefined;
       const createdTasks: Array<{
         id: string;
         title: string;
         assignee: string;
       }> = [];
-      for (const template of job.config.tasks) {
-        const result = this.taskService.create("__cron__", {
-          ...template,
-          priority: Priority.CRITICAL,
-          dependsOn: prevTaskId ? [prevTaskId] : [],
-        });
-        if (typeof result === "string") {
-          throw new Error(result);
+
+      const isOfficeJob = job.config.tasks.every((t) => !t.assignee);
+
+      if (isOfficeJob) {
+        // Office job: create independent chain per agent
+        for (const agentName of this.agents.keys()) {
+          let prevTaskId: string | undefined;
+          for (const template of job.config.tasks) {
+            const result = this.taskService.create("__cron__", {
+              ...template,
+              assignee: agentName,
+              priority: Priority.CRITICAL,
+              dependsOn: prevTaskId ? [prevTaskId] : [],
+            });
+            if (typeof result === "string") {
+              throw new Error(result);
+            }
+            prevTaskId = result.id;
+            createdTasks.push({
+              id: result.id,
+              title: template.title,
+              assignee: agentName,
+            });
+          }
         }
-        prevTaskId = result.id;
-        createdTasks.push({
-          id: result.id,
-          title: template.title,
-          assignee: template.assignee,
-        });
+      } else {
+        // Normal job: single chain with explicit assignees
+        let prevTaskId: string | undefined;
+        for (const template of job.config.tasks) {
+          const result = this.taskService.create("__cron__", {
+            ...template,
+            assignee: template.assignee!,
+            priority: Priority.CRITICAL,
+            dependsOn: prevTaskId ? [prevTaskId] : [],
+          });
+          if (typeof result === "string") {
+            throw new Error(result);
+          }
+          prevTaskId = result.id;
+          createdTasks.push({
+            id: result.id,
+            title: template.title,
+            assignee: template.assignee!,
+          });
+        }
       }
+
       this.dispatchLog.push(now);
       job.state.sentCount++;
       job.state.lastStatus = "ok";

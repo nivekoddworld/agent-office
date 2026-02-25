@@ -142,7 +142,7 @@ export const CRON_ADD = {
   name: "cron_add" as const,
   label: "Cron Add",
   description:
-    "Add or update a cron job. scope='agent' (default) manages your own jobs. scope='office' requires office_cron permission. Each job creates a chain of tasks when fired — every task depends on the previous one.",
+    "Add or update a cron job. scope='agent' (default) manages your own jobs. scope='office' requires office_cron permission. Each job creates a chain of tasks when fired — every task depends on the previous one. Omit assignee on all tasks to create an office job (task chain created for every agent).",
   parameters: Type.Object({
     name: Type.String({ description: "Job name ([a-zA-Z0-9_-]+)" }),
     schedule: Type.String({
@@ -154,9 +154,12 @@ export const CRON_ADD = {
         description: Type.Optional(
           Type.String({ description: "Task description (optional)" }),
         ),
-        assignee: Type.String({
-          description: "Agent name to assign this task to",
-        }),
+        assignee: Type.Optional(
+          Type.String({
+            description:
+              "Agent name to assign this task to. Omit on all tasks for an office job (chain created for every agent).",
+          }),
+        ),
         parent_id: Type.Optional(
           Type.String({
             description: "Parent task ID for sub-task grouping (optional)",
@@ -329,11 +332,9 @@ export const TASK_CREATE = {
           "Task priority (affects notification urgency). Default: normal",
       }),
     ),
-    reportChannel: Type.Optional(
-      Type.String({
-        description: "Channel to notify when this task completes (optional)",
-      }),
-    ),
+    reportChannel: Type.String({
+      description: "Channel to notify when this task completes",
+    }),
   }),
 };
 
