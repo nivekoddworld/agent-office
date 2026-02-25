@@ -20,6 +20,7 @@ import {
   IconHeartHandshake,
   IconBug,
   IconClock,
+  IconFiles,
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -221,6 +222,12 @@ export function SlackSidebar({
               label="Cron"
               active={isActive("/cron")}
               onClick={() => navigate("/cron")}
+            />
+            <SidebarItem
+              icon={<IconFiles size={16} color={"var(--ao-accent-blue)"} />}
+              label="Files"
+              active={isActive("/files")}
+              onClick={() => navigate("/files")}
             />
           </Box>
 

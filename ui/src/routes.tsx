@@ -9,6 +9,7 @@ import { OfficeDebugPanel } from "./pages/debug/OfficeDebugPanel.js";
 import { OrgChartPanel } from "./pages/org-chart/OrgChartPanel.js";
 import { DmView } from "./pages/dm/DmView.js";
 import { ConversationView } from "./pages/channel/ConversationView.js";
+import { AllFilesPanel } from "./pages/files/AllFilesPanel.js";
 
 export const router = createBrowserRouter([
   {
@@ -17,6 +18,7 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="/tasks" replace /> },
       { path: "tasks", element: <KanbanBoard /> },
       { path: "cron", element: <CronChannelView /> },
+      { path: "files", element: <AllFilesPanel /> },
       { path: "cost", element: <CostPanel /> },
       { path: "collaboration", element: <CollaborationPanel /> },
       { path: "settings", element: <SettingsPanel /> },
