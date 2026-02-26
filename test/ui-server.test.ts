@@ -228,6 +228,45 @@ describe("UI server", () => {
     expect(sseData).toContain('"sourceKind":"channel"');
   });
 
+  it("SSE tool_execution_end payload includes agent/type/toolName/isError", async () => {
+    const sseData = await new Promise<string>((resolve, reject) => {
+      let collected = "";
+      const req = http.get(
+        `${origin}/api/events`,
+        { headers: { Cookie: sessionCookie } },
+        (res) => {
+          res.setEncoding("utf-8");
+          res.on("data", (chunk: string) => {
+            collected += chunk;
+          });
+        },
+      );
+      req.on("error", reject);
+
+      setTimeout(() => {
+        try {
+          agentEventListener?.("coder", {
+            type: "tool_execution_end",
+            toolName: "message_user",
+            isError: false,
+          });
+        } catch (err) {
+          reject(err);
+        }
+        setTimeout(() => {
+          req.destroy();
+          resolve(collected);
+        }, 200);
+      }, 100);
+    });
+
+    expect(sseData).toContain("event: agent_event");
+    expect(sseData).toContain('"type":"tool_execution_end"');
+    expect(sseData).toContain('"toolName":"message_user"');
+    expect(sseData).toContain('"agent":"coder"');
+    expect(sseData).toContain('"isError":false');
+  });
+
   it("POST /api/tasks invalid priority returns 400", async () => {
     const res = await fetch(`${origin}/api/tasks`, {
       method: "POST",

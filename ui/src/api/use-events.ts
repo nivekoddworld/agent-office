@@ -5,6 +5,32 @@ import type { BootstrapState, SchedulerState } from "./types.js";
 type SSEHandler = (type: string, data: unknown) => void;
 type AuthExpiredHandler = () => void;
 
+type InvalidateClient = {
+  invalidateQueries(opts: {
+    queryKey: string[] | readonly string[];
+  }): void;
+};
+
+/** Targeted query invalidation for agent events. Exported for testing. */
+export function invalidateForEvent(
+  type: string,
+  data: unknown,
+  queryClient: InvalidateClient,
+): void {
+  if (type !== "agent_event") return;
+  const d = data as Record<string, unknown>;
+  if (
+    d.type === "tool_execution_end" &&
+    d.toolName === "message_user" &&
+    !d.isError &&
+    typeof d.agent === "string"
+  ) {
+    void queryClient.invalidateQueries({
+      queryKey: ["agent-messages", d.agent],
+    });
+  }
+}
+
 /**
  * SSE hook — connects to /api/events, auto-reconnects, merges into React Query cache.
  * Uses refs for callbacks to keep the EventSource stable across re-renders.
@@ -43,6 +69,7 @@ export function useSSE(
         void queryClient.invalidateQueries({ queryKey: ["channel-messages"] });
         void queryClient.invalidateQueries({ queryKey: ["agent-messages"] });
       }
+      invalidateForEvent(type, data, queryClient);
       // state_changed is silent — don't push to event feed
       if (type !== "state_changed") {
         onEventRef.current?.(type, data);
