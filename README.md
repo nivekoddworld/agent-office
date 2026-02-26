@@ -72,6 +72,8 @@ See [`examples/`](examples/) for more details — each has a README describing t
 - [Agent Collaboration](#agent-collaboration)
   - [list_agents](#list_agents)
   - [message_agent](#message_agent)
+  - [message_user](#message_user)
+  - [post_channel](#post_channel)
   - [read_agent_file](#read_agent_file)
   - [authenticated_fetch](#authenticated_fetch)
   - [cron_add](#cron_add)
@@ -86,6 +88,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [task_update](#task_update)
   - [task_list](#task_list)
   - [task_get](#task_get)
+  - [task_delete](#task_delete)
   - [Collaboration Policy](#collaboration-policy)
   - [Obligation Tracking](#obligation-tracking)
   - [Deadlock Detection](#deadlock-detection)
@@ -140,7 +143,7 @@ graph TD
 
 **Core flow:** `office.yaml` (auto-spawn) / CLI / Web UI / Cron / Agent cron tools / Task notifications -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to UI.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_user`, `post_channel`, `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`, `task_delete`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -286,7 +289,7 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill`          |
 | `heartbeat`        | map              | _(none)_                                               | Proactive heartbeat config (see [Heartbeat](#heartbeat))                         |
 
-**Task tools** (`task_create`, `task_update`, `task_list`, `task_get`) are available to all in-process agents by default. Restrict access via `permissions.tools.deny`. See [Task Management](#task-management).
+**Task tools** (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`) are available to all in-process agents by default. Restrict access via `permissions.tools.deny`. See [Task Management](#task-management).
 
 #### Heartbeat
 
@@ -571,7 +574,7 @@ agent calls cron_add:
 
 Agents can create, assign, and track tasks through a shared Kanban-style task system. The `TaskService` manages task state, enforces status transitions, resolves dependency chains, and dispatches notifications via the message bus.
 
-Task tools (`task_create`, `task_update`, `task_list`, `task_get`) are registered as default tools for all agents. Restrict access per agent via `permissions.tools.deny`. Task proxy endpoints are available via Host API.
+Task tools (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`) are registered as default tools for all agents. Restrict access per agent via `permissions.tools.deny`. Task proxy endpoints are available via Host API.
 
 **Cron integration:** Cron jobs now create tasks instead of sending messages. Tasks fired by cron are tagged with `createdBy: "__cron__"` and appear in the Kanban board with `CRITICAL` priority. Use `task_list` with `createdBy: "__cron__"` to query them. Task completion can trigger a channel notification via the `report_channel` field on the task or on the parent cron job definition.
 
@@ -725,7 +728,7 @@ Host Process                        Docker Container (per agent)
    - Volume mount: host workspace directory -> `/workspace` in container
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
-   - Proxy tools that forward `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `task_create`, `task_update`, `task_list`, `task_get`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create` to the Host API over HTTP
+   - Proxy tools that forward `message_user`, `post_channel`, `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `task_create`, `task_update`, `task_list`, `task_get`, `task_delete`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create` to the Host API over HTTP
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
 6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
@@ -784,6 +787,8 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | Method | Path                             | Purpose                                                        |
 | ------ | -------------------------------- | -------------------------------------------------------------- |
 | `GET`  | `/api/secrets`                   | Fetch secrets (model API key + tool secrets) at container boot |
+| `POST` | `/api/message-user`              | Send a DM to the human user (egress, idempotent)               |
+| `POST` | `/api/post-channel`              | Post a message to a channel (egress, rate-limited)             |
 | `POST` | `/api/message-agent`             | Forward message to another agent's inbox                       |
 | `GET`  | `/api/agents`                    | List all agents (name, status, description)                    |
 | `GET`  | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace                       |
@@ -800,6 +805,7 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | `POST` | `/api/task-update`               | Update a task (auth required)                                  |
 | `POST` | `/api/task-list`                 | List tasks (auth required)                                     |
 | `POST` | `/api/task-get`                  | Get task details (auth required)                               |
+| `POST` | `/api/task-delete`               | Delete a task (auth required)                                  |
 | `POST` | `/api/read-skill`                | Read full skill content (auth required)                        |
 | `POST` | `/api/skill-search`              | Search skills registry (auth required)                         |
 | `POST` | `/api/skill-install`             | Install a skill from registry (auth required)                  |
@@ -1023,7 +1029,8 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 | `POST`  | `/api/tasks`       | Create a task           |
 | `GET`   | `/api/tasks/board` | Get Kanban board data   |
 | `GET`   | `/api/tasks/:id`   | Get task details        |
-| `PATCH` | `/api/tasks/:id`   | Update task status/data |
+| `PATCH`  | `/api/tasks/:id`   | Update task status/data |
+| `DELETE` | `/api/tasks/:id`   | Delete a task           |
 
 **Channels:**
 
@@ -1056,7 +1063,7 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 ## Agent Collaboration
 
-Agents discover and communicate with each other autonomously through built-in collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), task tools (`task_create`, `task_update`, `task_list`, `task_get`), and skill tools (`read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
+Agents communicate through explicit tool calls. Agent text output is internal thinking — not visible to the user. All outward communication uses egress tools (`message_user`, `post_channel`), collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), task tools (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`), and skill tools (`read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
 
 ### Task Event Notifications
 
@@ -1114,6 +1121,43 @@ agent calls message_agent:
 
 -> { queued: false, reason: "multi_step_work_requires_task" }
 ```
+
+### `message_user`
+
+Send a message to the human user. This is the **only** way an agent communicates with the user — agent text output is internal thinking and not visible. DMs are persisted via the egress service to both SQLite (`dm_messages` table) and JSONL (`user-dm.jsonl`), with idempotency via deterministic `egressId` (SHA-256 from `idempotencyKey`).
+
+```
+agent calls message_user:
+  message: "The login page is ready for review."
+
+-> DM persisted to SQLite + JSONL
+-> state_changed SSE broadcast triggers UI refresh
+-> Real-time: tool_execution_end SSE event invalidates React Query cache for immediate display
+```
+
+**Idempotency:** When called with the same `idempotencyKey` (derived from the tool call's internal request ID), duplicate writes are prevented. SQLite `INSERT OR IGNORE` gates the JSONL write, ensuring exactly-once persistence even under retries.
+
+**Validation:** Empty messages and messages exceeding 64 KB are rejected.
+
+### `post_channel`
+
+Post a message to a named channel. All channel members see the message in their `channel-<name>.jsonl` session files. Bus notifications are sent to other members (not self). Optional `mentions` array targets bus delivery to specific members only.
+
+```
+agent calls post_channel:
+  channel: "general"
+  message: "The API endpoint is deployed."
+  mentions: ["reviewer"]
+
+-> JSONL written to all members' sessions/channel-general.jsonl
+-> Bus notification sent to reviewer only (not self)
+```
+
+**Rate limiting:** 5 messages per 30-second window per agent per channel. `__user__` posts bypass the rate limit.
+
+**Hop count:** Messages carry a `hopCount` field incremented on each delivery. Posts are rejected when `hopCount >= 5` to prevent infinite loops.
+
+**Role assignment:** Posts from `__user__` get `role: "user"`, all others get `role: "assistant"`.
 
 ### Collaboration Policy
 
@@ -1455,12 +1499,25 @@ agent calls task_get:
 -> Returns: title, description, status, assignee, dependsOn, timestamps, result
 ```
 
+### `task_delete`
+
+Delete a task permanently by ID. Cleans up dependency references — any task that depended on the deleted task has that dependency removed and may auto-unblock.
+
+```
+agent calls task_delete:
+  id: "T-def456"
+
+-> Task T-def456 deleted. Dependent tasks auto-unblocked.
+```
+
 ### Tool Architecture
 
 ```
 src/agent/tools/
   contracts.ts              Single source of truth (name, label, description, parameters)
   fetch-helpers.ts          Shared SSRF protection, URL validation, auth header builder
+  message-user.ts           message_user — host implementation (egress-impl.messageUser)
+  post-channel.ts           post_channel — host implementation (egress-impl.postChannel)
   message-agent.ts          Host implementation (bus.send + policy check + obligation tracking)
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
@@ -1471,6 +1528,7 @@ src/agent/tools/
   task-update.ts            task_update — host implementation
   task-list.ts              task_list — host implementation
   task-get.ts               task_get — host implementation
+  task-delete.ts            task_delete — host implementation
   task-impl.ts              Shared task tool logic
   read-skill.ts             read_skill — host implementation
   skill-search.ts           skill_search — host implementation
@@ -1484,6 +1542,8 @@ src/agent/tools/
   cron-impl.ts              Shared cron tool logic
   policy.ts                 Tool policy (allow/deny filtering)
   proxy/
+    message-user.ts         message_user — proxy implementation (HTTP POST /api/message-user)
+    post-channel.ts         post_channel — proxy implementation (HTTP POST /api/post-channel)
     message-agent.ts        Sandbox implementation (HTTP POST /api/message-agent)
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
     read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
@@ -1494,6 +1554,7 @@ src/agent/tools/
     task-update.ts          task_update — proxy implementation (HTTP)
     task-list.ts            task_list — proxy implementation (HTTP)
     task-get.ts             task_get — proxy implementation (HTTP)
+    task-delete.ts          task_delete — proxy implementation (HTTP)
     read-skill.ts           read_skill — proxy implementation (HTTP)
     skill-search.ts         skill_search — proxy implementation (HTTP)
     skill-install.ts        skill_install — proxy implementation (HTTP)
@@ -1512,6 +1573,7 @@ In-process agents use the host implementations directly. Sandboxed agents use th
 Every agent receives a **layered system prompt** composed from nine ordered layers:
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — always included, never overridden. Covers:
+   - Communication model: agent text = internal thinking (not visible to user); `message_user` = agent→user; `post_channel` = agent→channel; `message_agent` = agent→agent
    - Agent-to-agent collaboration (tools, messaging protocol, reply-loop avoidance, workflow rules, reporting, collaboration policy enforce/warn/off modes)
    - Execution protocol (Plan → Act → Verify → Report)
    - Workspace discipline and persistence discipline
@@ -1759,11 +1821,11 @@ Watchdog behavior is configurable via `WorkspaceConfig.watchdog` (all fields opt
 
 Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). DM conversations are **dual-written** to both SQLite (`dm_messages` table) and JSONL session files — SQLite is the primary source for UI DM display, while JSONL enables agent self-service lookup via `read_file`/`grep`. Inter-agent and channel messages are JSONL-only (see [Session History](#session-history)).
 
-| What        | DB location                            | Behavior                                                                                                 |
-| ----------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.         |
-| DM records  | Same DB file                           | User and assistant messages saved with `requestId` for dedup correlation. `fire <agent>` purges history. |
-| Obligations | Same DB file                           | Reply obligation tracking with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.              |
+| What        | DB location                            | Behavior                                                                                                                  |
+| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.                          |
+| DM records  | Same DB file                           | Written by egress service with deterministic `egress_id` for idempotency. SQLite `INSERT OR IGNORE` gates JSONL writes.  |
+| Obligations | Same DB file                           | Reply obligation tracking with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.                               |
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 
@@ -1779,11 +1841,11 @@ Conversation history is stored as JSONL files in each agent's `sessions/` direct
 | `agent-<peer>.jsonl`   | Inter-agent conversations |
 | `channel-<name>.jsonl` | Channel conversations     |
 
-Each line is a JSON object: `{"ts":"ISO8601","role":"user|assistant","from":"sender","text":"content"}`.
+Each line is a JSON object: `{"ts":"ISO8601","role":"user|assistant","from":"sender","text":"content","egressId":"..."}`. The `egressId` field (present on egress-written records) enables idempotent deduplication.
 
 **Dual write (inter-agent):** Inter-agent messages are written to both the sender's and receiver's session directories, so each agent has a complete local copy of the conversation.
 
-**Dual write (DMs):** User-agent DM conversations are written to both SQLite (`dm_messages` table) and JSONL (`user-dm.jsonl`). SQLite serves as the primary source for UI DM display (`GET /api/agents/:name/messages`). JSONL enables agents to search and read their DM history via `read_file`/`grep`.
+**Dual write (DMs):** User-agent DM conversations are written to both SQLite (`dm_messages` table) and JSONL (`user-dm.jsonl`) by the egress service (`message_user` tool). Each record carries a deterministic `egress_id` (SHA-256 from `idempotencyKey`) for deduplication — SQLite `INSERT OR IGNORE` prevents duplicates and gates the JSONL write. SQLite serves as the primary source for UI DM display (`GET /api/agents/:name/messages`). JSONL enables agents to search and read their DM history via `read_file`/`grep`.
 
 **Rotation:** Session files are rotated at 500 lines, keeping the last 400 lines to prevent unbounded growth.
 
@@ -2104,6 +2166,8 @@ src/
       contracts.ts            Shared tool metadata (name, label, description, parameters)
       fetch-helpers.ts        Shared SSRF, URL validation, auth header builder
       index.ts                Barrel re-export for host-side tools
+      message-user.ts         message_user — host implementation (egress-impl.messageUser)
+      post-channel.ts         post_channel — host implementation (egress-impl.postChannel)
       message-agent.ts        message_agent — host implementation (bus.send + policy check + obligation tracking)
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
@@ -2114,6 +2178,7 @@ src/
       task-update.ts          task_update — host implementation
       task-list.ts            task_list — host implementation
       task-get.ts             task_get — host implementation
+      task-delete.ts          task_delete — host implementation
       task-impl.ts            Shared task tool logic
       policy.ts               Tool policy (allow/deny filtering)
       read-skill.ts           read_skill — host implementation
@@ -2128,6 +2193,8 @@ src/
       cron-list.ts            cron_list — host implementation
       proxy/
         index.ts              Barrel + HostFetch type
+        message-user.ts       message_user — proxy implementation (HTTP)
+        post-channel.ts       post_channel — proxy implementation (HTTP)
         message-agent.ts      message_agent — proxy implementation (HTTP)
         list-agents.ts        list_agents — proxy implementation (HTTP)
         read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
@@ -2138,6 +2205,7 @@ src/
         task-update.ts        task_update — proxy implementation (HTTP)
         task-list.ts          task_list — proxy implementation (HTTP)
         task-get.ts           task_get — proxy implementation (HTTP)
+        task-delete.ts        task_delete — proxy implementation (HTTP)
         cron-add.ts           cron_add — proxy implementation (HTTP)
         cron-remove.ts        cron_remove — proxy implementation (HTTP)
         cron-list.ts          cron_list — proxy implementation (HTTP)
@@ -2146,6 +2214,10 @@ src/
         skill-install.ts      skill_install — proxy implementation (HTTP)
         skill-remove.ts       skill_remove — proxy implementation (HTTP)
         skill-search.ts       skill_search — proxy implementation (HTTP)
+
+  egress/
+    types.ts                  EgressContext, EgressDeps, EgressResult, constants (MAX_HOPS, rate limits)
+    egress-impl.ts            messageUser + postChannel — shared persist-then-notify logic
 
   sandbox/
     types.ts                  SandboxProvider interface, SandboxMode, SandboxStartOpts
@@ -2314,8 +2386,10 @@ test/
   debug-helpers.test.ts      Debug helper utilities
   ui-parity.test.ts          UI API parity (REST endpoints match command coverage)
   ui-send-message.test.ts    UI send message endpoint behavior
-  ui-server.test.ts          UI HTTP server lifecycle, routes, SSE
+  ui-server.test.ts          UI HTTP server lifecycle, routes, SSE, SSE payload contracts
   no-ui-option.test.ts       --no-ui CLI option behavior
+  egress-impl.test.ts        Egress service: messageUser/postChannel persistence, idempotency, rate limiting
+  use-events-invalidation.test.ts  React Query cache invalidation on message_user SSE events
 ```
 
 ## Dependencies

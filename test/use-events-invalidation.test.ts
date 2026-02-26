@@ -87,4 +87,29 @@ describe("invalidateForEvent", () => {
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
+
+  it("invalidates channel-messages on successful post_channel", () => {
+    invalidateForEvent("agent_event", {
+      type: "tool_execution_end",
+      toolName: "post_channel",
+      isError: false,
+      agent: "coder",
+    }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["channel-messages"],
+    });
+  });
+
+  it("does not invalidate channel-messages on post_channel error", () => {
+    invalidateForEvent("agent_event", {
+      type: "tool_execution_end",
+      toolName: "post_channel",
+      isError: true,
+      agent: "coder",
+    }, qc);
+
+    expect(qc.invalidateQueries).not.toHaveBeenCalled();
+  });
 });

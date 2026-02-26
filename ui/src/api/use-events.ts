@@ -19,14 +19,16 @@ export function invalidateForEvent(
 ): void {
   if (type !== "agent_event") return;
   const d = data as Record<string, unknown>;
-  if (
-    d.type === "tool_execution_end" &&
-    d.toolName === "message_user" &&
-    !d.isError &&
-    typeof d.agent === "string"
-  ) {
+  if (d.type !== "tool_execution_end" || d.isError) return;
+
+  if (d.toolName === "message_user" && typeof d.agent === "string") {
     void queryClient.invalidateQueries({
       queryKey: ["agent-messages", d.agent],
+    });
+  }
+  if (d.toolName === "post_channel") {
+    void queryClient.invalidateQueries({
+      queryKey: ["channel-messages"],
     });
   }
 }
