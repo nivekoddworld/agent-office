@@ -19,6 +19,9 @@ function mockHandle(
     setActiveRequestId: vi.fn(),
     setActiveSessionKey: vi.fn(),
     setActiveConversationPeer: vi.fn(),
+    setActiveOriginTaskId: vi.fn(),
+    setActiveHopCount: vi.fn(),
+    setActiveCorrelationId: vi.fn(),
     prompt: vi.fn(async () => {}),
     steer: vi.fn(async () => {}),
     info: vi.fn(() => ({
@@ -279,6 +282,9 @@ describe("Scheduler", () => {
       setActiveRequestId: vi.fn(),
       setActiveSessionKey: vi.fn(),
       setActiveConversationPeer: vi.fn(),
+      setActiveOriginTaskId: vi.fn(),
+      setActiveHopCount: vi.fn(),
+      setActiveCorrelationId: vi.fn(),
       prompt: vi.fn(async () => promptPromise),
       steer: vi.fn(async () => {}),
       info: vi.fn(() => ({

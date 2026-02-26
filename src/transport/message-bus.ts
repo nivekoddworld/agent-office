@@ -106,6 +106,7 @@ export class MessageBus {
     sessionKey?: string;
     sourceKind?: SourceKind;
     channel?: string;
+    hopCount?: number;
   }): void {
     this.sendWithOutcome(opts);
   }
@@ -120,11 +121,12 @@ export class MessageBus {
     sessionKey?: string;
     sourceKind?: SourceKind;
     channel?: string;
-    // Add new envelope fields
+    // Envelope fields
     correlationId?: string;
     requiresReply?: boolean;
     replyByTs?: number;
     originTaskId?: string;
+    hopCount?: number;
   }): { queued: boolean; reason?: string } {
     // Rate-limit non-user/system sources to protect inbox health.
     const limit = resolveRateLimit(opts.from);

@@ -8,7 +8,12 @@ export interface MessageStore {
   loadInbox(agent: string): PersistedInbox[];
   deleteInbox(id: string): void;
   deleteAllInbox(agent: string): void;
-  saveDm(record: Omit<DmRecord, "id">): void;
+  saveDm(
+    record: Omit<DmRecord, "id" | "correlation_id" | "egress_id"> & {
+      correlation_id?: string | null;
+      egress_id?: string | null;
+    },
+  ): boolean;
   queryDm(agent: string, limit: number, beforeTs?: number): DmRecord[];
   deleteDm(agent: string): void;
   close(): void;
@@ -265,6 +270,27 @@ export function createMessageStore(dbPath: string): MessageStore {
     }
   }
 
+  // v7 → v8 migration: add egress_id + correlation_id to dm_messages
+  const v8Check = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+  if (v8Check && parseInt(v8Check.value) < 8) {
+    try {
+      db.exec(`ALTER TABLE dm_messages ADD COLUMN egress_id TEXT`);
+    } catch {
+      /* already exists */
+    }
+    try {
+      db.exec(`ALTER TABLE dm_messages ADD COLUMN correlation_id TEXT`);
+    } catch {
+      /* already exists */
+    }
+    db.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_dm_egress_id ON dm_messages(egress_id) WHERE egress_id IS NOT NULL`,
+    );
+    db.exec(`UPDATE schema_meta SET value = '8' WHERE key = 'version'`);
+  }
+
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts_v2 ON dm_messages(agent, ts_ms DESC, id DESC)`,
   );
@@ -284,7 +310,10 @@ export function createMessageStore(dbPath: string): MessageStore {
     `DELETE FROM inbox_messages WHERE to_agent = ?`,
   );
   const insertDm = db.prepare(
-    `INSERT INTO dm_messages (agent, role, text, ts_ms, request_id) VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO dm_messages (agent, role, text, ts_ms, request_id, egress_id, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  const insertDmIdempotent = db.prepare(
+    `INSERT OR IGNORE INTO dm_messages (agent, role, text, ts_ms, request_id, egress_id, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
   const selectDm = db.prepare(
     `SELECT * FROM dm_messages WHERE agent = ? AND ts_ms < ? ORDER BY ts_ms DESC, id DESC LIMIT ?`,
@@ -324,13 +353,17 @@ export function createMessageStore(dbPath: string): MessageStore {
       deleteInboxByAgent.run(agent);
     },
     saveDm(record) {
-      insertDm.run(
+      const stmt = record.egress_id ? insertDmIdempotent : insertDm;
+      const result = stmt.run(
         record.agent,
         record.role,
         record.text,
         record.ts_ms,
         record.request_id,
+        record.egress_id ?? null,
+        record.correlation_id ?? null,
       );
+      return (result as any).changes > 0;
     },
     queryDm(agent, limit, beforeTs?) {
       if (beforeTs !== undefined) {

@@ -9,7 +9,6 @@ import { agentActivityStore } from "../../store/agent-activity-store.js";
 import { unreadStore, useUnreadCounts } from "../../store/unread-store.js";
 import { debugCaptureStore } from "../../store/debug-capture-store.js";
 import { isChatRelevantSSE } from "../slack/debug-helpers.js";
-import { extractText, isDmSessionForAgent } from "../slack/channel-helpers.js";
 import { useSchedulerAction } from "../../api/use-api-mutations.js";
 import { SlackSidebar } from "../slack/SlackSidebar.js";
 import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
@@ -44,22 +43,14 @@ export function RootLayout() {
 
     agentActivityStore.handleEvent(eventType, agent, d);
 
-    if (eventType === "message_end" && agent) {
-      const msg = d.message as
-        | { role?: string; content?: unknown; usage?: unknown }
-        | undefined;
-      if (msg?.role === "assistant") {
-        const text = extractText(msg.content);
-        if (text) {
-          if (isDmSessionForAgent(d.sessionKey, agent)) {
-            unreadStore.increment(agent);
-          }
-          const sk = typeof d.sessionKey === "string" ? d.sessionKey : "";
-          if (sk.startsWith("ch:")) {
-            unreadStore.increment(sk);
-          }
-        }
-      }
+    // Fast-path unread: message_user tool success → DM unread
+    if (
+      eventType === "tool_execution_end" &&
+      d.toolName === "message_user" &&
+      !d.isError &&
+      agent
+    ) {
+      unreadStore.increment(agent);
     }
   }, []);
 

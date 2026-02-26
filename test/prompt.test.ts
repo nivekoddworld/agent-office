@@ -33,9 +33,9 @@ describe("buildDefaultPrompt", () => {
     expect(prompt).toContain("STOP");
   });
 
-  it("includes user reporting section", () => {
+  it("includes user communication section", () => {
     const prompt = buildDefaultPrompt("designer", "/tmp/ws");
-    expect(prompt).toContain("Reporting to the user");
+    expect(prompt).toContain("Communicating with the user");
   });
 
   it("includes task and agent-to-agent notification rules", () => {

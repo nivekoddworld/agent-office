@@ -8,7 +8,13 @@ import {
 import { streamSimple } from "@mariozechner/pi-ai";
 import { writeEffectivePrompt } from "./prompts/effective-prompt.js";
 import type { MessageBus } from "../transport/message-bus.js";
-import type { AgentConfig, AgentInfo, CitationMode } from "../types.js";
+import type {
+  AgentConfig,
+  AgentInfo,
+  ChannelConfig,
+  CitationMode,
+} from "../types.js";
+import type { MessageStore } from "../messages/message-store.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { composeSystemPrompt } from "./prompts/prompt-manager.js";
@@ -33,6 +39,8 @@ import {
   createTaskListTool,
   createTaskGetTool,
   createTaskDeleteTool,
+  createMessageUserTool,
+  createPostChannelTool,
 } from "./tools/index.js";
 import { appendSession } from "../sessions/session-writer.js";
 import {
@@ -171,10 +179,16 @@ export async function initInProcessAgent(
   listAgentsFn: () => AgentInfo[],
   cronService: CronService | undefined,
   taskService: TaskService | undefined,
-  _sessionDeps?: unknown,
+  sessionDeps?: { store: MessageStore; channels: Map<string, ChannelConfig> },
   obligationStore?: ObligationStore,
   policyService?: PolicyService,
-  handle?: { getActiveSessionKey(): string | undefined },
+  handle?: {
+    getActiveSessionKey(): string | undefined;
+    getActiveRequestId(): string | undefined;
+    getActiveCorrelationId(): string | undefined;
+    getActiveHopCount(): number;
+  },
+  onStateChanged?: () => void,
 ): Promise<InProcessInitResult> {
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
 
@@ -260,6 +274,30 @@ export async function initInProcessAgent(
     createSkillInstallTool(skillDeps),
     createSkillRemoveTool(skillDeps),
     createSkillCreateTool(skillDeps),
+    createMessageUserTool({
+      agentName: ctx.name,
+      messageStore: sessionDeps?.store,
+      baseDir: ctx.baseDir,
+      bus,
+      channels: sessionDeps?.channels ?? new Map(),
+      onStateChanged,
+      getActiveRequestId: () => handle?.getActiveRequestId(),
+      getActiveCorrelationId: () => handle?.getActiveCorrelationId(),
+      getActiveSessionKey: () => handle?.getActiveSessionKey(),
+      getActiveHopCount: () => handle?.getActiveHopCount() ?? 0,
+    }),
+    createPostChannelTool({
+      agentName: ctx.name,
+      messageStore: sessionDeps?.store,
+      baseDir: ctx.baseDir,
+      bus,
+      channels: sessionDeps?.channels ?? new Map(),
+      onStateChanged,
+      getActiveRequestId: () => handle?.getActiveRequestId(),
+      getActiveCorrelationId: () => handle?.getActiveCorrelationId(),
+      getActiveSessionKey: () => handle?.getActiveSessionKey(),
+      getActiveHopCount: () => handle?.getActiveHopCount() ?? 0,
+    }),
     ...(ctx.config.tools ?? []),
   ];
 

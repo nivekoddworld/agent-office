@@ -6,10 +6,7 @@ import { json, readBody, requireMutation } from "../http-helpers.js";
 import { getBootstrapState } from "../routes.js";
 import { Priority } from "../../types.js";
 import { sessionKey } from "../../messages/session-key.js";
-import {
-  appendSession,
-  sessionFilename,
-} from "../../sessions/session-writer.js";
+import { sessionFilename } from "../../sessions/session-writer.js";
 import { validateChannelEntry } from "../../config/yaml-validation.js";
 import {
   createChannelInOfficeYaml,
@@ -17,6 +14,8 @@ import {
   deleteChannelFromOfficeYaml,
 } from "../../config/office-yaml.js";
 import { parsePriority } from "../validators.js";
+import { postChannel } from "../../egress/egress-impl.js";
+import type { EgressContext } from "../../egress/types.js";
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
   const { workspace, officeId, getPort, broadcast, refreshChannels } = ctx;
@@ -70,49 +69,40 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         if (!priorityResult.ok)
           return json(res, 400, { error: priorityResult.error });
         const pri = priorityResult.value ?? Priority.NORMAL;
-        const targets = parsed.mentions?.length
-          ? parsed.mentions
-          : cfg.members;
-        const sk = sessionKey("channel", channelName);
-        const reqId = parsed.requestId ?? undefined;
 
-        try {
-          const filename = sessionFilename(sk);
-          const entry = {
-            ts: new Date().toISOString(),
-            role: "user" as const,
-            from: "__user__",
-            text: parsed.message,
-          };
-          for (const member of cfg.members) {
-            appendSession(workspace.office.dir, member, filename, entry);
-          }
-        } catch (err) {
-          console.error(
-            "[ui] Failed to persist channel user turn:",
-            err,
-          );
-        }
-
-        for (const target of targets) {
-          try {
-            workspace.bus.send({
-              from: "__user__",
-              to: target,
-              type: "prompt",
-              payload: parsed.message,
-              priority: pri,
-              requestId: reqId,
-              sessionKey: sk,
-              sourceKind: "channel",
-              channel: channelName,
-            });
-          } catch {
-            // best-effort per target
-          }
+        const ctx: EgressContext = {
+          agentName: "__user__",
+          hopCount: 0,
+          requestId: parsed.requestId,
+        };
+        const result = postChannel(
+          ctx,
+          {
+            baseDir: workspace.office.dir,
+            bus: workspace.bus,
+            channels: workspace.office.channels,
+            onStateChanged: () =>
+              broadcast(
+                "state_changed",
+                getBootstrapState(workspace, officeId),
+              ),
+          },
+          channelName,
+          parsed.message,
+          parsed.mentions,
+          pri,
+        );
+        if (!result.ok) {
+          const status =
+            result.reason === "validation"
+              ? 400
+              : result.reason === "not_member"
+                ? 403
+                : 500;
+          return json(res, status, { error: result.reason });
         }
         broadcast("state_changed", getBootstrapState(workspace, officeId));
-        return json(res, 200, { ok: true, targets });
+        return json(res, 200, { ok: true, targets: result.targets });
       },
     },
     // GET /api/channels/:name/messages

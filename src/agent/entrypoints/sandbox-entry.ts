@@ -27,6 +27,8 @@ import {
   createCronRemoveProxy,
   createCronListProxy,
   createReadSkillProxy,
+  createMessageUserProxy,
+  createPostChannelProxy,
   createSkillSearchProxy,
   createSkillInstallProxy,
   createSkillRemoveProxy,
@@ -149,6 +151,8 @@ const allTools: AgentTool<any>[] = [
   createSkillInstallProxy(hostFetch),
   createSkillRemoveProxy(hostFetch),
   createSkillCreateProxy(hostFetch),
+  createMessageUserProxy(hostFetch),
+  createPostChannelProxy(hostFetch),
   ...(process.env["ON_DEMAND_SKILLS"] === "1"
     ? [createReadSkillProxy(hostFetch)]
     : []),

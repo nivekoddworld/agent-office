@@ -93,6 +93,8 @@ export class Scheduler {
         msg.sourceKind === "internal" ? msg.from : undefined,
       );
       handle.setActiveOriginTaskId(msg.originTaskId);
+      handle.setActiveHopCount(msg.hopCount ?? 0);
+      handle.setActiveCorrelationId(msg.correlationId);
 
       const payload = formatMessagePayload(msg, this._channels);
       const dispatch =
@@ -111,6 +113,8 @@ export class Scheduler {
           handle.setActiveRequestId(undefined);
           handle.setActiveSessionKey(undefined);
           handle.setActiveConversationPeer(undefined);
+          handle.setActiveHopCount(0);
+          handle.setActiveCorrelationId(undefined);
         });
     }
 

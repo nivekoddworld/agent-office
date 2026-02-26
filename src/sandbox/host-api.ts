@@ -37,9 +37,12 @@ import {
   handleTaskList,
   handleTaskGet,
   handleTaskDelete,
+  handleMessageUser,
+  handlePostChannel,
   type CronHandlerDeps,
   type TaskHandlerDeps,
 } from "./host-api-ext-handlers.js";
+import type { EgressContext, EgressDeps } from "../egress/types.js";
 
 const PROMPT_TIMEOUT_MS = 5 * 60_000; // 5 min
 const DEDUP_TTL_MS = 5 * 60_000;
@@ -75,6 +78,16 @@ export class HostApi {
     taskService: TaskService;
     onStateChanged?: () => void;
   } | null = null;
+  private dispatchContextGetters = new Map<
+    string,
+    () => {
+      hopCount: number;
+      correlationId?: string;
+      requestId?: string;
+      sessionKey?: string;
+    }
+  >();
+  private egressDeps: EgressDeps | null = null;
   private bus: MessageBus;
   private listFn: () => AgentInfo[];
   private baseDir: string;
@@ -98,6 +111,22 @@ export class HostApi {
     onStateChanged?: () => void;
   }): void {
     this.taskDeps = deps;
+  }
+
+  setDispatchContextGetter(
+    agentName: string,
+    getter: () => {
+      hopCount: number;
+      correlationId?: string;
+      requestId?: string;
+      sessionKey?: string;
+    },
+  ): void {
+    this.dispatchContextGetters.set(agentName, getter);
+  }
+
+  setEgressDeps(deps: EgressDeps): void {
+    this.egressDeps = deps;
   }
 
   registerAgent(
@@ -330,6 +359,33 @@ export class HostApi {
       } else if (req.method === "POST" && path === "/api/task-delete") {
         if (this.checkToolPolicy(path, agentName, res))
           await handleTaskDelete(req, res, this.buildTaskDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/message-user") {
+        // No policy gate — essential for DM contract
+        if (this.egressDeps)
+          await handleMessageUser(
+            req,
+            res,
+            this.buildEgressContext(agentName),
+            this.egressDeps,
+          );
+        else {
+          res.writeHead(503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Egress not configured" }));
+        }
+      } else if (req.method === "POST" && path === "/api/post-channel") {
+        if (this.checkToolPolicy(path, agentName, res)) {
+          if (this.egressDeps)
+            await handlePostChannel(
+              req,
+              res,
+              this.buildEgressContext(agentName),
+              this.egressDeps,
+            );
+          else {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Egress not configured" }));
+          }
+        }
       } else if (req.method === "POST" && path === "/api/tool-count") {
         await handleToolCount(req, res, agentName, this.agentToolCounts);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
@@ -361,6 +417,7 @@ export class HostApi {
     "/api/task-list": "task_list",
     "/api/task-get": "task_get",
     "/api/task-delete": "task_delete",
+    "/api/post-channel": "post_channel",
   };
 
   private checkToolPolicy(
@@ -408,6 +465,19 @@ export class HostApi {
       agentName,
       taskService: this.taskDeps.taskService,
       onStateChanged: this.taskDeps.onStateChanged,
+    };
+  }
+
+  private buildEgressContext(agentName: string): EgressContext {
+    const dispatch = this.dispatchContextGetters.get(agentName)?.() ?? {
+      hopCount: 0,
+    };
+    return {
+      agentName,
+      hopCount: dispatch.hopCount ?? 0,
+      correlationId: dispatch.correlationId,
+      requestId: dispatch.requestId,
+      originSession: dispatch.sessionKey,
     };
   }
 

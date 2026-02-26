@@ -25,4 +25,6 @@ export interface DmRecord {
   text: string;
   ts_ms: number;
   request_id: string | null;
+  egress_id: string | null;
+  correlation_id: string | null;
 }

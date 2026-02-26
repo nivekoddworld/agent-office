@@ -124,6 +124,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
                 text: parsed.message!,
                 ts_ms: Date.now(),
                 request_id: parsed.requestId ?? null,
+                correlation_id: null,
+                egress_id: null,
               });
             } catch (err) {
               console.error("[ui] Failed to persist user DM:", err);

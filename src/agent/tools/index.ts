@@ -17,3 +17,5 @@ export { createTaskUpdateTool } from "./task-update.js";
 export { createTaskListTool } from "./task-list.js";
 export { createTaskGetTool } from "./task-get.js";
 export { createTaskDeleteTool } from "./task-delete.js";
+export { createMessageUserTool } from "./message-user.js";
+export { createPostChannelTool } from "./post-channel.js";

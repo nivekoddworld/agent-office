@@ -91,50 +91,9 @@ export function eventToMessages(
       }
     }
 
-    if (type === "message_end") {
-      const msg = d.message as
-        | { role?: string; content?: unknown; usage?: unknown }
-        | undefined;
-      if (!msg) continue;
-
-      // Only show assistant responses. "user"-role messages are internal
-      // agent prompts (tool results, inter-agent forwards, etc.) — not
-      // from the human user.
-      if (msg.role !== "assistant") continue;
-
-      const text = extractText(msg.content);
-      if (!text) continue;
-
-      let usage: { totalTokens: number; totalCost: number } | undefined;
-      if (msg.usage) {
-        const u = msg.usage as {
-          totalTokens?: number;
-          cost?: { total?: number };
-        };
-        if (u.totalTokens) {
-          usage = {
-            totalTokens: u.totalTokens,
-            totalCost: u.cost?.total ?? 0,
-          };
-        }
-      }
-      const requestId = (d.requestId as string) ?? undefined;
-      if (channel.kind === "conversation") {
-        if (!requestId) continue;
-        if (excludedRequestIds?.has(requestId)) continue;
-        if (allowedRequestIds && !allowedRequestIds.has(requestId)) continue;
-      }
-      msgs.push({
-        id: `${event.id}`,
-        sender: agent,
-        text,
-        timestamp: event.timestamp,
-        isBot: true,
-        eventType: type,
-        usage,
-        requestId,
-      });
-    } else {
+    // Agent text output is telemetry only — chat messages come from baseline APIs.
+    // Only render system events from SSE.
+    {
       let systemText = "";
       if (type === "tool_execution_start") {
         systemText = `${agent} started tool: ${d.toolName as string}`;

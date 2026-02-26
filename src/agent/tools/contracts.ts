@@ -420,3 +420,33 @@ export const TASK_DELETE = {
     id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
   }),
 };
+
+// --- Egress tools ---
+
+export const MESSAGE_USER = {
+  name: "message_user" as const,
+  label: "Message User",
+  description:
+    "Send a message to the human user. This is the ONLY way to communicate with the user — your text output is internal thinking and not visible to the user.",
+  parameters: Type.Object({
+    message: Type.String({
+      description: "Message content to send to the user",
+    }),
+  }),
+};
+
+export const POST_CHANNEL = {
+  name: "post_channel" as const,
+  label: "Post Channel",
+  description:
+    "Post a message to a channel. All channel members see the message. Use mentions to notify specific members only.",
+  parameters: Type.Object({
+    channel: Type.String({ description: "Channel name (without #)" }),
+    message: Type.String({ description: "Message content" }),
+    mentions: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Agent names to notify (default: all members)",
+      }),
+    ),
+  }),
+};

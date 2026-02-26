@@ -73,6 +73,11 @@ export class Workspace {
   private sandboxMode: string;
   private hostApiPort: number;
   private messageStore: MessageStore | null = null;
+  private _dmEgressTracker = new Map<
+    string,
+    { attempts: number; successes: number }
+  >();
+  private _dmContractEmitted = new Set<string>();
 
   constructor(config: WorkspaceConfig) {
     this.office = config.office;
@@ -270,6 +275,17 @@ export class Workspace {
     });
 
     if (this.hostApi && this.sandboxMode === "docker") {
+      this.hostApi.setEgressDeps({
+        messageStore: this.messageStore ?? undefined,
+        baseDir: this.office.dir,
+        bus: this.bus,
+        channels: this.office.channels,
+        onStateChanged: () => {
+          for (const fn of this.listeners) {
+            fn("__workspace__", { type: "state_changed" } as any);
+          }
+        },
+      });
       await this.hostApi.start(this.hostApiPort);
     }
     this.scheduler.start();
@@ -367,6 +383,11 @@ export class Workspace {
       channels: this.office.channels,
       obligationStore: this.obligationStore,
       policyService,
+      onStateChanged: () => {
+        for (const fn of this.listeners) {
+          fn(config.name, { type: "state_changed" } as any);
+        }
+      },
     });
     try {
       await handle.init();
@@ -380,6 +401,17 @@ export class Workspace {
 
     this.agents.set(config.name, handle);
     this.bus.register(config.name);
+
+    // Register dispatch context getter for sandbox egress
+    if (this.hostApi) {
+      this.hostApi.setDispatchContextGetter(config.name, () => ({
+        hopCount: handle.getActiveHopCount(),
+        correlationId: handle.getActiveCorrelationId(),
+        requestId: handle.getActiveRequestId(),
+        sessionKey: handle.getActiveSessionKey(),
+      }));
+    }
+
     // Forward agent events to workspace listeners
     handle.onEvent((e) => {
       const requestId = handle.getActiveRequestId();
@@ -412,7 +444,7 @@ export class Workspace {
       }
 
       if (event.type === "message_start") {
-        const e = event as unknown as Record<string, unknown>;
+        const _e = event as unknown as Record<string, unknown>;
         console.log(
           `[event] ${config.name}: message_start` +
             (requestId ? ` requestId=${requestId}` : "") +
@@ -537,72 +569,68 @@ export class Workspace {
           }
         }
 
-        // Persist assistant text to DM store + JSONL session file
-        if (msg.role === "assistant") {
-          const text = extractDmText(msg.content);
-          if (text) {
-            const sk = handle.getActiveSessionKey();
-            // Suppress HEARTBEAT_OK responses from persistence
-            const isHeartbeatOk =
-              sk?.startsWith("heartbeat:") && text.trim() === "HEARTBEAT_OK";
-            if (!isHeartbeatOk)
-              try {
-                // DM store for hydration
-                if (this.messageStore && (!sk || sk.startsWith("dm:"))) {
-                  this.messageStore.saveDm({
-                    agent: config.name,
-                    role: "assistant",
-                    text,
-                    ts_ms: Date.now(),
-                    request_id: requestId ?? null,
-                  });
-                }
-                // JSONL session file — fan out to all channel members
-                if (sk) {
-                  const filename = sessionFilename(sk);
-                  const entry = {
-                    ts: new Date().toISOString(),
-                    role: "assistant" as const,
-                    from: config.name,
-                    text,
-                  };
-                  if (sk.startsWith("ch:")) {
-                    const channelName = sk.slice(3);
-                    const cfg = this.office.channels.get(channelName);
-                    if (cfg) {
-                      for (const member of cfg.members) {
-                        appendSession(this.office.dir, member, filename, entry);
-                      }
-                    }
-                  } else if (sk.startsWith("internal:")) {
-                    // Use conversation peer so the file is agent-${peer}.jsonl
-                    const peer = handle.getActiveConversationPeer();
-                    const peerFilename = peer
-                      ? `agent-${peer}.jsonl`
-                      : filename;
-                    appendSession(
-                      this.office.dir,
-                      config.name,
-                      peerFilename,
-                      entry,
-                    );
-                  } else {
-                    appendSession(
-                      this.office.dir,
-                      config.name,
-                      filename,
-                      entry,
-                    );
-                  }
-                }
-              } catch (err) {
-                console.error(
-                  "[workspace] Failed to persist assistant turn:",
-                  err,
-                );
+      }
+
+      // Egress contract: track message_user calls per dispatch
+      if (event.type === "tool_execution_end") {
+        const d = event as unknown as Record<string, unknown>;
+        if (d.toolName === "message_user") {
+          const tracker = this._dmEgressTracker.get(config.name) ?? {
+            attempts: 0,
+            successes: 0,
+          };
+          tracker.attempts++;
+          if (!d.isError) tracker.successes++;
+          this._dmEgressTracker.set(config.name, tracker);
+        }
+      }
+
+      if (event.type === "agent_end" && sk?.startsWith("dm:")) {
+        const tracker = this._dmEgressTracker.get(config.name) ?? {
+          attempts: 0,
+          successes: 0,
+        };
+        const d = event as unknown as Record<string, unknown>;
+        const reqId =
+          (d.requestId as string) ?? requestId ?? null;
+        const corrId =
+          (d.correlationId as string) ??
+          handle.getActiveCorrelationId() ??
+          null;
+        const dedupKey = `${sk}:${config.name}:${reqId ?? corrId ?? "__none__"}`;
+
+        if (!this._dmContractEmitted.has(dedupKey)) {
+          let systemMessage: string | null = null;
+          if (tracker.attempts === 0) {
+            systemMessage = "[System] Agent completed without responding.";
+          } else if (tracker.successes === 0) {
+            systemMessage =
+              "[System] Agent tried to respond but encountered errors.";
+          }
+          if (systemMessage && this.messageStore) {
+            try {
+              this.messageStore.saveDm({
+                agent: config.name,
+                role: "assistant",
+                text: systemMessage,
+                ts_ms: Date.now(),
+                request_id: reqId,
+                correlation_id: corrId,
+                egress_id: `__contract__:${reqId ?? corrId ?? randomUUID()}`,
+              });
+              this._dmContractEmitted.add(dedupKey);
+              for (const fn of this.listeners) {
+                fn(config.name, { type: "state_changed" } as any);
               }
+            } catch (err) {
+              console.error(
+                "[workspace] DM contract fallback failed:",
+                err,
+              );
+            }
           }
         }
+        this._dmEgressTracker.delete(config.name);
       }
 
       for (const fn of this.listeners) fn(config.name, event);
@@ -736,13 +764,6 @@ export class Workspace {
   }
 }
 
-function extractDmText(content: unknown): string {
-  if (!Array.isArray(content)) return "";
-  return (content as { type: string; text?: string }[])
-    .filter((c) => c.type === "text" && c.text)
-    .map((c) => c.text!)
-    .join("");
-}
 
 const PROVIDER_ENV_KEYS: Record<string, string> = {
   openai: "OPENAI_API_KEY",

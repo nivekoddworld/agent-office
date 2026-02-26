@@ -35,6 +35,8 @@ import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { readBody } from "./host-api-handlers.js";
+import { messageUser, postChannel } from "../egress/egress-impl.js";
+import type { EgressContext, EgressDeps } from "../egress/types.js";
 
 export interface CronHandlerDeps {
   agentName: string;
@@ -516,4 +518,87 @@ export async function handleTaskDelete(
   parsed.deps.onStateChanged?.();
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result }));
+}
+
+// --- Egress handlers ---
+
+const EGRESS_STATUS_MAP: Record<string, number> = {
+  validation: 400,
+  not_member: 403,
+  hop_limit: 429,
+  rate_limited: 429,
+  internal_error: 500,
+};
+
+export async function handleMessageUser(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: EgressContext,
+  deps: EgressDeps,
+): Promise<void> {
+  const body = await readBody(req);
+  if (!body) {
+    res.writeHead(413);
+    res.end();
+    return;
+  }
+  let parsed: { message?: string };
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Invalid JSON" }));
+    return;
+  }
+  if (!parsed.message || typeof parsed.message !== "string") {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Missing message" }));
+    return;
+  }
+  const result = messageUser(ctx, deps, parsed.message);
+  const status = result.ok ? 200 : (EGRESS_STATUS_MAP[result.reason] ?? 500);
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(result));
+}
+
+export async function handlePostChannel(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: EgressContext,
+  deps: EgressDeps,
+): Promise<void> {
+  const body = await readBody(req);
+  if (!body) {
+    res.writeHead(413);
+    res.end();
+    return;
+  }
+  let parsed: { channel?: string; message?: string; mentions?: string[] };
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Invalid JSON" }));
+    return;
+  }
+  if (
+    !parsed.channel ||
+    typeof parsed.channel !== "string" ||
+    !parsed.message ||
+    typeof parsed.message !== "string"
+  ) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Missing channel or message" }));
+    return;
+  }
+  const result = postChannel(
+    ctx,
+    deps,
+    parsed.channel,
+    parsed.message,
+    parsed.mentions,
+  );
+  const status = result.ok ? 200 : (EGRESS_STATUS_MAP[result.reason] ?? 500);
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(result));
 }

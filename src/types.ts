@@ -90,6 +90,7 @@ export interface InboxMessage {
   requiresReply?: boolean;
   replyByTs?: number;
   originTaskId?: string;
+  hopCount?: number;
 }
 
 // --- Scheduler ---

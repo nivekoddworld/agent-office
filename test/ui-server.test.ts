@@ -108,6 +108,7 @@ function createMockWorkspace() {
       queryDm: vi.fn(() => []),
       saveDm: vi.fn(),
     },
+    setTaskStateChangedCallback: vi.fn(),
   } as any;
 }
 
@@ -747,7 +748,7 @@ describe("UI server", () => {
     expect(msgs).toHaveLength(0);
   });
 
-  it("eventToMessages in DM mode requires matching dm session key", async () => {
+  it("eventToMessages ignores message_end (agent text is telemetry only)", async () => {
     const { eventToMessages } =
       await import("../ui/src/components/slack/channel-helpers.js");
     const dmChannel = { kind: "dm" as const, agentName: "coder" };
@@ -756,20 +757,6 @@ describe("UI server", () => {
         id: 1,
         type: "agent_event",
         timestamp: Date.now(),
-        data: {
-          type: "message_end",
-          agent: "coder",
-          sessionKey: "ch:general",
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: "channel reply" }],
-          },
-        },
-      },
-      {
-        id: 2,
-        type: "agent_event",
-        timestamp: Date.now() + 1,
         data: {
           type: "message_end",
           agent: "coder",
@@ -782,8 +769,7 @@ describe("UI server", () => {
       },
     ] as any;
     const msgs = eventToMessages(events, dmChannel, false);
-    expect(msgs).toHaveLength(1);
-    expect(msgs[0]!.text).toBe("dm reply");
+    expect(msgs).toHaveLength(0);
   });
 
   // --- Client-side initial selection algorithm ---

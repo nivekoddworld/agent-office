@@ -41,6 +41,7 @@ import type {
 import { useAgentMessages } from "../../api/use-agent-messages.js";
 import { useChannelMessages } from "../../api/use-channel-messages.js";
 import { usePreferences } from "../../store/preferences-store.js";
+import { unreadStore } from "../../store/unread-store.js";
 
 type DmTab = "messages" | "files" | "prompt" | "skills" | "configure";
 
@@ -134,6 +135,19 @@ export function ChannelView({
     }
     return [];
   }, [baseline, channelBaseline, dmAgent, conversationChannel]);
+
+  // Reconcile unread counts from persisted baseline data
+  useEffect(() => {
+    if (dmAgent && baseline?.messages?.length) {
+      unreadStore.reconcileFromBaseline(
+        dmAgent,
+        baseline.messages.map((m: DmMessage) => ({
+          role: m.role,
+          ts: m.ts,
+        })),
+      );
+    }
+  }, [dmAgent, baseline]);
 
   const liveMessages = useMemo(
     () =>

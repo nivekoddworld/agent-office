@@ -10,6 +10,8 @@ If the system stalls, it is almost always because an agent failed to message_age
 
 - **list_agents**: Discover other agents (name, status, workspace path).
 - **message_agent**: Send a direct message to another agent.
+- **message_user**: Send a message to the human user. Your text output is internal thinking — only message_user reaches the user.
+- **post_channel**: Post a message to a channel. Optionally mention specific members to target notifications.
 - **read_agent_file**: Read a file from another agent's workspace. Use this to review or access their work directly.
 
 **Task management** (available to all in-process agents):
@@ -83,10 +85,15 @@ When you receive a `[New Task]` or `[Task Ready]` notification from `__task__`, 
 
 When another agent sends you a direct message requesting work (not via the task system), you MUST `message_agent` them back with results when done, or immediately if blocked. Do NOT stop until the requester is notified.
 
-## Reporting to the user
+## Communicating with the user
 
-Your text output (not message_agent) is visible to the user. Messages without "[Message from ...]" prefix come from the user.
-When the user gave you a task and all work is done (including work you delegated to other agents), output a brief summary to the user explaining what was accomplished.
+Your text output is internal thinking — the user cannot see it.
+To communicate with the user, call **message_user**. This is the ONLY way the user sees your responses.
+
+**Hard rule**: When handling a user DM, you MUST call `message_user` with your final answer before your turn ends. Do not end a DM turn without calling `message_user` — the system will flag it as a failure. Multiple `message_user` calls are allowed during a turn (e.g. progress updates), but the last one should be the complete answer.
+
+When the user gives you a task and all work is done, call message_user with a brief summary.
+Messages without "[Message from ...]" prefix come from the user.
 
 ## Working with Your Team
 

@@ -61,6 +61,7 @@ export interface AgentHandleDeps {
   channels?: Map<string, ChannelConfig>;
   obligationStore?: ObligationStore;
   policyService?: PolicyService;
+  onStateChanged?: () => void;
 }
 
 export class AgentHandle {
@@ -81,6 +82,9 @@ export class AgentHandle {
   private _activeSessionKey: string | undefined;
   private _activeConversationPeer: string | undefined;
   private _activeOriginTaskId: string | undefined;
+  private _activeCorrelationId: string | undefined;
+  private _activeHopCount = 0;
+  private _onStateChanged?: () => void;
   private baseDir: string;
   private officeId: string;
   private officeName: string;
@@ -113,6 +117,7 @@ export class AgentHandle {
     this._channels = deps.channels;
     this._obligationStore = deps.obligationStore;
     this._policyService = deps.policyService;
+    this._onStateChanged = deps.onStateChanged;
     this._bootstrapDir =
       config.bootstrapDir ??
       join(deps.baseDir, "agents", config.name, "bootstrap");
@@ -174,6 +179,22 @@ export class AgentHandle {
 
   getActiveOriginTaskId(): string | undefined {
     return this._activeOriginTaskId;
+  }
+
+  setActiveCorrelationId(id: string | undefined): void {
+    this._activeCorrelationId = id;
+  }
+
+  getActiveCorrelationId(): string | undefined {
+    return this._activeCorrelationId;
+  }
+
+  setActiveHopCount(count: number): void {
+    this._activeHopCount = count;
+  }
+
+  getActiveHopCount(): number {
+    return this._activeHopCount;
   }
 
   setLastScheduledHeartbeatTs(ts: number): void {
@@ -271,6 +292,7 @@ export class AgentHandle {
       this._obligationStore,
       this._policyService,
       this,
+      this._onStateChanged,
     );
     this.agent = result.agent;
     this._toolCount = result.toolCount;
