@@ -164,7 +164,31 @@ export function SlackMessage({
       )}
 
       <Group gap="sm" align="flex-start" wrap="nowrap">
-        {!compact && (
+        {compact ? (
+          <Box
+            style={{
+              width: 36,
+              flexShrink: 0,
+              textAlign: "center",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "center",
+            }}
+          >
+            {hovered && (
+              <Text
+                size="xs"
+                style={{
+                  color: "var(--ao-text-muted)",
+                  fontSize: 10,
+                  lineHeight: "20px",
+                }}
+              >
+                {formatTime(message.timestamp)}
+              </Text>
+            )}
+          </Box>
+        ) : (
           <MessageAvatar
             name={message.sender}
             isBot={message.isBot}
@@ -232,16 +256,6 @@ export function SlackMessage({
             </Group>
           )}
 
-          {compact && (
-            <Text
-              component="span"
-              size="xs"
-              mr={6}
-              style={{ color: "var(--ao-text-muted)" }}
-            >
-              {formatTime(message.timestamp)}
-            </Text>
-          )}
           {message.isBot ? (
             <MarkdownContent content={message.text} />
           ) : (
