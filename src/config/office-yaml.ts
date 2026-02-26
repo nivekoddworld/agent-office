@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { parseDocument, stringify } from "yaml";
+import { isMap, isSeq, parseDocument, stringify } from "yaml";
 import {
   officeDir,
   officeYamlPath,
@@ -358,6 +358,95 @@ export async function removeAgentFromOfficeYaml(
     if (!doc.getIn(["agents", name])) return;
     doc.deleteIn(["agents", name]);
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function removeAgentFromChannels(
+  officeId: string,
+  name: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const path = officeYamlPath(officeId);
+    if (!existsSync(path)) return;
+
+    const raw = readFileSync(path, "utf-8");
+    const doc = parseDocument(raw);
+    const channels = doc.getIn(["office", "channels"]);
+    if (!channels || !isMap(channels)) return;
+
+    let changed = false;
+    for (const pair of (channels as any).items) {
+      const members = pair.value?.get?.("members");
+      if (!isSeq(members)) continue;
+      const idx = members.items.findIndex(
+        (item: any) => item.value === name,
+      );
+      if (idx >= 0) {
+        members.items.splice(idx, 1);
+        changed = true;
+      }
+    }
+    if (changed) {
+      atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+    }
+  });
+}
+
+export async function removeAgentFromCronTemplates(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const path = officeYamlPath(officeId);
+    if (!existsSync(path)) return;
+
+    const raw = readFileSync(path, "utf-8");
+    const doc = parseDocument(raw);
+    let changed = false;
+
+    function cleanCronMap(cronNode: unknown): void {
+      if (!isMap(cronNode)) return;
+      const toDelete: string[] = [];
+      for (const pair of (cronNode as any).items) {
+        const jobName =
+          typeof pair.key === "object" && pair.key !== null
+            ? pair.key.value
+            : pair.key;
+        const tasks = pair.value?.get?.("tasks");
+        if (!isSeq(tasks)) continue;
+        const before = tasks.items.length;
+        tasks.items = tasks.items.filter((item: any) => {
+          if (!isMap(item)) return true;
+          return (item as any).get("assignee") !== agentName;
+        });
+        if (tasks.items.length !== before) {
+          changed = true;
+          if (tasks.items.length === 0) toDelete.push(jobName);
+        }
+      }
+      for (const name of toDelete) {
+        (cronNode as any).delete(name);
+      }
+    }
+
+    // Agent-scoped cron: agents.*.cron
+    const agents = doc.getIn(["agents"]);
+    if (isMap(agents)) {
+      for (const pair of (agents as any).items) {
+        const agentNode = pair.value;
+        if (!isMap(agentNode)) continue;
+        const cronNode = (agentNode as any).get("cron");
+        cleanCronMap(cronNode);
+      }
+    }
+
+    // Office-scoped cron: office.cron
+    const officeCron = doc.getIn(["office", "cron"]);
+    cleanCronMap(officeCron);
+
+    if (changed) {
+      atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+    }
   });
 }
 

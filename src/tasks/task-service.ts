@@ -312,6 +312,17 @@ export class TaskService {
     );
   }
 
+  /** Delete all tasks assigned to the given agent. Returns count. */
+  deleteByAssignee(agentName: string): number {
+    const ids = Object.values(this.tasks)
+      .filter((t) => t.assignee === agentName)
+      .map((t) => t.id);
+    for (const id of ids) {
+      this.delete("__system__", id);
+    }
+    return ids.length;
+  }
+
   /** Get all tasks grouped by status (for Kanban board). */
   board(): Record<TaskStatus, Task[]> {
     const board: Record<TaskStatus, Task[]> = {

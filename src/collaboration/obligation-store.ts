@@ -77,6 +77,16 @@ export class ObligationStore {
     this._save();
   }
 
+  /** Remove all obligations involving the given agent (from or to). */
+  purgeByAgent(agentName: string): void {
+    for (const [key, o] of this.obligations) {
+      if (o.from === agentName || o.to === agentName) {
+        this.obligations.delete(key);
+      }
+    }
+    this._save();
+  }
+
   private _load(): void {
     if (!existsSync(this.storePath)) return;
     try {

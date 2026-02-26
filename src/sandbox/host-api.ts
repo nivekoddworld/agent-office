@@ -153,6 +153,9 @@ export class HostApi {
       this.agentPermissions.delete(name);
       this.skillResolvers.delete(name);
       this.agentToolCounts.delete(name);
+      this.dispatchContextGetters.delete(name);
+      this.heartbeats.delete(name);
+      this.eventListeners.delete(name);
     }
   }
 

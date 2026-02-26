@@ -1,12 +1,21 @@
 import { useState } from "react";
-import { Menu } from "@mantine/core";
+import { Menu, Stack, Text, List, ThemeIcon } from "@mantine/core";
 import {
   IconTrash,
   IconUserPlus,
   IconArrowsTransferUp,
+  IconSubtask,
+  IconClock,
+  IconHash,
+  IconMessage,
+  IconFiles,
+  IconLink,
+  IconCalendarEvent,
 } from "@tabler/icons-react";
 import { useFireAgent, useSetManager } from "../../api/use-api-mutations.js";
+import { useAppState } from "../layout/app-state-context.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
+import { computeFireImpact } from "../shared/fire-impact.js";
 
 interface NodeActionsProps {
   agentName: string;
@@ -26,6 +35,14 @@ export function NodeActions({
   const [confirmFire, setConfirmFire] = useState(false);
   const fireAgent = useFireAgent();
   const setManagerMutation = useSetManager();
+  const state = useAppState();
+
+  const impact = computeFireImpact(
+    agentName,
+    state.tasks,
+    state.cronJobs,
+    state.channels,
+  );
 
   const handleFire = () => {
     fireAgent.mutate(agentName, { onSettled: onClose });
@@ -80,7 +97,6 @@ export function NodeActions({
       <ConfirmDialog
         opened={confirmFire}
         title="Fire Agent"
-        message={`Are you sure you want to fire "${agentName}"? This will remove the agent from the office.`}
         confirmLabel="Fire"
         confirmColor="red"
         onConfirm={handleFire}
@@ -89,7 +105,62 @@ export function NodeActions({
           onClose();
         }}
         loading={fireAgent.isPending}
-      />
+      >
+        <Stack gap="sm" mb="lg">
+          <Text size="sm">
+            Fire agent <strong>&quot;{agentName}&quot;</strong>? The following
+            will be permanently removed:
+          </Text>
+          <List size="sm" spacing={4}>
+            <List.Item
+              icon={<ThemeIcon size={20} variant="light" color="red"><IconSubtask size={12} /></ThemeIcon>}
+            >
+              {impact.activeTasks} active task(s) → deleted
+            </List.Item>
+            <List.Item
+              icon={<ThemeIcon size={20} variant="light" color="orange"><IconClock size={12} /></ThemeIcon>}
+            >
+              {impact.ownCronJobs} cron job(s) → cancelled
+            </List.Item>
+            {impact.cronTemplatesInOtherJobs > 0 && (
+              <List.Item
+                icon={<ThemeIcon size={20} variant="light" color="orange"><IconCalendarEvent size={12} /></ThemeIcon>}
+              >
+                {impact.cronTemplatesInOtherJobs} task template(s) in other cron
+                jobs → removed
+              </List.Item>
+            )}
+            <List.Item
+              icon={<ThemeIcon size={20} variant="light" color="blue"><IconHash size={12} /></ThemeIcon>}
+            >
+              {impact.channelMemberships.length} channel membership(s) → removed
+              {impact.channelMemberships.length > 0 && (
+                <Text size="xs" c="dimmed">
+                  {impact.channelMemberships.map((c) => `#${c}`).join(", ")}
+                </Text>
+              )}
+            </List.Item>
+            <List.Item
+              icon={<ThemeIcon size={20} variant="light" color="grape"><IconMessage size={12} /></ThemeIcon>}
+            >
+              All DM history → deleted
+            </List.Item>
+            <List.Item
+              icon={<ThemeIcon size={20} variant="light" color="teal"><IconFiles size={12} /></ThemeIcon>}
+            >
+              All session files → deleted
+            </List.Item>
+            <List.Item
+              icon={<ThemeIcon size={20} variant="light" color="yellow"><IconLink size={12} /></ThemeIcon>}
+            >
+              All pending obligations → cleared
+            </List.Item>
+          </List>
+          <Text size="xs" c="red" fw={600}>
+            This cannot be undone.
+          </Text>
+        </Stack>
+      </ConfirmDialog>
     </>
   );
 }

@@ -72,6 +72,11 @@ export class Watchdog {
     return this.restartCounts.get(name) ?? 0;
   }
 
+  clearAgent(name: string): void {
+    this.restartCounts.delete(name);
+    this.lastStuck.delete(name);
+  }
+
   stuckCount(): number {
     const now = Date.now();
     let count = 0;

@@ -646,6 +646,8 @@ export class Workspace {
     await handle.destroy();
     this.bus.unregister(name);
     this.agents.delete(name);
+    this.scheduler.clearAgent(name);
+    this.watchdog.clearAgent(name);
   }
 
   send(

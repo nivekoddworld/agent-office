@@ -63,6 +63,10 @@ export class Scheduler {
     return this.lastHeartbeatTs.get(name) ?? null;
   }
 
+  clearAgent(name: string): void {
+    this.lastHeartbeatTs.delete(name);
+  }
+
   state(): SchedulerState {
     return {
       running: this.running,

@@ -1,8 +1,11 @@
 import {
   appendFileSync,
+  existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -65,4 +68,24 @@ function rotate(filePath: string): void {
   const tmp = filePath + ".tmp";
   writeFileSync(tmp, kept.join("\n") + "\n", "utf-8");
   renameSync(tmp, filePath);
+}
+
+/** Delete all session files for a fired agent and cross-references from other agents. */
+export function deleteAgentSessions(
+  baseDir: string,
+  agentName: string,
+): void {
+  // 1. Remove the fired agent's entire sessions directory
+  const agentSessionDir = join(baseDir, "agents", agentName, "sessions");
+  rmSync(agentSessionDir, { recursive: true, force: true });
+
+  // 2. Remove session files in other agents referencing the fired agent
+  const agentsDir = join(baseDir, "agents");
+  if (!existsSync(agentsDir)) return;
+  const targetFile = `agent-${agentName}.jsonl`;
+  for (const dir of readdirSync(agentsDir)) {
+    if (dir === agentName) continue;
+    const sessionPath = join(agentsDir, dir, "sessions", targetFile);
+    rmSync(sessionPath, { force: true });
+  }
 }

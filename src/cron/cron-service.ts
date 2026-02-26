@@ -184,6 +184,46 @@ export class CronService {
     this.persistState();
   }
 
+  /** Remove task templates assigned to the given agent from all cron jobs.
+   *  If a job has no remaining templates, the entire job is removed.
+   *  Returns the number of affected jobs. */
+  removeAgentFromTemplates(agentName: string): number {
+    let affected = 0;
+
+    // Agent-scoped jobs
+    for (const [key, job] of [...this.jobs]) {
+      const filtered = job.config.tasks.filter(
+        (t) => t.assignee !== agentName,
+      );
+      if (filtered.length === job.config.tasks.length) continue;
+      affected++;
+      if (filtered.length === 0) {
+        if (job.timer) clearTimeout(job.timer);
+        this.jobs.delete(key);
+      } else {
+        job.config.tasks = filtered;
+      }
+    }
+
+    // Office-scoped jobs
+    for (const [name, job] of [...this.officeJobs]) {
+      const filtered = job.config.tasks.filter(
+        (t) => t.assignee !== agentName,
+      );
+      if (filtered.length === job.config.tasks.length) continue;
+      affected++;
+      if (filtered.length === 0) {
+        if (job.timer) clearTimeout(job.timer);
+        this.officeJobs.delete(name);
+      } else {
+        job.config.tasks = filtered;
+      }
+    }
+
+    if (affected > 0) this.persistState();
+    return affected;
+  }
+
   /** List all active jobs (agent + office). */
   listJobs(): CronJobEntry[] {
     const agent: CronJobEntry[] = [...this.jobs.values()].map((j) => ({
