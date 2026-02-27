@@ -1003,6 +1003,8 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 | `PATCH`  | `/api/agents/:name/manager`        | Set or clear agent manager         |
 | `PATCH`  | `/api/agents/:name/heartbeat`      | Set agent heartbeat config         |
 | `DELETE` | `/api/agents/:name/heartbeat`      | Clear agent heartbeat config       |
+| `GET`    | `/api/agents/:name/peers`          | List peer agents with conversations |
+| `GET`    | `/api/agents/:name/peers/:peer/messages` | Read inter-agent conversation  |
 | `GET`    | `/api/agents/:name/skills`         | List agent installed skills        |
 | `GET`    | `/api/agents/:name/skills/search`  | Search skills registry             |
 | `POST`   | `/api/agents/:name/skills/install` | Install a skill for an agent       |
@@ -1957,17 +1959,21 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 
 ### Features
 
-- **Slack-style layout** — sidebar with channels (#general), direct messages per agent, Cron management, and a Tasks Kanban view
+- **Slack-style layout** — sidebar with channels (#general), direct messages per agent, Cron management, Heartbeat management, Files browser, and a Tasks Kanban view
 - **Kanban board** — task board with columns (waiting → todo → in_progress → done), per-agent filter, and task deletion from detail view
-- **Agent DMs** — conversation threads per agent with message input, tool call display, thread drawer, and clear history via three-dot menu
+- **Agent DMs** — conversation threads per agent with message input, tabbed view (Messages, Internal, Files, Prompt, Skills, Configure), and clear history via three-dot menu
+- **Internal conversations** — read-only viewer for agent-to-agent messages with peer selector dropdown and disabled message input
 - **Agent detail** — skills tab for viewing installed skills per agent
+- **Agent fire** — comprehensive cleanup with impact modal showing affected tasks, cron jobs, and channel memberships before confirmation
 - **Dynamic model selection** — Hire modal displays all 700+ available models from pi-ai, grouped by provider with metadata (reasoning capability, context window, costs). Auto-updates when pi-ai upgrades.
+- **Heartbeat management** — top-level page (`/heartbeat`) with card-based dashboard showing configured heartbeats, next run times, active hours, and add/edit/remove via modal
 - **Cron management** — top-level sidebar item with dedicated cron view, human-friendly schedule builder (hourly/daily/weekly/custom), report channel selector, loading states, and delete confirmation
+- **Files browser** — centralized page (`/files`) to browse all agents' workspace files
 - **Debug logs** — live event capture panel with source/kind/agent filters, preset views (All, Errors, Tools, Messages, Task/Cron), group-by-agent mode, and JSONL export
 - **Org chart** — dedicated page (`/org-chart`) with interactive hierarchy visualization and agent profile drawer
 - **Cost dashboard** — dedicated page (`/cost`) with per-agent token usage and cost breakdown
 - **Collaboration** — dedicated page (`/collaboration`) with metrics, obligation tracking, and deadlock signals
-- **Office settings** — dedicated page (`/settings`) with channel management (create, edit members/description, delete), scheduler controls, config reload/validate
+- **Office settings** — dedicated page (`/settings`) with channel management (create, edit members/description, delete), read-only scheduler status, config reload/validate
 - **URL-based navigation** — React Router v7 with bookmarkable URLs, browser back/forward, and deep linking to any view
 - **Real-time updates** — SSE event stream with unread badges and queue depth indicators
 
@@ -2287,11 +2293,23 @@ src/
     server.ts               HTTP server (:3847), SSE streaming, static file serving
     routes.ts               REST API route definitions (typed endpoints) + getModelsResponse()
     types.ts                UI-specific type definitions
-    command-parser.ts       Chat command parser (slash commands, natural language)
-    command-intent.ts       Command intent resolution (parsed command → action)
-    command-dispatch-sub.ts Command dispatch subscriber (wires intents to workspace)
     event-buffer.ts         SSE event buffering and batching
     manifest.ts             UI build manifest loader
+    handlers/
+      agent-config.handler.ts     Agent config (prompt, permissions, env, secrets, heartbeat)
+      agent-core.handler.ts       Agent CRUD (hire, fire, detail)
+      agent-files.handler.ts      Agent workspace file listing/reading
+      agent-messaging.handler.ts  Agent DMs, inbox, peer conversations
+      agent-skills.handler.ts     Agent skill install/remove/search
+      analytics.handler.ts        Cost and collaboration metrics
+      auth.handler.ts             Session auth + CSRF
+      channels.handler.ts         Channel CRUD + messaging
+      cron-agent.handler.ts       Per-agent cron jobs
+      cron-office.handler.ts      Office-level cron jobs
+      office.handler.ts           Office apply/validate/path + scheduler
+      sse.handler.ts              SSE event streaming
+      state.handler.ts            Bootstrap state + status
+      tasks.handler.ts            Task CRUD + board
     api/
       types.ts              Shared API types (ModelInfo, ModelCost, ModelsResponse)
       use-models.ts         React Query hook for fetching GET /api/models with 5-min stale time
@@ -2306,13 +2324,25 @@ ui/src/
       app-actions-context.ts  AppActionsContext + useAppActions() hook (openAgentProfile)
     slack/
       SlackSidebar.tsx        Sidebar with useNavigate/useLocation (URL-based active state)
-      ChannelView.tsx         DM + channel conversation thread view
+      ChannelView.tsx         DM + channel conversation thread view (tabbed: Messages, Internal, Files, Prompt, Skills, Configure)
+      MessageInput.tsx        Chat input with mentions, supports disabled mode for read-only views
       ...                     Other shared UI components
+    agent-detail/
+      PeerConversations.tsx   Read-only inter-agent conversation viewer with peer selector
+      ...                     Agent config/prompt/skills panels
+    heartbeat/
+      HeartbeatCard.tsx       Card component with avatar, interval, next run, active hours
+      HeartbeatForm.tsx       Modal form for adding/editing heartbeat config
+      HeartbeatDetailModal.tsx  Detail modal with edit/remove actions
   pages/
     tasks/
       KanbanBoard.tsx         /tasks — task board with columns and per-agent filter
     cron/
       CronChannelView.tsx     /cron — cron job management with schedule builder
+    heartbeat/
+      HeartbeatView.tsx       /heartbeat — heartbeat management dashboard
+    files/
+      AllFilesPanel.tsx       /files — centralized file browser for all agents
     dm/
       DmView.tsx              /dm/:agentName — wrapper that extracts param → ChannelView
     channel/
