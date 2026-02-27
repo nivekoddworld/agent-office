@@ -12,6 +12,7 @@ import {
   createChannelInOfficeYaml,
   updateChannelInOfficeYaml,
   deleteChannelFromOfficeYaml,
+  renameChannelInOfficeYaml,
 } from "../../config/office-yaml.js";
 import { parsePriority } from "../validators.js";
 import { postChannel } from "../../egress/egress-impl.js";
@@ -282,18 +283,53 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         if (!workspace.office.channels.has(name))
           return json(res, 404, { error: "channel_not_found" });
         const body = await readBody(req);
-        let parsed: { members?: string[]; description?: string };
+        let parsed: {
+          members?: string[];
+          description?: string;
+          name?: string;
+        };
         try {
           parsed = JSON.parse(body);
         } catch {
           return json(res, 400, { error: "invalid_body" });
         }
-        const existing = workspace.office.channels.get(name)!;
-        const members = parsed.members ?? existing.members;
+
+        // Handle rename
+        const newName = parsed.name?.trim();
+        if (newName && newName !== name) {
+          const channelNames = [...workspace.office.channels.keys()];
+          const defaultCh = workspace.office.channels.has("general")
+            ? "general"
+            : channelNames[0];
+          if (name === defaultCh)
+            return json(res, 400, {
+              error: "cannot_rename_default_channel",
+            });
+          const agentNames = workspace.list().map((a) => a.name);
+          const renameErrors = validateChannelEntry(
+            newName,
+            { members: workspace.office.channels.get(name)!.members },
+            agentNames,
+          );
+          if (renameErrors.length > 0)
+            return json(res, 400, { error: renameErrors.join("; ") });
+          try {
+            await renameChannelInOfficeYaml(officeId, name, newName);
+          } catch (err) {
+            return json(res, 409, {
+              error:
+                err instanceof Error ? err.message : "rename_failed",
+            });
+          }
+          name = newName;
+        }
+
+        const existing = workspace.office.channels.get(name);
+        const members = parsed.members ?? existing?.members ?? [];
         const description =
           "description" in parsed
             ? parsed.description || undefined
-            : existing.description;
+            : existing?.description;
         const agentNames = workspace.list().map((a) => a.name);
         const errors = validateChannelEntry(
           name,
@@ -312,7 +348,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             "state_changed",
             getBootstrapState(workspace, officeId),
           );
-          return json(res, 200, { ok: true });
+          return json(res, 200, { ok: true, name });
         } catch (err) {
           return json(res, 409, {
             error:

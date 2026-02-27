@@ -5,6 +5,7 @@ import {
   IconDots,
   IconTrash,
   IconFileText,
+  IconSettings,
 } from "@tabler/icons-react";
 
 import { AgentAvatar } from "../shared/AgentAvatar.js";
@@ -17,6 +18,7 @@ interface ChannelHeaderProps {
   description?: string;
   onClearHistory?: () => void;
   clearLoading?: boolean;
+  onOpenSettings?: () => void;
 }
 
 export function ChannelHeader({
@@ -26,6 +28,7 @@ export function ChannelHeader({
   description,
   onClearHistory,
   clearLoading,
+  onOpenSettings,
 }: ChannelHeaderProps) {
   const name = channel.kind === "dm" ? channel.agentName : channel.name;
   const desc = description ?? "";
@@ -101,6 +104,14 @@ export function ChannelHeader({
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
+                {onOpenSettings && (
+                  <Menu.Item
+                    leftSection={<IconSettings size={14} />}
+                    onClick={onOpenSettings}
+                  >
+                    Channel Settings
+                  </Menu.Item>
+                )}
                 <Menu.Item
                   leftSection={<IconTrash size={14} />}
                   color="red"

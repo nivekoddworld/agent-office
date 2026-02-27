@@ -635,7 +635,7 @@ describe("UI server", () => {
       body: JSON.stringify({ members: ["alice"], description: "Updated" }),
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
+    expect(await res.json()).toEqual({ ok: true, name: "general" });
   });
 
   it("PATCH /api/channels/:name returns 404 for unknown channel", async () => {

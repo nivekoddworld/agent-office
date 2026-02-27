@@ -2,6 +2,7 @@ import { useRef, useState, useMemo, useEffect, useCallback } from "react";
 import { Box, Button, Text, Group, UnstyledButton } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
   IconArrowDown,
   IconMessages,
@@ -26,6 +27,7 @@ import { AgentPromptPanel } from "../agent-detail/AgentPromptPanel.js";
 import { AgentSkillsPanel } from "../agent-detail/AgentSkillsPanel.js";
 import { PeerConversations } from "../agent-detail/PeerConversations.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
+import { ChannelSettingsModal } from "./ChannelSettingsModal.js";
 import {
   eventToMessages,
   mergeBaselineWithLive,
@@ -265,9 +267,11 @@ export function ChannelView({
     [channel, queryClient],
   );
 
+  const navigate = useNavigate();
   const isDm = channel.kind === "dm";
   const [clearConfirm, setClearConfirm] = useState(false);
   const [clearLoading, setClearLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleClearHistory = useCallback(async () => {
     setClearLoading(true);
@@ -336,6 +340,11 @@ export function ChannelView({
             : undefined
         }
         clearLoading={clearLoading || undefined}
+        onOpenSettings={
+          channel.kind === "conversation"
+            ? () => setSettingsOpen(true)
+            : undefined
+        }
       />
 
       <ConfirmDialog
@@ -352,6 +361,24 @@ export function ChannelView({
         onCancel={() => setClearConfirm(false)}
         loading={clearLoading}
       />
+
+      {channel.kind === "conversation" && (
+        <ChannelSettingsModal
+          opened={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          channelName={channel.name}
+          members={channels?.[channel.name]?.members ?? []}
+          description={channels?.[channel.name]?.description}
+          agentNames={agentNames}
+          isDefault={channel.name === defaultConversationChannel}
+          onSaved={(newName) => {
+            void queryClient.invalidateQueries({ queryKey: ["state"] });
+            if (newName !== channel.name) {
+              navigate(`/channels/${encodeURIComponent(newName)}`);
+            }
+          }}
+        />
+      )}
 
       {isDm && (
         <Box

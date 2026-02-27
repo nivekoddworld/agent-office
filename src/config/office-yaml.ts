@@ -550,6 +550,7 @@ export {
   createChannelInOfficeYaml,
   updateChannelInOfficeYaml,
   deleteChannelFromOfficeYaml,
+  renameChannelInOfficeYaml,
 } from "./office-yaml-mutations.js";
 
 // --- Re-export collaboration policy mutations from dedicated module ---

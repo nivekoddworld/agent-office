@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
 import { isSeq, parseDocument } from "yaml";
-import { officeYamlPath } from "../constants.js";
+import { officeDir, officeYamlPath } from "../constants.js";
 import type { AgentYamlEntry } from "./yaml-utils.js";
 import { withOfficeLock } from "./lock.js";
 import {
@@ -461,6 +462,38 @@ export async function deleteChannelFromOfficeYaml(
     doc.deleteIn(["office", "channels", name]);
     cleanupEmptyMap(doc, ["office", "channels"]);
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function renameChannelInOfficeYaml(
+  officeId: string,
+  oldName: string,
+  newName: string,
+): Promise<void> {
+  if (oldName === newName) return;
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    const node = doc.getIn(["office", "channels", oldName]);
+    if (!node) throw new Error(`Channel "${oldName}" not found`);
+    if (doc.getIn(["office", "channels", newName]))
+      throw new Error(`Channel "${newName}" already exists`);
+    const entry = (node as any).toJSON?.() ?? node;
+    doc.setIn(["office", "channels", newName], entry);
+    doc.deleteIn(["office", "channels", oldName]);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+
+    // Migrate session files for each member
+    const members: string[] = entry.members ?? [];
+    const baseDir = join(officeDir(officeId), "agents");
+    for (const member of members) {
+      const oldPath = join(baseDir, member, "sessions", `channel-${oldName}.jsonl`);
+      const newPath = join(baseDir, member, "sessions", `channel-${newName}.jsonl`);
+      try {
+        renameSync(oldPath, newPath);
+      } catch {
+        // file may not exist yet
+      }
+    }
   });
 }
 
