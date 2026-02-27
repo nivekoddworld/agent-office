@@ -1,5 +1,6 @@
+# Requires GitHub CLI (gh) installed for OAuth login.
 # Model availability depends on your provider account.
-# Replace openai:gpt-5.2-codex with your preferred provider:model-id if unavailable.
+# Replace github-copilot:gpt-5.1-codex with your preferred provider:model-id if unavailable.
 
 office:
   name: Basic Team
@@ -16,7 +17,8 @@ office:
 
 agents:
   coder:
-    model: google:gemini-2.5-flash
+    model: github-copilot:gpt-5.1-codex
+    auth: "oauth:github-copilot"
     priority: normal
     thinking: low
     description: "Backend developer — writes and debugs code"
@@ -41,7 +43,8 @@ agents:
       ```
 
   reviewer:
-    model: google:gemini-2.5-flash
+    model: github-copilot:gpt-5.1-codex
+    auth: "oauth:github-copilot"
     priority: high
     thinking: medium
     description: "Code reviewer — reviews quality and correctness"
@@ -69,7 +72,8 @@ agents:
       Always include the task ID when messaging coder: "Changes needed for [T-xxx]: ..."
 
   pm:
-    model: google:gemini-2.5-flash
+    model: github-copilot:gpt-5.1-codex
+    auth: "oauth:github-copilot"
     priority: high
     thinking: medium
     description: "Product manager — breaks down tasks and coordinates agents"

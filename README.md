@@ -6,17 +6,13 @@ Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono)
 
 Try one of these examples to get up and running quickly. Set env vars in the project root `.env` (not inside Docker — the host forwards them to containers).
 
-**Basic team** — PM, coder, and reviewer:
+**Basic team** — PM, coder, and reviewer (uses GitHub Copilot OAuth, no API keys):
 
 ```bash
 pnpm install
-cp .env.example .env
 cp -r examples/basic-team/ ~/.agent-office/offices/basic-team/
+pnpm dev oauth login github-copilot --office basic-team
 pnpm dev start --office basic-team --sandbox docker
-```
-
-```env
-GEMINI_API_KEY=
 ```
 
 **OpenServ team** — idea scout, team lead, agent dev, and token launcher:

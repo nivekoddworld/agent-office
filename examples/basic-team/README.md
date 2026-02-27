@@ -12,6 +12,7 @@ Coder and reviewer both `reports_to: pm`, creating a hierarchy where the PM mana
 
 ## Features demonstrated
 
+- **OAuth** — `auth: "oauth:github-copilot"` on all agents, no API keys needed
 - **Hierarchy** — `reports_to: pm` on coder and reviewer creates a managed team
 - **Prompt sources** — all agents use `prompt_inline` for custom instructions
 - **Prompt mode** — Reviewer uses `prompt_mode: minimal` (base + identity + custom only)
@@ -21,10 +22,15 @@ Coder and reviewer both `reports_to: pm`, creating a hierarchy where the PM mana
 - **Memory citations** — `memory.citations: auto` at office level
 - **Secrets** _(commented out)_ — PM shows optional `secrets` + `disclose_secrets` for `authenticated_fetch` use
 
+## Prerequisites
+
+- [GitHub CLI](https://cli.github.com/) (`gh`) installed — required for GitHub Copilot OAuth login
+
 ## Usage
 
 ```bash
 cp -r examples/basic-team/ ~/.agent-office/offices/basic-team/
+pnpm dev oauth login github-copilot --office basic-team
 pnpm dev start --office basic-team --sandbox docker
 ```
 
@@ -44,9 +50,9 @@ The PM will break the task down and delegate to coder and reviewer.
 
 ## Environment
 
-Set these in the project root `.env` (not inside Docker — the host forwards them to containers):
+This example uses OAuth via GitHub Copilot — no API keys needed. The `oauth login` step above handles authentication.
 
 ```env
-OPENAI_API_KEY=
-MY_GH_TOKEN=                 # optional, uncomment secrets block in office.yaml to use
+# Optional — uncomment secrets block in office.yaml to use
+# MY_GH_TOKEN=ghp_...
 ```
