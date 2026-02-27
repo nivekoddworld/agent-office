@@ -12,7 +12,6 @@ export interface AgentYamlEntry {
   thinking?: string;
   description?: string;
   prompt_inline?: string;
-  prompt_file?: string;
   cwd?: string;
   skills?: string[];
   api_key_ref?: string;
@@ -191,7 +190,6 @@ export function buildYamlEntry(
   if (entry.thinking && entry.thinking !== "low") out.thinking = entry.thinking;
   if (entry.description) out.description = entry.description;
   if (entry.prompt_inline) out.prompt_inline = entry.prompt_inline;
-  if (entry.prompt_file) out.prompt_file = entry.prompt_file;
   if (entry.cwd) out.cwd = entry.cwd;
   if (entry.skills && entry.skills.length > 0) out.skills = entry.skills;
   if (entry.api_key_ref) out.api_key_ref = entry.api_key_ref;

@@ -13,7 +13,7 @@ Coder and reviewer both `reports_to: pm`, creating a hierarchy where the PM mana
 ## Features demonstrated
 
 - **Hierarchy** — `reports_to: pm` on coder and reviewer creates a managed team
-- **Prompt sources** — PM uses `prompt_file`, coder and reviewer use `prompt_inline`
+- **Prompt sources** — all agents use `prompt_inline` for custom instructions
 - **Prompt mode** — Reviewer uses `prompt_mode: minimal` (base + identity + custom only)
 - **Agent env** — Coder sets `LOG_LEVEL: debug` via `env`
 - **Tool policy** — Reviewer has `cron_add` and `cron_remove` denied via `permissions.tools.deny`

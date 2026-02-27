@@ -87,7 +87,6 @@ export async function upsertAgentToOfficeYaml(
         "thinking",
         "description",
         "prompt_inline",
-        "prompt_file",
         "cwd",
         "skills",
         "api_key_ref",
@@ -205,7 +204,6 @@ export async function setAgentPrompt(
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
     doc.setIn(["agents", agentName, "prompt_inline"], text);
-    doc.deleteIn(["agents", agentName, "prompt_file"]);
     doc.deleteIn(["agents", agentName, "prompt"]);
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
@@ -220,11 +218,6 @@ export async function appendAgentPrompt(
     const { path, doc } = requireOfficeDoc(officeId);
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
-    if (doc.getIn(["agents", agentName, "prompt_file"])) {
-      throw new Error(
-        `Agent "${agentName}" uses prompt_file. Edit the file directly.`,
-      );
-    }
     const existing =
       (doc.getIn(["agents", agentName, "prompt_inline"]) as
         | string
@@ -246,7 +239,6 @@ export async function clearAgentPrompt(
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
     doc.deleteIn(["agents", agentName, "prompt_inline"]);
-    doc.deleteIn(["agents", agentName, "prompt_file"]);
     doc.deleteIn(["agents", agentName, "prompt"]);
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });

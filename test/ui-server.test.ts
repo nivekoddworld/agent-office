@@ -922,20 +922,4 @@ describe("UI server", () => {
     expect(body.error).toMatch(/No non-empty instruction files/);
   });
 
-  it("import-instructions returns 400 when agent uses prompt_file", async () => {
-    mockWs.getAgent.mockReturnValue({ cwd: "/tmp/ws" });
-    mockAgentImportInstructionsCommand.mockRejectedValue(
-      new Error('Agent "alice" uses prompt_file — edit the file directly.'),
-    );
-
-    const res = await fetch(`${origin}/api/agents/alice/prompt`, {
-      method: "PATCH",
-      headers: authHeaders(),
-      body: JSON.stringify({ action: "import-instructions" }),
-    });
-    expect(res.status).toBe(400);
-    const body = await res.json();
-    expect(body.ok).toBe(false);
-    expect(body.error).toMatch(/prompt_file/);
-  });
 });

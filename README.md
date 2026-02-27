@@ -266,7 +266,6 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `thinking`         | string           | `low`                                                  | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`                          |
 | `description`      | string           | `""`                                                   | Visible to other agents                                                          |
 | `prompt_inline`    | string           | _(none)_                                               | Custom instructions (inline text, appended to base prompt)                       |
-| `prompt_file`      | string           | _(none)_                                               | Path to `.md` file with custom instructions (relative to office dir)             |
 | `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                                |
 | `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                                    |
 | `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                              |
@@ -1573,10 +1572,10 @@ Every agent receives a **layered system prompt** composed from nine ordered laye
 3. **Hierarchy** — manager, peers, and direct reports derived from `reports_to` fields. Only present when hierarchy data exists. See [Hierarchy](#hierarchy).
 4. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
 5. **Identity** — agent name, description, workspace path.
-6. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
+6. **Custom instructions** — the `prompt_inline` content from `office.yaml`, appended under a `## Custom Instructions` header.
 7. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
 
-**Prompt source:** use exactly one of `prompt_inline` (inline text) or `prompt_file` (path to `.md` file, resolved relative to the office directory). Specifying both is a validation error. The legacy `prompt` field is no longer supported — use `prompt_inline` or `prompt_file` instead.
+**Prompt source:** use `prompt_inline` to provide custom instructions as inline text. The legacy `prompt` field is no longer supported — use `prompt_inline` instead.
 
 With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, hierarchy, runtime, and skills are skipped).
 

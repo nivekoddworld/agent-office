@@ -51,8 +51,6 @@ import {
 import {
   agentConfigShowCommand,
   agentPromptShowCommand,
-  agentPromptSetCommand,
-  agentPromptAppendCommand,
   agentPermissionShowCommand,
   orgChartCommand,
   agentHierarchyShowCommand,
@@ -366,17 +364,6 @@ describe("setAgentPrompt", () => {
     expect(raw).not.toContain("Old prompt");
   });
 
-  it("switches from prompt_file to prompt_inline", async () => {
-    writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
-    );
-    await setAgentPrompt(OFFICE_ID, "bot", "Inline now");
-    const raw = readYaml();
-    expect(raw).toContain("prompt_inline");
-    expect(raw).toContain("Inline now");
-    expect(raw).not.toContain("prompt_file");
-  });
-
   it("removes legacy prompt key on set", async () => {
     writeYaml(
       "office:\n  name: Test\nagents:\n  bot:\n    prompt: Old legacy\n",
@@ -437,44 +424,11 @@ describe("appendAgentPrompt", () => {
     expect(raw).not.toMatch(/\bprompt:(?!_)/); // legacy key removed
   });
 
-  it("rejects when agent uses prompt_file", async () => {
-    writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
-    );
-    await expect(appendAgentPrompt(OFFICE_ID, "bot", "extra")).rejects.toThrow(
-      "uses prompt_file",
-    );
-  });
-
   it("throws on missing agent", async () => {
     writeYaml("office:\n  name: Test\nagents:\n  other: {}\n");
     await expect(appendAgentPrompt(OFFICE_ID, "bot", "text")).rejects.toThrow(
       "not found",
     );
-  });
-});
-
-// --- Command-level prompt_file guards ---
-
-describe("agentPromptSetCommand prompt_file guard", () => {
-  it("throws when agent uses prompt_file", async () => {
-    writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
-    );
-    await expect(
-      agentPromptSetCommand(OFFICE_ID, "bot", "new text"),
-    ).rejects.toThrow("uses prompt_file");
-  });
-});
-
-describe("agentPromptAppendCommand prompt_file guard", () => {
-  it("throws when agent uses prompt_file", async () => {
-    writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n",
-    );
-    await expect(
-      agentPromptAppendCommand(OFFICE_ID, "bot", "extra"),
-    ).rejects.toThrow("uses prompt_file");
   });
 });
 
@@ -488,16 +442,6 @@ describe("clearAgentPrompt", () => {
     await clearAgentPrompt(OFFICE_ID, "bot");
     const raw = readYaml();
     expect(raw).not.toContain("prompt_inline");
-    expect(raw).toContain("model:");
-  });
-
-  it("removes prompt_file reference (file preserved on disk)", async () => {
-    writeYaml(
-      "office:\n  name: Test\nagents:\n  bot:\n    prompt_file: prompts/bot.md\n    model: openai:gpt-4\n",
-    );
-    await clearAgentPrompt(OFFICE_ID, "bot");
-    const raw = readYaml();
-    expect(raw).not.toContain("prompt_file");
     expect(raw).toContain("model:");
   });
 

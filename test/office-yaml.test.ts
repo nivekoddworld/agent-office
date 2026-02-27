@@ -569,22 +569,14 @@ describe("prompt source validation", () => {
     expect(errors).toEqual([]);
   });
 
-  it("accepts prompt_file", () => {
+  it("rejects prompt_file with migration error", () => {
     const errors = validateOfficeConfig({
       office: { name: "Test" },
-      agents: { bot: { prompt_file: "prompts/bot.md" } },
+      agents: { bot: { prompt_file: "prompts/bot.md" } as any },
     });
-    expect(errors).toEqual([]);
-  });
-
-  it("rejects both prompt_inline and prompt_file", () => {
-    const errors = validateOfficeConfig({
-      office: { name: "Test" },
-      agents: {
-        bot: { prompt_inline: "text", prompt_file: "file.md" },
-      },
-    });
-    expect(errors.some((e) => e.includes("Cannot specify both"))).toBe(true);
+    expect(
+      errors.some((e) => e.includes("prompt_file is no longer supported")),
+    ).toBe(true);
   });
 
   it("accepts neither (no custom prompt)", () => {
@@ -886,19 +878,11 @@ describe("buildYamlEntry", () => {
   it("persists prompt_inline", () => {
     const out = buildYamlEntry({ prompt_inline: "You are a coder." });
     expect(out.prompt_inline).toBe("You are a coder.");
-    expect(out.prompt_file).toBeUndefined();
   });
 
-  it("persists prompt_file", () => {
-    const out = buildYamlEntry({ prompt_file: "prompts/bot.md" });
-    expect(out.prompt_file).toBe("prompts/bot.md");
-    expect(out.prompt_inline).toBeUndefined();
-  });
-
-  it("omits both when neither set", () => {
+  it("omits prompt_inline when not set", () => {
     const out = buildYamlEntry({});
     expect(out.prompt_inline).toBeUndefined();
-    expect(out.prompt_file).toBeUndefined();
   });
 
   it("persists reports_to", () => {

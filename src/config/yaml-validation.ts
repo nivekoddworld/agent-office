@@ -160,26 +160,20 @@ export function validateAgentEntry(
 
   if ("prompt" in entry) {
     errors.push(
-      `"prompt" is no longer supported. Use "prompt_inline" (inline text) or "prompt_file" (path to .md file).`,
+      `"prompt" is no longer supported. Use "prompt_inline" instead.`,
     );
   }
 
-  if (entry.prompt_inline !== undefined && entry.prompt_file !== undefined) {
-    errors.push(
-      `Cannot specify both "prompt_inline" and "prompt_file" — use exactly one.`,
-    );
-  }
   if (
     entry.prompt_inline !== undefined &&
     typeof entry.prompt_inline !== "string"
   ) {
     errors.push(`prompt_inline must be a string`);
   }
-  if (
-    entry.prompt_file !== undefined &&
-    typeof entry.prompt_file !== "string"
-  ) {
-    errors.push(`prompt_file must be a string`);
+  if ((entry as any).prompt_file !== undefined) {
+    errors.push(
+      `prompt_file is no longer supported — use prompt_inline instead`,
+    );
   }
   if ((entry as any).bootstrap_dir !== undefined) {
     errors.push(

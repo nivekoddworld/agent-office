@@ -105,7 +105,6 @@ export function agentConfigShowCommand(
   if (entry.thinking) display.thinking = entry.thinking;
   if (entry.description) display.description = entry.description;
   if (entry.prompt_inline) display.prompt_inline = entry.prompt_inline;
-  if (entry.prompt_file) display.prompt_file = entry.prompt_file;
   if (entry.cwd) display.cwd = entry.cwd;
   if (entry.api_key_ref) display.api_key_ref = entry.api_key_ref;
   if (entry.skills?.length) display.skills = entry.skills;
@@ -178,9 +177,8 @@ export function agentPromptShowCommand(
     hierarchy: hierarchyMap.get(agentName),
   });
 
-  const sourceNote = entry.prompt_file ? ` (source: ${entry.prompt_file})` : "";
   console.log(
-    `\nAgent "${agentName}" effective prompt (${composed.version}, hash ${composed.hash}${sourceNote} — excludes skills; sandbox agents use cwd /workspace at runtime):`,
+    `\nAgent "${agentName}" effective prompt (${composed.version}, hash ${composed.hash} — excludes skills; sandbox agents use cwd /workspace at runtime):`,
   );
   console.log("---");
   console.log(composed.text);
@@ -192,12 +190,6 @@ export async function agentPromptSetCommand(
   agentName: string,
   text: string,
 ): Promise<void> {
-  const yaml = loadOfficeYaml(officeId);
-  if (yaml?.agents[agentName]?.prompt_file) {
-    throw new Error(
-      `Agent "${agentName}" uses prompt_file — edit the file directly, or clear it first with "agent prompt clear".`,
-    );
-  }
   await setAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Set prompt for "${agentName}"`);
 }
@@ -207,12 +199,6 @@ export async function agentPromptAppendCommand(
   agentName: string,
   text: string,
 ): Promise<void> {
-  const yaml = loadOfficeYaml(officeId);
-  if (yaml?.agents[agentName]?.prompt_file) {
-    throw new Error(
-      `Agent "${agentName}" uses prompt_file — edit the file directly.`,
-    );
-  }
   await appendAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Appended to prompt for "${agentName}"`);
 }
