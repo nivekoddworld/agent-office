@@ -19,8 +19,6 @@ import {
   IconRefresh,
   IconCheck,
   IconCopy,
-  IconPlayerPlay,
-  IconPlayerPause,
   IconPalette,
   IconEye,
 } from "@tabler/icons-react";
@@ -28,7 +26,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 
 import {
-  useSchedulerAction,
   useOfficeApply,
   useOfficeValidate,
 } from "../../api/use-api-mutations.js";
@@ -90,7 +87,6 @@ export function SettingsPanel() {
   const state = useAppState();
   const prefs = usePreferences();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
-  const schedulerAction = useSchedulerAction();
   const officeApply = useOfficeApply();
   const officeValidate = useOfficeValidate();
   const queryClient = useQueryClient();
@@ -104,10 +100,6 @@ export function SettingsPanel() {
   const activeCronJobs = state.cronJobs.filter(
     (j) => j.config.enabled !== false,
   ).length;
-
-  const handleToggleScheduler = () => {
-    schedulerAction.mutate(state.scheduler.running ? "stop" : "start");
-  };
 
   const handleReloadConfig = () => {
     officeApply.mutate(true, {
@@ -144,10 +136,7 @@ export function SettingsPanel() {
   };
 
   const intervalSec = (state.scheduler.intervalMs / 1000).toFixed(1);
-  const isPending =
-    officeApply.isPending ||
-    officeValidate.isPending ||
-    schedulerAction.isPending;
+  const isPending = officeApply.isPending || officeValidate.isPending;
 
   return (
     <PageShell title="Office Settings">
@@ -230,28 +219,13 @@ export function SettingsPanel() {
               <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
                 Status
               </Text>
-              <Group gap={8}>
-                <Badge
-                  size="sm"
-                  variant="light"
-                  color={state.scheduler.running ? "green" : "red"}
-                >
-                  {state.scheduler.running ? "Running" : "Stopped"}
-                </Badge>
-                <Switch
-                  size="xs"
-                  checked={state.scheduler.running}
-                  onChange={handleToggleScheduler}
-                  color="cyan"
-                  thumbIcon={
-                    state.scheduler.running ? (
-                      <IconPlayerPause size={10} />
-                    ) : (
-                      <IconPlayerPlay size={10} />
-                    )
-                  }
-                />
-              </Group>
+              <Badge
+                size="sm"
+                variant="light"
+                color={state.scheduler.running ? "green" : "red"}
+              >
+                {state.scheduler.running ? "Running" : "Stopped"}
+              </Badge>
             </Group>
             <InfoRow label="Tick interval" value={`${intervalSec}s`} />
             <InfoRow

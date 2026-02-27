@@ -13,8 +13,6 @@ import {
   IconSitemap,
   IconCoin,
   IconSettings,
-  IconPlayerPlay,
-  IconPlayerPause,
   IconLayoutKanban,
   IconPlus,
   IconHeartHandshake,
@@ -34,8 +32,6 @@ import type { AgentInfo } from "../../api/types.js";
 interface SlackSidebarProps {
   officeName: string;
   agents: AgentInfo[];
-  schedulerRunning: boolean;
-  onToggleScheduler?: () => void;
   unreadCounts?: Record<string, number>;
   channels?: Record<string, { members: string[]; description?: string }>;
 }
@@ -102,8 +98,6 @@ function SidebarItem({
 export function SlackSidebar({
   officeName,
   agents,
-  schedulerRunning,
-  onToggleScheduler,
   unreadCounts = {},
   channels = {},
 }: SlackSidebarProps) {
@@ -127,54 +121,14 @@ export function SlackSidebar({
         py="sm"
         style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap={8} wrap="nowrap" style={{ minWidth: 0 }}>
-            <Text
-              fw={700}
-              size="lg"
-              truncate
-              style={{
-                color: "var(--ao-text-bright)",
-              }}
-            >
-              {officeName}
-            </Text>
-            <Text
-              size="xs"
-              fw={500}
-              style={{
-                color: schedulerRunning
-                  ? "var(--ao-online-green)"
-                  : "var(--ao-text-muted)",
-                flexShrink: 0,
-              }}
-            >
-              {schedulerRunning ? "Active" : "Paused"}
-            </Text>
-          </Group>
-          {onToggleScheduler && (
-            <Tooltip
-              label={schedulerRunning ? "Pause scheduler" : "Start scheduler"}
-              withArrow
-            >
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                color="gray"
-                onClick={onToggleScheduler}
-              >
-                {schedulerRunning ? (
-                  <IconPlayerPause
-                    size={14}
-                    color={"var(--ao-text-secondary)"}
-                  />
-                ) : (
-                  <IconPlayerPlay size={14} color={"var(--ao-accent-green)"} />
-                )}
-              </ActionIcon>
-            </Tooltip>
-          )}
-        </Group>
+        <Text
+          fw={700}
+          size="lg"
+          truncate
+          style={{ color: "var(--ao-text-bright)" }}
+        >
+          {officeName}
+        </Text>
       </Box>
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>

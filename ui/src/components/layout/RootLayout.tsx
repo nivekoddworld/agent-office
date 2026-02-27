@@ -9,7 +9,6 @@ import { agentActivityStore } from "../../store/agent-activity-store.js";
 import { unreadStore, useUnreadCounts } from "../../store/unread-store.js";
 import { debugCaptureStore } from "../../store/debug-capture-store.js";
 import { isChatRelevantSSE } from "../slack/debug-helpers.js";
-import { useSchedulerAction } from "../../api/use-api-mutations.js";
 import { SlackSidebar } from "../slack/SlackSidebar.js";
 import { AgentProfileDrawer } from "../slack/AgentProfileDrawer.js";
 import { AppStateContext } from "./app-state-context.js";
@@ -97,12 +96,6 @@ export function RootLayout() {
   ]);
 
   const unreadCounts = useUnreadCounts();
-  const schedulerAction = useSchedulerAction();
-
-  const handleToggleScheduler = useCallback(() => {
-    if (!state) return;
-    schedulerAction.mutate(state.scheduler.running ? "stop" : "start");
-  }, [state, schedulerAction]);
 
   const openAgentProfile = useCallback((name: string) => {
     setModal({ kind: "profile", agentName: name });
@@ -162,8 +155,6 @@ export function RootLayout() {
             <SlackSidebar
               officeName={state.officeName}
               agents={state.agents}
-              schedulerRunning={state.scheduler.running}
-              onToggleScheduler={handleToggleScheduler}
               unreadCounts={unreadCounts}
               channels={state.channels}
             />
