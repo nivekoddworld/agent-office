@@ -42,11 +42,6 @@ vi.mock("../src/agent/tools/index.js", () => ({
     name: "read_agent_file",
     execute: vi.fn(),
   }),
-  createMemorySearchTool: () => ({
-    name: "memory_search",
-    execute: vi.fn(),
-  }),
-  createMemoryGetTool: () => ({ name: "memory_get", execute: vi.fn() }),
   createCronAddTool: () => ({ name: "cron_add", execute: vi.fn() }),
   createCronRemoveTool: () => ({ name: "cron_remove", execute: vi.fn() }),
   createCronListTool: () => ({ name: "cron_list", execute: vi.fn() }),
@@ -61,11 +56,6 @@ vi.mock("../src/agent/tools/index.js", () => ({
   createTaskDeleteTool: () => ({ name: "task_delete", execute: vi.fn() }),
   createMessageUserTool: () => ({ name: "message_user", execute: vi.fn() }),
   createPostChannelTool: () => ({ name: "post_channel", execute: vi.fn() }),
-}));
-
-// Mock memory/search to avoid real disk access
-vi.mock("../src/agent/memory/search.js", () => ({
-  collectMemoryFiles: () => [],
 }));
 
 function makeBus(): MessageBus {

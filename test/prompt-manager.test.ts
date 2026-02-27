@@ -131,12 +131,11 @@ describe("composeSystemPrompt", () => {
     expect(a.hash).toBe(b.hash);
   });
 
-  it("layer order: base → office → hierarchy → memory → runtime → identity → custom → skills", () => {
+  it("layer order: base → office → hierarchy → runtime → identity → custom → skills", () => {
     const { text } = composeSystemPrompt({
       ...BASE_CTX,
       officeName: "Acme Corp",
       hierarchy: { manager: "boss", peers: [], reports: [] },
-      hasMemory: true,
       envNames: ["VAR"],
       customPrompt: "My rules",
       description: "helper",
@@ -145,15 +144,13 @@ describe("composeSystemPrompt", () => {
     const baseIdx = text.indexOf("Agent-to-Agent Collaboration");
     const officeIdx = text.indexOf("## Office");
     const hierarchyIdx = text.indexOf("## Hierarchy");
-    const memoryIdx = text.indexOf("## Memory");
     const runtimeIdx = text.indexOf("Runtime Context");
     const identityIdx = text.indexOf('You are agent "test-agent"');
     const customIdx = text.indexOf("Custom Instructions");
     const skillsIdx = text.indexOf("## Skills");
     expect(baseIdx).toBeLessThan(officeIdx);
     expect(officeIdx).toBeLessThan(hierarchyIdx);
-    expect(hierarchyIdx).toBeLessThan(memoryIdx);
-    expect(memoryIdx).toBeLessThan(runtimeIdx);
+    expect(hierarchyIdx).toBeLessThan(runtimeIdx);
     expect(runtimeIdx).toBeLessThan(identityIdx);
     expect(identityIdx).toBeLessThan(customIdx);
     expect(customIdx).toBeLessThan(skillsIdx);
@@ -220,48 +217,6 @@ describe("composeSystemPrompt", () => {
     expect(text).not.toContain("## Office");
   });
 
-  it("memory block includes reading instructions", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
-    expect(text).toContain("## Memory");
-    expect(text).toContain("Reading:");
-    expect(text).toContain("memory_search");
-  });
-
-  it("memory block includes mandatory recall language", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
-    expect(text).toContain("MUST run memory_search");
-    expect(text).toContain(
-      "Do not rely on information that was not explicitly retrieved",
-    );
-    expect(text).toContain("If you do not find relevant memory, say so");
-  });
-
-  it("memory block includes writing instructions", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
-    expect(text).toContain("Writing:");
-    expect(text).toContain("MEMORY.md");
-    expect(text).toContain("memory/<topic>.md");
-  });
-
-  it("memory block includes activity log instructions", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: true });
-    expect(text).toContain("Activity log:");
-    expect(text).toContain("logs/YYYY-MM-DD.md");
-    expect(text).toContain("logs/2026-02-14.md");
-  });
-
-  it("memory block absent when hasMemory is false", () => {
-    const { text } = composeSystemPrompt({ ...BASE_CTX, hasMemory: false });
-    expect(text).not.toContain("## Memory");
-    expect(text).not.toContain("Writing:");
-    expect(text).not.toContain("Activity log:");
-  });
-
-  it("memory block absent by default", () => {
-    const { text } = composeSystemPrompt(BASE_CTX);
-    expect(text).not.toContain("## Memory");
-  });
-
   it("returns block metadata", () => {
     const { blocks } = composeSystemPrompt({
       ...BASE_CTX,
@@ -301,7 +256,6 @@ describe("composeSystemPrompt", () => {
       ...BASE_CTX,
       mode: "full",
       officeName: "Acme",
-      hasMemory: true,
       envNames: ["VAR"],
       customPrompt: "Rules",
       skillsPrompt: "## Skills\nList",
@@ -309,20 +263,18 @@ describe("composeSystemPrompt", () => {
     const names = blocks.map((b) => b.name);
     expect(names).toContain("base");
     expect(names).toContain("office");
-    expect(names).toContain("memory");
     expect(names).toContain("runtime");
     expect(names).toContain("identity");
     expect(names).toContain("custom");
     expect(names).toContain("skills");
   });
 
-  it("minimal mode excludes office, hierarchy, bootstrap, memory, runtime, skills", () => {
+  it("minimal mode excludes office, hierarchy, bootstrap, runtime, skills", () => {
     const { blocks, text } = composeSystemPrompt({
       ...BASE_CTX,
       mode: "minimal",
       officeName: "Acme",
       hierarchy: { manager: "lead", peers: [], reports: [] },
-      hasMemory: true,
       envNames: ["VAR"],
       customPrompt: "Rules",
       skillsPrompt: "## Skills\nList",
@@ -331,12 +283,10 @@ describe("composeSystemPrompt", () => {
     expect(names).not.toContain("office");
     expect(names).not.toContain("hierarchy");
     expect(names).not.toContain("bootstrap");
-    expect(names).not.toContain("memory");
     expect(names).not.toContain("runtime");
     expect(names).not.toContain("skills");
     expect(text).not.toContain("## Office");
     expect(text).not.toContain("## Hierarchy");
-    expect(text).not.toContain("## Memory");
     expect(text).not.toContain("Runtime Context");
   });
 

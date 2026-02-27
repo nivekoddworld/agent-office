@@ -135,14 +135,11 @@ export interface OfficeYaml {
     env?: Record<string, string>;
     secrets?: Record<string, string>;
     cron?: Record<string, OfficeCronYamlEntry>;
-    memory?: { citations?: "on" | "off" | "auto" };
     channels?: Record<string, { members: string[]; description?: string }>;
     collaborationPolicy?: CollaborationPolicy;
   };
   agents: Record<string, import("./config/yaml-utils.js").AgentYamlEntry>;
 }
-
-export type CitationMode = "on" | "off" | "auto";
 
 export interface OfficeContext {
   id: string;
@@ -151,7 +148,6 @@ export interface OfficeContext {
   env: Record<string, string>;
   secrets: Record<string, string>;
   dir: string;
-  citationMode: CitationMode;
   channels: Map<string, ChannelConfig>;
   policy?: CollaborationPolicy;
 }

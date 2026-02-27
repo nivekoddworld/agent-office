@@ -130,7 +130,7 @@ describe.skipIf(skipHostApi)("HostApi cron endpoints", () => {
     port = nextPort();
     api = new HostApi(makeBus(), makeListFn(), OFFICE_DIR);
     api.setCronDeps({ officeId: OFFICE_ID, officeDir: OFFICE_DIR, cron });
-    api.registerAgent("bot", token, { MODEL_API_KEY: "sk-test" }, "auto", {});
+    api.registerAgent("bot", token, { MODEL_API_KEY: "sk-test" });
     await api.start(port);
   });
 
@@ -229,7 +229,7 @@ describe.skipIf(skipHostApi)("HostApi cron endpoints", () => {
 
   it("allows office-scope add with permission", async () => {
     api.unregisterAgent(token);
-    api.registerAgent("bot", token, { MODEL_API_KEY: "sk-test" }, "auto", {
+    api.registerAgent("bot", token, { MODEL_API_KEY: "sk-test" }, {
       office_cron: true,
     });
     const res = await postJson(
@@ -319,7 +319,6 @@ describe.skipIf(skipHostApi)("HostApi cron endpoints", () => {
       "bot",
       "deny-tok",
       { MODEL_API_KEY: "sk-test" },
-      "auto",
       { tools: { deny: ["cron_add"] } },
     );
     await api2.start(port2);

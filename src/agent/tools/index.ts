@@ -2,8 +2,6 @@ export { createAuthenticatedFetchTool } from "./authenticated-fetch.js";
 export { createListAgentsTool } from "./list-agents.js";
 export { createReadAgentFileTool } from "./read-agent-file.js";
 export { createMessageAgentTool } from "./message-agent.js";
-export { createMemorySearchTool } from "./memory-search.js";
-export { createMemoryGetTool } from "./memory-get.js";
 export { createCronAddTool } from "./cron-add.js";
 export { createCronRemoveTool } from "./cron-remove.js";
 export { createCronListTool } from "./cron-list.js";

@@ -397,6 +397,15 @@ describe("validateOfficeConfig", () => {
     expect(errors).toEqual([]);
   });
 
+  it("rejects legacy office.memory with migration error", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test", memory: { citations: "auto" } } as any,
+      agents: {},
+    });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("office.memory is no longer supported");
+  });
+
   it("accepts valid permissions", () => {
     const errors = validateOfficeConfig({
       office: { name: "Test" },

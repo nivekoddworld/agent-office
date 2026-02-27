@@ -93,23 +93,23 @@ describe("formatBootstrapBlock", () => {
 });
 
 describe("bootstrap in prompt composition", () => {
-  it("bootstrap block positioned between office and memory", () => {
+  it("bootstrap block positioned between office and runtime", () => {
     writeFileSync(join(TEST_DIR, "SOUL.md"), "Soul content here");
 
     const { text } = composeSystemPrompt({
       name: "test",
       cwd: TEST_DIR,
       officeName: "Acme",
-      hasMemory: true,
+      envNames: ["VAR"],
       bootstrapDir: TEST_DIR,
       enableBootstrap: true,
     });
 
     const officeIdx = text.indexOf("## Office");
     const bootstrapIdx = text.indexOf("## [bootstrap: SOUL.md]");
-    const memoryIdx = text.indexOf("## Memory");
+    const runtimeIdx = text.indexOf("Runtime Context");
     expect(officeIdx).toBeLessThan(bootstrapIdx);
-    expect(bootstrapIdx).toBeLessThan(memoryIdx);
+    expect(bootstrapIdx).toBeLessThan(runtimeIdx);
   });
 
   it("bootstrap absent when enableBootstrap is false", () => {

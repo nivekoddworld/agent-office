@@ -23,7 +23,6 @@ export interface PromptContext {
   cronJobs?: string[];
   officeName?: string;
   officeDescription?: string;
-  hasMemory?: boolean;
   skillsPrompt?: string;
   hierarchy?: { manager: string | null; peers: string[]; reports: string[] };
   bootstrapDir?: string;
@@ -69,24 +68,6 @@ function buildIdentityBlock(ctx: PromptContext): string {
   return (
     `\n\nYou are agent "${ctx.name}"${desc}.\n` +
     `Your workspace is ${ctx.cwd}. All file tools (read, write, edit, bash) operate in this directory.`
-  );
-}
-
-function buildMemoryBlock(ctx: PromptContext): string {
-  if (!ctx.hasMemory) return "";
-  return (
-    "\n\n## Memory\n" +
-    "Reading:\n" +
-    "CRITICAL: Before answering questions about prior work, decisions, or patterns, " +
-    "you MUST run memory_search first. Do not rely on information that was not explicitly " +
-    "retrieved via memory tools. If you do not find relevant memory, say so.\n" +
-    "Office memory is shared across all agents; agent memory is private to you.\n\n" +
-    "Writing:\n" +
-    "After completing a task, update your agent memory using write/edit tools. " +
-    "Use MEMORY.md for key decisions and memory/<topic>.md for detailed notes. Keep entries concise.\n\n" +
-    "Activity log:\n" +
-    "Append a brief summary to logs/YYYY-MM-DD.md with timestamp, what was done, and key files touched " +
-    "(for example, logs/2026-02-14.md). Create the file if it does not exist."
   );
 }
 
@@ -137,7 +118,6 @@ export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
     { name: "office", text: buildOfficeBlock(ctx) },
     { name: "hierarchy", text: buildHierarchyBlock(ctx) },
     { name: "bootstrap", text: buildBootstrapBlock(ctx) },
-    { name: "memory", text: buildMemoryBlock(ctx) },
     { name: "runtime", text: buildRuntimeBlock(ctx) },
     { name: "identity", text: buildIdentityBlock(ctx) },
     { name: "custom", text: buildCustomBlock(ctx.customPrompt) },

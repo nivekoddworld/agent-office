@@ -450,6 +450,28 @@ describe.skipIf(skipHostApi)("HostApi", () => {
     api.unregisterAgent(tokenB);
   });
 
+  // --- Removed memory endpoints regression ---
+
+  it("POST /api/memory-search returns 404 (removed)", async () => {
+    const res = await postJson(
+      port,
+      "/api/memory-search",
+      { query: "test" },
+      token,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("POST /api/memory-get returns 404 (removed)", async () => {
+    const res = await postJson(
+      port,
+      "/api/memory-get",
+      { path: "MEMORY.md" },
+      token,
+    );
+    expect(res.status).toBe(404);
+  });
+
   // --- kill agent while prompt pending ---
 
   it("kill clears pending prompts + unregisters token", async () => {

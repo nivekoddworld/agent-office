@@ -4,8 +4,6 @@
 office:
   name: Basic Team
   description: "A three-agent product development team"
-  memory:
-    citations: auto
   cron:
     daily-standup:
       schedule: "0 9 * * 1-5"

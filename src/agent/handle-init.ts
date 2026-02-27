@@ -12,20 +12,16 @@ import type {
   AgentConfig,
   AgentInfo,
   ChannelConfig,
-  CitationMode,
 } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { composeSystemPrompt } from "./prompts/prompt-manager.js";
-import { collectMemoryFiles } from "./memory/search.js";
 import {
   createListAgentsTool,
   createReadAgentFileTool,
   createMessageAgentTool,
   createAuthenticatedFetchTool,
-  createMemorySearchTool,
-  createMemoryGetTool,
   createCronAddTool,
   createCronRemoveTool,
   createCronListTool,
@@ -69,7 +65,6 @@ export interface InitContext {
   officeDescription?: string;
   config: AgentConfig;
   bootstrapDir: string;
-  citationMode: CitationMode;
 }
 
 export interface SandboxInitResult {
@@ -94,9 +89,6 @@ export async function initSandboxAgent(
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
 
   const model = ctx.config.model;
-  const hasMemory =
-    collectMemoryFiles(ctx.cwd).length > 0 ||
-    collectMemoryFiles(ctx.baseDir).length > 0;
   const skillPaths = resolveSkillPaths(ctx);
 
   const { skills: sandboxSkills } = loadSkills({
@@ -128,7 +120,6 @@ export async function initSandboxAgent(
     cronJobs: getCronSummaries(ctx.officeId, ctx.name),
     officeName: ctx.officeName,
     officeDescription: ctx.officeDescription,
-    hasMemory,
     skillsPrompt: sandboxSkillsPrompt,
     hierarchy: ctx.config.hierarchy,
     bootstrapDir: ctx.bootstrapDir,
@@ -260,8 +251,6 @@ export async function initInProcessAgent(
     ...(Object.keys(resolvedSecrets).length > 0
       ? [createAuthenticatedFetchTool(resolvedSecrets)]
       : []),
-    createMemorySearchTool(ctx.name, ctx.baseDir, ctx.citationMode),
-    createMemoryGetTool(ctx.name, ctx.baseDir, ctx.citationMode),
     createCronAddTool(cronDeps),
     createCronRemoveTool(cronDeps),
     createCronListTool(cronDeps),
@@ -331,9 +320,6 @@ export async function initInProcessAgent(
     console.log(`[agent:${ctx.name}] Denied tools: ${denied.join(", ")}`);
   for (const w of warnings) console.warn(`[agent:${ctx.name}] ${w}`);
 
-  const hasMemoryFiles =
-    collectMemoryFiles(ctx.cwd).length > 0 ||
-    collectMemoryFiles(ctx.baseDir).length > 0;
   const composed = composeSystemPrompt({
     name: ctx.name,
     cwd: ctx.cwd,
@@ -346,7 +332,6 @@ export async function initInProcessAgent(
     cronJobs: ctx.officeId ? getCronSummaries(ctx.officeId, ctx.name) : [],
     officeName: ctx.officeName,
     officeDescription: ctx.officeDescription,
-    hasMemory: hasMemoryFiles,
     skillsPrompt: inProcSkillsPrompt,
     hierarchy: ctx.config.hierarchy,
     bootstrapDir: ctx.bootstrapDir,

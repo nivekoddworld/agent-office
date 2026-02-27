@@ -12,7 +12,6 @@ import type {
   AgentInfo,
   AgentStatus,
   ChannelConfig,
-  CitationMode,
   HeartbeatConfig,
 } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
@@ -20,7 +19,6 @@ import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
 import { composeSystemPrompt } from "./prompts/prompt-manager.js";
 import type { BlockMeta } from "./prompts/truncate.js";
-import { collectMemoryFiles } from "./memory/search.js";
 import {
   extractSkillSummaries,
   formatSkillSummariesForPrompt,
@@ -55,7 +53,6 @@ export interface AgentHandleDeps {
   officeId: string;
   officeName: string;
   officeDescription?: string;
-  citationMode?: CitationMode;
   cronService?: CronService;
   taskService?: TaskService;
   messageStore?: MessageStore;
@@ -90,7 +87,6 @@ export class AgentHandle {
   private officeId: string;
   private officeName: string;
   private officeDescription?: string;
-  private citationMode: CitationMode;
   private cronService?: CronService;
   private taskService?: TaskService;
   private _messageStore?: MessageStore;
@@ -111,7 +107,6 @@ export class AgentHandle {
     this.officeId = deps.officeId;
     this.officeName = deps.officeName;
     this.officeDescription = deps.officeDescription;
-    this.citationMode = deps.citationMode ?? "auto";
     this.cronService = deps.cronService;
     this.taskService = deps.taskService;
     this._messageStore = deps.messageStore;
@@ -226,7 +221,6 @@ export class AgentHandle {
       officeDescription: this.officeDescription,
       config: this.config,
       bootstrapDir: this._bootstrapDir,
-      citationMode: this.citationMode,
     };
   }
 
@@ -390,10 +384,6 @@ export class AgentHandle {
       skillsPrompt = formatSkillsForPrompt(skills);
     }
 
-    const hasMemoryFiles =
-      collectMemoryFiles(this.cwd).length > 0 ||
-      collectMemoryFiles(this.baseDir).length > 0;
-
     const composed = composeSystemPrompt({
       name: this.name,
       cwd: this.provider ? "/workspace" : this.cwd,
@@ -406,7 +396,6 @@ export class AgentHandle {
       cronJobs: this.officeId ? getCronSummaries(this.officeId, this.name) : [],
       officeName: this.officeName,
       officeDescription: this.officeDescription,
-      hasMemory: hasMemoryFiles,
       skillsPrompt,
       hierarchy: this.config.hierarchy,
       bootstrapDir: this._bootstrapDir,

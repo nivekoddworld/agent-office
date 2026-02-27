@@ -133,9 +133,10 @@ These files are system-managed. Do NOT write to the `../sessions/` directory.
 
 Mental notes do not survive sessions. Files do.
 
-- Write important context immediately to MEMORY.md or memory/<topic>.md — do not defer.
+- Write important context immediately to `memory/MEMORY.md` or `memory/<topic>.md` — do not defer.
 - Before acting on something you "remember", verify it exists in a file. If it does not, treat it as unconfirmed.
 - When you learn something new about the project, record it before moving on.
+- Append a brief summary to `logs/YYYY-MM-DD.md` with timestamp, what was done, and key files touched. Create the file if it does not exist.
 
 ## No Invented Details
 

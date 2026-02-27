@@ -95,11 +95,6 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Collaboration Metrics](#collaboration-metrics)
   - [Tool Architecture](#tool-architecture)
   - [Prompt System](#prompt-system)
-- [Memory System](#memory-system)
-  - [memory_search](#memory_search)
-  - [memory_get](#memory_get)
-  - [Citation Mode](#citation-mode)
-
 - [Concepts](#concepts)
   - [Tick-Based Scheduler](#tick-based-scheduler)
   - [Priority Levels](#priority-levels)
@@ -143,7 +138,7 @@ graph TD
 
 **Core flow:** `office.yaml` (auto-spawn) / CLI / Web UI / Cron / Agent cron tools / Task notifications -> Workspace -> Scheduler tick -> drain inbox -> dispatch to Pi Agent -> agent runs tools -> response streamed to UI.
 
-Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_user`, `post_channel`, `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`, `task_delete`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
+Each agent is a full Pi coding agent with its own filesystem workspace, skills, and injected tools (`message_user`, `post_channel`, `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `cron_add`, `cron_remove`, `cron_list`, `task_create`, `task_update`, `task_list`, `task_get`, `task_delete`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). The scheduler runs a tick loop that serves agents by priority, one message per tick per agent, non-blocking.
 
 Agents can run **in-process** (default) or inside **Docker containers** for full process-level isolation.
 
@@ -214,8 +209,6 @@ office:
     SHARED_API_URL: https://api.acme.com
   secrets:
     SHARED_TOKEN: ${ACME_TOKEN}
-  memory:
-    citations: auto # on | off | auto (default: auto)
   cron:
     standup:
       schedule: "0 9 * * 1-5"
@@ -728,7 +721,7 @@ Host Process                        Docker Container (per agent)
    - Volume mount: host workspace directory -> `/workspace` in container
 3. **sandbox-entry.ts** (inside container) creates a Pi Agent with:
    - Local coding tools (read, write, edit, bash, grep, find, ls) scoped to `/workspace`
-   - Proxy tools that forward `message_user`, `post_channel`, `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `memory_search`, `memory_get`, `task_create`, `task_update`, `task_list`, `task_get`, `task_delete`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create` to the Host API over HTTP
+   - Proxy tools that forward `message_user`, `post_channel`, `message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`, `task_create`, `task_update`, `task_list`, `task_get`, `task_delete`, `read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create` to the Host API over HTTP
 4. **Host API** authenticates requests via Bearer token, executes them against the message bus / filesystem, and returns results.
 5. **Prompt flow:** Host sends `POST /prompt` to container -> agent processes -> container sends `POST /api/prompt-done` back to host.
 6. **Heartbeat:** Container sends `POST /api/heartbeat` every 5 seconds. Watchdog monitors these for stuck detection.
@@ -793,8 +786,6 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | `GET`  | `/api/agents`                    | List all agents (name, status, description)                    |
 | `GET`  | `/api/agent-file?agent=X&path=Y` | Read file from another agent's workspace                       |
 | `POST` | `/api/authenticated-fetch`       | Host-proxied HTTP request with secret injection                |
-| `POST` | `/api/memory-search`             | Search memory files across scopes (auth required)              |
-| `POST` | `/api/memory-get`                | Read a specific memory file (auth required)                    |
 | `POST` | `/api/cron-add`                  | Add or update a cron job (auth required, identity from token)  |
 | `POST` | `/api/cron-remove`               | Remove a cron job (auth required, identity from token)         |
 | `POST` | `/api/cron-list`                 | List cron jobs visible to the calling agent (auth required)    |
@@ -1065,7 +1056,7 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 ## Agent Collaboration
 
-Agents communicate through explicit tool calls. Agent text output is internal thinking — not visible to the user. All outward communication uses egress tools (`message_user`, `post_channel`), collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), memory tools (`memory_search`, `memory_get`), cron tools (`cron_add`, `cron_remove`, `cron_list`), task tools (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`), and skill tools (`read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
+Agents communicate through explicit tool calls. Agent text output is internal thinking — not visible to the user. All outward communication uses egress tools (`message_user`, `post_channel`), collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), cron tools (`cron_add`, `cron_remove`, `cron_list`), task tools (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`), and skill tools (`read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
 
 ### Task Event Notifications
 
@@ -1524,8 +1515,6 @@ src/agent/tools/
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
-  memory-search.ts          memory_search — host implementation
-  memory-get.ts             memory_get — host implementation
   task-create.ts            task_create — host implementation
   task-update.ts            task_update — host implementation
   task-list.ts              task_list — host implementation
@@ -1550,8 +1539,6 @@ src/agent/tools/
     list-agents.ts          Sandbox implementation (HTTP GET /api/agents)
     read-agent-file.ts      Sandbox implementation (HTTP GET /api/agent-file)
     authenticated-fetch.ts  Sandbox implementation (HTTP POST /api/authenticated-fetch)
-    memory-search.ts        memory_search — proxy implementation (HTTP)
-    memory-get.ts           memory_get — proxy implementation (HTTP)
     task-create.ts          task_create — proxy implementation (HTTP)
     task-update.ts          task_update — proxy implementation (HTTP)
     task-list.ts            task_list — proxy implementation (HTTP)
@@ -1587,79 +1574,20 @@ Every agent receives a **layered system prompt** composed from nine ordered laye
 2. **Office context** — office name and description (e.g. "You work at Acme Corp. We build AI-powered widgets"). Only present when an office has a display name.
 3. **Hierarchy** — manager, peers, and direct reports derived from `reports_to` fields. Only present when hierarchy data exists. See [Hierarchy](#hierarchy).
 4. **Bootstrap files** — optional workspace files (`SOUL.md`, `CONTEXT.md`, etc.) injected with provenance headers. See [Bootstrap Files](#bootstrap-files).
-5. **Memory** — reading, writing, and logging instructions. Only present when memory files exist in either scope. See [Memory System](#memory-system).
-6. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
-7. **Identity** — agent name, description, workspace path.
-8. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
-9. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
+5. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
+6. **Identity** — agent name, description, workspace path.
+7. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
+8. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
 
 **Prompt source:** use exactly one of `prompt_inline` (inline text) or `prompt_file` (path to `.md` file, resolved relative to the office directory). Specifying both is a validation error. The legacy `prompt` field is no longer supported — use `prompt_inline` or `prompt_file` instead.
 
-With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, hierarchy, bootstrap, memory, runtime, and skills are skipped).
+With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, hierarchy, bootstrap, runtime, and skills are skipped).
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn. An `.effective-prompt.md` snapshot is written to the agent directory on every spawn/reload for debugging.
 
 Custom instructions are **append-only** — they add your content after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
 
 > **Note:** `agent prompt show <agent>` displays the prompt text but excludes runtime-loaded skills. Use `prompt report <agent>` for the authoritative composed-block view with accurate character counts.
-
-## Memory System
-
-Agents have access to a two-scope memory system for persisting knowledge across sessions.
-
-**Scopes:**
-
-- **Office memory** — shared across all agents. Files live at `~/.agent-office/offices/<id>/MEMORY.md` and `~/.agent-office/offices/<id>/memory/*.md`. Searchable by all agents but not writable by them (managed by the office operator).
-- **Agent memory** — private to each agent's workspace. Files live at `~/.agent-office/offices/<id>/agents/<name>/workspace/MEMORY.md` and `workspace/memory/*.md`. Agents can read and write these using their standard file tools (write/edit).
-
-Memory is automatically enabled when `MEMORY.md` or `memory/*.md` files exist in either scope. The system prompt then includes reading, writing, and logging guidance.
-
-### `memory_search`
-
-Search memory files by keyword across scopes. Returns matching lines with file path and line number.
-
-```
-agent calls memory_search:
-  query: "database schema"
-  scope: "all"          # "agent" | "office" | "all" (default: "all")
-
--> Returns matching lines from both office and agent memory files
--> Agent-scope results ranked first
-```
-
-### `memory_get`
-
-Read a specific memory file by path.
-
-```
-agent calls memory_get:
-  path: "memory/debugging.md"
-  scope: "agent"        # "agent" | "office" (default: "agent")
-
--> Returns contents of the file
-```
-
-Both tools are **read-only** — they search and retrieve memory files but cannot modify them. Agents write to their own memory files using their standard file tools (write/edit), which are scoped to the agent's workspace.
-
-**Prompt-driven writing and logging:** The system prompt instructs agents to update `MEMORY.md` and `memory/<topic>.md` after completing tasks, and to append daily summaries to `logs/YYYY-MM-DD.md`. This is prompt-level guidance — agents follow it as part of their instructed behavior, not via tool enforcement.
-
-**Security guards:** Path traversal is blocked (both `..` components and symlink escape via `realpathSync`). Files larger than 256 KB are rejected. Binary files (null bytes detected) return an error. Only `MEMORY.md` and `memory/*.md` paths are allowed.
-
-### Citation Mode
-
-Configure how memory search/get results are annotated with their source scope:
-
-```yaml
-office:
-  memory:
-    citations: auto # on | off | auto (default: auto)
-```
-
-| Mode   | Behavior                                               |
-| ------ | ------------------------------------------------------ |
-| `on`   | Always prefix results with `[agent]` or `[office]` tag |
-| `off`  | Never add scope tags                                   |
-| `auto` | Add scope tags for office results only (default)       |
 
 ## Concepts
 
@@ -1699,8 +1627,6 @@ Each office gets an isolated directory, and each agent within it gets its own wo
     acme/
       office.yaml           # office + agent definitions
       .lock                 # per-office config lock
-      MEMORY.md             # office memory (shared, read-only to agents)
-      memory/               # office-level topic files
       cron/
         state.json          # cron job state
       tasks/
@@ -1715,8 +1641,8 @@ Each office gets an isolated directory, and each agent within it gets its own wo
       agents/
         designer/
           workspace/              # agent's cwd — all file tools scoped here
-            MEMORY.md             # agent memory (private, writable)
-            memory/               # detailed topic files
+            memory/
+              MEMORY.md           # agent memory (private, writable)
             logs/                 # daily activity logs (YYYY-MM-DD.md)
           sessions/               # JSONL session history (system-managed)
             user-dm.jsonl         # user↔agent DMs
@@ -1779,7 +1705,7 @@ A `.sources.json` file in each agent's skills directory maps installed skill fol
 
 ### Bootstrap Files
 
-Optional markdown files loaded from a per-agent source directory. If present, they are loaded alphabetically and injected into the system prompt between the office and memory layers with provenance headers.
+Optional markdown files loaded from a per-agent source directory. If present, they are loaded alphabetically and injected into the system prompt between the office and runtime layers with provenance headers.
 
 **Default source:** `<officeDir>/agents/<name>/bootstrap/`
 **Override:** set `bootstrap_dir` in the agent's YAML entry (resolved relative to the office directory).
@@ -2154,8 +2080,7 @@ src/
     handle.ts                 Agent lifecycle (init, prompt, steer, abort, destroy)
     handle-init.ts            initInProcessAgent / initSandboxAgent factory functions
     prompt.ts                 Convenience wrapper over prompt-manager
-    memory/
-      search.ts              Memory search/get utility (path guards, size limits)
+    workspace-scaffold.ts    Workspace directory scaffold (memory/, logs/)
     prompts/
       base-v1.md              Versioned base prompt (collaboration, tools, safety)
       base-v1.ts              TS companion (reads .md, exports PROMPT_VERSION)
@@ -2178,8 +2103,6 @@ src/
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
-      memory-search.ts        memory_search — host implementation
-      memory-get.ts           memory_get — host implementation
       task-create.ts          task_create — host implementation
       task-update.ts          task_update — host implementation
       task-list.ts            task_list — host implementation
@@ -2205,8 +2128,6 @@ src/
         list-agents.ts        list_agents — proxy implementation (HTTP)
         read-agent-file.ts    read_agent_file — proxy implementation (HTTP)
         authenticated-fetch.ts  authenticated_fetch — proxy implementation (HTTP)
-        memory-search.ts      memory_search — proxy implementation (HTTP)
-        memory-get.ts         memory_get — proxy implementation (HTTP)
         task-create.ts        task_create — proxy implementation (HTTP)
         task-update.ts        task_update — proxy implementation (HTTP)
         task-list.ts          task_list — proxy implementation (HTTP)
@@ -2394,8 +2315,7 @@ test/
   effective-prompt.test.ts   Effective prompt snapshot generation
   bootstrap.test.ts          Bootstrap file loading, truncation, prompt injection
   truncate.test.ts           Prompt truncation (head/tail split, per-block limits)
-  memory-search.test.ts      Memory search/get utility, path traversal, size guards
-  memory-tools.test.ts       Memory tool execution, citation modes
+  workspace-scaffold.test.ts Workspace scaffold (memory/, logs/ directory creation)
   office-cron.test.ts        Office-level cron lifecycle, targets, broadcast, state keys
   task-service.test.ts       Task creation, status transitions, dependencies, notifications
   task-store.test.ts         Task persistence, filtering

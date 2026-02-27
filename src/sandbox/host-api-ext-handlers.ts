@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import { loadSkills } from "@mariozechner/pi-coding-agent";
-import type { CitationMode, AgentPermissions } from "../types.js";
+import type { AgentPermissions } from "../types.js";
 import { redactText } from "../security/redact.js";
 import {
   validateFetchParams,
@@ -10,7 +10,6 @@ import {
   RESERVED_SECRET_NAMES,
   type FetchParams,
 } from "../agent/tools/fetch-helpers.js";
-import { searchMemory, getMemoryFile } from "../agent/memory/search.js";
 import {
   cronAddImpl,
   cronRemoveImpl,
@@ -138,85 +137,6 @@ export async function handleAuthenticatedFetch(
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: `Fetch failed: ${message}` }));
   }
-}
-
-export async function handleMemorySearch(
-  req: IncomingMessage,
-  res: ServerResponse,
-  agentName: string,
-  baseDir: string,
-  citationModes: Map<string, CitationMode>,
-): Promise<void> {
-  const body = await readBody(req);
-  if (!body) {
-    res.writeHead(413);
-    res.end();
-    return;
-  }
-
-  const { query, scope: rawScope } = JSON.parse(body);
-  if (!query) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Missing required field: query" }));
-    return;
-  }
-  const scope = ["agent", "office", "all"].includes(rawScope)
-    ? rawScope
-    : "all";
-
-  const matches = searchMemory({ query, scope, agentName, officeDir: baseDir });
-  const cm = citationModes.get(agentName) ?? "auto";
-  const formatted = matches
-    .map((m) => {
-      const cite = cm === "on" || (cm === "auto" && m.scope === "office");
-      const prefix = cite ? `[${m.scope}] ` : "";
-      return `${prefix}${m.file}:${m.line}: ${m.content}`;
-    })
-    .join("\n");
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ result: formatted || "No matches found." }));
-}
-
-export async function handleMemoryGet(
-  req: IncomingMessage,
-  res: ServerResponse,
-  agentName: string,
-  baseDir: string,
-  citationModes: Map<string, CitationMode>,
-): Promise<void> {
-  const body = await readBody(req);
-  if (!body) {
-    res.writeHead(413);
-    res.end();
-    return;
-  }
-
-  const { path: filePath, scope: rawScope } = JSON.parse(body);
-  if (!filePath) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Missing required field: path" }));
-    return;
-  }
-  const scope = ["agent", "office"].includes(rawScope) ? rawScope : "agent";
-
-  const result = getMemoryFile({
-    filePath,
-    scope,
-    agentName,
-    officeDir: baseDir,
-  });
-
-  if ("error" in result) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: result.error }));
-    return;
-  }
-
-  const cm = citationModes.get(agentName) ?? "auto";
-  const cite = cm === "on" || (cm === "auto" && result.scope === "office");
-  const header = cite ? `[${result.scope}] ${filePath}\n\n` : "";
-  res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ result: header + result.content }));
 }
 
 async function parseCronBody(

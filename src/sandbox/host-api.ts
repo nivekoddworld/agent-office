@@ -10,7 +10,6 @@ import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
 import { isToolDenied } from "../agent/tools/policy.js";
 import { createRedactor } from "../security/redact.js";
-import type { CitationMode } from "../types.js";
 import {
   handleSecrets,
   handleAgents,
@@ -22,8 +21,6 @@ import {
 } from "./host-api-handlers.js";
 import {
   handleAuthenticatedFetch,
-  handleMemorySearch,
-  handleMemoryGet,
   handleCronAdd,
   handleCronRemove,
   handleCronList,
@@ -64,7 +61,6 @@ export class HostApi {
   private seenMessages = new Map<string, number>();
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeats = new Map<string, number>();
-  private citationModes = new Map<string, CitationMode>();
   private eventListeners = new Map<string, (event: unknown) => void>();
   private agentPermissions = new Map<string, AgentPermissions>();
   private skillResolvers = new Map<string, () => Map<string, string>>();
@@ -133,13 +129,11 @@ export class HostApi {
     name: string,
     token: string,
     secrets: Record<string, string> = {},
-    citationMode: CitationMode = "auto",
     permissions: AgentPermissions = {},
   ): void {
     this.tokens.set(token, name);
     this.agentSecrets.set(token, secrets);
     this.redactors.set(token, createRedactor(secrets));
-    this.citationModes.set(name, citationMode);
     this.agentPermissions.set(name, permissions);
   }
 
@@ -149,7 +143,6 @@ export class HostApi {
     this.agentSecrets.delete(token);
     this.redactors.delete(token);
     if (name) {
-      this.citationModes.delete(name);
       this.agentPermissions.delete(name);
       this.skillResolvers.delete(name);
       this.agentToolCounts.delete(name);
@@ -306,22 +299,6 @@ export class HostApi {
           agentName,
           token,
           this.agentSecrets,
-        );
-      } else if (req.method === "POST" && path === "/api/memory-search") {
-        await handleMemorySearch(
-          req,
-          res,
-          agentName,
-          this.baseDir,
-          this.citationModes,
-        );
-      } else if (req.method === "POST" && path === "/api/memory-get") {
-        await handleMemoryGet(
-          req,
-          res,
-          agentName,
-          this.baseDir,
-          this.citationModes,
         );
       } else if (req.method === "POST" && path === "/api/cron-add") {
         if (this.checkToolPolicy(path, agentName, res))

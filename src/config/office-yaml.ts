@@ -11,7 +11,6 @@ import {
 import type {
   OfficeYaml,
   OfficeContext,
-  CitationMode,
   ChannelConfig,
   CollaborationPolicy,
   CollaborationSla,
@@ -158,9 +157,6 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       env: officeEnv,
       secrets: (office.secrets as Record<string, string>) ?? {},
       cron: office.cron as Record<string, OfficeCronYamlEntry> | undefined,
-      memory: office.memory as
-        | { citations?: "on" | "off" | "auto" }
-        | undefined,
       channels: office.channels as
         | Record<string, { members: string[]; description?: string }>
         | undefined,
@@ -222,13 +218,10 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
     }
   }
 
-  if (config.office.memory) {
-    const c = config.office.memory.citations;
-    if (c !== undefined && c !== "on" && c !== "off" && c !== "auto") {
-      errors.push(
-        `office.memory.citations must be "on", "off", or "auto" (got "${c}")`,
-      );
-    }
+  if ((config.office as any).memory) {
+    errors.push(
+      "office.memory is no longer supported — remove it from office.yaml",
+    );
   }
 
   if (config.office.collaborationPolicy !== undefined) {
@@ -322,7 +315,6 @@ export function buildOfficeContext(
     env: yaml.office.env ?? {},
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),
-    citationMode: (yaml.office.memory?.citations as CitationMode) ?? "auto",
     channels,
     policy: yaml.office.collaborationPolicy,
   };

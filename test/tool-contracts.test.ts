@@ -4,8 +4,6 @@ import {
   LIST_AGENTS,
   READ_AGENT_FILE,
   AUTHENTICATED_FETCH,
-  MEMORY_SEARCH,
-  MEMORY_GET,
   CRON_ADD,
   CRON_REMOVE,
   CRON_LIST,
@@ -18,8 +16,6 @@ import { createMessageAgentTool } from "../src/agent/tools/message-agent.js";
 import { createListAgentsTool } from "../src/agent/tools/list-agents.js";
 import { createReadAgentFileTool } from "../src/agent/tools/read-agent-file.js";
 import { createAuthenticatedFetchTool } from "../src/agent/tools/authenticated-fetch.js";
-import { createMemorySearchTool } from "../src/agent/tools/memory-search.js";
-import { createMemoryGetTool } from "../src/agent/tools/memory-get.js";
 import { createCronAddTool } from "../src/agent/tools/cron-add.js";
 import { createCronRemoveTool } from "../src/agent/tools/cron-remove.js";
 import { createCronListTool } from "../src/agent/tools/cron-list.js";
@@ -31,8 +27,6 @@ import { createMessageAgentProxy } from "../src/agent/tools/proxy/message-agent.
 import { createListAgentsProxy } from "../src/agent/tools/proxy/list-agents.js";
 import { createReadAgentFileProxy } from "../src/agent/tools/proxy/read-agent-file.js";
 import { createAuthenticatedFetchProxy } from "../src/agent/tools/proxy/authenticated-fetch.js";
-import { createMemorySearchProxy } from "../src/agent/tools/proxy/memory-search.js";
-import { createMemoryGetProxy } from "../src/agent/tools/proxy/memory-get.js";
 import { createCronAddProxy } from "../src/agent/tools/proxy/cron-add.js";
 import { createCronRemoveProxy } from "../src/agent/tools/proxy/cron-remove.js";
 import { createCronListProxy } from "../src/agent/tools/proxy/cron-list.js";
@@ -68,14 +62,6 @@ describe("Tool contracts — host and proxy tools share metadata", () => {
     {
       contract: AUTHENTICATED_FETCH,
       tool: createAuthenticatedFetchTool({ SECRET: "val" }),
-    },
-    {
-      contract: MEMORY_SEARCH,
-      tool: createMemorySearchTool("self", "/test/base", "auto"),
-    },
-    {
-      contract: MEMORY_GET,
-      tool: createMemoryGetTool("self", "/test/base", "auto"),
     },
     {
       contract: CRON_ADD,
@@ -136,8 +122,6 @@ describe("Tool contracts — host and proxy tools share metadata", () => {
       contract: AUTHENTICATED_FETCH,
       tool: createAuthenticatedFetchProxy(noopFetch),
     },
-    { contract: MEMORY_SEARCH, tool: createMemorySearchProxy(noopFetch) },
-    { contract: MEMORY_GET, tool: createMemoryGetProxy(noopFetch) },
     { contract: CRON_ADD, tool: createCronAddProxy(noopFetch) },
     { contract: CRON_REMOVE, tool: createCronRemoveProxy(noopFetch) },
     { contract: CRON_LIST, tool: createCronListProxy(noopFetch) },

@@ -23,6 +23,7 @@ import {
 } from "./sessions/session-writer.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
+import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
 import { CronService, type CronChannelFanout, type CronReportDm } from "./cron/cron-service.js";
@@ -327,6 +328,12 @@ export class Workspace {
     );
     config = { ...config, env: merged.env, secrets: merged.secrets };
 
+    // Ensure workspace scaffold (memory/ and logs/ dirs) before agent init
+    const workspaceDir =
+      config.cwd ??
+      join(this.office.dir, "agents", config.name, "workspace");
+    ensureWorkspaceScaffold(workspaceDir);
+
     const useSandbox =
       config.sandbox === "docker" ||
       (config.sandbox !== "none" && this.sandboxMode === "docker");
@@ -352,7 +359,6 @@ export class Workspace {
         config.name,
         sandboxToken,
         secrets,
-        this.office.citationMode,
         config.permissions,
       );
       provider = this.sandboxProvider;
@@ -376,7 +382,6 @@ export class Workspace {
       officeId: this.office.id,
       officeName: this.office.name,
       officeDescription: this.office.description,
-      citationMode: this.office.citationMode,
       cronService: this.cron,
       taskService: this.tasks,
       messageStore: this.messageStore ?? undefined,

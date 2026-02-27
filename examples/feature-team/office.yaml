@@ -15,8 +15,6 @@
 office:
   name: Feature Team
   description: "Task-driven development team with Coder and Reviewer"
-  memory:
-    citations: auto
 
 agents:
   task-manager:
