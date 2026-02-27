@@ -24,6 +24,7 @@ import { resolveEnvRefs } from "../config/env-substitution.js";
 import { composeSystemPrompt } from "../agent/prompts/prompt-manager.js";
 import { resolveCustomPrompt } from "../agent/prompts/prompt-loader.js";
 import { buildHierarchyMap, formatOrgChart } from "../config/hierarchy.js";
+import { readInstructionFiles } from "../agent/workspace-scaffold.js";
 
 export async function agentEnvSetCommand(
   officeId: string,
@@ -214,6 +215,21 @@ export async function agentPromptAppendCommand(
   }
   await appendAgentPrompt(officeId, agentName, text);
   console.log(`[agent] Appended to prompt for "${agentName}"`);
+}
+
+export async function agentImportInstructionsCommand(
+  officeId: string,
+  agentName: string,
+  workspaceDir: string,
+): Promise<void> {
+  const text = readInstructionFiles(workspaceDir);
+  if (!text) {
+    throw new Error(
+      "No non-empty instruction files found in workspace/instructions/",
+    );
+  }
+  await appendAgentPrompt(officeId, agentName, text);
+  console.log(`[agent] Imported instructions into prompt for "${agentName}"`);
 }
 
 export async function agentPromptClearCommand(

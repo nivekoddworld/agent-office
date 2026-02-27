@@ -19,6 +19,7 @@ import {
   IconBlockquote,
   IconDeviceFloppy,
   IconEraser,
+  IconFileImport,
   IconRefresh,
   IconEye,
   IconEdit,
@@ -77,7 +78,7 @@ function insertLinePrefix(
 }
 
 export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
-  const { data: agent, isLoading } = useAgentDetail(agentName);
+  const { data: agent, isLoading, refetch } = useAgentDetail(agentName);
   const setPrompt = useSetPrompt();
   const officeApply = useOfficeApply();
   const [promptText, setPromptText] = useState("");
@@ -185,6 +186,31 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
         });
       },
     });
+  };
+
+  const handleImportInstructions = () => {
+    setPrompt.mutate(
+      { agentName, action: "import-instructions" },
+      {
+        onSuccess: async () => {
+          const { data } = await refetch();
+          if (data) setPromptText(data.customPrompt ?? "");
+          notifications.show({
+            title: "Instructions imported",
+            message:
+              "Instruction files appended to prompt. Click 'Apply to Runtime' to update.",
+            color: "blue",
+          });
+        },
+        onError: (err) => {
+          notifications.show({
+            title: "Import failed",
+            message: err.message,
+            color: "red",
+          });
+        },
+      },
+    );
   };
 
   const showEditor = viewMode === "edit" || viewMode === "split";
@@ -421,6 +447,16 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
               disabled={!promptText.trim()}
             >
               Save to Config
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              color="teal"
+              leftSection={<IconFileImport size={14} />}
+              onClick={handleImportInstructions}
+              loading={setPrompt.isPending}
+            >
+              Import Instructions
             </Button>
             <Button
               size="xs"

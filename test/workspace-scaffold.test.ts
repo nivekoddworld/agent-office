@@ -8,7 +8,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { ensureWorkspaceScaffold } from "../src/agent/workspace-scaffold.js";
+import {
+  ensureWorkspaceScaffold,
+  readInstructionFiles,
+} from "../src/agent/workspace-scaffold.js";
 
 const TEST_DIR = join(tmpdir(), "scaffold-test-" + process.pid);
 
@@ -29,7 +32,9 @@ describe("ensureWorkspaceScaffold", () => {
     expect(existsSync(join(TEST_DIR, "logs", `${today}.md`))).toBe(true);
 
     expect(existsSync(join(TEST_DIR, "instructions", "CONTEXT.md"))).toBe(true);
-    expect(existsSync(join(TEST_DIR, "instructions", "IDENTITY.md"))).toBe(true);
+    expect(existsSync(join(TEST_DIR, "instructions", "IDENTITY.md"))).toBe(
+      true,
+    );
     expect(existsSync(join(TEST_DIR, "instructions", "SOUL.md"))).toBe(true);
   });
 
@@ -44,9 +49,9 @@ describe("ensureWorkspaceScaffold", () => {
     expect(readFileSync(join(TEST_DIR, "memory", "MEMORY.md"), "utf-8")).toBe(
       "existing content",
     );
-    expect(readFileSync(join(TEST_DIR, "instructions", "SOUL.md"), "utf-8")).toBe(
-      "my soul",
-    );
+    expect(
+      readFileSync(join(TEST_DIR, "instructions", "SOUL.md"), "utf-8"),
+    ).toBe("my soul");
   });
 
   it("is idempotent (safe to call twice)", () => {
@@ -57,7 +62,66 @@ describe("ensureWorkspaceScaffold", () => {
     const today = new Date().toISOString().slice(0, 10);
     expect(existsSync(join(TEST_DIR, "logs", `${today}.md`))).toBe(true);
     expect(existsSync(join(TEST_DIR, "instructions", "CONTEXT.md"))).toBe(true);
-    expect(existsSync(join(TEST_DIR, "instructions", "IDENTITY.md"))).toBe(true);
+    expect(existsSync(join(TEST_DIR, "instructions", "IDENTITY.md"))).toBe(
+      true,
+    );
     expect(existsSync(join(TEST_DIR, "instructions", "SOUL.md"))).toBe(true);
+  });
+});
+
+describe("readInstructionFiles", () => {
+  it("returns undefined when instructions dir does not exist", () => {
+    expect(readInstructionFiles(TEST_DIR)).toBeUndefined();
+  });
+
+  it("returns undefined when all files are empty", () => {
+    ensureWorkspaceScaffold(TEST_DIR);
+    expect(readInstructionFiles(TEST_DIR)).toBeUndefined();
+  });
+
+  it("returns formatted text with headings for non-empty files", () => {
+    ensureWorkspaceScaffold(TEST_DIR);
+    writeFileSync(join(TEST_DIR, "instructions", "CONTEXT.md"), "project ctx");
+    writeFileSync(join(TEST_DIR, "instructions", "SOUL.md"), "be kind");
+
+    const result = readInstructionFiles(TEST_DIR);
+    expect(result).toBe("## CONTEXT\n\nproject ctx\n\n## SOUL\n\nbe kind");
+  });
+
+  it("skips empty files and includes only non-empty ones", () => {
+    ensureWorkspaceScaffold(TEST_DIR);
+    writeFileSync(join(TEST_DIR, "instructions", "IDENTITY.md"), "i am bot");
+
+    const result = readInstructionFiles(TEST_DIR);
+    expect(result).toBe("## IDENTITY\n\ni am bot");
+  });
+
+  it("joins sections with exactly one blank line separator", () => {
+    ensureWorkspaceScaffold(TEST_DIR);
+    writeFileSync(join(TEST_DIR, "instructions", "CONTEXT.md"), "a");
+    writeFileSync(join(TEST_DIR, "instructions", "IDENTITY.md"), "b");
+    writeFileSync(join(TEST_DIR, "instructions", "SOUL.md"), "c");
+
+    const result = readInstructionFiles(TEST_DIR)!;
+    const parts = result.split("\n\n");
+    expect(parts).toEqual([
+      "## CONTEXT",
+      "a",
+      "## IDENTITY",
+      "b",
+      "## SOUL",
+      "c",
+    ]);
+  });
+
+  it("throws when combined payload exceeds size limit", () => {
+    ensureWorkspaceScaffold(TEST_DIR);
+    // 50_001 chars of content + heading overhead guarantees exceeding 50_000
+    const large = "x".repeat(50_001);
+    writeFileSync(join(TEST_DIR, "instructions", "CONTEXT.md"), large);
+
+    expect(() => readInstructionFiles(TEST_DIR)).toThrow(
+      /exceeding 50000 char limit/,
+    );
   });
 });

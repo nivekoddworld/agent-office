@@ -120,10 +120,9 @@ export function useCronRemove() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ jobName }: { jobName: string }) =>
-      apiFetch<{ ok: boolean }>(
-        `/api/cron/${encodeURIComponent(jobName)}`,
-        { method: "DELETE" },
-      ),
+      apiFetch<{ ok: boolean }>(`/api/cron/${encodeURIComponent(jobName)}`, {
+        method: "DELETE",
+      }),
     onSuccess: () => invalidateState(queryClient),
   });
 }
@@ -172,7 +171,7 @@ export function useSetPrompt() {
       text,
     }: {
       agentName: string;
-      action: "set" | "append" | "clear";
+      action: "set" | "append" | "clear" | "import-instructions";
       text?: string;
     }) =>
       apiFetch<{ ok: boolean }>(
@@ -293,9 +292,7 @@ export function useHeartbeatSet() {
           body: JSON.stringify({
             interval_ms: args.intervalMs,
             ...(args.prompt ? { prompt: args.prompt } : {}),
-            ...(args.activeHours
-              ? { active_hours: args.activeHours }
-              : {}),
+            ...(args.activeHours ? { active_hours: args.activeHours } : {}),
           }),
         },
       ),

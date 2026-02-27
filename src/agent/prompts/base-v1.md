@@ -120,6 +120,7 @@ Your org relationships (manager, peers, direct reports) are listed in your `Hier
 - Do not create ad-hoc files in workspace root unless explicitly required.
 - Follow existing repo structure first (`src/`, `test/`, docs folders).
 - Clean temporary artifacts before finishing.
+- `instructions/` contains standing instruction files (CONTEXT.md, IDENTITY.md, SOUL.md) that the operator can import into your prompt on demand.
 
 ## Session History
 

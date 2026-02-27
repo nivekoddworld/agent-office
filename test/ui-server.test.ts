@@ -17,6 +17,10 @@ const {
   mockListInstalledAgentSkills,
   mockRemoveProjectSkillForAgent,
   mockSkillRemoveCommand,
+  mockAgentImportInstructionsCommand,
+  mockAgentPromptSetCommand,
+  mockAgentPromptAppendCommand,
+  mockAgentPromptClearCommand,
 } = vi.hoisted(() => ({
   mockSearchRegistrySkills: vi.fn(async () => []),
   mockInstallRegistrySkillForAgent: vi.fn(async () => ({
@@ -30,7 +34,21 @@ const {
     }),
   ),
   mockSkillRemoveCommand: vi.fn(async () => undefined),
+  mockAgentImportInstructionsCommand: vi.fn(async () => undefined),
+  mockAgentPromptSetCommand: vi.fn(async () => undefined),
+  mockAgentPromptAppendCommand: vi.fn(async () => undefined),
+  mockAgentPromptClearCommand: vi.fn(async () => undefined),
 }));
+vi.mock("../src/commands/agent-config.js", async (importOriginal) => {
+  const orig = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...orig,
+    agentImportInstructionsCommand: mockAgentImportInstructionsCommand,
+    agentPromptSetCommand: mockAgentPromptSetCommand,
+    agentPromptAppendCommand: mockAgentPromptAppendCommand,
+    agentPromptClearCommand: mockAgentPromptClearCommand,
+  };
+});
 vi.mock("../src/skills/registry.js", () => ({
   searchRegistrySkills: mockSearchRegistrySkills,
   installRegistrySkillForAgent: mockInstallRegistrySkillForAgent,
@@ -849,5 +867,75 @@ describe("UI server", () => {
       ? { kind: "conversation" as const, name: defaultChannel }
       : { kind: "system" as const, name: "tasks" as const };
     expect(initial).toEqual({ kind: "system", name: "tasks" });
+  });
+
+  // --- PATCH /api/agents/:name/prompt — import-instructions ---
+
+  it("import-instructions returns 200 when command succeeds", async () => {
+    mockWs.getAgent.mockReturnValue({ cwd: "/tmp/ws" });
+    mockAgentImportInstructionsCommand.mockResolvedValue(undefined);
+
+    const res = await fetch(`${origin}/api/agents/alice/prompt`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ action: "import-instructions" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true });
+    expect(mockAgentImportInstructionsCommand).toHaveBeenCalledWith(
+      "test-office",
+      "alice",
+      "/tmp/ws",
+    );
+  });
+
+  it("import-instructions returns 404 when agent not found", async () => {
+    mockWs.getAgent.mockReturnValue(undefined);
+
+    const res = await fetch(`${origin}/api/agents/unknown/prompt`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ action: "import-instructions" }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body).toEqual({ error: "agent_not_found" });
+  });
+
+  it("import-instructions returns 400 when no non-empty files", async () => {
+    mockWs.getAgent.mockReturnValue({ cwd: "/tmp/ws" });
+    mockAgentImportInstructionsCommand.mockRejectedValue(
+      new Error(
+        "No non-empty instruction files found in workspace/instructions/",
+      ),
+    );
+
+    const res = await fetch(`${origin}/api/agents/alice/prompt`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ action: "import-instructions" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/No non-empty instruction files/);
+  });
+
+  it("import-instructions returns 400 when agent uses prompt_file", async () => {
+    mockWs.getAgent.mockReturnValue({ cwd: "/tmp/ws" });
+    mockAgentImportInstructionsCommand.mockRejectedValue(
+      new Error('Agent "alice" uses prompt_file — edit the file directly.'),
+    );
+
+    const res = await fetch(`${origin}/api/agents/alice/prompt`, {
+      method: "PATCH",
+      headers: authHeaders(),
+      body: JSON.stringify({ action: "import-instructions" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/prompt_file/);
   });
 });

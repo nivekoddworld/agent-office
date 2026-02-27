@@ -6,6 +6,7 @@ import {
   agentPromptSetCommand,
   agentPromptAppendCommand,
   agentPromptClearCommand,
+  agentImportInstructionsCommand,
   agentPermissionSetToolsCommand,
   agentPermissionSetOfficeCronCommand,
   agentPermissionClearOfficeCronCommand,
@@ -41,12 +42,11 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         } catch {
           return json(res, 400, { error: "invalid_body" });
         }
-        if (
-          !parsed.action ||
-          !["set", "append", "clear"].includes(parsed.action)
-        ) {
+        const validActions = ["set", "append", "clear", "import-instructions"];
+        if (!parsed.action || !validActions.includes(parsed.action)) {
           return json(res, 400, {
-            error: "action must be 'set', 'append', or 'clear'",
+            error:
+              "action must be 'set', 'append', 'clear', or 'import-instructions'",
           });
         }
         if (
@@ -58,7 +58,15 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           });
         }
         try {
-          if (parsed.action === "set") {
+          if (parsed.action === "import-instructions") {
+            const handle = workspace.getAgent(agentName);
+            if (!handle) return json(res, 404, { error: "agent_not_found" });
+            await agentImportInstructionsCommand(
+              officeId,
+              agentName,
+              handle.cwd,
+            );
+          } else if (parsed.action === "set") {
             await agentPromptSetCommand(officeId, agentName, parsed.text!);
           } else if (parsed.action === "append") {
             await agentPromptAppendCommand(officeId, agentName, parsed.text!);
@@ -102,10 +110,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
                 true,
               );
             } else {
-              await agentPermissionClearOfficeCronCommand(
-                officeId,
-                agentName,
-              );
+              await agentPermissionClearOfficeCronCommand(officeId, agentName);
             }
           }
           if (parsed.tools) {
@@ -113,8 +118,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
               await agentPermissionClearToolsCommand(officeId, agentName);
             } else if (
               parsed.tools.mode &&
-              (parsed.tools.mode === "allow" ||
-                parsed.tools.mode === "deny") &&
+              (parsed.tools.mode === "allow" || parsed.tools.mode === "deny") &&
               parsed.tools.list?.length
             ) {
               await agentPermissionSetToolsCommand(
@@ -155,16 +159,12 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         } catch {
           return json(res, 400, { error: "invalid_body" });
         }
-        if (
-          !parsed.action ||
-          !["set", "unset"].includes(parsed.action)
-        ) {
+        if (!parsed.action || !["set", "unset"].includes(parsed.action)) {
           return json(res, 400, {
             error: "action must be 'set' or 'unset'",
           });
         }
-        if (!parsed.key)
-          return json(res, 400, { error: "key is required" });
+        if (!parsed.key) return json(res, 400, { error: "key is required" });
         if (parsed.action === "set" && parsed.value === undefined) {
           return json(res, 400, { error: "value is required for set" });
         }
@@ -208,16 +208,12 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         } catch {
           return json(res, 400, { error: "invalid_body" });
         }
-        if (
-          !parsed.action ||
-          !["set", "unset"].includes(parsed.action)
-        ) {
+        if (!parsed.action || !["set", "unset"].includes(parsed.action)) {
           return json(res, 400, {
             error: "action must be 'set' or 'unset'",
           });
         }
-        if (!parsed.key)
-          return json(res, 400, { error: "key is required" });
+        if (!parsed.key) return json(res, 400, { error: "key is required" });
         if (parsed.action === "set" && !parsed.hostEnvName) {
           return json(res, 400, {
             error: "hostEnvName is required for set",
@@ -232,11 +228,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
               parsed.hostEnvName!,
             );
           } else {
-            await agentSecretRefUnsetCommand(
-              officeId,
-              agentName,
-              parsed.key,
-            );
+            await agentSecretRefUnsetCommand(officeId, agentName, parsed.key);
           }
           broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true });
@@ -268,10 +260,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             error: "manager field is required (string or null)",
           });
         }
-        if (
-          parsed.manager !== null &&
-          typeof parsed.manager !== "string"
-        ) {
+        if (parsed.manager !== null && typeof parsed.manager !== "string") {
           return json(res, 400, {
             error: "manager must be a string or null",
           });
