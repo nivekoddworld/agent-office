@@ -1784,7 +1784,7 @@ Optional markdown files loaded from a per-agent source directory. If present, th
 **Default source:** `<officeDir>/agents/<name>/bootstrap/`
 **Override:** set `bootstrap_dir` in the agent's YAML entry (resolved relative to the office directory).
 
-**Supported files:** `CONTEXT.md`, `HEARTBEAT.md`, `IDENTITY.md`, `SOUL.md`, `TOOLS.md`, `USER.md`
+**Supported files:** `CONTEXT.md`, `IDENTITY.md`, `SOUL.md`
 
 ```bash
 # Create a personality file for an agent

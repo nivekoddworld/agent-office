@@ -24,14 +24,9 @@ describe("loadBootstrapFiles", () => {
   it("loads existing files in deterministic alphabetical order", () => {
     writeFileSync(join(TEST_DIR, "SOUL.md"), "Soul content");
     writeFileSync(join(TEST_DIR, "CONTEXT.md"), "Context content");
-    writeFileSync(join(TEST_DIR, "USER.md"), "User content");
 
     const files = loadBootstrapFiles(TEST_DIR);
-    expect(files.map((f) => f.name)).toEqual([
-      "CONTEXT.md",
-      "SOUL.md",
-      "USER.md",
-    ]);
+    expect(files.map((f) => f.name)).toEqual(["CONTEXT.md", "SOUL.md"]);
   });
 
   it("skips missing files silently", () => {
@@ -87,13 +82,13 @@ describe("formatBootstrapBlock", () => {
   it("includes provenance headers", () => {
     const files = [
       { name: "SOUL.md", content: "Soul content" },
-      { name: "USER.md", content: "User content" },
+      { name: "IDENTITY.md", content: "Identity content" },
     ];
     const block = formatBootstrapBlock(files);
     expect(block).toContain("## [bootstrap: SOUL.md]");
-    expect(block).toContain("## [bootstrap: USER.md]");
+    expect(block).toContain("## [bootstrap: IDENTITY.md]");
     expect(block).toContain("Soul content");
-    expect(block).toContain("User content");
+    expect(block).toContain("Identity content");
   });
 });
 

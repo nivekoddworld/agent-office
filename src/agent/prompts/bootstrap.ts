@@ -1,14 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const BOOTSTRAP_FILES = [
-  "CONTEXT.md",
-  "HEARTBEAT.md",
-  "IDENTITY.md",
-  "SOUL.md",
-  "TOOLS.md",
-  "USER.md",
-];
+export const BOOTSTRAP_FILES = ["CONTEXT.md", "IDENTITY.md", "SOUL.md"];
 
 /** Per-file read-time guard (128 KiB). */
 export const MAX_BOOTSTRAP_FILE = 128 * 1024;
