@@ -134,6 +134,7 @@ export interface HeartbeatConfig {
 }
 
 export interface AgentDetail extends AgentInfo {
+  modelId: string;
   sandbox: string | null;
   thinkingLevel: string | null;
   permissions: {

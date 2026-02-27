@@ -44,7 +44,7 @@ export function useHireAgent() {
       thinking?: string;
       desc?: string;
     }) =>
-      apiFetch<{ ok: boolean; name: string; cwd: string | null }>(
+      apiFetch<{ ok: boolean; name: string; cwd: string | null; warning?: string }>(
         "/api/agents",
         {
           method: "POST",
@@ -307,6 +307,27 @@ export function useHeartbeatClear() {
       apiFetch<{ ok: boolean }>(
         `/api/agents/${encodeURIComponent(agentName)}/heartbeat`,
         { method: "DELETE" },
+      ),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
+export function useSetModel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      agentName,
+      model,
+    }: {
+      agentName: string;
+      model: string;
+    }) =>
+      apiFetch<{ ok: boolean; warning?: string }>(
+        `/api/agents/${encodeURIComponent(agentName)}/model`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ model }),
+        },
       ),
     onSuccess: () => invalidateState(queryClient),
   });

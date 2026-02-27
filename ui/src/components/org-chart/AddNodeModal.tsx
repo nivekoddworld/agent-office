@@ -21,6 +21,7 @@ import type {
 import { useHireAgent, useSetManager } from "../../api/use-api-mutations.js";
 import { useModels } from "../../api/use-models.js";
 import type { ModelInfo } from "../../api/types.js";
+import { notifications } from "@mantine/notifications";
 
 const FALLBACK_MODELS: ComboboxItemGroup[] = [
   {
@@ -178,9 +179,17 @@ export function AddNodeModal({
         desc: description.trim() || undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (data) => {
           if (reportsTo) {
             setManager.mutate({ agentName: name.trim(), manager: reportsTo });
+          }
+          if (data.warning) {
+            notifications.show({
+              title: "API Key Required",
+              message: data.warning,
+              color: "yellow",
+              autoClose: 8000,
+            });
           }
           reset();
           onClose();

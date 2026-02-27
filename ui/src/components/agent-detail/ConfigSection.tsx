@@ -1,13 +1,129 @@
-import { Table, Text } from "@mantine/core";
-import type { AgentDetail } from "../../api/types.js";
+import { useMemo } from "react";
+import {
+  Table,
+  Text,
+  Select,
+  Group,
+  Badge,
+  Loader,
+} from "@mantine/core";
+import type {
+  ComboboxItem,
+  ComboboxData,
+  ComboboxItemGroup,
+  ComboboxLikeRenderOptionInput,
+} from "@mantine/core";
+import type { AgentDetail, ModelInfo } from "../../api/types.js";
+import { useModels } from "../../api/use-models.js";
+import { useSetModel } from "../../api/use-api-mutations.js";
+import { notifications } from "@mantine/notifications";
 
 interface ConfigSectionProps {
   agent: AgentDetail;
 }
 
+const FALLBACK_MODELS: ComboboxItemGroup[] = [
+  {
+    group: "anthropic",
+    items: [
+      { value: "anthropic:claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
+      { value: "anthropic:claude-haiku-3-20240307", label: "Claude Haiku 3" },
+    ],
+  },
+  {
+    group: "openai",
+    items: [
+      { value: "openai:gpt-4o", label: "GPT-4o" },
+      { value: "openai:gpt-4o-mini", label: "GPT-4o Mini" },
+    ],
+  },
+];
+
+function formatContextWindow(tokens: number): string {
+  return `${Math.round(tokens / 1000)}k`;
+}
+
+function buildModelData(models: ModelInfo[]): {
+  data: ComboboxData;
+  lookup: Map<string, ModelInfo>;
+} {
+  const lookup = new Map<string, ModelInfo>();
+  const byProvider = new Map<string, ComboboxItem[]>();
+
+  for (const m of models) {
+    lookup.set(m.id, m);
+    const items = byProvider.get(m.provider) ?? [];
+    items.push({ value: m.id, label: m.name });
+    byProvider.set(m.provider, items);
+  }
+
+  const groups: ComboboxItemGroup[] = [];
+  for (const [provider, items] of byProvider) {
+    groups.push({ group: provider, items });
+  }
+
+  return { data: groups as ComboboxData, lookup };
+}
+
 export function ConfigSection({ agent }: ConfigSectionProps) {
+  const { data: modelsResp, isLoading: modelsLoading } = useModels();
+  const setModel = useSetModel();
+
+  const { data: selectData, lookup } = useMemo(() => {
+    if (!modelsResp?.models.length) {
+      return {
+        data: FALLBACK_MODELS as ComboboxData,
+        lookup: new Map<string, ModelInfo>(),
+      };
+    }
+    return buildModelData(modelsResp.models);
+  }, [modelsResp]);
+
+  const renderModelOption = ({
+    option,
+  }: ComboboxLikeRenderOptionInput<ComboboxItem>) => {
+    const info = lookup.get(option.value);
+    if (!info) return <Text size="xs">{option.label}</Text>;
+    return (
+      <Group gap="xs" wrap="nowrap">
+        <Text size="xs" truncate style={{ flex: 1 }}>
+          {option.label}
+        </Text>
+        {info.reasoning && (
+          <Badge size="xs" variant="light" color="violet">
+            reasoning
+          </Badge>
+        )}
+        <Text size="xs" c="dimmed">
+          {formatContextWindow(info.contextWindow)}
+        </Text>
+        <Text size="xs" c="dimmed">
+          ${info.cost.input}/${info.cost.output}
+        </Text>
+      </Group>
+    );
+  };
+
+  const handleModelChange = (value: string | null) => {
+    if (!value || value === agent.modelId) return;
+    setModel.mutate(
+      { agentName: agent.name, model: value },
+      {
+        onSuccess: (data) => {
+          if (data.warning) {
+            notifications.show({
+              title: "API Key Required",
+              message: data.warning,
+              color: "yellow",
+              autoClose: 8000,
+            });
+          }
+        },
+      },
+    );
+  };
+
   const rows: [string, string][] = [
-    ["Model", agent.model],
     ["Status", agent.status],
     ["Priority", String(agent.priority)],
     ["Turns", String(agent.turns)],
@@ -20,6 +136,34 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
   return (
     <Table withRowBorders={false}>
       <Table.Tbody>
+        <Table.Tr>
+          <Table.Td w={120}>
+            <Text size="xs" c="dimmed">
+              Model
+            </Text>
+          </Table.Td>
+          <Table.Td>
+            {modelsLoading ? (
+              <Loader size="xs" />
+            ) : (
+              <Select
+                size="xs"
+                data={selectData}
+                value={agent.modelId}
+                onChange={handleModelChange}
+                searchable
+                allowDeselect={false}
+                renderOption={renderModelOption}
+                maxDropdownHeight={300}
+                limit={50}
+                disabled={setModel.isPending}
+                styles={{
+                  input: { minHeight: 28, height: 28 },
+                }}
+              />
+            )}
+          </Table.Td>
+        </Table.Tr>
         {rows.map(([label, value]) => (
           <Table.Tr key={label}>
             <Table.Td w={120}>

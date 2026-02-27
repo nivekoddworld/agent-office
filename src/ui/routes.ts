@@ -170,6 +170,7 @@ export function getAgentDetail(handle: AgentHandle): AgentDetail {
 
   return {
     ...info,
+    modelId: `${cfg.model.provider}:${cfg.model.id}`,
     sandbox: cfg.sandbox ?? null,
     thinkingLevel: cfg.thinkingLevel ?? null,
     permissions: cfg.permissions ?? {},

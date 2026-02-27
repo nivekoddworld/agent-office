@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { type AgentEvent, type Agent } from "@mariozechner/pi-agent-core";
+import type { Model } from "@mariozechner/pi-ai";
 import {
   loadSkills,
   formatSkillsForPrompt,
@@ -200,6 +201,12 @@ export class AgentHandle {
   /** Live-update heartbeat config without restarting the agent. */
   updateHeartbeat(hb: HeartbeatConfig | undefined): void {
     (this.config as { heartbeat?: HeartbeatConfig }).heartbeat = hb;
+  }
+
+  /** Live-update model without restarting the agent. */
+  updateModel(model: Model<any>): void {
+    (this.config as { model: Model<any> }).model = model;
+    this.agent?.setModel(model);
   }
 
   private get agentDir(): string {

@@ -4,6 +4,7 @@ import { json, readBody, requireMutation } from "../http-helpers.js";
 import { getBootstrapState, getAgentDetail } from "../routes.js";
 import { hireCommand, type HireArgs } from "../../commands/hire.js";
 import { fireCommand } from "../../commands/fire.js";
+import { ensureProviderKeyInDotEnv } from "./agent-config.handler.js";
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
   const { workspace, officeId, getPort, broadcast } = ctx;
@@ -104,10 +105,23 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           await hireCommand(workspace, hireArgs);
           const handle = workspace.getAgent(parsed.name);
           broadcast("state_changed", getBootstrapState(workspace, officeId));
+
+          let warning: string | undefined;
+          if (!parsed.api_key_ref) {
+            const modelSpec = parsed.model ?? "anthropic:claude-sonnet-4-20250514";
+            const provider = modelSpec.split(":")[0];
+            if (provider) {
+              const missingVar = ensureProviderKeyInDotEnv(provider);
+              if (missingVar) {
+                warning = `${missingVar} not found. Added to .env — fill in the value and restart.`;
+              }
+            }
+          }
           return json(res, 201, {
             ok: true,
             name: parsed.name,
             cwd: handle?.cwd ?? null,
+            warning,
           });
         } catch (err) {
           return json(res, 400, {

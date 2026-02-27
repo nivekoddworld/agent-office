@@ -565,3 +565,7 @@ export {
   setAgentHeartbeat,
   clearAgentHeartbeat,
 } from "./office-yaml-mutations.js";
+
+// --- Re-export model mutations from dedicated module ---
+
+export { setAgentModel } from "./office-yaml-mutations.js";

@@ -20,8 +20,45 @@ import {
 import {
   setAgentHeartbeat,
   clearAgentHeartbeat,
+  setAgentModel,
   loadOfficeYaml,
 } from "../../config/office-yaml.js";
+import { getModel, getEnvApiKey } from "@mariozechner/pi-ai";
+import { existsSync, readFileSync, appendFileSync } from "node:fs";
+import { join } from "node:path";
+
+const PROVIDER_ENV_VAR: Record<string, string> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+  google: "GEMINI_API_KEY",
+  groq: "GROQ_API_KEY",
+  cerebras: "CEREBRAS_API_KEY",
+  xai: "XAI_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+  "vercel-ai-gateway": "AI_GATEWAY_API_KEY",
+  zai: "ZAI_API_KEY",
+  mistral: "MISTRAL_API_KEY",
+  minimax: "MINIMAX_API_KEY",
+  "minimax-cn": "MINIMAX_CN_API_KEY",
+  huggingface: "HF_TOKEN",
+  opencode: "OPENCODE_API_KEY",
+  "kimi-coding": "KIMI_API_KEY",
+  "azure-openai-responses": "AZURE_OPENAI_API_KEY",
+};
+
+export function ensureProviderKeyInDotEnv(provider: string): string | undefined {
+  const envVar = PROVIDER_ENV_VAR[provider];
+  if (!envVar) return undefined;
+  if (getEnvApiKey(provider)) return undefined;
+
+  const dotenvPath = join(process.cwd(), ".env");
+  if (existsSync(dotenvPath)) {
+    const content = readFileSync(dotenvPath, "utf-8");
+    if (content.includes(envVar)) return envVar;
+  }
+  appendFileSync(dotenvPath, `\n# ${provider}\n${envVar}=\n`, "utf-8");
+  return envVar;
+}
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
   const { workspace, officeId, getPort, broadcast } = ctx;
@@ -273,6 +310,56 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           );
           broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true });
+        } catch (err) {
+          return json(res, 400, {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+    },
+    // PATCH /api/agents/:name/model
+    {
+      method: "PATCH",
+      pattern: /^\/api\/agents\/([^/]+)\/model$/,
+      paramNames: ["name"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const agentName = params.name!;
+        const body = await readBody(req);
+        let parsed: { model?: string };
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        if (!parsed.model || typeof parsed.model !== "string") {
+          return json(res, 400, { error: "model is required (provider:model-id)" });
+        }
+        const parts = parsed.model.split(":");
+        if (parts.length !== 2 || !parts[0] || !parts[1]) {
+          return json(res, 400, {
+            error: 'Invalid model format — must be "provider:model-id"',
+          });
+        }
+        const handle = workspace.getAgent(agentName);
+        if (!handle) return json(res, 404, { error: "agent_not_found" });
+        try {
+          const provider = parts[0]!;
+          const model = getModel(provider as any, parts[1] as any);
+          await setAgentModel(officeId, agentName, parsed.model);
+          handle.updateModel(model);
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
+
+          const hasCustomKey = !!handle.config.apiKeyRef;
+          let warning: string | undefined;
+          if (!hasCustomKey) {
+            const missingVar = ensureProviderKeyInDotEnv(provider);
+            if (missingVar) {
+              warning = `${missingVar} not found. Added to .env — fill in the value and restart.`;
+            }
+          }
+          return json(res, 200, { ok: true, warning });
         } catch (err) {
           return json(res, 400, {
             ok: false,

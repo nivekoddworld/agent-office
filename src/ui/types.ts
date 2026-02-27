@@ -37,6 +37,7 @@ export interface AgentDetail {
   status: string;
   priority: number;
   model: string;
+  modelId: string;
   description: string;
   queueDepth: number;
   turns: number;

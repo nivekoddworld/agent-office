@@ -501,3 +501,19 @@ export async function clearAgentHeartbeat(
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
+
+// --- Model mutations ---
+
+export async function setAgentModel(
+  officeId: string,
+  agentName: string,
+  modelSpec: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    doc.setIn(["agents", agentName, "model"], modelSpec);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
