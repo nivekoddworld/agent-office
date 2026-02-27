@@ -569,4 +569,9 @@ export {
 
 // --- Re-export model mutations from dedicated module ---
 
-export { setAgentModel } from "./office-yaml-mutations.js";
+export {
+  setAgentModel,
+  setAgentDescription,
+  setAgentPriority,
+  setAgentThinking,
+} from "./office-yaml-mutations.js";

@@ -378,3 +378,9 @@ export function useSaveInstructionFile() {
       ),
   });
 }
+
+export {
+  useSetDescription,
+  useSetPriority,
+  useSetThinking,
+} from "./use-agent-property-mutations.js";

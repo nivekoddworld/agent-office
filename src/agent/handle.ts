@@ -1,19 +1,24 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { type AgentEvent, type Agent } from "@mariozechner/pi-agent-core";
+import {
+  type AgentEvent,
+  type Agent,
+  type ThinkingLevel,
+} from "@mariozechner/pi-agent-core";
 import type { Model } from "@mariozechner/pi-ai";
 import {
   loadSkills,
   formatSkillsForPrompt,
 } from "@mariozechner/pi-coding-agent";
 import type { MessageBus } from "../transport/message-bus.js";
-import type {
-  AgentConfig,
-  AgentInfo,
-  AgentStatus,
-  ChannelConfig,
-  HeartbeatConfig,
+import {
+  Priority,
+  type AgentConfig,
+  type AgentInfo,
+  type AgentStatus,
+  type ChannelConfig,
+  type HeartbeatConfig,
 } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
@@ -207,6 +212,22 @@ export class AgentHandle {
   updateModel(model: Model<any>): void {
     (this.config as { model: Model<any> }).model = model;
     this.agent?.setModel(model);
+  }
+
+  /** Live-update description without restarting the agent. */
+  updateDescription(desc: string | undefined): void {
+    (this.config as { description?: string }).description = desc;
+  }
+
+  /** Live-update priority without restarting the agent. */
+  updatePriority(priority: Priority): void {
+    (this.config as { priority: Priority }).priority = priority;
+  }
+
+  /** Live-update thinking level without restarting the agent. */
+  updateThinkingLevel(level: ThinkingLevel | undefined): void {
+    (this.config as { thinkingLevel?: ThinkingLevel }).thinkingLevel = level;
+    this.agent?.setThinkingLevel(level ?? "low");
   }
 
   private get agentDir(): string {

@@ -550,3 +550,65 @@ export async function setAgentModel(
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
+
+// --- Description mutations ---
+
+export async function setAgentDescription(
+  officeId: string,
+  agentName: string,
+  description: string | null,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    if (description) {
+      doc.setIn(["agents", agentName, "description"], description);
+    } else {
+      doc.deleteIn(["agents", agentName, "description"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Priority mutations ---
+
+const VALID_PRIORITIES = ["idle", "low", "normal", "high", "critical"];
+
+export async function setAgentPriority(
+  officeId: string,
+  agentName: string,
+  priority: string,
+): Promise<void> {
+  if (!VALID_PRIORITIES.includes(priority))
+    throw new Error(
+      `Invalid priority "${priority}" — must be one of: ${VALID_PRIORITIES.join(", ")}`,
+    );
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    doc.setIn(["agents", agentName, "priority"], priority);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Thinking level mutations ---
+
+export async function setAgentThinking(
+  officeId: string,
+  agentName: string,
+  thinking: string | null,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    if (thinking) {
+      doc.setIn(["agents", agentName, "thinking"], thinking);
+    } else {
+      doc.deleteIn(["agents", agentName, "thinking"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
