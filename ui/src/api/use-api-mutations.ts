@@ -276,6 +276,18 @@ export function useTaskDelete() {
   });
 }
 
+export function useTaskRestart() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) =>
+      apiFetch<Task>(`/api/tasks/${encodeURIComponent(taskId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ restart: true }),
+      }),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
 export function useHeartbeatSet() {
   const queryClient = useQueryClient();
   return useMutation({

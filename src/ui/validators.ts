@@ -21,6 +21,7 @@ export interface TaskUpdateBody {
   result?: string;
   assignee?: string;
   priority?: Priority;
+  restart?: boolean;
 }
 
 export const TASK_PRIORITY_MAP: Record<string, Priority> = {
@@ -130,12 +131,13 @@ export function parseTaskUpdateBody(
     value["status"] !== undefined ||
     value["result"] !== undefined ||
     value["assignee"] !== undefined ||
-    value["priority"] !== undefined;
+    value["priority"] !== undefined ||
+    value["restart"] !== undefined;
   if (!hasAnyField) {
     return {
       ok: false,
       error:
-        "at least one field must be provided: status, result, assignee, priority",
+        "at least one field must be provided: status, result, assignee, priority, restart",
     };
   }
 
@@ -168,6 +170,11 @@ export function parseTaskUpdateBody(
   const priorityResult = parsePriority(value["priority"]);
   if (!priorityResult.ok) return priorityResult;
 
+  const restart = value["restart"];
+  if (restart !== undefined && typeof restart !== "boolean") {
+    return { ok: false, error: "restart must be a boolean" };
+  }
+
   return {
     ok: true,
     value: {
@@ -177,6 +184,7 @@ export function parseTaskUpdateBody(
       ...(priorityResult.value !== undefined
         ? { priority: priorityResult.value }
         : {}),
+      ...(restart ? { restart } : {}),
     },
   };
 }

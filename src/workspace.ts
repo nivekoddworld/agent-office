@@ -248,6 +248,11 @@ export class Workspace {
     return this.messageStore;
   }
 
+  /** Re-notify agents about pending tasks that lost their inbox message after restart. */
+  recoverTasks(): number {
+    return this.tasks.recoverPendingTasks();
+  }
+
   async start(): Promise<void> {
     const dbPath = join(this.office.dir, "messages", "messages.sqlite");
     this.messageStore = createMessageStore(dbPath);

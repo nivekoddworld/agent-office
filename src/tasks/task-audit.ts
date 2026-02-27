@@ -4,7 +4,7 @@ import { join, dirname } from "node:path";
 export interface TaskAuditEntry {
   ts: string;
   agent: string;
-  action: "create" | "update" | "transition" | "delete";
+  action: "create" | "update" | "transition" | "delete" | "restart";
   taskId: string;
   result: "ok" | "error";
   details?: Record<string, unknown>;

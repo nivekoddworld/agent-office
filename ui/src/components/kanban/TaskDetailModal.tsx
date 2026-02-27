@@ -15,6 +15,7 @@ import {
   IconMessageCircle,
   IconUser,
   IconClock,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 
@@ -29,6 +30,7 @@ interface TaskDetailModalProps {
   opened: boolean;
   onClose: () => void;
   onDelete?: (taskId: string) => void;
+  onRestart?: (taskId: string) => void;
 }
 
 function formatDate(ts: number): string {
@@ -48,6 +50,7 @@ export function TaskDetailModal({
   opened,
   onClose,
   onDelete,
+  onRestart,
 }: TaskDetailModalProps) {
   const [confirming, setConfirming] = useState(false);
   const navigate = useNavigate();
@@ -269,19 +272,36 @@ export function TaskDetailModal({
           )}
         </Group>
 
-        {onDelete && (
+        {(onDelete || onRestart) && (
           <>
             <Divider color="var(--ao-border)" />
-            <Group justify="flex-end">
-              <Button
-                size="xs"
-                color="red"
-                variant={confirming ? "filled" : "light"}
-                leftSection={<IconTrash size={14} />}
-                onClick={handleDelete}
-              >
-                {confirming ? "Confirm Delete" : "Delete Task"}
-              </Button>
+            <Group justify="flex-end" gap="sm">
+              {onRestart &&
+                (task.status === "done" || task.status === "failed") && (
+                  <Button
+                    size="xs"
+                    color="blue"
+                    variant="light"
+                    leftSection={<IconRefresh size={14} />}
+                    onClick={() => {
+                      onRestart(task.id);
+                      onClose();
+                    }}
+                  >
+                    Restart Task
+                  </Button>
+                )}
+              {onDelete && (
+                <Button
+                  size="xs"
+                  color="red"
+                  variant={confirming ? "filled" : "light"}
+                  leftSection={<IconTrash size={14} />}
+                  onClick={handleDelete}
+                >
+                  {confirming ? "Confirm Delete" : "Delete Task"}
+                </Button>
+              )}
             </Group>
           </>
         )}

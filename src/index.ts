@@ -175,6 +175,12 @@ program
       // Apply office.yaml agents
       await applyOfficeYaml(workspace, opts.office);
 
+      // Re-notify agents about tasks that lost their inbox message
+      const recovered = workspace.recoverTasks();
+      if (recovered > 0) {
+        console.log(`[tasks] Recovered ${recovered} pending task(s)`);
+      }
+
       // Web UI
       if (opts.ui !== false) {
         try {

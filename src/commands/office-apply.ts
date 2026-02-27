@@ -255,6 +255,12 @@ export async function applyOfficeYaml(
     summary.push(`${failures.length} failed (${failures.join(", ")})`);
   console.log(`[office] ${summary.join(", ")}`);
 
+  // Re-notify agents about tasks that lost their inbox message after restart
+  const recovered = workspace.recoverTasks();
+  if (recovered > 0) {
+    console.log(`[tasks] Recovered ${recovered} pending task(s)`);
+  }
+
   // Reconcile cron jobs
   const yamlCronJobs = extractCronJobs(yaml.agents);
   const yamlAgentNames = new Set(yamlCronJobs.keys());

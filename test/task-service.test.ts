@@ -370,7 +370,7 @@ describe("TaskService", () => {
     expect(result).toContain("cannot transition");
   });
 
-  it("failed is terminal — cannot transition out", () => {
+  it("failed cannot transition directly to in_progress", () => {
     const t = service.create("pm", {
       title: "Terminal",
       assignee: "coder",
@@ -380,9 +380,24 @@ describe("TaskService", () => {
     service.update("coder", t.id, { status: "in_progress" });
     service.update("coder", t.id, { status: "failed" });
 
-    const result = service.update("coder", t.id, { status: "todo" });
+    const result = service.update("coder", t.id, { status: "in_progress" });
     expect(typeof result).toBe("string");
     expect(result).toContain("cannot transition");
+  });
+
+  it("failed → todo via update() is blocked (must use restart)", () => {
+    const t = service.create("pm", {
+      title: "Use restart",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    service.update("coder", t.id, { status: "in_progress" });
+    service.update("coder", t.id, { status: "failed" });
+
+    const result = service.update("coder", t.id, { status: "todo" });
+    expect(typeof result).toBe("string");
+    expect(result).toContain("use restart");
   });
 
   it("notifies creator when task fails", () => {
@@ -403,6 +418,74 @@ describe("TaskService", () => {
     expect(messages.some((m) => m.payload.includes("[Task Failed]"))).toBe(
       true,
     );
+  });
+
+  // --- restart ---
+
+  it("restarts a failed task to todo, clearing completion data", () => {
+    const t = service.create("pm", {
+      title: "Restart me",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.update("coder", t.id, { status: "in_progress" });
+    service.update("coder", t.id, { status: "failed", result: "Error" });
+
+    const restarted = service.restart("pm", t.id) as Task;
+    expect(restarted.status).toBe("todo");
+    expect(restarted.startedAt).toBeUndefined();
+    expect(restarted.completedAt).toBeUndefined();
+    expect(restarted.result).toBeUndefined();
+  });
+
+  it("restarts a done task to todo", () => {
+    const t = service.create("pm", {
+      title: "Redo me",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.update("coder", t.id, { status: "in_progress" });
+    service.update("coder", t.id, { status: "done", result: "Complete" });
+
+    const restarted = service.restart("pm", t.id) as Task;
+    expect(restarted.status).toBe("todo");
+    expect(restarted.result).toBeUndefined();
+  });
+
+  it("rejects restart on a non-terminal task", () => {
+    const t = service.create("pm", {
+      title: "Not terminal",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    const result = service.restart("pm", t.id);
+    expect(typeof result).toBe("string");
+    expect(result).toContain("cannot restart");
+  });
+
+  it("sends [Task Restarted] notification to assignee on restart", () => {
+    const t = service.create("pm", {
+      title: "Notify restart",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.update("coder", t.id, { status: "in_progress" });
+    service.update("coder", t.id, { status: "failed" });
+    bus.drain("coder");
+
+    service.restart("pm", t.id);
+
+    const messages = bus.peekMessages("coder");
+    expect(messages.some((m) => m.payload.includes("[Task Restarted]"))).toBe(
+      true,
+    );
+  });
+
+  it("rejects restart on unknown task", () => {
+    const result = service.restart("pm", "T-nonexistent");
+    expect(typeof result).toBe("string");
+    expect(result).toContain("not found");
   });
 
   // --- delete ---
@@ -622,6 +705,123 @@ describe("TaskService", () => {
     expect(board.todo.length).toBe(1);
     expect(board.in_progress.length).toBe(1);
     expect(board.done.length).toBe(0);
+  });
+
+  // --- recovery ---
+
+  it("recovers in_progress task with empty inbox", () => {
+    const t = service.create("pm", {
+      title: "In progress",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.update("coder", t.id, { status: "in_progress" });
+    bus.drain("coder");
+
+    const recovered = service.recoverPendingTasks();
+    expect(recovered).toBe(1);
+
+    const messages = bus.peekMessages("coder");
+    expect(messages.some((m) => m.payload.includes("[Task Recovery]"))).toBe(
+      true,
+    );
+    expect(
+      messages.some((m) => m.payload.includes("you were working on this")),
+    ).toBe(true);
+  });
+
+  it("recovers todo task with empty inbox", () => {
+    const t = service.create("pm", {
+      title: "Todo task",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    bus.drain("coder");
+
+    expect(t.status).toBe("todo");
+    const recovered = service.recoverPendingTasks();
+    expect(recovered).toBe(1);
+
+    const messages = bus.peekMessages("coder");
+    expect(messages.some((m) => m.payload.includes("[Task Recovery]"))).toBe(
+      true,
+    );
+    expect(
+      messages.some((m) => m.payload.includes("ready for you to pick up")),
+    ).toBe(true);
+  });
+
+  it("does NOT duplicate notification when inbox already has task message", () => {
+    service.create("pm", {
+      title: "Already notified",
+      assignee: "coder",
+      priority: P,
+    });
+    // Inbox already has the [New Task] message
+    const beforeCount = bus.peekMessages("coder").length;
+
+    const recovered = service.recoverPendingTasks();
+    expect(recovered).toBe(0);
+    expect(bus.peekMessages("coder").length).toBe(beforeCount);
+  });
+
+  it("skips done, failed, and waiting tasks during recovery", () => {
+    const t1 = service.create("pm", {
+      title: "Done task",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.update("coder", t1.id, { status: "in_progress" });
+    service.update("coder", t1.id, { status: "done" });
+
+    const t2 = service.create("pm", {
+      title: "Failed task",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.update("coder", t2.id, { status: "in_progress" });
+    service.update("coder", t2.id, { status: "failed" });
+
+    const dep = service.create("pm", {
+      title: "Dep",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.create("pm", {
+      title: "Waiting task",
+      assignee: "reviewer",
+      dependsOn: [dep.id],
+      priority: P,
+    });
+
+    bus.drain("coder");
+    bus.drain("reviewer");
+
+    const recovered = service.recoverPendingTasks();
+    // Only the dep task (todo) should be recovered, not done/failed/waiting
+    expect(recovered).toBe(1);
+  });
+
+  it("returns correct count of recovered tasks", () => {
+    const t1 = service.create("pm", {
+      title: "Task A",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    service.update("coder", t1.id, { status: "in_progress" });
+
+    const t2 = service.create("pm", {
+      title: "Task B",
+      assignee: "reviewer",
+      priority: P,
+    }) as Task;
+    service.update("reviewer", t2.id, { status: "in_progress" });
+
+    bus.drain("coder");
+    bus.drain("reviewer");
+
+    const recovered = service.recoverPendingTasks();
+    expect(recovered).toBe(2);
   });
 
   // --- persistence ---

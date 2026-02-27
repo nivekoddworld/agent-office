@@ -77,11 +77,9 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         const validated = parseTaskUpdateBody(parsed);
         if (!validated.ok)
           return json(res, 400, { ok: false, error: validated.error });
-        const result = workspace.tasks.update(
-          "__user__",
-          params.id!,
-          validated.value,
-        );
+        const result = validated.value.restart
+          ? workspace.tasks.restart("__user__", params.id!)
+          : workspace.tasks.update("__user__", params.id!, validated.value);
         if (typeof result === "string")
           return json(res, 400, { ok: false, error: result });
         broadcast("state_changed", getBootstrapState(workspace, officeId));
