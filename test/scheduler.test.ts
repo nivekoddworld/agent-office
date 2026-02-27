@@ -444,7 +444,7 @@ describe("Scheduler", () => {
       expect(target.prompt).toHaveBeenCalledWith(
         "[Message from pm in #general. Other members: designer]\n" +
           "I think we should refactor\n\n" +
-          "[To reply in #general, post in the channel]",
+          '[To reply, call post_channel with channel="#general". Only reply if you have something substantive to add — do NOT reply just to acknowledge or greet.]',
       );
     });
 

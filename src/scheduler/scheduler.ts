@@ -185,7 +185,7 @@ function formatMessagePayload(
     }
     return (
       `[Message from ${msg.from}${ctx}]\n${msg.payload}\n\n` +
-      `[To reply in #${msg.channel}, post in the channel]`
+      `[To reply, call post_channel with channel="#${msg.channel}". Only reply if you have something substantive to add — do NOT reply just to acknowledge or greet.]`
     );
   }
 
