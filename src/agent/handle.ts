@@ -13,6 +13,7 @@ import type {
   AgentStatus,
   ChannelConfig,
   CitationMode,
+  HeartbeatConfig,
 } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
@@ -203,6 +204,11 @@ export class AgentHandle {
 
   getLastScheduledHeartbeatTs(): number | null {
     return this._lastScheduledHeartbeatTs;
+  }
+
+  /** Live-update heartbeat config without restarting the agent. */
+  updateHeartbeat(hb: HeartbeatConfig | undefined): void {
+    (this.config as { heartbeat?: HeartbeatConfig }).heartbeat = hb;
   }
 
   private get agentDir(): string {

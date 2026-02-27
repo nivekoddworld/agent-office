@@ -134,6 +134,22 @@ export function getBootstrapState(
     officeName: workspace.office.name,
     channels: channelsObj,
     defaultConversationChannel,
+    heartbeats: Object.keys(agentDefs).map((name) => {
+      const handle = workspace.getAgent(name);
+      const yamlHb = agentDefs[name]?.heartbeat;
+      return {
+        agentName: name,
+        config: yamlHb
+          ? {
+              intervalMs: yamlHb.interval_ms,
+              prompt: yamlHb.prompt,
+              activeHours: yamlHb.active_hours,
+            }
+          : null,
+        lastScheduledTs: handle?.getLastScheduledHeartbeatTs() ?? null,
+        agentStatus: handle ? handle.info().status : ("not_running" as const),
+      };
+    }),
   };
 }
 

@@ -1,9 +1,21 @@
-import type { AgentInfo, ChannelConfig, SchedulerState } from "../types.js";
+import type {
+  AgentInfo,
+  ChannelConfig,
+  HeartbeatConfig,
+  SchedulerState,
+} from "../types.js";
 import type { CronJobEntry } from "../cron/types.js";
 import type { Task } from "../tasks/types.js";
 import type { AgentHierarchy } from "../config/hierarchy.js";
 
 // --- Bootstrap / State ---
+
+export interface HeartbeatEntry {
+  agentName: string;
+  config: HeartbeatConfig | null;
+  lastScheduledTs: number | null;
+  agentStatus: "idle" | "running" | "dead" | "not_running";
+}
 
 export interface BootstrapState {
   agents: AgentInfo[];
@@ -15,6 +27,7 @@ export interface BootstrapState {
   officeName: string;
   channels: Record<string, ChannelConfig>;
   defaultConversationChannel: string;
+  heartbeats: HeartbeatEntry[];
 }
 
 // --- Agent detail ---

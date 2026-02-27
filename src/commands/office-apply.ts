@@ -51,6 +51,7 @@ interface NormalizedConfig {
   onDemandSkills: boolean;
   bootstrapDir: string;
   hierarchy: string;
+  heartbeat: string;
 }
 
 function resolveCwd(baseDir: string, name: string, cwd?: string): string {
@@ -86,6 +87,7 @@ function normalizeEntry(
     onDemandSkills: entry.on_demand_skills ?? true,
     bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, baseDir, name),
     hierarchy: JSON.stringify(hierarchyMap?.get(name) ?? {}),
+    heartbeat: JSON.stringify(entry.heartbeat ?? {}),
   };
 }
 
@@ -115,6 +117,7 @@ function normalizeRunning(
     bootstrapDir:
       cfg.bootstrapDir ?? join(baseDir, "agents", name, "bootstrap"),
     hierarchy: JSON.stringify(cfg.hierarchy ?? {}),
+    heartbeat: JSON.stringify(cfg.heartbeat ?? {}),
   };
 }
 
@@ -135,7 +138,8 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.promptMode === b.promptMode &&
     a.onDemandSkills === b.onDemandSkills &&
     a.bootstrapDir === b.bootstrapDir &&
-    a.hierarchy === b.hierarchy
+    a.hierarchy === b.hierarchy &&
+    a.heartbeat === b.heartbeat
   );
 }
 
@@ -239,6 +243,13 @@ export async function applyOfficeYaml(
           ? resolveBootstrapDir(entry.bootstrap_dir, baseDir, name)
           : undefined,
         hierarchy: hierarchyMap.get(name),
+        heartbeat: entry.heartbeat
+          ? {
+              intervalMs: entry.heartbeat.interval_ms,
+              prompt: entry.heartbeat.prompt,
+              activeHours: entry.heartbeat.active_hours,
+            }
+          : undefined,
       });
 
       spawned++;

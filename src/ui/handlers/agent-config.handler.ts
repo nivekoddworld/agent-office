@@ -19,6 +19,7 @@ import {
 import {
   setAgentHeartbeat,
   clearAgentHeartbeat,
+  loadOfficeYaml,
 } from "../../config/office-yaml.js";
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
@@ -299,7 +300,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       handler: async (req, res, _url, params) => {
         if (requireMutation(req, res, getPort())) return;
         const name = params.name!;
-        if (!workspace.getAgent(name))
+        const yaml = loadOfficeYaml(officeId);
+        if (!yaml?.agents?.[name])
           return json(res, 404, { error: "agent_not_found" });
         const body = await readBody(req);
         let parsed: {
@@ -326,6 +328,11 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             prompt: parsed.prompt,
             active_hours: parsed.active_hours,
           });
+          workspace.getAgent(name)?.updateHeartbeat({
+            intervalMs: parsed.interval_ms,
+            prompt: parsed.prompt,
+            activeHours: parsed.active_hours,
+          });
           broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true });
         } catch (err) {
@@ -344,10 +351,12 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       handler: async (req, res, _url, params) => {
         if (requireMutation(req, res, getPort())) return;
         const name = params.name!;
-        if (!workspace.getAgent(name))
+        const yaml = loadOfficeYaml(officeId);
+        if (!yaml?.agents?.[name])
           return json(res, 404, { error: "agent_not_found" });
         try {
           await clearAgentHeartbeat(officeId, name);
+          workspace.getAgent(name)?.updateHeartbeat(undefined);
           broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true });
         } catch (err) {

@@ -277,6 +277,44 @@ export function useTaskDelete() {
   });
 }
 
+export function useHeartbeatSet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args: {
+      agentName: string;
+      intervalMs: number;
+      prompt?: string;
+      activeHours?: { start: string; end: string };
+    }) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/agents/${encodeURIComponent(args.agentName)}/heartbeat`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            interval_ms: args.intervalMs,
+            ...(args.prompt ? { prompt: args.prompt } : {}),
+            ...(args.activeHours
+              ? { active_hours: args.activeHours }
+              : {}),
+          }),
+        },
+      ),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
+export function useHeartbeatClear() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentName }: { agentName: string }) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/agents/${encodeURIComponent(agentName)}/heartbeat`,
+        { method: "DELETE" },
+      ),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
 export function useSetSecretRef() {
   const queryClient = useQueryClient();
   return useMutation({

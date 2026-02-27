@@ -93,6 +93,13 @@ export interface ChannelConfig {
   description?: string;
 }
 
+export interface HeartbeatEntry {
+  agentName: string;
+  config: HeartbeatConfig | null;
+  lastScheduledTs: number | null;
+  agentStatus: "idle" | "running" | "dead" | "not_running";
+}
+
 export interface BootstrapState {
   agents: AgentInfo[];
   scheduler: SchedulerState;
@@ -104,6 +111,7 @@ export interface BootstrapState {
   channels?: Record<string, ChannelConfig>;
   defaultConversationChannel?: string;
   collaborationPolicy?: CollaborationPolicy;
+  heartbeats: HeartbeatEntry[];
 }
 
 export interface BlockMeta {
