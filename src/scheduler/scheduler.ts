@@ -175,7 +175,10 @@ function formatMessagePayload(
   if (msg.sourceKind === "channel" && msg.channel) {
     const ctx = channelContext(msg, channels);
     if (msg.from === "__user__") {
-      return `[Posted${ctx}]\n${msg.payload}`;
+      return (
+        `[Message from user${ctx}]\n${msg.payload}\n\n` +
+        `[To reply, call message_user]`
+      );
     }
     if (msg.from === "__cron__") {
       return `[Scheduled trigger${ctx}]\n${msg.payload}`;
@@ -186,7 +189,12 @@ function formatMessagePayload(
     );
   }
 
-  if (msg.from === "__user__") return msg.payload;
+  if (msg.from === "__user__") {
+    return (
+      `[Message from user]\n${msg.payload}\n\n` +
+      `[To reply, call message_user]`
+    );
+  }
   if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
   if (msg.from === "__heartbeat__") return `[Heartbeat]\n${msg.payload}`;
   return (

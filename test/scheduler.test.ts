@@ -74,8 +74,12 @@ describe("Scheduler", () => {
     sched.stop();
 
     // Both should be dispatched — high first due to priority sort
-    expect(high.prompt).toHaveBeenCalledWith("hi");
-    expect(low.prompt).toHaveBeenCalledWith("lo");
+    expect(high.prompt).toHaveBeenCalledWith(
+      "[Message from user]\nhi\n\n[To reply, call message_user]",
+    );
+    expect(low.prompt).toHaveBeenCalledWith(
+      "[Message from user]\nlo\n\n[To reply, call message_user]",
+    );
     expect(high.setStatus).toHaveBeenCalledWith("running");
     expect(low.setStatus).toHaveBeenCalledWith("running");
   });
@@ -157,7 +161,7 @@ describe("Scheduler", () => {
     );
   });
 
-  it("passes user messages without prefix", () => {
+  it("formats user messages with [Message from user] prefix", () => {
     const agents = new Map<string, any>();
     const bus = new MessageBus();
 
@@ -178,7 +182,9 @@ describe("Scheduler", () => {
     vi.advanceTimersByTime(100);
     sched.stop();
 
-    expect(target.prompt).toHaveBeenCalledWith("do stuff");
+    expect(target.prompt).toHaveBeenCalledWith(
+      "[Message from user]\ndo stuff\n\n[To reply, call message_user]",
+    );
   });
 
   it("formats cron messages as [Scheduled trigger]", () => {
@@ -228,7 +234,9 @@ describe("Scheduler", () => {
     vi.advanceTimersByTime(100);
     sched.stop();
 
-    expect(target.steer).toHaveBeenCalledWith("redirect");
+    expect(target.steer).toHaveBeenCalledWith(
+      "[Message from user]\nredirect\n\n[To reply, call message_user]",
+    );
     expect(target.prompt).not.toHaveBeenCalled();
   });
 
@@ -402,7 +410,8 @@ describe("Scheduler", () => {
       sched.stop();
 
       expect(target.prompt).toHaveBeenCalledWith(
-        "[Posted in #general. Other members: designer, pm]\nHello everyone",
+        "[Message from user in #general. Other members: designer, pm]\nHello everyone\n\n" +
+          "[To reply, call message_user]",
       );
     });
 
@@ -463,7 +472,8 @@ describe("Scheduler", () => {
       sched.stop();
 
       expect(target.prompt).toHaveBeenCalledWith(
-        "[Posted in #dev. Other members: bob]\nhi",
+        "[Message from user in #dev. Other members: bob]\nhi\n\n" +
+          "[To reply, call message_user]",
       );
     });
 
@@ -490,7 +500,9 @@ describe("Scheduler", () => {
       vi.advanceTimersByTime(100);
       sched.stop();
 
-      expect(target.prompt).toHaveBeenCalledWith("[Posted in #unknown]\nhello");
+      expect(target.prompt).toHaveBeenCalledWith(
+        "[Message from user in #unknown]\nhello\n\n[To reply, call message_user]",
+      );
     });
   });
 });
