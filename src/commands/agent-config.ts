@@ -22,10 +22,7 @@ import { officeDir } from "../constants.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { composeSystemPrompt } from "../agent/prompts/prompt-manager.js";
-import {
-  resolveCustomPrompt,
-  resolveBootstrapDir,
-} from "../agent/prompts/prompt-loader.js";
+import { resolveCustomPrompt } from "../agent/prompts/prompt-loader.js";
 import { buildHierarchyMap, formatOrgChart } from "../config/hierarchy.js";
 
 export async function agentEnvSetCommand(
@@ -178,8 +175,6 @@ export function agentPromptShowCommand(
     officeName: yaml.office.name,
     officeDescription: yaml.office.description,
     hierarchy: hierarchyMap.get(agentName),
-    bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, oDir, agentName),
-    enableBootstrap: true,
   });
 
   const sourceNote = entry.prompt_file ? ` (source: ${entry.prompt_file})` : "";

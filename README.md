@@ -100,7 +100,6 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [Priority Levels](#priority-levels)
   - [Workspace Sandboxing](#workspace-sandboxing)
   - [Skills](#skills)
-  - [Bootstrap Files](#bootstrap-files)
   - [Watchdog](#watchdog)
   - [Message Persistence](#message-persistence)
 - [Prompt Inspection](#prompt-inspection)
@@ -268,7 +267,6 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `description`      | string           | `""`                                                   | Visible to other agents                                                          |
 | `prompt_inline`    | string           | _(none)_                                               | Custom instructions (inline text, appended to base prompt)                       |
 | `prompt_file`      | string           | _(none)_                                               | Path to `.md` file with custom instructions (relative to office dir)             |
-| `bootstrap_dir`    | string           | `agents/<name>/bootstrap/`                             | Bootstrap file source directory (relative to office dir)                         |
 | `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                                |
 | `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                                    |
 | `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                              |
@@ -1573,15 +1571,14 @@ Every agent receives a **layered system prompt** composed from nine ordered laye
    - Instruction precedence (system rules > office config > custom instructions > file injections)
 2. **Office context** — office name and description (e.g. "You work at Acme Corp. We build AI-powered widgets"). Only present when an office has a display name.
 3. **Hierarchy** — manager, peers, and direct reports derived from `reports_to` fields. Only present when hierarchy data exists. See [Hierarchy](#hierarchy).
-4. **Bootstrap files** — optional workspace files (`SOUL.md`, `CONTEXT.md`, etc.) injected with provenance headers. See [Bootstrap Files](#bootstrap-files).
-5. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
-6. **Identity** — agent name, description, workspace path.
-7. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
-8. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
+4. **Runtime context** — available env var names, secret names (when `disclose_secrets: true`), active cron job summaries. Lists are sorted for deterministic hashing.
+5. **Identity** — agent name, description, workspace path.
+6. **Custom instructions** — the `prompt_inline` or `prompt_file` content from `office.yaml`, appended under a `## Custom Instructions` header.
+7. **Skills** — summaries only by default (on-demand via `read_skill`), or full content when `on_demand_skills: false`. See [Skills](#skills).
 
 **Prompt source:** use exactly one of `prompt_inline` (inline text) or `prompt_file` (path to `.md` file, resolved relative to the office directory). Specifying both is a validation error. The legacy `prompt` field is no longer supported — use `prompt_inline` or `prompt_file` instead.
 
-With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, hierarchy, bootstrap, runtime, and skills are skipped).
+With `prompt_mode: minimal`, only base, identity, and custom layers are included (office, hierarchy, runtime, and skills are skipped).
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn. An `.effective-prompt.md` snapshot is written to the agent directory on every spawn/reload for debugging.
 
@@ -1644,18 +1641,17 @@ Each office gets an isolated directory, and each agent within it gets its own wo
             memory/
               MEMORY.md           # agent memory (private, writable)
             logs/                 # daily activity logs (YYYY-MM-DD.md)
+            instructions/         # user instruction files (SOUL.md, CONTEXT.md, IDENTITY.md)
           sessions/               # JSONL session history (system-managed)
             user-dm.jsonl         # user↔agent DMs
             agent-reviewer.jsonl  # inter-agent conversations
             channel-general.jsonl # channel conversations
-          bootstrap/              # bootstrap files (SOUL.md, CONTEXT.md, etc.)
           skills/                 # installed skill directories
             .sources.json         # skill folder → GitHub source mapping
           .effective-prompt.md    # generated snapshot (do not edit)
         reviewer/
           workspace/
           sessions/
-          bootstrap/
           skills/
     defi-lab/
       office.yaml
@@ -1702,33 +1698,6 @@ A `.sources.json` file in each agent's skills directory maps installed skill fol
 `skill_remove` tool is project-skill only. If a skill is legacy GitHub-sourced, remove it through CLI `skill remove <agent> <name>`.
 
 **On-demand loading (default):** Skill summaries (name + description) are included in the prompt and agents call [`read_skill`](#read_skill) to fetch full content when needed. This reduces prompt size for agents with many or large skills. Set `on_demand_skills: false` to inject full skill content into the system prompt (eager mode).
-
-### Bootstrap Files
-
-Optional markdown files loaded from a per-agent source directory. If present, they are loaded alphabetically and injected into the system prompt between the office and runtime layers with provenance headers.
-
-**Default source:** `<officeDir>/agents/<name>/bootstrap/`
-**Override:** set `bootstrap_dir` in the agent's YAML entry (resolved relative to the office directory).
-
-**Supported files:** `CONTEXT.md`, `IDENTITY.md`, `SOUL.md`
-
-```bash
-# Create a personality file for an agent
-mkdir -p ~/.agent-office/offices/my-office/agents/bot/bootstrap
-echo "I am a concise, friendly assistant." > \
-  ~/.agent-office/offices/my-office/agents/bot/bootstrap/SOUL.md
-```
-
-The file appears in the prompt as:
-
-```
-## [bootstrap: SOUL.md]
-I am a concise, friendly assistant.
-```
-
-- Missing files are silently skipped — no configuration needed.
-- Per-file size cap: 128 KiB. Total cap across all files: 256 KiB (byte-accurate, UTF-8 safe).
-- Use `prompt report <agent>` to verify bootstrap content is loaded.
 
 ### Watchdog
 
@@ -1822,20 +1791,18 @@ Version: v1
 
 Base prompt           2,847 chars
 Office block            156 chars
-Bootstrap files         892 chars
-Memory block            643 chars
 Runtime block           312 chars
 Identity block           89 chars
 Custom prompt         1,204 chars
 Skills                3,421 chars
 ──────────────────────────────────
-Total                 9,564 chars
+Total                 8,029 chars
 
 Tools: 15 registered
 Skills: 2 loaded (web-skills, code-review)
 ```
 
-Use this to verify bootstrap files are loaded, check prompt size after truncation, and confirm tool/skill counts.
+Use this to check prompt size after truncation and confirm tool/skill counts.
 
 A full `.effective-prompt.md` snapshot is also generated per agent on every spawn/reload at `<officeDir>/agents/<name>/.effective-prompt.md`. Add `.effective-prompt.md` to `.gitignore` — it is generated, not source.
 
@@ -2087,7 +2054,6 @@ src/
       prompt-manager.ts       Layered composition + deterministic hashing
       prompt-loader.ts        XOR prompt resolution (inline vs file)
       effective-prompt.ts     .effective-prompt.md snapshot writer
-      bootstrap.ts            Bootstrap file loader (SOUL.md, CONTEXT.md, etc.)
       truncate.ts             Prompt truncation (head/tail split, per-block limits)
     skills/
       on-demand.ts            Skill summary extraction for on-demand mode
@@ -2313,7 +2279,6 @@ test/
   prompt-manager.test.ts     Prompt composition, layering, hashing, office block, determinism
   prompt-loader.test.ts      Prompt source resolution (inline, file, path safety)
   effective-prompt.test.ts   Effective prompt snapshot generation
-  bootstrap.test.ts          Bootstrap file loading, truncation, prompt injection
   truncate.test.ts           Prompt truncation (head/tail split, per-block limits)
   workspace-scaffold.test.ts Workspace scaffold (memory/, logs/ directory creation)
   office-cron.test.ts        Office-level cron lifecycle, targets, broadcast, state keys

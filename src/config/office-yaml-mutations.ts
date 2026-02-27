@@ -88,7 +88,6 @@ export async function upsertAgentToOfficeYaml(
         "description",
         "prompt_inline",
         "prompt_file",
-        "bootstrap_dir",
         "cwd",
         "skills",
         "api_key_ref",

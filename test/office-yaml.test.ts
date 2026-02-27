@@ -594,6 +594,16 @@ describe("prompt source validation", () => {
     });
     expect(errors).toEqual([]);
   });
+
+  it("rejects bootstrap_dir with migration error", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test" },
+      agents: { bot: { bootstrap_dir: "shared/" } as any },
+    });
+    expect(
+      errors.some((e) => e.includes("bootstrap_dir is no longer supported")),
+    ).toBe(true);
+  });
 });
 
 // --- Build OfficeContext ---

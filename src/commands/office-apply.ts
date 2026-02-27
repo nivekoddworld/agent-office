@@ -18,10 +18,7 @@ import {
   extractOfficeCronJobs,
   validateAgentEntry,
 } from "../config/yaml-utils.js";
-import {
-  resolveCustomPrompt,
-  resolveBootstrapDir,
-} from "../agent/prompts/prompt-loader.js";
+import { resolveCustomPrompt } from "../agent/prompts/prompt-loader.js";
 import { buildHierarchyMap } from "../config/hierarchy.js";
 import {
   fetchSkills,
@@ -49,7 +46,6 @@ interface NormalizedConfig {
   permissions: string;
   promptMode: string;
   onDemandSkills: boolean;
-  bootstrapDir: string;
   hierarchy: string;
   heartbeat: string;
 }
@@ -85,7 +81,6 @@ function normalizeEntry(
     permissions: JSON.stringify(entry.permissions ?? {}),
     promptMode: entry.prompt_mode ?? "full",
     onDemandSkills: entry.on_demand_skills ?? true,
-    bootstrapDir: resolveBootstrapDir(entry.bootstrap_dir, baseDir, name),
     hierarchy: JSON.stringify(hierarchyMap?.get(name) ?? {}),
     heartbeat: JSON.stringify(entry.heartbeat ?? {}),
   };
@@ -114,8 +109,6 @@ function normalizeRunning(
     permissions: JSON.stringify(cfg.permissions ?? {}),
     promptMode: cfg.promptMode ?? "full",
     onDemandSkills: cfg.onDemandSkills ?? true,
-    bootstrapDir:
-      cfg.bootstrapDir ?? join(baseDir, "agents", name, "bootstrap"),
     hierarchy: JSON.stringify(cfg.hierarchy ?? {}),
     heartbeat: JSON.stringify(cfg.heartbeat ?? {}),
   };
@@ -137,7 +130,6 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.permissions === b.permissions &&
     a.promptMode === b.promptMode &&
     a.onDemandSkills === b.onDemandSkills &&
-    a.bootstrapDir === b.bootstrapDir &&
     a.hierarchy === b.hierarchy &&
     a.heartbeat === b.heartbeat
   );
@@ -239,9 +231,6 @@ export async function applyOfficeYaml(
         permissions: entry.permissions,
         promptMode: entry.prompt_mode,
         onDemandSkills: entry.on_demand_skills,
-        bootstrapDir: entry.bootstrap_dir
-          ? resolveBootstrapDir(entry.bootstrap_dir, baseDir, name)
-          : undefined,
         hierarchy: hierarchyMap.get(name),
         heartbeat: entry.heartbeat
           ? {

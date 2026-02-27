@@ -181,11 +181,10 @@ export function validateAgentEntry(
   ) {
     errors.push(`prompt_file must be a string`);
   }
-  if (
-    entry.bootstrap_dir !== undefined &&
-    typeof entry.bootstrap_dir !== "string"
-  ) {
-    errors.push(`bootstrap_dir must be a string`);
+  if ((entry as any).bootstrap_dir !== undefined) {
+    errors.push(
+      `bootstrap_dir is no longer supported — remove it from office.yaml`,
+    );
   }
 
   if (

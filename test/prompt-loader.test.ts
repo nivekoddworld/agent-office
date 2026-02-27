@@ -8,10 +8,7 @@ import {
   existsSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import {
-  resolveCustomPrompt,
-  resolveBootstrapDir,
-} from "../src/agent/prompts/prompt-loader.js";
+import { resolveCustomPrompt } from "../src/agent/prompts/prompt-loader.js";
 
 const TEST_DIR = join(tmpdir(), "ao-prompt-loader-test");
 const OUTSIDE_DIR = join(tmpdir(), "ao-prompt-loader-outside");
@@ -85,31 +82,3 @@ describe("resolveCustomPrompt", () => {
   });
 });
 
-describe("resolveBootstrapDir", () => {
-  it("returns default path when no override", () => {
-    const result = resolveBootstrapDir(undefined, TEST_DIR, "bot");
-    expect(result).toMatch(/agents\/bot\/bootstrap$/);
-  });
-
-  it("resolves custom bootstrap_dir relative to office dir", () => {
-    const customDir = join(TEST_DIR, "shared-bootstrap");
-    mkdirSync(customDir, { recursive: true });
-
-    const result = resolveBootstrapDir("shared-bootstrap", TEST_DIR, "bot");
-    expect(result).toMatch(/shared-bootstrap$/);
-  });
-
-  it("rejects bootstrap_dir that escapes office dir", () => {
-    expect(() => resolveBootstrapDir("../../etc", TEST_DIR, "bot")).toThrow(
-      /escapes office directory/,
-    );
-  });
-
-  it("rejects symlink bootstrap_dir that escapes office dir", () => {
-    symlinkSync(OUTSIDE_DIR, join(TEST_DIR, "escape-link"));
-
-    expect(() => resolveBootstrapDir("escape-link", TEST_DIR, "bot")).toThrow(
-      /escapes office directory/,
-    );
-  });
-});

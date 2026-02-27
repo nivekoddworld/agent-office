@@ -64,7 +64,6 @@ export interface InitContext {
   officeName: string;
   officeDescription?: string;
   config: AgentConfig;
-  bootstrapDir: string;
 }
 
 export interface SandboxInitResult {
@@ -122,8 +121,6 @@ export async function initSandboxAgent(
     officeDescription: ctx.officeDescription,
     skillsPrompt: sandboxSkillsPrompt,
     hierarchy: ctx.config.hierarchy,
-    bootstrapDir: ctx.bootstrapDir,
-    enableBootstrap: true,
     mode: ctx.config.promptMode ?? "full",
   });
   writeEffectivePrompt(ctx.agentDir, composed, {
@@ -334,8 +331,6 @@ export async function initInProcessAgent(
     officeDescription: ctx.officeDescription,
     skillsPrompt: inProcSkillsPrompt,
     hierarchy: ctx.config.hierarchy,
-    bootstrapDir: ctx.bootstrapDir,
-    enableBootstrap: true,
     mode: ctx.config.promptMode ?? "full",
   });
   writeEffectivePrompt(ctx.agentDir, composed, {

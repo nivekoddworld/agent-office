@@ -6,7 +6,6 @@ import {
   type BlockMeta,
   type TruncationConfig,
 } from "./truncate.js";
-import { loadBootstrapFiles, formatBootstrapBlock } from "./bootstrap.js";
 
 export { PROMPT_VERSION };
 export type { BlockMeta };
@@ -25,8 +24,6 @@ export interface PromptContext {
   officeDescription?: string;
   skillsPrompt?: string;
   hierarchy?: { manager: string | null; peers: string[]; reports: string[] };
-  bootstrapDir?: string;
-  enableBootstrap?: boolean;
   mode?: PromptMode;
   truncationConfig?: Partial<TruncationConfig>;
 }
@@ -93,12 +90,6 @@ function buildHierarchyBlock(ctx: PromptContext): string {
   );
 }
 
-function buildBootstrapBlock(ctx: PromptContext): string {
-  if (!ctx.enableBootstrap || !ctx.bootstrapDir) return "";
-  const files = loadBootstrapFiles(ctx.bootstrapDir);
-  return formatBootstrapBlock(files);
-}
-
 function buildSkillsBlock(skillsPrompt?: string): string {
   if (!skillsPrompt?.trim()) return "";
   return "\n\n" + skillsPrompt.trim();
@@ -117,7 +108,6 @@ export function composeSystemPrompt(ctx: PromptContext): ComposedPrompt {
     { name: "base", text: buildBasePrompt() },
     { name: "office", text: buildOfficeBlock(ctx) },
     { name: "hierarchy", text: buildHierarchyBlock(ctx) },
-    { name: "bootstrap", text: buildBootstrapBlock(ctx) },
     { name: "runtime", text: buildRuntimeBlock(ctx) },
     { name: "identity", text: buildIdentityBlock(ctx) },
     { name: "custom", text: buildCustomBlock(ctx.customPrompt) },

@@ -93,7 +93,6 @@ export class AgentHandle {
   private _channels?: Map<string, ChannelConfig>;
   private _obligationStore?: ObligationStore;
   private _policyService?: PolicyService;
-  private _bootstrapDir: string;
   private _lastScheduledHeartbeatTs: number | null = null;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
@@ -114,9 +113,6 @@ export class AgentHandle {
     this._obligationStore = deps.obligationStore;
     this._policyService = deps.policyService;
     this._onStateChanged = deps.onStateChanged;
-    this._bootstrapDir =
-      config.bootstrapDir ??
-      join(deps.baseDir, "agents", config.name, "bootstrap");
   }
 
   get name(): string {
@@ -220,7 +216,6 @@ export class AgentHandle {
       officeName: this.officeName,
       officeDescription: this.officeDescription,
       config: this.config,
-      bootstrapDir: this._bootstrapDir,
     };
   }
 
@@ -398,8 +393,6 @@ export class AgentHandle {
       officeDescription: this.officeDescription,
       skillsPrompt,
       hierarchy: this.config.hierarchy,
-      bootstrapDir: this._bootstrapDir,
-      enableBootstrap: true,
       mode: this.config.promptMode ?? "full",
     });
 

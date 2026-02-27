@@ -15,4 +15,11 @@ export function ensureWorkspaceScaffold(workspaceDir: string): void {
   const today = new Date().toISOString().slice(0, 10);
   const logFile = join(logDir, `${today}.md`);
   if (!existsSync(logFile)) writeFileSync(logFile, "", "utf-8");
+
+  const instrDir = join(workspaceDir, "instructions");
+  mkdirSync(instrDir, { recursive: true });
+  for (const file of ["CONTEXT.md", "IDENTITY.md", "SOUL.md"]) {
+    const p = join(instrDir, file);
+    if (!existsSync(p)) writeFileSync(p, "", "utf-8");
+  }
 }

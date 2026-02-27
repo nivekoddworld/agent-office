@@ -44,8 +44,6 @@ function blockLabel(name: string): string {
   const labels: Record<string, string> = {
     base: "Base prompt",
     office: "Office block",
-    bootstrap: "Bootstrap files",
-    memory: "Memory block",
     runtime: "Runtime block",
     identity: "Identity block",
     custom: "Custom prompt",

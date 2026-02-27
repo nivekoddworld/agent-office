@@ -269,7 +269,7 @@ describe("composeSystemPrompt", () => {
     expect(names).toContain("skills");
   });
 
-  it("minimal mode excludes office, hierarchy, bootstrap, runtime, skills", () => {
+  it("minimal mode excludes office, hierarchy, runtime, skills", () => {
     const { blocks, text } = composeSystemPrompt({
       ...BASE_CTX,
       mode: "minimal",
@@ -282,7 +282,6 @@ describe("composeSystemPrompt", () => {
     const names = blocks.map((b) => b.name);
     expect(names).not.toContain("office");
     expect(names).not.toContain("hierarchy");
-    expect(names).not.toContain("bootstrap");
     expect(names).not.toContain("runtime");
     expect(names).not.toContain("skills");
     expect(text).not.toContain("## Office");

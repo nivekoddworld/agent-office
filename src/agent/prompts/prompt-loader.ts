@@ -20,22 +20,6 @@ export function assertInsideOfficeDir(
 }
 
 /**
- * Resolve `bootstrap_dir` with boundary check. Returns `undefined`
- * when no override is set (caller falls back to the default path).
- */
-export function resolveBootstrapDir(
-  bootstrapDir: string | undefined,
-  officeDir: string,
-  agentName: string,
-): string {
-  const boundary = realpathSync(officeDir);
-  if (!bootstrapDir) return resolve(boundary, "agents", agentName, "bootstrap");
-  const resolved = resolve(boundary, bootstrapDir);
-  assertInsideOfficeDir(officeDir, resolved, "bootstrap_dir");
-  return resolved;
-}
-
-/**
  * Resolve the custom prompt from either inline text or a file path.
  * Returns `undefined` when neither is set.
  */
