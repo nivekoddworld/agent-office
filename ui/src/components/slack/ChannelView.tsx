@@ -223,7 +223,7 @@ export function ChannelView({
     } else if (totalCount > lastCountRef.current) {
       setUnseenCount(totalCount - lastCountRef.current);
     }
-  }, [totalCount, stickToBottom]);
+  }, [totalCount, stickToBottom, dmTab]);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
