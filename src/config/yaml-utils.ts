@@ -15,6 +15,7 @@ export interface AgentYamlEntry {
   cwd?: string;
   skills?: string[];
   api_key_ref?: string;
+  auth?: string;
   env?: Record<string, string>;
   secrets?: Record<string, string>;
   disclose_secrets?: boolean;
@@ -193,6 +194,7 @@ export function buildYamlEntry(
   if (entry.cwd) out.cwd = entry.cwd;
   if (entry.skills && entry.skills.length > 0) out.skills = entry.skills;
   if (entry.api_key_ref) out.api_key_ref = entry.api_key_ref;
+  if (entry.auth) out.auth = entry.auth;
   if (entry.env && Object.keys(entry.env).length > 0) out.env = entry.env;
   if (rawSecrets && Object.keys(rawSecrets).length > 0)
     out.secrets = rawSecrets;

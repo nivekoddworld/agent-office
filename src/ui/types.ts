@@ -69,6 +69,8 @@ export interface AgentDetail {
     activeHours?: { start: string; end: string };
   } | null;
   lastScheduledHeartbeatTs: number | null;
+  auth: string | null;
+  apiKeyRef: string | null;
 }
 
 // --- Command dispatch ---

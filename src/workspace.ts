@@ -22,6 +22,7 @@ import {
   type SessionEntry,
 } from "./sessions/session-writer.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
+import { resolveOAuthKeySync } from "./auth/oauth-resolver.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
@@ -345,7 +346,7 @@ export class Workspace {
     if (useSandbox && this.sandboxProvider && this.hostApi) {
       sandboxToken = randomUUID();
       // Resolve model key and all user-defined secrets
-      const modelKey = resolveModelKey(config);
+      const modelKey = resolveModelKey(config, this.office.dir);
       const secrets: Record<string, string> = { MODEL_API_KEY: modelKey };
       if (config.secrets) {
         const resolved = resolveEnvRefs(
@@ -779,7 +780,11 @@ const PROVIDER_ENV_KEYS: Record<string, string> = {
   xai: "XAI_API_KEY",
 };
 
-function resolveModelKey(config: AgentConfig): string {
+function resolveModelKey(config: AgentConfig, officeDir?: string): string {
+  // OAuth takes precedence
+  if (config.auth?.startsWith("oauth:") && officeDir) {
+    return resolveOAuthKeySync(officeDir, config.auth.slice("oauth:".length));
+  }
   // Custom ref takes precedence
   if (config.apiKeyRef) {
     const key = process.env[config.apiKeyRef];

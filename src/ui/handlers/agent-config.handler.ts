@@ -21,6 +21,8 @@ import {
   setAgentHeartbeat,
   clearAgentHeartbeat,
   setAgentModel,
+  setAgentAuth,
+  clearAgentAuth,
   loadOfficeYaml,
 } from "../../config/office-yaml.js";
 import { getModel, getEnvApiKey } from "@mariozechner/pi-ai";
@@ -349,6 +351,20 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           const model = getModel(provider as any, parts[1] as any);
           await setAgentModel(officeId, agentName, parsed.model);
           handle.updateModel(model);
+
+          // Clear auth if switching to a provider that doesn't support OAuth
+          const OAUTH_PROVIDERS = new Set([
+            "anthropic",
+            "openai",
+            "github-copilot",
+            "google-gemini-cli",
+            "google-antigravity",
+          ]);
+          if (!OAUTH_PROVIDERS.has(provider) && handle.config.auth) {
+            await clearAgentAuth(officeId, agentName);
+            (handle.config as { auth?: string }).auth = undefined;
+          }
+
           broadcast("state_changed", getBootstrapState(workspace, officeId));
 
           const hasCustomKey = !!handle.config.apiKeyRef;
@@ -360,6 +376,47 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             }
           }
           return json(res, 200, { ok: true, warning });
+        } catch (err) {
+          return json(res, 400, {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+    },
+    // PATCH /api/agents/:name/auth
+    {
+      method: "PATCH",
+      pattern: /^\/api\/agents\/([^/]+)\/auth$/,
+      paramNames: ["name"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const agentName = params.name!;
+        const body = await readBody(req);
+        let parsed: { auth?: string | null };
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        if (!("auth" in parsed)) {
+          return json(res, 400, {
+            error: "auth field is required (string or null)",
+          });
+        }
+        const handle = workspace.getAgent(agentName);
+        if (!handle) return json(res, 404, { error: "agent_not_found" });
+        try {
+          if (parsed.auth) {
+            await setAgentAuth(officeId, agentName, parsed.auth);
+            (handle.config as { auth?: string }).auth = parsed.auth;
+            (handle.config as { apiKeyRef?: string }).apiKeyRef = undefined;
+          } else {
+            await clearAgentAuth(officeId, agentName);
+            (handle.config as { auth?: string }).auth = undefined;
+          }
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
+          return json(res, 200, { ok: true });
         } catch (err) {
           return json(res, 400, {
             ok: false,

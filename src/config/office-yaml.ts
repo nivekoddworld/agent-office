@@ -570,3 +570,7 @@ export {
 // --- Re-export model mutations from dedicated module ---
 
 export { setAgentModel } from "./office-yaml-mutations.js";
+
+// --- Re-export auth mutations from dedicated module ---
+
+export { setAgentAuth, clearAgentAuth } from "./office-yaml-mutations.js";

@@ -48,6 +48,7 @@ export interface AgentConfig {
   tools?: AgentTool<any>[];
   apiKey?: string;
   apiKeyRef?: string;
+  auth?: string;
   env?: Record<string, string>;
   secrets?: Record<string, string>;
   discloseSecrets?: boolean;

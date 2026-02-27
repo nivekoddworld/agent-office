@@ -148,6 +148,8 @@ export interface AgentDetail extends AgentInfo {
   hierarchy: AgentHierarchy | null;
   heartbeat: HeartbeatConfig | null;
   lastScheduledHeartbeatTs: number | null;
+  auth: string | null;
+  apiKeyRef: string | null;
 }
 
 export interface AgentSkill {

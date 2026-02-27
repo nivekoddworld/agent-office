@@ -91,6 +91,7 @@ export async function upsertAgentToOfficeYaml(
         "cwd",
         "skills",
         "api_key_ref",
+        "auth",
         "env",
         "secrets",
         "disclose_secrets",
@@ -531,6 +532,45 @@ export async function clearAgentHeartbeat(
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
     doc.deleteIn(["agents", agentName, "heartbeat"]);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Model mutations ---
+
+// --- Auth mutations ---
+
+const AUTH_RE = /^oauth:[a-z][a-z0-9-]*$/;
+
+export async function setAgentAuth(
+  officeId: string,
+  agentName: string,
+  auth: string,
+): Promise<void> {
+  if (!AUTH_RE.test(auth)) {
+    throw new Error(
+      `Invalid auth format "${auth}" — must match "oauth:<provider>"`,
+    );
+  }
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    doc.setIn(["agents", agentName, "auth"], auth);
+    doc.deleteIn(["agents", agentName, "api_key_ref"]);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+export async function clearAgentAuth(
+  officeId: string,
+  agentName: string,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    doc.deleteIn(["agents", agentName, "auth"]);
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }

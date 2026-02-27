@@ -378,3 +378,39 @@ export function useSaveInstructionFile() {
       ),
   });
 }
+
+export function useSetAuth() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      agentName,
+      auth,
+    }: {
+      agentName: string;
+      auth: string | null;
+    }) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/agents/${encodeURIComponent(agentName)}/auth`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ auth }),
+        },
+      ),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
+export function useOAuthDelete() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ provider }: { provider: string }) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/oauth/${encodeURIComponent(provider)}`,
+        { method: "DELETE" },
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["oauth-providers"] });
+      invalidateState(queryClient);
+    },
+  });
+}

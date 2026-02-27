@@ -42,6 +42,7 @@ interface NormalizedConfig {
   env: string;
   secrets: string;
   apiKeyRef: string;
+  auth: string;
   discloseSecrets: boolean;
   permissions: string;
   promptMode: string;
@@ -77,6 +78,7 @@ function normalizeEntry(
     env: JSON.stringify(entry.env ?? {}),
     secrets: JSON.stringify(entry.secrets ?? {}),
     apiKeyRef: entry.api_key_ref ?? "",
+    auth: entry.auth ?? "",
     discloseSecrets: entry.disclose_secrets ?? false,
     permissions: JSON.stringify(entry.permissions ?? {}),
     promptMode: entry.prompt_mode ?? "full",
@@ -105,6 +107,7 @@ function normalizeRunning(
     env: JSON.stringify(cfg.env ?? {}),
     secrets: JSON.stringify(cfg.secrets ?? {}),
     apiKeyRef: cfg.apiKeyRef ?? "",
+    auth: cfg.auth ?? "",
     discloseSecrets: cfg.discloseSecrets ?? false,
     permissions: JSON.stringify(cfg.permissions ?? {}),
     promptMode: cfg.promptMode ?? "full",
@@ -126,6 +129,7 @@ function configsEqual(a: NormalizedConfig, b: NormalizedConfig): boolean {
     a.env === b.env &&
     a.secrets === b.secrets &&
     a.apiKeyRef === b.apiKeyRef &&
+    a.auth === b.auth &&
     a.discloseSecrets === b.discloseSecrets &&
     a.permissions === b.permissions &&
     a.promptMode === b.promptMode &&
@@ -225,6 +229,7 @@ export async function applyOfficeYaml(
         systemPrompt: resolveCustomPrompt(entry, baseDir),
         description: entry.description,
         apiKeyRef: entry.api_key_ref,
+        auth: entry.auth,
         env: entry.env,
         secrets: entry.secrets,
         discloseSecrets: entry.disclose_secrets,

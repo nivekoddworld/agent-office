@@ -6,6 +6,7 @@ import {
   Group,
   Badge,
   Loader,
+  CloseButton,
 } from "@mantine/core";
 import type {
   ComboboxItem,
@@ -13,9 +14,11 @@ import type {
   ComboboxItemGroup,
   ComboboxLikeRenderOptionInput,
 } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
 import type { AgentDetail, ModelInfo } from "../../api/types.js";
 import { useModels } from "../../api/use-models.js";
-import { useSetModel } from "../../api/use-api-mutations.js";
+import { useSetModel, useSetAuth, useOAuthDelete } from "../../api/use-api-mutations.js";
+import { apiFetch } from "../../api/client.js";
 import { notifications } from "@mantine/notifications";
 
 interface ConfigSectionProps {
@@ -38,6 +41,20 @@ const FALLBACK_MODELS: ComboboxItemGroup[] = [
     ],
   },
 ];
+
+const OAUTH_PROVIDER_MAP: Record<string, string> = {
+  anthropic: "anthropic",
+  openai: "openai-codex",
+  "github-copilot": "github-copilot",
+  "google-gemini-cli": "google-gemini-cli",
+  "google-antigravity": "google-antigravity",
+};
+
+interface OAuthProviderStatus {
+  id: string;
+  name: string;
+  authenticated: boolean;
+}
 
 function formatContextWindow(tokens: number): string {
   return `${Math.round(tokens / 1000)}k`;
@@ -68,6 +85,25 @@ function buildModelData(models: ModelInfo[]): {
 export function ConfigSection({ agent }: ConfigSectionProps) {
   const { data: modelsResp, isLoading: modelsLoading } = useModels();
   const setModel = useSetModel();
+  const setAuth = useSetAuth();
+  const oauthDelete = useOAuthDelete();
+
+  const { data: oauthProviders } = useQuery({
+    queryKey: ["oauth-providers"],
+    queryFn: () =>
+      apiFetch<{ providers: OAuthProviderStatus[] }>("/api/oauth/providers"),
+    refetchInterval: 10_000,
+  });
+
+  const modelProvider = agent.modelId.split(":")[0] ?? "";
+  const oauthProviderId = OAUTH_PROVIDER_MAP[modelProvider];
+  const providerHasCreds = oauthProviders?.providers.some(
+    (p) => p.id === oauthProviderId && p.authenticated,
+  );
+  const showAuthSelector = !!oauthProviderId && providerHasCreds;
+  const currentAuthMode = agent.auth?.startsWith("oauth:") ? "OAuth" : "API Key";
+  const authenticated =
+    oauthProviders?.providers.filter((p) => p.authenticated) ?? [];
 
   const { data: selectData, lookup } = useMemo(() => {
     if (!modelsResp?.models.length) {
@@ -123,6 +159,19 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
     );
   };
 
+  const handleAuthChange = (value: string | null) => {
+    if (!value || !oauthProviderId) return;
+    if (value === "API Key") {
+      setAuth.mutate({ agentName: agent.name, auth: null });
+    } else {
+      setAuth.mutate({ agentName: agent.name, auth: `oauth:${oauthProviderId}` });
+    }
+  };
+
+  const handleDeleteCreds = (providerId: string) => {
+    oauthDelete.mutate({ provider: providerId });
+  };
+
   const rows: [string, string][] = [
     ["Status", agent.status],
     ["Priority", String(agent.priority)],
@@ -164,6 +213,59 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
             )}
           </Table.Td>
         </Table.Tr>
+        {showAuthSelector && (
+          <Table.Tr>
+            <Table.Td w={120}>
+              <Text size="xs" c="dimmed">
+                Auth
+              </Text>
+            </Table.Td>
+            <Table.Td>
+              <Select
+                size="xs"
+                data={["API Key", "OAuth"]}
+                value={currentAuthMode}
+                onChange={handleAuthChange}
+                allowDeselect={false}
+                disabled={setAuth.isPending}
+                styles={{
+                  input: { minHeight: 28, height: 28 },
+                }}
+              />
+            </Table.Td>
+          </Table.Tr>
+        )}
+        {authenticated.length > 0 && (
+          <Table.Tr>
+            <Table.Td w={120}>
+              <Text size="xs" c="dimmed">
+                OAuth
+              </Text>
+            </Table.Td>
+            <Table.Td>
+              <Group gap={6}>
+                {authenticated.map((p) => (
+                  <Badge
+                    key={p.id}
+                    size="sm"
+                    variant="light"
+                    color="green"
+                    pr={3}
+                    rightSection={
+                      <CloseButton
+                        size="xs"
+                        variant="transparent"
+                        onClick={() => handleDeleteCreds(p.id)}
+                      />
+                    }
+                  >
+                    {p.name}
+                  </Badge>
+                ))}
+              </Group>
+            </Table.Td>
+          </Table.Tr>
+        )}
         {rows.map(([label, value]) => (
           <Table.Tr key={label}>
             <Table.Td w={120}>

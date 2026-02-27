@@ -181,6 +181,8 @@ export function getAgentDetail(handle: AgentHandle): AgentDetail {
     hierarchy: cfg.hierarchy ?? null,
     heartbeat: cfg.heartbeat ?? null,
     lastScheduledHeartbeatTs: handle.getLastScheduledHeartbeatTs(),
+    auth: cfg.auth ?? null,
+    apiKeyRef: cfg.apiKeyRef ?? null,
   };
 }
 

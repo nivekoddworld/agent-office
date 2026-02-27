@@ -93,6 +93,76 @@ officeCmd
     },
   );
 
+// --- oauth subcommands ---
+
+const oauthCmd = program
+  .command("oauth")
+  .description("OAuth credential management");
+
+oauthCmd
+  .command("login <provider>")
+  .description(
+    "Login with OAuth provider (anthropic, openai-codex, github-copilot, google-gemini-cli, google-antigravity)",
+  )
+  .requiredOption("--office <id>", "Office to store credentials for")
+  .action(async (provider: string, opts: { office: string }) => {
+    try {
+      validateOfficeId(opts.office);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+    if (!officeExists(opts.office)) {
+      console.error(
+        `Office "${opts.office}" not found. Run: agent-office office create ${opts.office}`,
+      );
+      process.exit(1);
+    }
+    const { oauthLogin } = await import("./commands/oauth-login.js");
+    const dir = join(AGENT_OFFICE_DIR, "offices", opts.office);
+    await oauthLogin(dir, provider);
+  });
+
+oauthCmd
+  .command("logout <provider>")
+  .description("Remove OAuth credentials for a provider")
+  .requiredOption("--office <id>", "Office to remove credentials from")
+  .action(async (provider: string, opts: { office: string }) => {
+    try {
+      validateOfficeId(opts.office);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+    if (!officeExists(opts.office)) {
+      console.error(`Office "${opts.office}" not found.`);
+      process.exit(1);
+    }
+    const { oauthLogout } = await import("./commands/oauth-login.js");
+    const dir = join(AGENT_OFFICE_DIR, "offices", opts.office);
+    oauthLogout(dir, provider);
+  });
+
+oauthCmd
+  .command("list")
+  .description("List OAuth providers and their credential status")
+  .requiredOption("--office <id>", "Office to check")
+  .action(async (_opts: { office: string }) => {
+    try {
+      validateOfficeId(_opts.office);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : err);
+      process.exit(1);
+    }
+    if (!officeExists(_opts.office)) {
+      console.error(`Office "${_opts.office}" not found.`);
+      process.exit(1);
+    }
+    const { oauthList } = await import("./commands/oauth-login.js");
+    const dir = join(AGENT_OFFICE_DIR, "offices", _opts.office);
+    oauthList(dir, _opts.office);
+  });
+
 // --- start ---
 
 program

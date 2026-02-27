@@ -158,6 +158,22 @@ export function validateAgentEntry(
     }
   }
 
+  if (entry.auth !== undefined) {
+    if (typeof entry.auth !== "string") {
+      errors.push(`auth must be a string`);
+    } else if (!entry.auth.startsWith("oauth:")) {
+      errors.push(`auth must start with "oauth:" (got "${entry.auth}")`);
+    } else {
+      const provider = entry.auth.slice("oauth:".length);
+      if (!provider) {
+        errors.push(`auth: missing provider after "oauth:"`);
+      }
+    }
+    if (entry.api_key_ref) {
+      errors.push(`Cannot specify both "auth" and "api_key_ref"`);
+    }
+  }
+
   if ("prompt" in entry) {
     errors.push(
       `"prompt" is no longer supported. Use "prompt_inline" instead.`,

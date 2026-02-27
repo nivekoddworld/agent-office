@@ -47,6 +47,11 @@ See [`examples/`](examples/) for more details — each has a README describing t
 
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
+- [OAuth Authentication](#oauth-authentication)
+  - [Supported Providers](#supported-providers)
+  - [CLI Commands](#cli-commands)
+  - [Using OAuth in office.yaml](#using-oauth-in-officeyaml)
+  - [Web UI Auth Selector](#web-ui-auth-selector)
 - [Multi-Office Architecture](#multi-office-architecture)
   - [Creating an Office](#creating-an-office)
   - [Office Configuration](#office-configuration-officeyaml)
@@ -172,12 +177,108 @@ XAI_API_KEY=...                          # For xAI Grok models
 # MY_GH_TOKEN=ghp_...                     # Host env vars for authenticated_fetch secrets
 ```
 
-**Important:** When you hire an agent with a specific model, that model's API key must be present in `.env`. For example:
+**Authentication:** Each model needs credentials. You can use either API keys (`.env`) or OAuth:
 
-- `hire designer --model openai:gpt-4o` requires `OPENAI_API_KEY`
-- `hire researcher --model anthropic:claude-opus-4-6` requires `ANTHROPIC_API_KEY`
+- **API keys** — set in `.env` (e.g. `OPENAI_API_KEY=sk-...`). Required when the model's provider has no OAuth credentials.
+- **OAuth** — authenticate via provider CLIs before starting. OAuth tokens auto-refresh and don't require `.env` keys.
+
+```bash
+# Option A: API keys in .env
+echo "ANTHROPIC_API_KEY=sk-..." >> .env
+
+# Option B: OAuth login (requires provider CLI installed)
+pnpm dev oauth login anthropic --office my-team
+pnpm dev oauth list --office my-team
+```
+
+When both OAuth credentials and an API key exist for a provider, you can switch between them per-agent in the Web UI. See [OAuth Authentication](#oauth-authentication) for details.
 
 See the **Dynamic Model Discovery** section below for how to browse available models and their requirements in the Web UI.
+
+## OAuth Authentication
+
+As an alternative to API keys in `.env`, agents can authenticate with model providers via OAuth. This uses the provider's own CLI login flow — the agent-office CLI orchestrates the browser-based OAuth handshake and stores credentials per office.
+
+### Supported Providers
+
+| Provider ID          | Name              | Flow Type       | Requires                   |
+| -------------------- | ----------------- | --------------- | -------------------------- |
+| `anthropic`          | Anthropic         | Code paste      | Anthropic CLI              |
+| `openai-codex`       | OpenAI            | Callback server | OpenAI Codex CLI           |
+| `github-copilot`     | GitHub Copilot    | Code paste      | GitHub Copilot CLI         |
+| `google-gemini-cli`  | Google Gemini CLI | Callback server | Gemini CLI                 |
+| `google-antigravity` | Antigravity       | Callback server | Antigravity CLI            |
+
+**Code paste** providers open a browser URL and prompt you to paste back an auth code. **Callback server** providers start a local HTTP server and complete the flow automatically.
+
+### CLI Commands
+
+```bash
+# Login — interactive OAuth flow (opens browser)
+pnpm dev oauth login <provider> --office <id>
+
+# List — show all providers and credential status
+pnpm dev oauth list --office <id>
+
+# Logout — remove stored credentials
+pnpm dev oauth logout <provider> --office <id>
+```
+
+**Example session:**
+
+```bash
+$ pnpm dev oauth login anthropic --office my-team
+[oauth] Logging in to Anthropic...
+[oauth] Open this URL to authenticate:
+  https://console.anthropic.com/oauth/...
+Paste the authorization code: ****
+[oauth] Credentials saved for Anthropic.
+
+$ pnpm dev oauth list --office my-team
+  ✓ anthropic              Anthropic
+  ✗ openai-codex           OpenAI
+  ✗ github-copilot         GitHub Copilot
+  ✗ google-gemini-cli      Google Gemini CLI
+  ✗ google-antigravity     Antigravity
+
+  Login:   pnpm dev oauth login <provider> --office my-team
+  Logout:  pnpm dev oauth logout <provider> --office my-team
+```
+
+Credentials are stored at `~/.agent-office/offices/<id>/oauth/<provider>.json` and auto-refresh when tokens expire.
+
+### Using OAuth in `office.yaml`
+
+Set the `auth` field on an agent to use OAuth instead of an API key:
+
+```yaml
+agents:
+  designer:
+    model: anthropic:claude-sonnet-4-20250514
+    auth: "oauth:anthropic"    # use OAuth credentials
+  reviewer:
+    model: openai:gpt-4o
+    auth: "oauth:openai-codex" # use OAuth credentials
+  analyst:
+    model: google:gemini-2.0-flash
+    # no auth field — falls back to GEMINI_API_KEY from .env
+```
+
+The `auth` field format is `oauth:<provider-id>`. When set, the agent uses stored OAuth credentials with automatic token refresh instead of a static API key.
+
+### Web UI Auth Selector
+
+When OAuth credentials exist for an agent's model provider, the Web UI Config tab shows an **Auth** selector to switch between "API Key" and "OAuth" modes. The UI also displays all authenticated providers as green badges with one-click removal.
+
+The auth selector only appears when credentials are available — if no OAuth login has been done for a provider, agents use API keys by default.
+
+### OAuth REST API
+
+| Method   | Path                     | Description                                     |
+| -------- | ------------------------ | ----------------------------------------------- |
+| `GET`    | `/api/oauth/providers`   | List all providers with authentication status    |
+| `GET`    | `/api/oauth/status/:id`  | Check if credentials exist for a provider        |
+| `DELETE` | `/api/oauth/:id`         | Remove stored credentials for a provider         |
 
 ## Multi-Office Architecture
 
@@ -236,6 +337,7 @@ agents:
       Focus on clean, semantic HTML and modern CSS.
     skills:
       - nichochar/web-skills
+    auth: "oauth:anthropic" # optional — use OAuth instead of API key
     api_key_ref: MY_CUSTOM_KEY # optional — host env var name for model key override
     env: # non-sensitive, passed as Docker --env (agent overrides office)
       LOG_LEVEL: debug
@@ -268,6 +370,7 @@ All agent fields are optional. Agents are spawned sequentially in declaration or
 | `prompt_inline`    | string           | _(none)_                                               | Custom instructions (inline text, appended to base prompt)                       |
 | `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                                |
 | `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                                    |
+| `auth`             | string           | _(none — uses API key)_                                | Auth mode: `oauth:<provider-id>` for OAuth (see [OAuth](#oauth-authentication))  |
 | `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                              |
 | `env`              | map              | `{}`                                                   | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)                  |
 | `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`)             |
@@ -860,6 +963,9 @@ The table below lists all available operations and their descriptions:
 | `cost status`                                         | Session token and cost totals (resets on restart)             |
 | `cost today [--agent <name>]`                         | Persistent token and cost totals for today                    |
 | `cost report --days <n> [--agent <name>]`             | Historical usage over last N days                             |
+| `oauth login <provider> --office <id>`                | Interactive OAuth login for a provider                        |
+| `oauth logout <provider> --office <id>`               | Remove OAuth credentials for a provider                       |
+| `oauth list --office <id>`                            | List all providers and credential status                      |
 
 ### Hire Options
 
@@ -952,7 +1058,7 @@ Runtime commands (everything in the table above) can be executed through two sur
 - **Web UI** — dedicated controls (buttons, forms, modals) for common operations: hire, fire, send messages, cron management, office reload, org chart. Some data (tasks, cost, permissions, skills) is displayed read-only. There is no free-text command prompt in the UI.
 - **REST API** — typed endpoints per resource (e.g. `POST /api/agents`, `DELETE /api/agents/:name`, `PATCH /api/agents/:name/prompt`), plus `POST /api/send` for agent messages. Callable via `curl`, scripts, or browser DevTools. See [REST API Endpoints](#rest-api-endpoints).
 
-One-shot CLI commands (`office create`, `office validate`, `office migrate`, `start`) are run in the terminal and are not part of the runtime API.
+One-shot CLI commands (`office create`, `office validate`, `office migrate`, `oauth login/logout/list`, `start`) are run in the terminal and are not part of the runtime API.
 
 With `--no-ui`, the dashboard and API server are not started — runtime commands are unavailable for that process.
 
@@ -988,6 +1094,7 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 | `PATCH`  | `/api/agents/:name/permissions`    | Update agent permissions           |
 | `PATCH`  | `/api/agents/:name/env`            | Set or unset agent env var         |
 | `PATCH`  | `/api/agents/:name/secret-refs`    | Set or unset agent secret ref      |
+| `PATCH`  | `/api/agents/:name/auth`           | Set or clear agent auth mode       |
 | `PATCH`  | `/api/agents/:name/manager`        | Set or clear agent manager         |
 | `PATCH`  | `/api/agents/:name/heartbeat`      | Set agent heartbeat config         |
 | `DELETE` | `/api/agents/:name/heartbeat`      | Clear agent heartbeat config       |
@@ -1050,6 +1157,14 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 | `GET`   | `/api/cost`                  | Cost and token usage data            |
 | `GET`   | `/api/collaboration/metrics` | Collaboration observability snapshot |
 | `PATCH` | `/api/collaboration/policy`  | Update collaboration policy          |
+
+**OAuth:**
+
+| Method   | Path                     | Description                                  |
+| -------- | ------------------------ | -------------------------------------------- |
+| `GET`    | `/api/oauth/providers`   | List all providers with authentication status |
+| `GET`    | `/api/oauth/status/:id`  | Check credential status for a provider        |
+| `DELETE` | `/api/oauth/:id`         | Remove stored credentials for a provider      |
 
 ## Agent Collaboration
 
@@ -1858,6 +1973,7 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 - **Agent detail** — skills tab for viewing installed skills per agent
 - **Agent fire** — comprehensive cleanup with impact modal showing affected tasks, cron jobs, and channel memberships before confirmation
 - **Dynamic model selection** — Hire modal displays all 700+ available models from pi-ai, grouped by provider with metadata (reasoning capability, context window, costs). Auto-updates when pi-ai upgrades.
+- **OAuth auth selector** — per-agent Config tab shows auth mode toggle (API Key / OAuth) when OAuth credentials exist for the agent's model provider, plus authenticated provider badges with one-click credential removal
 - **Heartbeat management** — top-level page (`/heartbeat`) with card-based dashboard showing configured heartbeats, next run times, active hours, and add/edit/remove via modal
 - **Cron management** — top-level sidebar item with dedicated cron view, human-friendly schedule builder (hourly/daily/weekly/custom), report channel selector, loading states, and delete confirmation
 - **Files browser** — centralized page (`/files`) to browse all agents' workspace files
@@ -2151,7 +2267,12 @@ src/
     local.ts                  In-process priority inbox queues (with SQLite persist hooks)
     message-bus.ts            Bus wrapper over transport (store integration, pop, purge)
 
+  auth/
+    oauth-store.ts            OAuth credential persistence (load/save/path, atomic writes)
+    oauth-resolver.ts         Dynamic getApiKey callback (auto-refresh) + sync resolver
+
   commands/
+    oauth-login.ts            OAuth CLI: login (interactive), logout, list providers
     office-apply.ts           Apply office.yaml + reload/validate/path commands
     hire.ts                   Agent creation with YAML auto-sync
     roster.ts                 Agent status table
@@ -2192,6 +2313,7 @@ src/
       channels.handler.ts         Channel CRUD + messaging
       cron-agent.handler.ts       Per-agent cron jobs
       cron-office.handler.ts      Office-level cron jobs
+      oauth.handler.ts            OAuth provider listing + credential removal
       office.handler.ts           Office apply/validate/path + scheduler
       sse.handler.ts              SSE event streaming
       state.handler.ts            Bootstrap state + status

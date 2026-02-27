@@ -34,6 +34,7 @@ import { register as registerChannels } from "./handlers/channels.handler.js";
 import { register as registerCronOffice } from "./handlers/cron-office.handler.js";
 import { register as registerOffice } from "./handlers/office.handler.js";
 import { register as registerAnalytics } from "./handlers/analytics.handler.js";
+import { register as registerOAuth } from "./handlers/oauth.handler.js";
 
 const DEFAULT_PORT = 3847;
 const HOST = "127.0.0.1";
@@ -144,6 +145,7 @@ export async function startUiServer(
   router.register(registerAgentFiles(ctx));
   router.register(registerAgentSkills(ctx));
   router.register(registerAgentConfig(ctx));
+  router.register(registerOAuth(ctx));
   router.register(registerAgentMessaging(ctx));
   router.register(registerCronAgent(ctx));
   router.register(registerAgentCore(ctx));

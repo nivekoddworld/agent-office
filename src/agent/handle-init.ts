@@ -51,6 +51,7 @@ import type { ObligationStore } from "../collaboration/obligation-store.js";
 import type { PolicyService } from "../collaboration/policy-service.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
+import { createOAuthGetApiKey } from "../auth/oauth-resolver.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { applyToolPolicy } from "./tools/policy.js";
@@ -181,7 +182,14 @@ export async function initInProcessAgent(
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
 
   let resolvedApiKey: string | undefined;
-  if (ctx.config.apiKeyRef) {
+  let oauthGetApiKey:
+    | ((provider: string) => Promise<string | undefined>)
+    | undefined;
+
+  if (ctx.config.auth?.startsWith("oauth:")) {
+    const oauthProvider = ctx.config.auth.slice("oauth:".length);
+    oauthGetApiKey = createOAuthGetApiKey(ctx.baseDir, oauthProvider);
+  } else if (ctx.config.apiKeyRef) {
     resolvedApiKey = process.env[ctx.config.apiKeyRef];
     if (!resolvedApiKey) {
       throw new Error(
@@ -349,7 +357,7 @@ export async function initInProcessAgent(
       tools,
     },
     streamFn: streamSimple,
-    getApiKey: resolvedApiKey ? () => resolvedApiKey : undefined,
+    getApiKey: oauthGetApiKey ?? (resolvedApiKey ? () => resolvedApiKey : undefined),
   });
 
   const secretValues: Record<string, string> = {};
