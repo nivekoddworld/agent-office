@@ -177,7 +177,7 @@ function formatMessagePayload(
     if (msg.from === "__user__") {
       return (
         `[Message from user${ctx}]\n${msg.payload}\n\n` +
-        `[To reply, call message_user]`
+        `[To reply, call post_channel with channel="#${msg.channel}"]`
       );
     }
     if (msg.from === "__cron__") {

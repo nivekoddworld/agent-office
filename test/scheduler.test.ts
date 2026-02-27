@@ -411,7 +411,7 @@ describe("Scheduler", () => {
 
       expect(target.prompt).toHaveBeenCalledWith(
         "[Message from user in #general. Other members: designer, pm]\nHello everyone\n\n" +
-          "[To reply, call message_user]",
+          '[To reply, call post_channel with channel="#general"]',
       );
     });
 
@@ -473,7 +473,7 @@ describe("Scheduler", () => {
 
       expect(target.prompt).toHaveBeenCalledWith(
         "[Message from user in #dev. Other members: bob]\nhi\n\n" +
-          "[To reply, call message_user]",
+          '[To reply, call post_channel with channel="#dev"]',
       );
     });
 
@@ -501,7 +501,7 @@ describe("Scheduler", () => {
       sched.stop();
 
       expect(target.prompt).toHaveBeenCalledWith(
-        "[Message from user in #unknown]\nhello\n\n[To reply, call message_user]",
+        '[Message from user in #unknown]\nhello\n\n[To reply, call post_channel with channel="#unknown"]',
       );
     });
   });
