@@ -27,6 +27,7 @@ interface MessageInputProps {
   channelLabel: string;
   mentionCandidates?: string[];
   onMessageSent?: (agentName: string, text: string, requestId: string) => void;
+  disabled?: boolean;
 }
 
 export function MessageInput({
@@ -36,6 +37,7 @@ export function MessageInput({
   channelLabel,
   mentionCandidates,
   onMessageSent,
+  disabled,
 }: MessageInputProps) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -126,6 +128,9 @@ export function MessageInput({
         borderRadius: 8,
         backgroundColor: "var(--ao-bg-input)",
         overflow: "hidden",
+        ...(disabled
+          ? { opacity: 0.5, pointerEvents: "none" as const }
+          : {}),
       }}
     >
       <textarea
@@ -133,7 +138,8 @@ export function MessageInput({
         value={text}
         onChange={(e) => setText(e.currentTarget.value)}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder}
+        placeholder={disabled ? "Read-only conversation" : placeholder}
+        disabled={disabled}
         rows={1}
         style={{
           width: "100%",

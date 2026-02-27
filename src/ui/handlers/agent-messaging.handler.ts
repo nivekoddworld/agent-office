@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { HandlerContext } from "../handler-context.js";
 import type { RouteDefinition } from "../router.js";
@@ -133,6 +133,88 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           }
         }
         return json(res, result.ok ? 200 : 400, result);
+      },
+    },
+    // GET /api/agents/:name/peers — list peer agents with session files
+    {
+      method: "GET",
+      pattern: /^\/api\/agents\/([^/]+)\/peers$/,
+      paramNames: ["name"],
+      handler: (_req, res, _url, params) => {
+        const name = params.name!;
+        const dir = join(
+          workspace.office.dir,
+          "agents",
+          name,
+          "sessions",
+        );
+        let peers: string[] = [];
+        try {
+          peers = readdirSync(dir)
+            .filter((f) => f.startsWith("agent-") && f.endsWith(".jsonl"))
+            .map((f) => f.slice(6, -6));
+        } catch {
+          // directory may not exist
+        }
+        return json(res, 200, { agent: name, peers });
+      },
+    },
+    // GET /api/agents/:name/peers/:peer/messages — read inter-agent JSONL
+    {
+      method: "GET",
+      pattern: /^\/api\/agents\/([^/]+)\/peers\/([^/]+)\/messages$/,
+      paramNames: ["name", "peer"],
+      handler: (_req, res, url, params) => {
+        const name = params.name!;
+        const peer = params.peer!;
+        const rawLimit = parseInt(
+          url.searchParams.get("limit") ?? "100",
+          10,
+        );
+        if (isNaN(rawLimit))
+          return json(res, 400, { error: "invalid_limit" });
+        const limit = Math.max(1, Math.min(500, rawLimit));
+
+        const filePath = join(
+          workspace.office.dir,
+          "agents",
+          name,
+          "sessions",
+          `agent-${peer}.jsonl`,
+        );
+        let lines: string[] = [];
+        try {
+          lines = readFileSync(filePath, "utf-8")
+            .split("\n")
+            .filter((l) => l.length > 0);
+        } catch {
+          // file may not exist
+        }
+
+        const tail = lines.slice(-limit);
+        const messages = tail
+          .map((line, idx) => {
+            try {
+              const e = JSON.parse(line) as {
+                ts: string;
+                role: string;
+                from: string;
+                text: string;
+              };
+              return {
+                seq: idx + 1,
+                role: e.role,
+                from: e.from,
+                text: e.text,
+                ts: new Date(e.ts).getTime(),
+              };
+            } catch {
+              return null;
+            }
+          })
+          .filter((m): m is NonNullable<typeof m> => m !== null);
+
+        return json(res, 200, { agent: name, peer, messages });
       },
     },
   ];

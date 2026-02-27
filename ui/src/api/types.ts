@@ -261,6 +261,25 @@ export interface DmHistoryResponse {
   messages: DmMessage[];
 }
 
+export interface PeerListResponse {
+  agent: string;
+  peers: string[];
+}
+
+export interface PeerMessage {
+  seq: number;
+  role: "user" | "assistant";
+  from: string;
+  text: string;
+  ts: number;
+}
+
+export interface PeerMessagesResponse {
+  agent: string;
+  peer: string;
+  messages: PeerMessage[];
+}
+
 export interface ChannelMessage {
   seq: number;
   role: "user" | "assistant";

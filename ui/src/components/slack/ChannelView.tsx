@@ -9,6 +9,7 @@ import {
   IconSettings,
   IconFileText,
   IconSparkles,
+  IconMessageCircle,
 } from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
 
@@ -23,6 +24,7 @@ import { AgentFilesPanel } from "./AgentFilesPanel.js";
 import { AgentConfigPanel } from "../agent-detail/AgentConfigPanel.js";
 import { AgentPromptPanel } from "../agent-detail/AgentPromptPanel.js";
 import { AgentSkillsPanel } from "../agent-detail/AgentSkillsPanel.js";
+import { PeerConversations } from "../agent-detail/PeerConversations.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import {
   eventToMessages,
@@ -43,7 +45,13 @@ import { useChannelMessages } from "../../api/use-channel-messages.js";
 import { usePreferences } from "../../store/preferences-store.js";
 import { unreadStore } from "../../store/unread-store.js";
 
-type DmTab = "messages" | "files" | "prompt" | "skills" | "configure";
+type DmTab =
+  | "messages"
+  | "conversations"
+  | "files"
+  | "prompt"
+  | "skills"
+  | "configure";
 
 interface ChannelViewProps {
   channel: ChannelId;
@@ -354,12 +362,27 @@ export function ChannelView({
         >
           <Group gap={0} px="md">
             {(
-              ["messages", "files", "prompt", "skills", "configure"] as const
+              [
+                "messages",
+                "conversations",
+                "files",
+                "prompt",
+                "skills",
+                "configure",
+              ] as const
             ).map((tab) => {
               const active = dmTab === tab;
               const icons: Record<DmTab, React.ReactNode> = {
                 messages: (
                   <IconMessages
+                    size={15}
+                    color={
+                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                    }
+                  />
+                ),
+                conversations: (
+                  <IconMessageCircle
                     size={15}
                     color={
                       active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
@@ -401,6 +424,7 @@ export function ChannelView({
               };
               const labels: Record<DmTab, string> = {
                 messages: "Messages",
+                conversations: "Internal",
                 files: "Files",
                 prompt: "Prompt",
                 skills: "Skills",
@@ -440,7 +464,12 @@ export function ChannelView({
         </Box>
       )}
 
-      {isDm && dmTab === "configure" ? (
+      {isDm && dmTab === "conversations" ? (
+        <PeerConversations
+          agentName={channel.agentName}
+          onClickAvatar={onClickAvatar}
+        />
+      ) : isDm && dmTab === "configure" ? (
         <AgentConfigPanel
           agentName={channel.agentName}
           agentNames={agentNames}
