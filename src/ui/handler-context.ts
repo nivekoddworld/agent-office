@@ -6,5 +6,4 @@ export interface HandlerContext {
   getPort: () => number;
   broadcast: (type: string, data: unknown) => void;
   refreshChannels: () => void;
-  refreshPolicy: () => void;
 }

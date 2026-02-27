@@ -23,8 +23,12 @@ import {
   setAgentModel,
   setAgentAuth,
   clearAgentAuth,
+  setAgentDescription,
+  setAgentPriority,
+  setAgentThinking,
   loadOfficeYaml,
 } from "../../config/office-yaml.js";
+import { Priority } from "../../types.js";
 import { getModel, getEnvApiKey } from "@mariozechner/pi-ai";
 import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
@@ -490,6 +494,129 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         try {
           await clearAgentHeartbeat(officeId, name);
           workspace.getAgent(name)?.updateHeartbeat(undefined);
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
+          return json(res, 200, { ok: true });
+        } catch (err) {
+          return json(res, 400, {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+    },
+    // PATCH /api/agents/:name/description
+    {
+      method: "PATCH",
+      pattern: /^\/api\/agents\/([^/]+)\/description$/,
+      paramNames: ["name"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const agentName = params.name!;
+        const body = await readBody(req);
+        let parsed: { description?: string | null };
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        if (!("description" in parsed)) {
+          return json(res, 400, {
+            error: "description field is required (string or null)",
+          });
+        }
+        try {
+          const desc =
+            typeof parsed.description === "string" && parsed.description.trim()
+              ? parsed.description.trim()
+              : null;
+          await setAgentDescription(officeId, agentName, desc);
+          workspace.getAgent(agentName)?.updateDescription(desc ?? undefined);
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
+          return json(res, 200, { ok: true });
+        } catch (err) {
+          return json(res, 400, {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+    },
+    // PATCH /api/agents/:name/priority
+    {
+      method: "PATCH",
+      pattern: /^\/api\/agents\/([^/]+)\/priority$/,
+      paramNames: ["name"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const agentName = params.name!;
+        const body = await readBody(req);
+        let parsed: { priority?: string };
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        const validPriorities = ["idle", "low", "normal", "high", "critical"];
+        if (
+          !parsed.priority ||
+          !validPriorities.includes(parsed.priority)
+        ) {
+          return json(res, 400, {
+            error: `priority must be one of: ${validPriorities.join(", ")}`,
+          });
+        }
+        const priorityMap: Record<string, Priority> = {
+          idle: Priority.IDLE,
+          low: Priority.LOW,
+          normal: Priority.NORMAL,
+          high: Priority.HIGH,
+          critical: Priority.CRITICAL,
+        };
+        try {
+          await setAgentPriority(officeId, agentName, parsed.priority);
+          workspace
+            .getAgent(agentName)
+            ?.updatePriority(priorityMap[parsed.priority]!);
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
+          return json(res, 200, { ok: true });
+        } catch (err) {
+          return json(res, 400, {
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+    },
+    // PATCH /api/agents/:name/thinking
+    {
+      method: "PATCH",
+      pattern: /^\/api\/agents\/([^/]+)\/thinking$/,
+      paramNames: ["name"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const agentName = params.name!;
+        const body = await readBody(req);
+        let parsed: { thinking?: string | null };
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        if (!("thinking" in parsed)) {
+          return json(res, 400, {
+            error: "thinking field is required (string or null)",
+          });
+        }
+        try {
+          const thinking =
+            typeof parsed.thinking === "string" && parsed.thinking.trim()
+              ? parsed.thinking.trim()
+              : null;
+          await setAgentThinking(officeId, agentName, thinking);
+          const handle = workspace.getAgent(agentName);
+          handle?.updateThinkingLevel(
+            thinking ? (thinking as any) : undefined,
+          );
           broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true });
         } catch (err) {

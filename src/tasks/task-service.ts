@@ -169,6 +169,13 @@ export class TaskService {
       if (!TASK_STATUSES.includes(params.status)) {
         return `Error: invalid status "${params.status}"`;
       }
+      // Restart transitions must go through restart() to clear completion data
+      if (
+        params.status === "todo" &&
+        (task.status === "done" || task.status === "failed")
+      ) {
+        return `Error: use restart to move a ${task.status} task back to todo`;
+      }
       const allowed = STATUS_TRANSITIONS[task.status];
       if (!allowed.includes(params.status)) {
         return `Error: cannot transition from "${task.status}" to "${params.status}". Allowed: ${allowed.join(", ") || "none"}`;
@@ -229,6 +236,39 @@ export class TaskService {
       this.resolveDependencies(task.id);
       this.doneHook?.(task);
     }
+
+    return task;
+  }
+
+  /** Restart a done or failed task — resets to "todo", clears completion data. */
+  restart(restartedBy: string, taskId: string): Task | string {
+    const task = this.tasks[taskId];
+    if (!task) return `Error: task "${taskId}" not found`;
+
+    if (task.status !== "done" && task.status !== "failed") {
+      return `Error: cannot restart task in "${task.status}" status. Only done or failed tasks can be restarted.`;
+    }
+
+    const oldStatus = task.status;
+    task.status = "todo";
+    task.startedAt = undefined;
+    task.completedAt = undefined;
+    task.result = undefined;
+    task.updatedAt = Date.now();
+
+    this.persist();
+    this.stateChangedCallback?.();
+
+    auditTaskAction(this.officeDir, {
+      ts: new Date().toISOString(),
+      agent: restartedBy,
+      action: "restart",
+      taskId: task.id,
+      result: "ok",
+      details: { from: oldStatus, to: "todo" },
+    });
+
+    this.notifyAssignee(task, "restart");
 
     return task;
   }
@@ -343,6 +383,25 @@ export class TaskService {
     return board;
   }
 
+  /**
+   * Re-notify agents about pending tasks that lost their inbox message
+   * (e.g. after a system restart). Returns the number of tasks recovered.
+   */
+  recoverPendingTasks(): number {
+    let recovered = 0;
+    for (const task of Object.values(this.tasks)) {
+      if (task.status !== "in_progress" && task.status !== "todo") continue;
+
+      const inbox = this.bus.peekMessages(task.assignee);
+      const hasMessage = inbox.some((m) => m.originTaskId === task.id);
+      if (hasMessage) continue;
+
+      this.notifyAssignee(task, "recovery");
+      recovered++;
+    }
+    return recovered;
+  }
+
   private resolveDependencies(completedTaskId: string): void {
     for (const task of Object.values(this.tasks)) {
       if (task.status !== "waiting") continue;
@@ -412,16 +471,30 @@ export class TaskService {
     }
   }
 
-  private notifyAssignee(task: Task, reason: "new" | "ready"): void {
-    const prefix = reason === "new" ? "[New Task]" : "[Task Ready]";
+  private notifyAssignee(
+    task: Task,
+    reason: "new" | "ready" | "restart" | "recovery",
+  ): void {
+    const prefix =
+      reason === "new"
+        ? "[New Task]"
+        : reason === "restart"
+          ? "[Task Restarted]"
+          : reason === "recovery"
+            ? "[Task Recovery]"
+            : "[Task Ready]";
     const depInfo =
       reason === "ready" && task.dependsOn.length > 0
         ? `\nDepends on: ${task.dependsOn.map((id) => `#${id}`).join(", ")} (all done)`
         : "";
+    const recoveryInfo =
+      reason === "recovery"
+        ? `\nStatus: ${task.status} — ${task.status === "in_progress" ? "you were working on this when the system restarted." : "this task is ready for you to pick up."}`
+        : "";
 
     const payload =
       `${prefix} #${task.id}: ${task.title}\n` +
-      `Created by: ${task.createdBy}${depInfo}\n` +
+      `Created by: ${task.createdBy}${depInfo}${recoveryInfo}\n` +
       (task.description ? `Description: ${task.description}\n` : "") +
       `Use task_get("${task.id}") for full details.`;
 

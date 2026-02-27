@@ -27,13 +27,10 @@ export async function fireCommand(
       `[fire] Removed task templates from ${affectedCrons} cron job(s)`,
     );
 
-  // 5. Clear obligations involving the agent
-  workspace.obligationStore.purgeByAgent(name);
-
-  // 6. Delete session JSONL files
+  // 5. Delete session JSONL files
   deleteAgentSessions(workspace.office.dir, name);
 
-  // 7. Sync office.yaml: remove agent + channel memberships + cron templates
+  // 6. Sync office.yaml: remove agent + channel memberships + cron templates
   const officeId = workspace.office?.id;
   if (officeId) {
     try {

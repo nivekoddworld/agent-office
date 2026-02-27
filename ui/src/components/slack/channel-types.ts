@@ -3,7 +3,6 @@ export type SystemTarget =
   | "cron"
   | "debug"
   | "cost"
-  | "collaboration"
   | "settings"
   | "org-chart";
 

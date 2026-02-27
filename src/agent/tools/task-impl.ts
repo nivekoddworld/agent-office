@@ -85,6 +85,7 @@ interface TaskUpdateParams {
   result?: string;
   assignee?: string;
   priority?: string;
+  restart?: boolean;
 }
 
 export function taskUpdateImpl(
@@ -94,6 +95,14 @@ export function taskUpdateImpl(
   if (!deps.taskService) return "Error: task service not initialized";
 
   if (!params.id) return "Error: task id is required";
+
+  // Handle restart
+  if (params.restart) {
+    const restarted = deps.taskService.restart(deps.agentName, params.id);
+    if (typeof restarted === "string") return restarted;
+    return `Task #${restarted.id} restarted: [todo] [${priorityLabel(restarted.priority)}]`;
+  }
+
   if (
     !params.status &&
     !params.result &&

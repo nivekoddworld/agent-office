@@ -452,7 +452,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
                 <Group gap="xs">
                   <Button
                     size="xs"
-                    variant="light"
+                    variant="filled"
                     leftSection={<IconDeviceFloppy size={14} />}
                     onClick={handleSet}
                     loading={setPrompt.isPending}
@@ -462,8 +462,8 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
                   </Button>
                   <Button
                     size="xs"
-                    variant="light"
-                    color="teal"
+                    variant="filled"
+                    color="sage"
                     leftSection={<IconFileImport size={14} />}
                     onClick={handleImportInstructions}
                     loading={setPrompt.isPending}
@@ -472,7 +472,7 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
                   </Button>
                   <Button
                     size="xs"
-                    variant="light"
+                    variant="filled"
                     color="red"
                     leftSection={<IconEraser size={14} />}
                     onClick={() => setConfirmClear(true)}

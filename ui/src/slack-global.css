@@ -205,7 +205,7 @@ body,
 }
 .markdown-body code {
   background-color: var(--ao-bg-code);
-  color: #00ff88;
+  color: #6ec77a;
   padding: 0.15em 0.35em;
   border-radius: 3px;
   font-size: 0.9em;
@@ -235,7 +235,7 @@ body,
   margin: 0.15em 0;
 }
 .markdown-body blockquote {
-  border-left: 3px solid var(--ao-accent-purple);
+  border-left: 3px solid var(--ao-accent-sage);
   margin: 0.5em 0;
   padding: 0.25em 0.75em;
   color: var(--ao-text-secondary);
@@ -270,39 +270,39 @@ body,
   color: var(--ao-text-bright);
 }
 
-/* ─── Syntax highlighting (cyberpunk neon) ─── */
+/* ─── Syntax highlighting (warm earth tones) ─── */
 
 .hljs {
-  color: #c9d1d9;
+  color: #d4d0cc;
 }
 .hljs-keyword,
 .hljs-selector-tag {
-  color: #a855f7;
+  color: #6ec77a;
 }
 .hljs-string,
 .hljs-attr {
-  color: #fbbf24;
+  color: #f0a868;
 }
 .hljs-number,
 .hljs-literal {
-  color: #00ff88;
+  color: #7dd6a4;
 }
 .hljs-comment {
-  color: #484f58;
+  color: #7a7470;
   font-style: italic;
 }
 .hljs-function,
 .hljs-title {
-  color: #00d4ff;
+  color: #e8b86d;
 }
 .hljs-type,
 .hljs-built_in {
-  color: #00ff88;
+  color: #5cc49c;
 }
 .hljs-variable,
 .hljs-params {
-  color: #7dd3fc;
+  color: #d4b87a;
 }
 .hljs-meta {
-  color: #a855f7;
+  color: #6ec77a;
 }

@@ -11,7 +11,6 @@ import {
   ENV_REF_RE,
   RESERVED_KEYS,
 } from "./yaml-utils.js";
-import type { CollaborationMode, CollaborationSla } from "../types.js";
 
 function requireOfficeDoc(officeId: string): {
   path: string;
@@ -389,32 +388,6 @@ export async function clearAgentPermissionTools(
   });
 }
 
-// --- Collaboration policy mutations ---
-
-export async function setCollaborationMode(
-  officeDir: string,
-  mode: CollaborationMode,
-): Promise<void> {
-  return withOfficeLock(officeDir, async () => {
-    const { path, doc } = requireOfficeDoc(officeDir);
-    doc.setIn(["office", "collaborationPolicy", "mode"], mode);
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
-export async function setCollaborationSla(
-  officeDir: string,
-  sla: Partial<CollaborationSla>,
-): Promise<void> {
-  return withOfficeLock(officeDir, async () => {
-    const { path, doc } = requireOfficeDoc(officeDir);
-    for (const [key, value] of Object.entries(sla)) {
-      doc.setIn(["office", "collaborationPolicy", "sla", key], value);
-    }
-    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
-  });
-}
-
 // --- Channel mutations ---
 
 export async function createChannelInOfficeYaml(
@@ -587,6 +560,68 @@ export async function setAgentModel(
     if (!doc.getIn(["agents", agentName]))
       throw new Error(`Agent "${agentName}" not found in office.yaml`);
     doc.setIn(["agents", agentName, "model"], modelSpec);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Description mutations ---
+
+export async function setAgentDescription(
+  officeId: string,
+  agentName: string,
+  description: string | null,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    if (description) {
+      doc.setIn(["agents", agentName, "description"], description);
+    } else {
+      doc.deleteIn(["agents", agentName, "description"]);
+    }
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Priority mutations ---
+
+const VALID_PRIORITIES = ["idle", "low", "normal", "high", "critical"];
+
+export async function setAgentPriority(
+  officeId: string,
+  agentName: string,
+  priority: string,
+): Promise<void> {
+  if (!VALID_PRIORITIES.includes(priority))
+    throw new Error(
+      `Invalid priority "${priority}" — must be one of: ${VALID_PRIORITIES.join(", ")}`,
+    );
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    doc.setIn(["agents", agentName, "priority"], priority);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}
+
+// --- Thinking level mutations ---
+
+export async function setAgentThinking(
+  officeId: string,
+  agentName: string,
+  thinking: string | null,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (!doc.getIn(["agents", agentName]))
+      throw new Error(`Agent "${agentName}" not found in office.yaml`);
+    if (thinking) {
+      doc.setIn(["agents", agentName, "thinking"], thinking);
+    } else {
+      doc.deleteIn(["agents", agentName, "thinking"]);
+    }
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }

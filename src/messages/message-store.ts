@@ -193,7 +193,7 @@ export function createMessageStore(dbPath: string): MessageStore {
     db.exec(`UPDATE schema_meta SET value = '5' WHERE key = 'version'`);
   }
 
-  // v5 → v6 migration: add envelope fields for collaboration tracking
+  // v5 → v6 migration: add envelope fields for message tracking
   const v6Check = db
     .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
     .get() as { value: string } | undefined;
@@ -299,8 +299,8 @@ export function createMessageStore(dbPath: string): MessageStore {
   );
 
   const insertInbox = db.prepare(
-    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms, session_key, source_kind, channel, correlation_id, requires_reply, reply_by_ts, origin_task_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms, session_key, source_kind, channel, correlation_id, origin_task_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const selectInbox = db.prepare(
     `SELECT * FROM inbox_messages WHERE to_agent = ? ORDER BY priority DESC, seq ASC`,
@@ -338,8 +338,6 @@ export function createMessageStore(dbPath: string): MessageStore {
         msg.source_kind ?? null,
         msg.channel ?? null,
         msg.correlation_id ?? null,
-        msg.requires_reply ?? 0,
-        msg.reply_by_ts ?? null,
         msg.origin_task_id ?? null,
       );
     },

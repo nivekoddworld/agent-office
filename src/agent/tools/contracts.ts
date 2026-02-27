@@ -11,30 +11,6 @@ export const MESSAGE_AGENT = {
       description: "Target agent name",
     }),
     message: Type.String({ description: "Message content" }),
-    requiresReply: Type.Optional(
-      Type.Boolean({
-        description: "Request a reply within SLA (default: false)",
-      }),
-    ),
-    replyByMinutes: Type.Optional(
-      Type.Integer({
-        description: "Custom reply SLA in minutes (overrides office default)",
-        minimum: 1,
-      }),
-    ),
-    originTaskId: Type.Optional(
-      Type.String({
-        description: "Related task ID for correlation tracking",
-      }),
-    ),
-    overrideReason: Type.Optional(
-      Type.Unsafe<string>({
-        type: "string",
-        enum: ["urgent", "critical", "emergency"],
-        description:
-          "Policy override reason (enforce mode only, use sparingly)",
-      }),
-    ),
   }),
 };
 
@@ -310,7 +286,7 @@ export const TASK_UPDATE = {
   name: "task_update" as const,
   label: "Task Update",
   description:
-    "Update a task's status, result, assignee, or priority. Status transitions: waiting→todo, todo→in_progress, in_progress→done, in_progress→failed. Completing a task auto-unblocks dependent tasks. Use task_delete to remove unwanted tasks.",
+    "Update a task's status, result, assignee, or priority. Status transitions: waiting→todo, todo→in_progress, in_progress→done, in_progress→failed. Use restart=true to restart a done or failed task (resets to todo, clears result/timestamps). Completing a task auto-unblocks dependent tasks. Use task_delete to remove unwanted tasks.",
   parameters: Type.Object({
     id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
     status: Type.Optional(
@@ -333,6 +309,12 @@ export const TASK_UPDATE = {
         type: "string",
         enum: ["idle", "low", "normal", "high", "critical"],
         description: "Change task priority",
+      }),
+    ),
+    restart: Type.Optional(
+      Type.Boolean({
+        description:
+          "Set to true to restart a done or failed task. Resets status to todo, clears result and timestamps. Other fields are ignored when restart is true.",
       }),
     ),
   }),

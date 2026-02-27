@@ -15,7 +15,6 @@ import {
   IconSettings,
   IconLayoutKanban,
   IconPlus,
-  IconHeartHandshake,
   IconBug,
   IconClock,
   IconFiles,
@@ -275,17 +274,6 @@ export function SlackSidebar({
               label="Cost Dashboard"
               active={isActive("/cost")}
               onClick={() => navigate("/cost")}
-            />
-            <SidebarItem
-              icon={
-                <IconHeartHandshake
-                  size={16}
-                  color={"var(--ao-text-sidebar)"}
-                />
-              }
-              label="Collaboration"
-              active={isActive("/collaboration")}
-              onClick={() => navigate("/collaboration")}
             />
             <SidebarItem
               icon={<IconSettings size={16} color={"var(--ao-text-sidebar)"} />}

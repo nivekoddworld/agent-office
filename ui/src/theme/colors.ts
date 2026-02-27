@@ -1,8 +1,19 @@
 import { generateColors } from "@mantine/colors-generator";
 import type { MantineColorsTuple } from "@mantine/core";
 
-// Brand primary — Violet (facehash avatar connection)
-export const violet = generateColors("#7048e8");
+// Brand primary — Sage Green (hand-tuned for button contrast)
+export const sage: MantineColorsTuple = [
+  "#f0f5f1", // 0 — lightest (light variant bg)
+  "#d5e4d8", // 1 — light sage (dark mode light-variant text)
+  "#b5cfba", // 2 — outline color in dark mode
+  "#93b89a", // 3 — muted accent
+  "#74a37c", // 4 — medium (light bg overlay source)
+  "#5f9268", // 5 — hover state
+  "#4f8058", // 6 — filled button / primary shade
+  "#416b49", // 7 — filled hover (dark mode)
+  "#34573b", // 8 — dark accent
+  "#27432e", // 9 — darkest
+];
 
 // Brand accent — Warm Coral
 export const coral = generateColors("#e8764b");

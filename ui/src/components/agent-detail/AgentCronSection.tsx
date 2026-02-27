@@ -130,7 +130,7 @@ function AgentCronRow({
             <Badge
               size="xs"
               variant="light"
-              color={job.scope === "office" ? "violet" : "blue"}
+              color={job.scope === "office" ? "sage" : "blue"}
             >
               {job.scope}
             </Badge>

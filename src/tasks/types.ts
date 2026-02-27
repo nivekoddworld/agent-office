@@ -20,8 +20,8 @@ export const STATUS_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   waiting: ["todo"],
   todo: ["in_progress"],
   in_progress: ["done", "failed"],
-  done: [],
-  failed: [],
+  done: ["todo"],
+  failed: ["todo"],
 };
 
 export interface Task {

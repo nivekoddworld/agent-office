@@ -12,13 +12,6 @@ import type {
   OfficeYaml,
   OfficeContext,
   ChannelConfig,
-  CollaborationPolicy,
-  CollaborationSla,
-  CollaborationMode,
-} from "../types.js";
-import {
-  DEFAULT_COLLABORATION_POLICY,
-  DEFAULT_COLLABORATION_SLA,
 } from "../types.js";
 import type { AgentYamlEntry } from "./yaml-utils.js";
 import { resolveEnvRefs } from "./env-substitution.js";
@@ -29,7 +22,6 @@ import {
   validateChannelEntry,
   atomicWriteYaml,
 } from "./yaml-utils.js";
-import { validateCollaborationPolicy } from "./yaml-validation.js";
 import type { OfficeCronYamlEntry } from "../types.js";
 import { describeCron } from "../cron/cron-parser.js";
 
@@ -160,9 +152,6 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       channels: office.channels as
         | Record<string, { members: string[]; description?: string }>
         | undefined,
-      collaborationPolicy: parseCollaborationPolicy(
-        office["collaborationPolicy"],
-      ),
     },
     agents: result,
   };
@@ -224,67 +213,7 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
     );
   }
 
-  if (config.office.collaborationPolicy !== undefined) {
-    errors.push(
-      ...validateCollaborationPolicy(config.office.collaborationPolicy),
-    );
-  }
-
   return errors;
-}
-
-// --- Collaboration Policy Parser ---
-
-export function parseCollaborationPolicy(raw: unknown): CollaborationPolicy {
-  if (!raw || typeof raw !== "object") return DEFAULT_COLLABORATION_POLICY;
-  const r = raw as Record<string, unknown>;
-  const rawMode = r["mode"];
-  const validModes: CollaborationMode[] = ["off", "warn", "enforce"];
-  const mode: CollaborationMode =
-    typeof rawMode === "string" &&
-    validModes.includes(rawMode as CollaborationMode)
-      ? (rawMode as CollaborationMode)
-      : "off";
-
-  const rawSla = r["sla"];
-  const slaBase =
-    typeof rawSla === "object" && rawSla !== null
-      ? (rawSla as Record<string, unknown>)
-      : {};
-
-  function num(key: string, def: number): number {
-    const v = slaBase[key];
-    return typeof v === "number" && v > 0 ? v : def;
-  }
-
-  const sla: CollaborationSla = {
-    replyByMinutes: num(
-      "replyByMinutes",
-      DEFAULT_COLLABORATION_SLA.replyByMinutes,
-    ),
-    remindAtMinutes: num(
-      "remindAtMinutes",
-      DEFAULT_COLLABORATION_SLA.remindAtMinutes,
-    ),
-    escalateAtMinutes: num(
-      "escalateAtMinutes",
-      DEFAULT_COLLABORATION_SLA.escalateAtMinutes,
-    ),
-    staleTaskHours: num(
-      "staleTaskHours",
-      DEFAULT_COLLABORATION_SLA.staleTaskHours,
-    ),
-    deadlockThresholdMinutes: num(
-      "deadlockThresholdMinutes",
-      DEFAULT_COLLABORATION_SLA.deadlockThresholdMinutes,
-    ),
-    stallCooldownMinutes: num(
-      "stallCooldownMinutes",
-      DEFAULT_COLLABORATION_SLA.stallCooldownMinutes,
-    ),
-  };
-
-  return { mode, sla };
 }
 
 // --- Build OfficeContext ---
@@ -316,7 +245,6 @@ export function buildOfficeContext(
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),
     channels,
-    policy: yaml.office.collaborationPolicy,
   };
 }
 
@@ -553,13 +481,6 @@ export {
   renameChannelInOfficeYaml,
 } from "./office-yaml-mutations.js";
 
-// --- Re-export collaboration policy mutations from dedicated module ---
-
-export {
-  setCollaborationMode,
-  setCollaborationSla,
-} from "./office-yaml-mutations.js";
-
 // --- Re-export heartbeat mutations from dedicated module ---
 
 export {
@@ -569,8 +490,11 @@ export {
 
 // --- Re-export model mutations from dedicated module ---
 
-export { setAgentModel } from "./office-yaml-mutations.js";
-
-// --- Re-export auth mutations from dedicated module ---
-
-export { setAgentAuth, clearAgentAuth } from "./office-yaml-mutations.js";
+export {
+  setAgentModel,
+  setAgentAuth,
+  clearAgentAuth,
+  setAgentDescription,
+  setAgentPriority,
+  setAgentThinking,
+} from "./office-yaml-mutations.js";

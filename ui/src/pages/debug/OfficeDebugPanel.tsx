@@ -247,7 +247,7 @@ export function OfficeDebugPanel() {
           {capture.isCapturing ? (
             <Button
               size="compact-xs"
-              variant="light"
+              variant="filled"
               color="red"
               onClick={() => debugCaptureStore.stopCapture()}
             >
@@ -256,7 +256,7 @@ export function OfficeDebugPanel() {
           ) : (
             <Button
               size="compact-xs"
-              variant="light"
+              variant="filled"
               color="green"
               onClick={() => {
                 debugCaptureStore.setDraftFilter({
@@ -273,7 +273,7 @@ export function OfficeDebugPanel() {
           )}
           <Button
             size="compact-xs"
-            variant="light"
+            variant="filled"
             color="gray"
             onClick={() => debugCaptureStore.clearBuffer()}
           >
@@ -281,7 +281,7 @@ export function OfficeDebugPanel() {
           </Button>
           <Button
             size="compact-xs"
-            variant="light"
+            variant="filled"
             color="cyan"
             disabled={displayRows.length === 0}
             onClick={handleExport}

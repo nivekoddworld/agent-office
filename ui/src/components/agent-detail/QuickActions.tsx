@@ -8,7 +8,6 @@ import {
   IconHash,
   IconMessage,
   IconFiles,
-  IconLink,
   IconCalendarEvent,
 } from "@tabler/icons-react";
 import { useOfficeApply, useFireAgent } from "../../api/use-api-mutations.js";
@@ -48,8 +47,8 @@ export function QuickActions({ agent }: QuickActionsProps) {
       <Group gap="xs">
         <Button
           size="xs"
-          variant="light"
-          color="blue"
+          variant="filled"
+          color="sage"
           onClick={reload}
           leftSection={<IconRefresh size={14} />}
           loading={officeApply.isPending}
@@ -58,7 +57,7 @@ export function QuickActions({ agent }: QuickActionsProps) {
         </Button>
         <Button
           size="xs"
-          variant="light"
+          variant="filled"
           color="red"
           onClick={() => setConfirmFire(true)}
           leftSection={<IconTrash size={14} />}
@@ -110,19 +109,14 @@ export function QuickActions({ agent }: QuickActionsProps) {
               )}
             </List.Item>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="grape"><IconMessage size={12} /></ThemeIcon>}
+              icon={<ThemeIcon size={20} variant="light" color="sage"><IconMessage size={12} /></ThemeIcon>}
             >
               All DM history → deleted
             </List.Item>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="teal"><IconFiles size={12} /></ThemeIcon>}
+              icon={<ThemeIcon size={20} variant="light" color="sage"><IconFiles size={12} /></ThemeIcon>}
             >
               All session files → deleted
-            </List.Item>
-            <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="yellow"><IconLink size={12} /></ThemeIcon>}
-            >
-              All pending obligations → cleared
             </List.Item>
           </List>
           <Text size="xs" c="red" fw={600}>

@@ -8,7 +8,7 @@ import { TaskAddForm } from "../../components/kanban/TaskAddForm.js";
 import { EmptyState } from "../../components/shared/EmptyState.js";
 import { PageShell } from "../../components/shared/PageShell.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
-import { useTaskDelete } from "../../api/use-api-mutations.js";
+import { useTaskDelete, useTaskRestart } from "../../api/use-api-mutations.js";
 import type { Task, TaskStatus } from "../../api/types.js";
 
 const VISIBLE_COLUMNS: TaskStatus[] = [
@@ -35,6 +35,7 @@ export function KanbanBoard() {
   const [filter, setFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
   const deleteTask = useTaskDelete();
+  const restartTask = useTaskRestart();
 
   // Sync selectedTask when tasks prop updates (e.g. agent status change via SSE)
   useEffect(() => {
@@ -82,7 +83,7 @@ export function KanbanBoard() {
       headerRight={
         <Button
           size="xs"
-          variant="light"
+          variant="filled"
           leftSection={<IconPlus size={14} />}
           onClick={() => setAddOpen(true)}
         >
@@ -125,7 +126,7 @@ export function KanbanBoard() {
               filter === "all" ? (
                 <Button
                   size="xs"
-                  variant="light"
+                  variant="filled"
                   leftSection={<IconPlus size={14} />}
                   onClick={() => setAddOpen(true)}
                 >
@@ -163,6 +164,10 @@ export function KanbanBoard() {
         onClose={() => setSelectedTask(null)}
         onDelete={(taskId) => {
           deleteTask.mutate(taskId);
+          setSelectedTask(null);
+        }}
+        onRestart={(taskId) => {
+          restartTask.mutate(taskId);
           setSelectedTask(null);
         }}
       />

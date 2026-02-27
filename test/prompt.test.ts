@@ -20,7 +20,7 @@ describe("buildDefaultPrompt", () => {
     expect(prompt).not.toMatch(/You are agent "designer" —/);
   });
 
-  it("includes collaboration rules", () => {
+  it("includes agent communication tools", () => {
     const prompt = buildDefaultPrompt("designer", "/tmp/ws");
     expect(prompt).toContain("list_agents");
     expect(prompt).toContain("message_agent");

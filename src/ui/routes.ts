@@ -11,7 +11,6 @@ import { loadOfficeYaml } from "../config/office-yaml.js";
 import { COMMAND_MANIFEST } from "./manifest.js";
 import { readUsageRecords, summarizeUsage } from "../metrics/usage-tracker.js";
 import { officeDir } from "../constants.js";
-import type { CollaborationSnapshot } from "../collaboration/metrics.js";
 import { getProviders, getModels } from "@mariozechner/pi-ai";
 
 // --- Scoped logger ---
@@ -209,12 +208,6 @@ export function getCostSummary(
     byAgent: Object.fromEntries(byAgent),
     recordCount: records.length,
   };
-}
-
-export function getCollaborationMetrics(
-  workspace: Workspace,
-): CollaborationSnapshot {
-  return workspace.getCollaborationMetrics();
 }
 
 // --- Models discovery ---

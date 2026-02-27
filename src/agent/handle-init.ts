@@ -47,8 +47,6 @@ import type { CronService } from "../cron/cron-service.js";
 import type { CronToolDeps } from "./tools/cron-impl.js";
 import type { TaskService } from "../tasks/task-service.js";
 import type { TaskToolDeps } from "./tools/task-impl.js";
-import type { ObligationStore } from "../collaboration/obligation-store.js";
-import type { PolicyService } from "../collaboration/policy-service.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { createOAuthGetApiKey } from "../auth/oauth-resolver.js";
@@ -169,8 +167,6 @@ export async function initInProcessAgent(
   cronService: CronService | undefined,
   taskService: TaskService | undefined,
   sessionDeps?: { store: MessageStore; channels: Map<string, ChannelConfig> },
-  obligationStore?: ObligationStore,
-  policyService?: PolicyService,
   handle?: {
     getActiveSessionKey(): string | undefined;
     getActiveRequestId(): string | undefined;
@@ -243,8 +239,6 @@ export async function initInProcessAgent(
     createMessageAgentTool({
       agentName: ctx.name,
       bus,
-      obligationStore,
-      policyService,
       onSessionWrite: (agent, peer, entry) => {
         const filename = `agent-${peer}.jsonl`;
         appendSession(ctx.baseDir, agent, filename, entry);

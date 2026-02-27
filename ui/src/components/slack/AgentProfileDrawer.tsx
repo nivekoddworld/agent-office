@@ -18,10 +18,13 @@ import {
   IconBolt,
   IconSend,
   IconInbox,
+  IconHierarchy2,
+  IconHash,
 } from "@tabler/icons-react";
 
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
+import { useBootstrapState } from "../../api/use-state.js";
 import { UserPresence } from "./UserPresence.js";
 import { useAgentActivityFor } from "../../store/agent-activity-store.js";
 import { ConfigSection } from "../agent-detail/ConfigSection.js";
@@ -31,6 +34,9 @@ import { SkillsManager } from "../agent-detail/SkillsManager.js";
 import { PromptViewer } from "../agent-detail/PromptViewer.js";
 import { QuickActions } from "../agent-detail/QuickActions.js";
 import { QueuePreview } from "../agent-detail/QueuePreview.js";
+import { EditableDescription } from "../agent-detail/EditableDescription.js";
+import { AgentHierarchySection } from "../agent-detail/AgentHierarchySection.js";
+import { AgentChannelsSection } from "../agent-detail/AgentChannelsSection.js";
 
 interface AgentProfileDrawerProps {
   agentName: string | null;
@@ -46,7 +52,10 @@ export function AgentProfileDrawer({
   onSendMessage,
 }: AgentProfileDrawerProps) {
   const { data: agent, isLoading } = useAgentDetail(agentName);
+  const { data: state } = useBootstrapState(true);
   const activity = useAgentActivityFor(agentName ?? "");
+
+  const agentNames = state?.agents.map((a) => a.name) ?? [];
 
   return (
     <Drawer
@@ -116,18 +125,17 @@ export function AgentProfileDrawer({
                             : "Offline"}
                   </Text>
                 </Group>
-                {agent.description && (
-                  <Text size="sm" style={{ color: "var(--ao-text-muted)" }}>
-                    {agent.description}
-                  </Text>
-                )}
+                <EditableDescription
+                  agentName={agent.name}
+                  description={agent.description || undefined}
+                />
               </Stack>
             </Group>
 
             <Group gap="xs" mt="md">
               <Button
                 size="xs"
-                variant="light"
+                variant="filled"
                 leftSection={<IconSend size={14} />}
                 onClick={() => {
                   onClose();
@@ -138,23 +146,13 @@ export function AgentProfileDrawer({
               </Button>
               <Badge
                 variant="light"
-                color="blue"
+                color="sage"
                 size="lg"
                 styles={{
                   root: { height: 30, paddingInline: 14 },
                 }}
               >
                 {agent.model}
-              </Badge>
-              <Badge
-                variant="light"
-                color="gray"
-                size="lg"
-                styles={{
-                  root: { height: 30, paddingInline: 14 },
-                }}
-              >
-                Priority: {agent.priority}
               </Badge>
             </Group>
           </Box>
@@ -189,6 +187,27 @@ export function AgentProfileDrawer({
               </Accordion.Control>
               <Accordion.Panel>
                 <ConfigSection agent={agent} />
+              </Accordion.Panel>
+            </Accordion.Item>
+
+            <Accordion.Item value="hierarchy">
+              <Accordion.Control icon={<IconHierarchy2 size={16} />}>
+                Hierarchy
+              </Accordion.Control>
+              <Accordion.Panel>
+                <AgentHierarchySection
+                  agent={agent}
+                  agentNames={agentNames}
+                />
+              </Accordion.Panel>
+            </Accordion.Item>
+
+            <Accordion.Item value="channels">
+              <Accordion.Control icon={<IconHash size={16} />}>
+                Channels
+              </Accordion.Control>
+              <Accordion.Panel>
+                <AgentChannelsSection agentName={agent.name} />
               </Accordion.Panel>
             </Accordion.Item>
 

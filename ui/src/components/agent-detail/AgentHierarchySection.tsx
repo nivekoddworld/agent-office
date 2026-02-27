@@ -54,7 +54,7 @@ export function AgentHierarchySection({
           Manager:
         </Text>
         {managerDisplay ? (
-          <Badge size="sm" variant="light" color="violet">
+          <Badge size="sm" variant="light" color="sage">
             {managerDisplay}
           </Badge>
         ) : (
@@ -111,7 +111,7 @@ export function AgentHierarchySection({
           />
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             onClick={saveManager}
             loading={setManager.isPending}
           >

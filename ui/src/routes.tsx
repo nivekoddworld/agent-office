@@ -3,7 +3,6 @@ import { RootLayout } from "./components/layout/RootLayout.js";
 import { KanbanBoard } from "./pages/tasks/KanbanBoard.js";
 import { CronChannelView } from "./pages/cron/CronChannelView.js";
 import { CostPanel } from "./pages/cost/CostPanel.js";
-import { CollaborationPanel } from "./pages/collaboration/CollaborationPanel.js";
 import { SettingsPanel } from "./pages/settings/SettingsPanel.js";
 import { OfficeDebugPanel } from "./pages/debug/OfficeDebugPanel.js";
 import { OrgChartPanel } from "./pages/org-chart/OrgChartPanel.js";
@@ -22,7 +21,6 @@ export const router = createBrowserRouter([
       { path: "heartbeat", element: <HeartbeatView /> },
       { path: "files", element: <AllFilesPanel /> },
       { path: "cost", element: <CostPanel /> },
-      { path: "collaboration", element: <CollaborationPanel /> },
       { path: "settings", element: <SettingsPanel /> },
       { path: "debug", element: <OfficeDebugPanel /> },
       { path: "org-chart", element: <OrgChartPanel /> },

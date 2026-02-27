@@ -17,7 +17,13 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import type { AgentDetail, ModelInfo } from "../../api/types.js";
 import { useModels } from "../../api/use-models.js";
-import { useSetModel, useSetAuth, useOAuthDelete } from "../../api/use-api-mutations.js";
+import {
+  useSetModel,
+  useSetAuth,
+  useOAuthDelete,
+  useSetPriority,
+  useSetThinking,
+} from "../../api/use-api-mutations.js";
 import { apiFetch } from "../../api/client.js";
 import { notifications } from "@mantine/notifications";
 
@@ -56,6 +62,28 @@ interface OAuthProviderStatus {
   authenticated: boolean;
 }
 
+const PRIORITY_OPTIONS = [
+  { value: "idle", label: "Idle" },
+  { value: "low", label: "Low" },
+  { value: "normal", label: "Normal" },
+  { value: "high", label: "High" },
+  { value: "critical", label: "Critical" },
+];
+
+const PRIORITY_NUM_TO_STR: Record<number, string> = {
+  0: "idle",
+  1: "low",
+  2: "normal",
+  3: "high",
+  4: "critical",
+};
+
+const THINKING_OPTIONS = [
+  { value: "low", label: "Low (default)" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+];
+
 function formatContextWindow(tokens: number): string {
   return `${Math.round(tokens / 1000)}k`;
 }
@@ -87,6 +115,8 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
   const setModel = useSetModel();
   const setAuth = useSetAuth();
   const oauthDelete = useOAuthDelete();
+  const setPriority = useSetPriority();
+  const setThinking = useSetThinking();
 
   const { data: oauthProviders } = useQuery({
     queryKey: ["oauth-providers"],
@@ -126,7 +156,7 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
           {option.label}
         </Text>
         {info.reasoning && (
-          <Badge size="xs" variant="light" color="violet">
+          <Badge size="xs" variant="light" color="sage">
             reasoning
           </Badge>
         )}
@@ -172,15 +202,29 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
     oauthDelete.mutate({ provider: providerId });
   };
 
+  const currentPriority = PRIORITY_NUM_TO_STR[agent.priority] ?? "normal";
+  const currentThinking = agent.thinkingLevel ?? "low";
+
+  const handlePriorityChange = (value: string | null) => {
+    if (!value || value === currentPriority) return;
+    setPriority.mutate({ agentName: agent.name, priority: value });
+  };
+
+  const handleThinkingChange = (value: string | null) => {
+    if (!value || value === currentThinking) return;
+    const thinking = value === "low" ? null : value;
+    setThinking.mutate({ agentName: agent.name, thinking });
+  };
+
   const rows: [string, string][] = [
     ["Status", agent.status],
-    ["Priority", String(agent.priority)],
     ["Turns", String(agent.turns)],
     ["Queue Depth", String(agent.queueDepth)],
     ["Sandbox", agent.sandbox ?? "none"],
-    ["Thinking", agent.thinkingLevel ?? "default"],
     ["Prompt Mode", agent.promptReport.mode],
   ];
+
+  const selectInputStyles = { input: { minHeight: 28, height: 28 } };
 
   return (
     <Table withRowBorders={false}>
@@ -206,9 +250,7 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
                 maxDropdownHeight={300}
                 limit={50}
                 disabled={setModel.isPending}
-                styles={{
-                  input: { minHeight: 28, height: 28 },
-                }}
+                styles={selectInputStyles}
               />
             )}
           </Table.Td>
@@ -228,9 +270,7 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
                 onChange={handleAuthChange}
                 allowDeselect={false}
                 disabled={setAuth.isPending}
-                styles={{
-                  input: { minHeight: 28, height: 28 },
-                }}
+                styles={selectInputStyles}
               />
             </Table.Td>
           </Table.Tr>
@@ -266,6 +306,42 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
             </Table.Td>
           </Table.Tr>
         )}
+        <Table.Tr>
+          <Table.Td w={120}>
+            <Text size="xs" c="dimmed">
+              Priority
+            </Text>
+          </Table.Td>
+          <Table.Td>
+            <Select
+              size="xs"
+              data={PRIORITY_OPTIONS}
+              value={currentPriority}
+              onChange={handlePriorityChange}
+              allowDeselect={false}
+              disabled={setPriority.isPending}
+              styles={selectInputStyles}
+            />
+          </Table.Td>
+        </Table.Tr>
+        <Table.Tr>
+          <Table.Td w={120}>
+            <Text size="xs" c="dimmed">
+              Thinking
+            </Text>
+          </Table.Td>
+          <Table.Td>
+            <Select
+              size="xs"
+              data={THINKING_OPTIONS}
+              value={currentThinking}
+              onChange={handleThinkingChange}
+              allowDeselect={false}
+              disabled={setThinking.isPending}
+              styles={selectInputStyles}
+            />
+          </Table.Td>
+        </Table.Tr>
         {rows.map(([label, value]) => (
           <Table.Tr key={label}>
             <Table.Td w={120}>

@@ -44,7 +44,7 @@ export function CronChannelView() {
       headerRight={
         <Button
           size="xs"
-          variant="light"
+          variant="filled"
           leftSection={<IconPlus size={14} />}
           onClick={openAdd}
         >

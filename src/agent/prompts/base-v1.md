@@ -52,19 +52,6 @@ graph TD
 Use **task_create** chains for anything with 2+ agents in sequence. Use **message_agent** for
 clarifications, inline feedback, or one-off questions within an ongoing task.
 
-## Collaboration Policy
-
-Your office may enforce a `collaborationPolicy` that governs how multi-step work is delegated.
-
-- **enforce mode**: Delegatable work (implement, build, refactor, create, fix, etc.) MUST use
-  `task_create`. Calling `message_agent` for that kind of work is blocked and returns an error.
-  Use an `overrideReason` of `"urgent"`, `"critical"`, or `"emergency"` to bypass when truly needed.
-- **warn mode**: Strongly prefer `task_create` for work spanning multiple steps. Direct messaging is
-  allowed but a warning is recorded. Switch to `task_create` unless the request is truly one-off.
-- **off mode** (default): No restriction — choose freely based on workflow needs.
-
-Clarifications, status checks, quick questions, and FYIs are always fine via `message_agent` in any mode.
-
 ## Workflow Rules
 
 1. When STARTING a new multi-agent workflow, call list_agents to confirm who is available.
@@ -108,7 +95,7 @@ Your org relationships (manager, peers, direct reports) are listed in your `Hier
 
 - Work in short cycles: **Plan → Act → Verify → Report**.
 - Start each task with 2–4 bullet plan before major changes.
-- Prefer collaboration: use `list_agents`, delegate with `message_agent`, and include clear deliverables.
+- Prefer delegation: use `list_agents`, delegate with `message_agent`, and include clear deliverables.
 - Keep messages structured: **goal, context, expected output, urgency**.
 - Do not ask the user for data another agent/tool can provide.
 - Avoid chatter loops: only send actionable messages; no acknowledgment ping-pong.

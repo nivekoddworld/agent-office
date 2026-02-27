@@ -1,19 +1,24 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { type AgentEvent, type Agent } from "@mariozechner/pi-agent-core";
+import {
+  type AgentEvent,
+  type Agent,
+  type ThinkingLevel,
+} from "@mariozechner/pi-agent-core";
 import type { Model } from "@mariozechner/pi-ai";
 import {
   loadSkills,
   formatSkillsForPrompt,
 } from "@mariozechner/pi-coding-agent";
 import type { MessageBus } from "../transport/message-bus.js";
-import type {
-  AgentConfig,
-  AgentInfo,
-  AgentStatus,
-  ChannelConfig,
-  HeartbeatConfig,
+import {
+  Priority,
+  type AgentConfig,
+  type AgentInfo,
+  type AgentStatus,
+  type ChannelConfig,
+  type HeartbeatConfig,
 } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
@@ -26,8 +31,6 @@ import {
 } from "./skills/on-demand.js";
 import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
-import type { ObligationStore } from "../collaboration/obligation-store.js";
-import type { PolicyService } from "../collaboration/policy-service.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import {
@@ -58,8 +61,6 @@ export interface AgentHandleDeps {
   taskService?: TaskService;
   messageStore?: MessageStore;
   channels?: Map<string, ChannelConfig>;
-  obligationStore?: ObligationStore;
-  policyService?: PolicyService;
   onStateChanged?: () => void;
 }
 
@@ -92,8 +93,6 @@ export class AgentHandle {
   private taskService?: TaskService;
   private _messageStore?: MessageStore;
   private _channels?: Map<string, ChannelConfig>;
-  private _obligationStore?: ObligationStore;
-  private _policyService?: PolicyService;
   private _lastScheduledHeartbeatTs: number | null = null;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
@@ -111,8 +110,6 @@ export class AgentHandle {
     this.taskService = deps.taskService;
     this._messageStore = deps.messageStore;
     this._channels = deps.channels;
-    this._obligationStore = deps.obligationStore;
-    this._policyService = deps.policyService;
     this._onStateChanged = deps.onStateChanged;
   }
 
@@ -209,6 +206,22 @@ export class AgentHandle {
     this.agent?.setModel(model);
   }
 
+  /** Live-update description without restarting the agent. */
+  updateDescription(desc: string | undefined): void {
+    (this.config as { description?: string }).description = desc;
+  }
+
+  /** Live-update priority without restarting the agent. */
+  updatePriority(priority: Priority): void {
+    (this.config as { priority: Priority }).priority = priority;
+  }
+
+  /** Live-update thinking level without restarting the agent. */
+  updateThinkingLevel(level: ThinkingLevel | undefined): void {
+    (this.config as { thinkingLevel?: ThinkingLevel }).thinkingLevel = level;
+    this.agent?.setThinkingLevel(level ?? "low");
+  }
+
   private get agentDir(): string {
     return join(this.baseDir, "agents", this.config.name);
   }
@@ -291,8 +304,6 @@ export class AgentHandle {
       this._messageStore && this._channels
         ? { store: this._messageStore, channels: this._channels }
         : undefined,
-      this._obligationStore,
-      this._policyService,
       this,
       this._onStateChanged,
     );

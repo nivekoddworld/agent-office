@@ -259,7 +259,7 @@ export function MessageInput({
           <ActionIcon
             size="md"
             variant={text.trim() && canSend ? "filled" : "subtle"}
-            color={text.trim() && canSend ? "green" : "gray"}
+            color={text.trim() && canSend ? "sage" : "gray"}
             onClick={() => {
               void send();
             }}

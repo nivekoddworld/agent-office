@@ -15,6 +15,7 @@ import {
   IconMessageCircle,
   IconUser,
   IconClock,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 
@@ -29,6 +30,7 @@ interface TaskDetailModalProps {
   opened: boolean;
   onClose: () => void;
   onDelete?: (taskId: string) => void;
+  onRestart?: (taskId: string) => void;
 }
 
 function formatDate(ts: number): string {
@@ -48,6 +50,7 @@ export function TaskDetailModal({
   opened,
   onClose,
   onDelete,
+  onRestart,
 }: TaskDetailModalProps) {
   const [confirming, setConfirming] = useState(false);
   const navigate = useNavigate();
@@ -126,7 +129,7 @@ export function TaskDetailModal({
             <Tooltip label={`Send DM to ${task.assignee}`} withArrow>
               <Button
                 size="xs"
-                variant="light"
+                variant="filled"
                 leftSection={<IconMessageCircle size={14} />}
                 onClick={handleDm}
               >
@@ -144,7 +147,7 @@ export function TaskDetailModal({
             {task.createdBy === "__user__" ? (
               <IconUser size={18} color="var(--ao-accent-blue)" />
             ) : task.createdBy === "__cron__" ? (
-              <IconClock size={18} color="var(--ao-accent-purple)" />
+              <IconClock size={18} color="var(--ao-accent-sage)" />
             ) : (
               <AgentAvatar name={task.createdBy} size={22} />
             )}
@@ -269,19 +272,36 @@ export function TaskDetailModal({
           )}
         </Group>
 
-        {onDelete && (
+        {(onDelete || onRestart) && (
           <>
             <Divider color="var(--ao-border)" />
-            <Group justify="flex-end">
-              <Button
-                size="xs"
-                color="red"
-                variant={confirming ? "filled" : "light"}
-                leftSection={<IconTrash size={14} />}
-                onClick={handleDelete}
-              >
-                {confirming ? "Confirm Delete" : "Delete Task"}
-              </Button>
+            <Group justify="flex-end" gap="sm">
+              {onRestart &&
+                (task.status === "done" || task.status === "failed") && (
+                  <Button
+                    size="xs"
+                    color="blue"
+                    variant="filled"
+                    leftSection={<IconRefresh size={14} />}
+                    onClick={() => {
+                      onRestart(task.id);
+                      onClose();
+                    }}
+                  >
+                    Restart Task
+                  </Button>
+                )}
+              {onDelete && (
+                <Button
+                  size="xs"
+                  color="red"
+                  variant={confirming ? "filled" : "light"}
+                  leftSection={<IconTrash size={14} />}
+                  onClick={handleDelete}
+                >
+                  {confirming ? "Confirm Delete" : "Delete Task"}
+                </Button>
+              )}
             </Group>
           </>
         )}
