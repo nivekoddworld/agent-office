@@ -922,4 +922,82 @@ describe("UI server", () => {
     expect(body.error).toMatch(/No non-empty instruction files/);
   });
 
+  // --- GET/PUT /api/agents/:name/instructions/:file ---
+
+  it("GET /api/agents/:name/instructions/:file returns content", async () => {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const dir = join("/tmp", "instr-test-ui");
+    mkdirSync(join(dir, "instructions"), { recursive: true });
+    writeFileSync(join(dir, "instructions", "CONTEXT.md"), "test content");
+    mockWs.getAgent.mockReturnValue({ cwd: dir });
+
+    const res = await fetch(
+      `${origin}/api/agents/alice/instructions/CONTEXT.md`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ content: "test content" });
+
+    const { rmSync } = await import("node:fs");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("GET /api/agents/:name/instructions/:file returns 400 for invalid filename", async () => {
+    mockWs.getAgent.mockReturnValue({ cwd: "/tmp" });
+    const res = await fetch(
+      `${origin}/api/agents/alice/instructions/EVIL.md`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_file" });
+  });
+
+  it("GET /api/agents/:name/instructions/:file returns 404 for unknown agent", async () => {
+    mockWs.getAgent.mockReturnValue(undefined);
+    const res = await fetch(
+      `${origin}/api/agents/unknown/instructions/CONTEXT.md`,
+      { headers: { Cookie: sessionCookie } },
+    );
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "agent_not_found" });
+  });
+
+  it("PUT /api/agents/:name/instructions/:file writes file", async () => {
+    const { mkdirSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const dir = join("/tmp", "instr-put-test-ui");
+    mkdirSync(dir, { recursive: true });
+    mockWs.getAgent.mockReturnValue({ cwd: dir });
+
+    const res = await fetch(
+      `${origin}/api/agents/alice/instructions/SOUL.md`,
+      {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({ content: "be kind" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    const { readFileSync, rmSync } = await import("node:fs");
+    expect(readFileSync(join(dir, "instructions", "SOUL.md"), "utf-8")).toBe("be kind");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("PUT /api/agents/:name/instructions/:file rejects non-string content", async () => {
+    mockWs.getAgent.mockReturnValue({ cwd: "/tmp" });
+    const res = await fetch(
+      `${origin}/api/agents/alice/instructions/CONTEXT.md`,
+      {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({ content: 123 }),
+      },
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_content" });
+  });
+
 });

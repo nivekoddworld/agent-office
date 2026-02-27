@@ -6,6 +6,8 @@ import {
   getAgentFileContent,
   openAgentFile,
   deleteAgentFile,
+  getInstructionFile,
+  putInstructionFile,
 } from "../routes.js";
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
@@ -71,6 +73,40 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         const filePath = url.searchParams.get("path");
         if (!filePath) return json(res, 400, { error: "missing_path" });
         const result = await deleteAgentFile(handle, filePath);
+        if ("error" in result) return json(res, 400, result);
+        return json(res, 200, result);
+      },
+    },
+    {
+      method: "GET",
+      pattern: /^\/api\/agents\/([^/]+)\/instructions\/([^/]+)$/,
+      paramNames: ["name", "file"],
+      handler: async (_req, res, _url, params) => {
+        const handle = workspace.getAgent(params.name!);
+        if (!handle) return json(res, 404, { error: "agent_not_found" });
+        const result = await getInstructionFile(handle, params.file!);
+        if ("error" in result) return json(res, 400, result);
+        return json(res, 200, result);
+      },
+    },
+    {
+      method: "PUT",
+      pattern: /^\/api\/agents\/([^/]+)\/instructions\/([^/]+)$/,
+      paramNames: ["name", "file"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const handle = workspace.getAgent(params.name!);
+        if (!handle) return json(res, 404, { error: "agent_not_found" });
+        const body = await readBody(req);
+        let parsed: { content?: unknown };
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        if (typeof parsed.content !== "string")
+          return json(res, 400, { error: "invalid_content" });
+        const result = await putInstructionFile(handle, params.file!, parsed.content);
         if ("error" in result) return json(res, 400, result);
         return json(res, 200, result);
       },

@@ -336,3 +336,24 @@ export function useSetSecretRef() {
     onSuccess: () => invalidateState(queryClient),
   });
 }
+
+export function useSaveInstructionFile() {
+  return useMutation({
+    mutationFn: ({
+      agentName,
+      file,
+      content,
+    }: {
+      agentName: string;
+      file: string;
+      content: string;
+    }) =>
+      apiFetch<{ ok: true }>(
+        `/api/agents/${encodeURIComponent(agentName)}/instructions/${encodeURIComponent(file)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ content }),
+        },
+      ),
+  });
+}

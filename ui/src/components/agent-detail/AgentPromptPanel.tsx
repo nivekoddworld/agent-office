@@ -8,6 +8,7 @@ import {
   ActionIcon,
   Tooltip,
   Textarea,
+  Tabs,
 } from "@mantine/core";
 import {
   IconBold,
@@ -32,6 +33,7 @@ import { notifications } from "@mantine/notifications";
 import { useSetPrompt, useOfficeApply } from "../../api/use-api-mutations.js";
 import { useAgentDetail } from "../../api/use-agent-detail.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
+import { InstructionFileEditor } from "./InstructionFileEditor.js";
 
 interface AgentPromptPanelProps {
   agentName: string;
@@ -217,275 +219,300 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
   const showPreview = viewMode === "preview" || viewMode === "split";
 
   return (
-    <Box
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        flex: 1,
-        overflow: "hidden",
-      }}
-    >
-      {/* Toolbar */}
-      <Box
-        px="sm"
-        py={6}
-        style={{
-          borderBottom: `1px solid var(--ao-border)`,
-          backgroundColor: "var(--ao-bg-surface)",
-          flexShrink: 0,
-        }}
-      >
-        <Group gap="xs" justify="space-between">
-          <Group gap={4}>
-            <Tooltip label="Bold">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => wrap("**", "**")}
-              >
-                <IconBold size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Italic">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => wrap("_", "_")}
-              >
-                <IconItalic size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Inline code">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => wrap("`", "`")}
-              >
-                <IconCode size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Box
-              style={{
-                width: 1,
-                height: 18,
-                backgroundColor: "var(--ao-border)",
-              }}
-              mx={4}
-            />
-            <Tooltip label="Heading">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => prefix("## ")}
-              >
-                <IconHeading size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Bullet list">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => prefix("- ")}
-              >
-                <IconList size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Numbered list">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => prefix("1. ")}
-              >
-                <IconListNumbers size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Quote">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => prefix("> ")}
-              >
-                <IconBlockquote size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Code block">
-              <ActionIcon
-                size="sm"
-                variant="subtle"
-                onClick={() => wrap("```\n", "\n```")}
-              >
-                <IconCode size={15} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
+    <>
+      <Tabs defaultValue="prompt" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        <Tabs.List style={{ flexShrink: 0, borderBottom: "1px solid var(--ao-border)", backgroundColor: "var(--ao-bg-surface)" }}>
+          <Tabs.Tab value="prompt">Custom Prompt</Tabs.Tab>
+          <Tabs.Tab value="CONTEXT.md">CONTEXT</Tabs.Tab>
+          <Tabs.Tab value="IDENTITY.md">IDENTITY</Tabs.Tab>
+          <Tabs.Tab value="SOUL.md">SOUL</Tabs.Tab>
+        </Tabs.List>
 
-          <Group gap={4}>
-            <Tooltip label="Edit">
-              <ActionIcon
-                size="sm"
-                variant={viewMode === "edit" ? "filled" : "subtle"}
-                onClick={() => setViewMode("edit")}
-              >
-                <IconEdit size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Split">
-              <ActionIcon
-                size="sm"
-                variant={viewMode === "split" ? "filled" : "subtle"}
-                onClick={() => setViewMode("split")}
-              >
-                <IconColumns size={15} />
-              </ActionIcon>
-            </Tooltip>
-            <Tooltip label="Preview">
-              <ActionIcon
-                size="sm"
-                variant={viewMode === "preview" ? "filled" : "subtle"}
-                onClick={() => setViewMode("preview")}
-              >
-                <IconEye size={15} />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </Group>
-      </Box>
-
-      {/* Editor + Preview */}
-      <Box style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {showEditor && (
+        <Tabs.Panel value="prompt" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
           <Box
             style={{
-              flex: 1,
               display: "flex",
               flexDirection: "column",
-              borderRight: showPreview
-                ? `1px solid var(--ao-border)`
-                : undefined,
+              flex: 1,
               overflow: "hidden",
             }}
           >
-            <Textarea
-              ref={textareaRef}
-              value={promptText}
-              onChange={(e) => setPromptText(e.currentTarget.value)}
-              placeholder="Write your agent's custom prompt in Markdown..."
-              styles={{
-                root: { flex: 1, display: "flex", flexDirection: "column" },
-                wrapper: { flex: 1, display: "flex" },
-                input: {
-                  flex: 1,
-                  backgroundColor: "var(--ao-bg-body)",
-                  border: "none",
-                  borderRadius: 0,
-                  color: "var(--ao-text-primary)",
-                  fontFamily: "monospace",
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  resize: "none",
-                },
+            {/* Toolbar */}
+            <Box
+              px="sm"
+              py={6}
+              style={{
+                borderBottom: `1px solid var(--ao-border)`,
+                backgroundColor: "var(--ao-bg-surface)",
+                flexShrink: 0,
               }}
-            />
-          </Box>
-        )}
+            >
+              <Group gap="xs" justify="space-between">
+                <Group gap={4}>
+                  <Tooltip label="Bold">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => wrap("**", "**")}
+                    >
+                      <IconBold size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Italic">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => wrap("_", "_")}
+                    >
+                      <IconItalic size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Inline code">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => wrap("`", "`")}
+                    >
+                      <IconCode size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Box
+                    style={{
+                      width: 1,
+                      height: 18,
+                      backgroundColor: "var(--ao-border)",
+                    }}
+                    mx={4}
+                  />
+                  <Tooltip label="Heading">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => prefix("## ")}
+                    >
+                      <IconHeading size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Bullet list">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => prefix("- ")}
+                    >
+                      <IconList size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Numbered list">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => prefix("1. ")}
+                    >
+                      <IconListNumbers size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Quote">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => prefix("> ")}
+                    >
+                      <IconBlockquote size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Code block">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      onClick={() => wrap("```\n", "\n```")}
+                    >
+                      <IconCode size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
 
-        {showPreview && (
-          <Box
-            style={{
-              flex: 1,
-              overflow: "auto",
-              padding: 16,
-              backgroundColor: "var(--ao-bg-body)",
-            }}
-          >
-            {promptText.trim() ? (
-              <Box
-                className="markdown-body"
-                style={{
-                  color: "var(--ao-text-primary)",
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                }}
-              >
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight]}
+                <Group gap={4}>
+                  <Tooltip label="Edit">
+                    <ActionIcon
+                      size="sm"
+                      variant={viewMode === "edit" ? "filled" : "subtle"}
+                      onClick={() => setViewMode("edit")}
+                    >
+                      <IconEdit size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Split">
+                    <ActionIcon
+                      size="sm"
+                      variant={viewMode === "split" ? "filled" : "subtle"}
+                      onClick={() => setViewMode("split")}
+                    >
+                      <IconColumns size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="Preview">
+                    <ActionIcon
+                      size="sm"
+                      variant={viewMode === "preview" ? "filled" : "subtle"}
+                      onClick={() => setViewMode("preview")}
+                    >
+                      <IconEye size={15} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+              </Group>
+            </Box>
+
+            {/* Editor + Preview */}
+            <Box style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+              {showEditor && (
+                <Box
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    borderRight: showPreview
+                      ? `1px solid var(--ao-border)`
+                      : undefined,
+                    overflow: "hidden",
+                  }}
                 >
-                  {promptText}
-                </ReactMarkdown>
-              </Box>
-            ) : (
-              <Text
-                size="sm"
-                style={{ color: "var(--ao-text-muted)", fontStyle: "italic" }}
-              >
-                Markdown preview will appear here...
-              </Text>
-            )}
+                  <Textarea
+                    ref={textareaRef}
+                    value={promptText}
+                    onChange={(e) => setPromptText(e.currentTarget.value)}
+                    placeholder="Write your agent's custom prompt in Markdown..."
+                    styles={{
+                      root: { flex: 1, display: "flex", flexDirection: "column" },
+                      wrapper: { flex: 1, display: "flex" },
+                      input: {
+                        flex: 1,
+                        backgroundColor: "var(--ao-bg-body)",
+                        border: "none",
+                        borderRadius: 0,
+                        color: "var(--ao-text-primary)",
+                        fontFamily: "monospace",
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        resize: "none",
+                      },
+                    }}
+                  />
+                </Box>
+              )}
+
+              {showPreview && (
+                <Box
+                  style={{
+                    flex: 1,
+                    overflow: "auto",
+                    padding: 16,
+                    backgroundColor: "var(--ao-bg-body)",
+                  }}
+                >
+                  {promptText.trim() ? (
+                    <Box
+                      className="markdown-body"
+                      style={{
+                        color: "var(--ao-text-primary)",
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeHighlight]}
+                      >
+                        {promptText}
+                      </ReactMarkdown>
+                    </Box>
+                  ) : (
+                    <Text
+                      size="sm"
+                      style={{ color: "var(--ao-text-muted)", fontStyle: "italic" }}
+                    >
+                      Markdown preview will appear here...
+                    </Text>
+                  )}
+                </Box>
+              )}
+            </Box>
+
+            {/* Bottom action bar */}
+            <Box
+              px="sm"
+              py={8}
+              style={{
+                borderTop: `1px solid var(--ao-border)`,
+                backgroundColor: "var(--ao-bg-surface)",
+                flexShrink: 0,
+              }}
+            >
+              <Group gap="xs" justify="space-between">
+                <Group gap="xs">
+                  <Button
+                    size="xs"
+                    variant="light"
+                    leftSection={<IconDeviceFloppy size={14} />}
+                    onClick={handleSet}
+                    loading={setPrompt.isPending}
+                    disabled={!promptText.trim()}
+                  >
+                    Save to Config
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="teal"
+                    leftSection={<IconFileImport size={14} />}
+                    onClick={handleImportInstructions}
+                    loading={setPrompt.isPending}
+                  >
+                    Import Instructions
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    color="red"
+                    leftSection={<IconEraser size={14} />}
+                    onClick={() => setConfirmClear(true)}
+                    disabled={customChars === 0}
+                  >
+                    Clear
+                  </Button>
+                </Group>
+
+                <Group gap="xs">
+                  <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+                    Custom block: {customChars.toLocaleString()} chars
+                  </Text>
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    leftSection={<IconRefresh size={14} />}
+                    onClick={handleReload}
+                    loading={officeApply.isPending}
+                  >
+                    Apply to Runtime
+                  </Button>
+                </Group>
+              </Group>
+            </Box>
           </Box>
-        )}
-      </Box>
+        </Tabs.Panel>
 
-      {/* Bottom action bar */}
-      <Box
-        px="sm"
-        py={8}
-        style={{
-          borderTop: `1px solid var(--ao-border)`,
-          backgroundColor: "var(--ao-bg-surface)",
-          flexShrink: 0,
-        }}
-      >
-        <Group gap="xs" justify="space-between">
-          <Group gap="xs">
-            <Button
-              size="xs"
-              variant="light"
-              leftSection={<IconDeviceFloppy size={14} />}
-              onClick={handleSet}
-              loading={setPrompt.isPending}
-              disabled={!promptText.trim()}
-            >
-              Save to Config
-            </Button>
-            <Button
-              size="xs"
-              variant="light"
-              color="teal"
-              leftSection={<IconFileImport size={14} />}
-              onClick={handleImportInstructions}
-              loading={setPrompt.isPending}
-            >
-              Import Instructions
-            </Button>
-            <Button
-              size="xs"
-              variant="light"
-              color="red"
-              leftSection={<IconEraser size={14} />}
-              onClick={() => setConfirmClear(true)}
-              disabled={customChars === 0}
-            >
-              Clear
-            </Button>
-          </Group>
+        <Tabs.Panel value="CONTEXT.md" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <InstructionFileEditor agentName={agentName} file="CONTEXT.md" />
+        </Tabs.Panel>
 
-          <Group gap="xs">
-            <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
-              Custom block: {customChars.toLocaleString()} chars
-            </Text>
-            <Button
-              size="xs"
-              variant="subtle"
-              leftSection={<IconRefresh size={14} />}
-              onClick={handleReload}
-              loading={officeApply.isPending}
-            >
-              Apply to Runtime
-            </Button>
-          </Group>
-        </Group>
-      </Box>
+        <Tabs.Panel value="IDENTITY.md" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <InstructionFileEditor agentName={agentName} file="IDENTITY.md" />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="SOUL.md" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <InstructionFileEditor agentName={agentName} file="SOUL.md" />
+        </Tabs.Panel>
+      </Tabs>
 
       <ConfirmDialog
         opened={confirmClear}
@@ -496,6 +523,6 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
         onCancel={() => setConfirmClear(false)}
         loading={setPrompt.isPending}
       />
-    </Box>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { readdir, stat, readFile, realpath, rm } from "node:fs/promises";
+import { readdir, stat, readFile, writeFile, mkdir, realpath, rm } from "node:fs/promises";
 import { join, relative, sep, dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { platform } from "node:process";
@@ -429,6 +429,38 @@ export async function deleteAgentFile(
   } catch {
     return { error: "delete_failed" };
   }
+}
+
+const ALLOWED_INSTRUCTION_FILES = new Set(["CONTEXT.md", "IDENTITY.md", "SOUL.md"]);
+const MAX_INSTRUCTION_CHARS = 50_000;
+
+export async function getInstructionFile(
+  handle: AgentHandle,
+  file: string,
+): Promise<{ content: string } | { error: string }> {
+  if (!ALLOWED_INSTRUCTION_FILES.has(file)) return { error: "invalid_file" };
+  const abs = join(handle.cwd, "instructions", file);
+  try {
+    const content = await readFile(abs, "utf-8");
+    return { content };
+  } catch {
+    return { content: "" };
+  }
+}
+
+export async function putInstructionFile(
+  handle: AgentHandle,
+  file: string,
+  content: string,
+): Promise<{ ok: true } | { error: string }> {
+  if (!ALLOWED_INSTRUCTION_FILES.has(file)) return { error: "invalid_file" };
+  if (typeof content !== "string") return { error: "invalid_content" };
+  if (content.length > MAX_INSTRUCTION_CHARS)
+    return { error: `content_too_large (${content.length} chars, max ${MAX_INSTRUCTION_CHARS})` };
+  const dir = join(handle.cwd, "instructions");
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, file), content, "utf-8");
+  return { ok: true };
 }
 
 // --- Direct send (bypasses command string parsing) ---
