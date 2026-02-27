@@ -30,7 +30,6 @@ import {
   useOfficeValidate,
 } from "../../api/use-api-mutations.js";
 import { ChannelManager } from "../../components/slack/ChannelManager.js";
-import { CollaborationPolicySection } from "../../components/slack/CollaborationPolicySection.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
 import { SectionHeader } from "../../components/shared/SectionHeader.js";
 import { PageShell } from "../../components/shared/PageShell.js";
@@ -186,7 +185,7 @@ export function SettingsPanel() {
         {/* Appearance */}
         <Box>
           <SectionHeader
-            icon={<IconPalette size={16} color={"var(--ao-accent-purple)"} />}
+            icon={<IconPalette size={16} color={"var(--ao-accent-sage)"} />}
             label="Appearance"
           />
           <Surface>
@@ -286,7 +285,7 @@ export function SettingsPanel() {
             icon={
               <IconCalendarEvent
                 size={16}
-                color={"var(--ao-accent-purple)"}
+                color={"var(--ao-accent-sage)"}
               />
             }
             label="Cron Jobs"
@@ -296,8 +295,6 @@ export function SettingsPanel() {
             <InfoRow label="Active" value={`${activeCronJobs}`} />
           </Surface>
         </Box>
-
-        <CollaborationPolicySection policy={state.collaborationPolicy} />
 
         <ChannelManager
           channels={state.channels}
@@ -325,8 +322,8 @@ export function SettingsPanel() {
           <Group gap="sm">
             <Tooltip label="Reload office.yaml configuration" withArrow>
               <ActionIcon
-                variant="light"
-                color="cyan"
+                variant="filled"
+                color="sage"
                 size="lg"
                 onClick={handleReloadConfig}
                 loading={isPending}
@@ -342,8 +339,8 @@ export function SettingsPanel() {
 
             <Tooltip label="Validate office.yaml syntax" withArrow>
               <ActionIcon
-                variant="light"
-                color="green"
+                variant="filled"
+                color="sage"
                 size="lg"
                 onClick={handleValidateConfig}
                 loading={isPending}

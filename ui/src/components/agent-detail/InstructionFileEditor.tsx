@@ -331,7 +331,7 @@ export function InstructionFileEditor({
         <Group gap="xs" justify="space-between">
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             leftSection={<IconDeviceFloppy size={14} />}
             onClick={handleSave}
             loading={save.isPending}

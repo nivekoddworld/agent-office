@@ -31,8 +31,6 @@ import {
 } from "./skills/on-demand.js";
 import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
-import type { ObligationStore } from "../collaboration/obligation-store.js";
-import type { PolicyService } from "../collaboration/policy-service.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import {
@@ -63,8 +61,6 @@ export interface AgentHandleDeps {
   taskService?: TaskService;
   messageStore?: MessageStore;
   channels?: Map<string, ChannelConfig>;
-  obligationStore?: ObligationStore;
-  policyService?: PolicyService;
   onStateChanged?: () => void;
 }
 
@@ -97,8 +93,6 @@ export class AgentHandle {
   private taskService?: TaskService;
   private _messageStore?: MessageStore;
   private _channels?: Map<string, ChannelConfig>;
-  private _obligationStore?: ObligationStore;
-  private _policyService?: PolicyService;
   private _lastScheduledHeartbeatTs: number | null = null;
 
   constructor(config: AgentConfig, deps: AgentHandleDeps) {
@@ -116,8 +110,6 @@ export class AgentHandle {
     this.taskService = deps.taskService;
     this._messageStore = deps.messageStore;
     this._channels = deps.channels;
-    this._obligationStore = deps.obligationStore;
-    this._policyService = deps.policyService;
     this._onStateChanged = deps.onStateChanged;
   }
 
@@ -312,8 +304,6 @@ export class AgentHandle {
       this._messageStore && this._channels
         ? { store: this._messageStore, channels: this._channels }
         : undefined,
-      this._obligationStore,
-      this._policyService,
       this,
       this._onStateChanged,
     );

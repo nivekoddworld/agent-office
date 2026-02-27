@@ -135,7 +135,7 @@ export function AgentProfileDrawer({
             <Group gap="xs" mt="md">
               <Button
                 size="xs"
-                variant="light"
+                variant="filled"
                 leftSection={<IconSend size={14} />}
                 onClick={() => {
                   onClose();
@@ -146,7 +146,7 @@ export function AgentProfileDrawer({
               </Button>
               <Badge
                 variant="light"
-                color="blue"
+                color="sage"
                 size="lg"
                 styles={{
                   root: { height: 30, paddingInline: 14 },

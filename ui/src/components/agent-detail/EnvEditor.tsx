@@ -142,7 +142,7 @@ export function EnvEditor({ agent }: EnvEditorProps) {
           />
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             onClick={addEnv}
             disabled={!newEnvKey.trim() || !newEnvVal.trim()}
           >
@@ -204,7 +204,7 @@ export function EnvEditor({ agent }: EnvEditorProps) {
           />
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             color="yellow"
             onClick={addSecret}
             disabled={!newSecKey.trim() || !newSecEnv.trim()}

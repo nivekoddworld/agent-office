@@ -128,7 +128,7 @@ function getFileIcon(name: string) {
       return <IconTerminal size={size} color={"var(--ao-accent-green)"} />;
     case "yaml":
     case "yml":
-      return <IconFile size={size} color={"var(--ao-accent-purple)"} />;
+      return <IconFile size={size} color={"var(--ao-accent-sage)"} />;
     default:
       return <IconFile size={size} color={"var(--ao-text-muted)"} />;
   }

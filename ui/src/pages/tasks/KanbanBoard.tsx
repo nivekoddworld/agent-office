@@ -83,7 +83,7 @@ export function KanbanBoard() {
       headerRight={
         <Button
           size="xs"
-          variant="light"
+          variant="filled"
           leftSection={<IconPlus size={14} />}
           onClick={() => setAddOpen(true)}
         >
@@ -126,7 +126,7 @@ export function KanbanBoard() {
               filter === "all" ? (
                 <Button
                   size="xs"
-                  variant="light"
+                  variant="filled"
                   leftSection={<IconPlus size={14} />}
                   onClick={() => setAddOpen(true)}
                 >

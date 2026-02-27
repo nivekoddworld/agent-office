@@ -3,7 +3,7 @@ import type { AgentDetail } from "../../api/types.js";
 
 const BLOCK_COLORS: Record<string, string> = {
   base: "blue",
-  office: "violet",
+  office: "sage",
   bootstrap: "green",
   memory: "yellow",
   runtime: "orange",

@@ -69,7 +69,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [CLI Flags](#cli-flags)
   - [Execution Surfaces](#execution-surfaces)
   - [REST API Endpoints](#rest-api-endpoints)
-- [Agent Collaboration](#agent-collaboration)
+- [Agent Tools](#agent-tools)
   - [list_agents](#list_agents)
   - [message_agent](#message_agent)
   - [message_user](#message_user)
@@ -89,10 +89,6 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [task_list](#task_list)
   - [task_get](#task_get)
   - [task_delete](#task_delete)
-  - [Collaboration Policy](#collaboration-policy)
-  - [Obligation Tracking](#obligation-tracking)
-  - [Deadlock Detection](#deadlock-detection)
-  - [Collaboration Metrics](#collaboration-metrics)
   - [Tool Architecture](#tool-architecture)
   - [Prompt System](#prompt-system)
 - [Concepts](#concepts)
@@ -215,15 +211,6 @@ office:
       tasks:
         - title: "Daily standup"
           assignee: pm
-  collaborationPolicy:
-    mode: off # off | warn | enforce
-    sla:
-      replyByMinutes: 5
-      remindAtMinutes: 3
-      escalateAtMinutes: 5
-      staleTaskHours: 24
-      deadlockThresholdMinutes: 10
-      stallCooldownMinutes: 5
 
 agents:
   designer:
@@ -254,8 +241,6 @@ agents:
 ```
 
 Office-level `env` and `secrets` are inherited by all agents. Agent-level values override office-level.
-
-The `collaborationPolicy` block configures collaboration enforcement for all agents. See [Collaboration Policy](#collaboration-policy).
 
 All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.
 
@@ -1048,12 +1033,10 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 | Method  | Path                         | Description                          |
 | ------- | ---------------------------- | ------------------------------------ |
 | `GET`   | `/api/cost`                  | Cost and token usage data            |
-| `GET`   | `/api/collaboration/metrics` | Collaboration observability snapshot |
-| `PATCH` | `/api/collaboration/policy`  | Update collaboration policy          |
 
-## Agent Collaboration
+## Agent Tools
 
-Agents communicate through explicit tool calls. Agent text output is internal thinking — not visible to the user. All outward communication uses egress tools (`message_user`, `post_channel`), collaboration tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), cron tools (`cron_add`, `cron_remove`, `cron_list`), task tools (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`), and skill tools (`read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
+Agents communicate through explicit tool calls. Agent text output is internal thinking — not visible to the user. All outward communication uses egress tools (`message_user`, `post_channel`), messaging tools (`message_agent`, `list_agents`, `read_agent_file`, `authenticated_fetch`), cron tools (`cron_add`, `cron_remove`, `cron_list`), task tools (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`), and skill tools (`read_skill`, `skill_search`, `skill_install`, `skill_remove`, `skill_create`). Tool schemas are defined once in `src/agent/tools/contracts.ts`. Both in-process and sandboxed agents expose the full tool set.
 
 ### Task Event Notifications
 
@@ -1085,31 +1068,18 @@ Optional parameters:
 
 | Parameter        | Type    | Default | Description                                                                     |
 | ---------------- | ------- | ------- | ------------------------------------------------------------------------------- |
-| `requiresReply`  | boolean | `false` | Request a reply within SLA (registers an obligation)                            |
-| `replyByMinutes` | integer | `5`     | Custom reply SLA in minutes (only used when `requiresReply` is `true`)          |
 | `originTaskId`   | string  | —       | Related task ID for correlation tracking                                        |
-| `overrideReason` | string  | —       | Policy override: `"urgent"`, `"critical"`, or `"emergency"` (enforce mode only) |
 
-Returns delivery confirmation: `{ queued: true }` on success, or `{ queued: false, reason: "..." }` on failure (e.g. `rate_limited` or policy violation).
+Returns delivery confirmation: `{ queued: true }` on success, or `{ queued: false, reason: "..." }` on failure (e.g. `rate_limited`).
 
 ```
 copywriter calls message_agent:
   to: "designer"
   message: "Here's the landing page copy: ..."
-  requiresReply: true
 
--> Message lands in designer's inbox (obligation registered, 5-min SLA)
+-> Message lands in designer's inbox
 -> Next tick delivers it as: [Message from copywriter]\nHere's the landing page copy: ...\n\n[To reply, call message_agent with to="copywriter"]
 -> Designer starts working
-```
-
-```
-# In enforce mode, delegatable work without overrideReason is blocked:
-agent calls message_agent:
-  to: "coder"
-  message: "Implement the login page"
-
--> { queued: false, reason: "multi_step_work_requires_task" }
 ```
 
 ### `message_user`
@@ -1148,74 +1118,6 @@ agent calls post_channel:
 **Hop count:** Messages carry a `hopCount` field incremented on each delivery. Posts are rejected when `hopCount >= 5` to prevent infinite loops.
 
 **Role assignment:** Posts from `__user__` get `role: "user"`, all others get `role: "assistant"`.
-
-### Collaboration Policy
-
-The `collaborationPolicy` in `office.yaml` governs how multi-step work is delegated between agents. Three modes are available:
-
-| Mode      | Behavior                                                                                             |
-| --------- | ---------------------------------------------------------------------------------------------------- |
-| `off`     | No restrictions on `message_agent` usage (default)                                                   |
-| `warn`    | Logs a warning when `message_agent` is used for work that should use `task_create`                   |
-| `enforce` | Blocks `message_agent` for delegatable work; agents must use `task_create` to assign multi-step work |
-
-**Detection heuristic:** Messages containing action verbs (`create`, `implement`, `review`, `build`, `fix`, `refactor`, `write`, `deploy`, `add`, `delete`, `remove`, `migrate`, `setup`, `configure`) directed to a single recipient are classified as delegatable work. Clarifications and FYIs (messages containing `"quick question"`, `"clarification"`, `"just checking"`, `"fyi"`, `"heads up"`) are always allowed regardless of mode.
-
-**Override (enforce mode only):** Pass `overrideReason` with `"urgent"`, `"critical"`, or `"emergency"` to bypass the policy block. Overrides are logged for audit.
-
-```yaml
-# office.yaml
-office:
-  collaborationPolicy:
-    mode: enforce
-    sla:
-      replyByMinutes: 5
-      remindAtMinutes: 3
-      escalateAtMinutes: 5
-      staleTaskHours: 24
-      deadlockThresholdMinutes: 10
-      stallCooldownMinutes: 5
-```
-
-### Obligation Tracking
-
-When `message_agent` is called with `requiresReply: true`, an obligation is registered tracking the expected reply.
-
-Each obligation records: `correlationId`, `from`, `to`, `replyByTs`, and optionally `originTaskId`. Obligations are persisted to `<officeDir>/obligations/obligations.json` using atomic writes (temp file + rename).
-
-**SLA defaults:** `replyByMinutes: 5` (configurable per-message via the `replyByMinutes` parameter or globally via the office SLA config).
-
-**Overdue handling:** When an obligation passes its SLA deadline, the `DeadlockDetector` sends a nudge message from `__system__` to the delinquent agent. If the agent has a `reports_to` manager, the manager is also notified via escalation.
-
-Fulfilled obligations are tracked and cleaned up after 24 hours of retention.
-
-### Deadlock Detection
-
-The `DeadlockDetector` runs periodic checks (default every 15 seconds) to identify workflow stalls. Three stall signals are monitored:
-
-| Signal                   | Trigger                                                           |
-| ------------------------ | ----------------------------------------------------------------- |
-| `unresolved_obligations` | Obligations past their SLA deadline                               |
-| `all_agents_idle`        | All agents idle but queues have pending messages                  |
-| `no_queue_progress`      | No messages dequeued for `deadlockThresholdMinutes` (default: 10) |
-
-Stall events are emitted to workspace listeners as `workflow_stalled` events. Nudge messages are sent to agents with overdue obligations, with a cooldown period (`stallCooldownMinutes`, default: 5) to prevent spam.
-
-Incidents are tracked and can be resolved programmatically. Configure thresholds via the `sla` block in `collaborationPolicy`.
-
-### Collaboration Metrics
-
-The `CollaborationMetricsCollector` tracks message volume, task-vs-DM ratios, and reply latency in 24-hour rolling windows. Metrics are persisted to `<officeDir>/collaboration-metrics.json`.
-
-An observability snapshot is available via `GET /api/collaboration/metrics` and includes:
-
-- `currentWindow` — message counts, reply latencies, simple-work candidates
-- `simpleWorkRatio` — fraction of DMs that could have been tasks
-- `avgReplyLatencyMs` — average reply latency in the current window
-- `pendingObligationCount` / `overdueObligationCount` — obligation status
-- `pendingReplyAges` — per-obligation age breakdown (`from`, `to`, `ageMs`)
-- `staleTaskCount` — tasks not updated within `staleTaskHours`
-- `stallIncidentCount` / `recentStallIncidents` — deadlock incident history
 
 ### `read_agent_file`
 
@@ -1508,7 +1410,7 @@ src/agent/tools/
   fetch-helpers.ts          Shared SSRF protection, URL validation, auth header builder
   message-user.ts           message_user — host implementation (egress-impl.messageUser)
   post-channel.ts           post_channel — host implementation (egress-impl.postChannel)
-  message-agent.ts          Host implementation (bus.send + policy check + obligation tracking)
+  message-agent.ts          Host implementation (bus.send)
   list-agents.ts            Host implementation (direct listFn call)
   read-agent-file.ts        Host implementation (direct fs access)
   authenticated-fetch.ts    Host implementation (outbound fetch with secret injection)
@@ -1560,7 +1462,7 @@ Every agent receives a **layered system prompt** composed from nine ordered laye
 
 1. **Base prompt** (`src/agent/prompts/base-v1.md`) — always included, never overridden. Covers:
    - Communication model: agent text = internal thinking (not visible to user); `message_user` = agent→user; `post_channel` = agent→channel; `message_agent` = agent→agent
-   - Agent-to-agent collaboration (tools, messaging protocol, reply-loop avoidance, workflow rules, reporting, collaboration policy enforce/warn/off modes)
+   - Agent-to-agent messaging (tools, messaging protocol, reply-loop avoidance, workflow rules, reporting)
    - Execution protocol (Plan → Act → Verify → Report)
    - Workspace discipline and persistence discipline
    - No invented details — do not fabricate external systems, links, IDs, or integrations; ask or state unknown
@@ -1581,7 +1483,7 @@ With `prompt_mode: minimal`, only base, identity, and custom layers are included
 
 Each prompt is versioned (`v1`) and hashed (SHA-256, first 12 hex chars) for traceability. The hash is logged on agent spawn. An `.effective-prompt.md` snapshot is written to the agent directory on every spawn/reload for debugging.
 
-Custom instructions are **append-only** — they add your content after the base prompt. All agents always receive collaboration rules, tool guidance, and safety instructions regardless of custom prompt content.
+Custom instructions are **append-only** — they add your content after the base prompt. All agents always receive messaging rules, tool guidance, and safety instructions regardless of custom prompt content.
 
 > **Note:** `agent prompt show <agent>` displays the prompt text but excludes runtime-loaded skills. Use `prompt report <agent>` for the authoritative composed-block view with accurate character counts.
 
@@ -1627,9 +1529,6 @@ Each office gets an isolated directory, and each agent within it gets its own wo
         state.json          # cron job state
       tasks/
         tasks.json          # task store
-      obligations/
-        obligations.json    # reply obligation store
-      collaboration-metrics.json  # collaboration metrics
       logs/
         cron-audit.jsonl    # agent cron tool audit trail
         task-audit.jsonl    # task mutation audit trail
@@ -1721,11 +1620,10 @@ Inbox queues and DM records are persisted to SQLite so they survive process rest
 | ----------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.                          |
 | DM records  | Same DB file                           | Written by egress service with deterministic `egress_id` for idempotency. SQLite `INSERT OR IGNORE` gates JSONL writes.  |
-| Obligations | Same DB file                           | Reply obligation tracking with indexes on `correlation_id`, `reply_by_ts`, and `fulfilled`.                               |
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 
-The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `requiresReply`, `replyByTs`, `originTaskId`) for collaboration tracking.
+The `MessageBus` supports `sendWithOutcome()` which returns `{ queued: boolean; reason?: string }` instead of void. Messages carry envelope fields (`correlationId`, `originTaskId`) for tracking.
 
 #### Session History
 
@@ -1864,7 +1762,6 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 - **Debug logs** — live event capture panel with source/kind/agent filters, preset views (All, Errors, Tools, Messages, Task/Cron), group-by-agent mode, and JSONL export
 - **Org chart** — dedicated page (`/org-chart`) with interactive hierarchy visualization and agent profile drawer
 - **Cost dashboard** — dedicated page (`/cost`) with per-agent token usage and cost breakdown
-- **Collaboration** — dedicated page (`/collaboration`) with metrics, obligation tracking, and deadlock signals
 - **Office settings** — dedicated page (`/settings`) with channel management (create, edit members/description, delete), read-only scheduler status, config reload/validate
 - **URL-based navigation** — React Router v7 with bookmarkable URLs, browser back/forward, and deep linking to any view
 - **Real-time updates** — SSE event stream with unread badges and queue depth indicators
@@ -2022,7 +1919,7 @@ See [`examples/feature-team/`](examples/feature-team/) for the full `office.yaml
 ```
 src/
   index.ts                    CLI entry + startup
-  workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox, collaboration)
+  workspace.ts                Central facade (wires scheduler, bus, watchdog, sandbox)
   types.ts                    Shared types (Priority, AgentConfig, OfficeYaml, OfficeContext, etc.)
   constants.ts                Shared constants, office path helpers, officeId validation
 
@@ -2048,7 +1945,7 @@ src/
     prompt.ts                 Convenience wrapper over prompt-manager
     workspace-scaffold.ts    Workspace directory scaffold (memory/, logs/)
     prompts/
-      base-v1.md              Versioned base prompt (collaboration, tools, safety)
+      base-v1.md              Versioned base prompt (messaging, tools, safety)
       base-v1.ts              TS companion (reads .md, exports PROMPT_VERSION)
       prompt-manager.ts       Layered composition + deterministic hashing
       prompt-loader.ts        XOR prompt resolution (inline vs file)
@@ -2064,7 +1961,7 @@ src/
       index.ts                Barrel re-export for host-side tools
       message-user.ts         message_user — host implementation (egress-impl.messageUser)
       post-channel.ts         post_channel — host implementation (egress-impl.postChannel)
-      message-agent.ts        message_agent — host implementation (bus.send + policy check + obligation tracking)
+      message-agent.ts        message_agent — host implementation (bus.send)
       list-agents.ts          list_agents — host implementation (direct call)
       read-agent-file.ts      read_agent_file — host implementation (local fs)
       authenticated-fetch.ts  authenticated_fetch — host implementation (secret injection + fetch)
@@ -2141,7 +2038,7 @@ src/
 
   messages/
     types.ts                  PersistedInbox, DmRecord interfaces
-    message-store.ts          SQLite-backed inbox + DM + obligation persistence (node:sqlite, Node 22+)
+    message-store.ts          SQLite-backed inbox + DM persistence (node:sqlite, Node 22+)
     session-key.ts            Session key helpers (sessionKey, parseSessionKey)
 
   sessions/
@@ -2169,12 +2066,6 @@ src/
   metrics/
     usage-tracker.ts          Usage/cost JSONL tracker (record, read, summarize)
 
-  collaboration/
-    metrics.ts              Baseline metrics collector (message volume, reply latency, snapshots)
-    obligation-store.ts     Reply obligation persistence (JSON, atomic writes)
-    deadlock-detector.ts    Stall detection (idle agents, no progress, overdue obligations)
-    policy-service.ts       Collaboration policy enforcement (off/warn/enforce modes)
-
   ui/
     server.ts               HTTP server (:3847), SSE streaming, static file serving
     routes.ts               REST API route definitions (typed endpoints) + getModelsResponse()
@@ -2187,7 +2078,7 @@ src/
       agent-files.handler.ts      Agent workspace file listing/reading
       agent-messaging.handler.ts  Agent DMs, inbox, peer conversations
       agent-skills.handler.ts     Agent skill install/remove/search
-      analytics.handler.ts        Cost and collaboration metrics
+      analytics.handler.ts        Cost metrics
       auth.handler.ts             Session auth + CSRF
       channels.handler.ts         Channel CRUD + messaging
       cron-agent.handler.ts       Per-agent cron jobs
@@ -2235,8 +2126,6 @@ ui/src/
       ConversationView.tsx    /channels/:name — wrapper that extracts param → ChannelView
     cost/
       CostPanel.tsx           /cost — per-agent token usage and cost breakdown
-    collaboration/
-      CollaborationPanel.tsx  /collaboration — collaboration metrics panel
     settings/
       SettingsPanel.tsx       /settings — office settings and channel management
     debug/
@@ -2289,10 +2178,6 @@ test/
   usage-tracker.test.ts      Usage JSONL recording, reading, filtering
   cost-commands.test.ts      Cost status/today/report formatting
   cli-behavior.test.ts       CLI flag/option validation
-  collaboration-metrics.test.ts  Collaboration snapshot shape, obligation counts, ages
-  deadlock-detector.test.ts  Stall detection signals, cooldown, nudge, incidents
-  obligation-store.test.ts   Obligation CRUD, overdue detection, persistence
-  policy-service.test.ts     Policy modes (off/warn/enforce), override, heuristic
   session-context.test.ts    Session key helpers (sessionKey, parseSessionKey)
   chat-feed-routing.test.ts  SSE event routing (chat-relevant vs suppressed)
   command-parser.test.ts     Chat command parsing (slash commands, natural language)

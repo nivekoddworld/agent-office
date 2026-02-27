@@ -155,7 +155,7 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
           />
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             color="green"
             onClick={addAllowTool}
             disabled={!newAllowTool.trim()}
@@ -206,7 +206,7 @@ export function PermissionsEditor({ agent }: PermissionsEditorProps) {
           />
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             color="red"
             onClick={addDenyTool}
             disabled={!newDenyTool.trim()}

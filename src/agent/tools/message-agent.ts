@@ -4,11 +4,7 @@ import type { MessageBus } from "../../transport/message-bus.js";
 import { Priority } from "../../types.js";
 import { sessionKey } from "../../messages/session-key.js";
 import { MESSAGE_AGENT } from "./contracts.js";
-import type { ObligationStore } from "../../collaboration/obligation-store.js";
-import type { PolicyService } from "../../collaboration/policy-service.js";
 import type { SessionEntry } from "../../sessions/session-writer.js";
-
-const DEFAULT_REPLY_SLA_MINUTES = 5;
 
 const textResult = (text: string) => ({
   content: [{ type: "text" as const, text }],
@@ -18,14 +14,6 @@ const textResult = (text: string) => ({
 export interface MessageAgentDeps {
   agentName: string;
   bus: MessageBus;
-  obligationStore?: ObligationStore;
-  policyService?: PolicyService;
-  onOverride?: (params: {
-    from: string;
-    to: string;
-    overrideReason: string;
-    correlationId: string;
-  }) => void;
   onSessionWrite?: (
     agentName: string,
     peerName: string,
@@ -44,13 +32,7 @@ export function createMessageAgentTool(
       ? { agentName: agentNameOrDeps, bus: bus! }
       : agentNameOrDeps;
 
-  const {
-    agentName,
-    bus: msgBus,
-    obligationStore,
-    policyService,
-    onOverride,
-  } = deps;
+  const { agentName, bus: msgBus } = deps;
 
   return {
     ...MESSAGE_AGENT,
@@ -59,10 +41,6 @@ export function createMessageAgentTool(
       params: {
         to: string;
         message: string;
-        requiresReply?: boolean;
-        replyByMinutes?: number;
-        originTaskId?: string;
-        overrideReason?: "urgent" | "critical" | "emergency";
       },
     ) => {
       const to = params.to.trim();
@@ -72,61 +50,10 @@ export function createMessageAgentTool(
         );
       }
 
-      let warnPrefix = "";
       const correlationId = randomUUID();
       try {
-        // 1. Policy check
-        if (policyService) {
-          const recipientCount = 1;
-          const check = policyService.checkMessagePolicy(
-            params.message,
-            recipientCount,
-            params.overrideReason,
-            params.to,
-          );
-          if (check.blocked) {
-            return textResult(
-              `Error: Policy violation — multi-step work requires task_create. Use task_create for delegation. (reason: ${check.reason})`,
-            );
-          }
-          if (check.warn) {
-            console.warn(
-              `[policy:warn] ${agentName} → ${params.to}: prefer task_create for multi-step work`,
-            );
-            warnPrefix =
-              "[Policy warning: prefer task_create for multi-step work] ";
-          }
-          if (
-            params.overrideReason &&
-            policyService?.getPolicy().mode === "enforce" &&
-            !check.blocked &&
-            !check.warn
-          ) {
-            console.warn(
-              `[policy:override] ${agentName} → ${params.to}: override=${params.overrideReason}`,
-            );
-            onOverride?.({
-              from: agentName,
-              to: params.to,
-              overrideReason: params.overrideReason,
-              correlationId,
-            });
-          }
-        }
-
-        // 2. Generate envelope fields
-        const slaMinutes =
-          params.replyByMinutes ??
-          policyService?.getPolicy().sla.replyByMinutes ??
-          DEFAULT_REPLY_SLA_MINUTES;
-        const replyByMs = params.requiresReply
-          ? Date.now() + slaMinutes * 60_000
-          : undefined;
-
-        // 3. Session key
         const sk = sessionKey("internal", params.to);
 
-        // 4. Send with envelope
         const outcome = msgBus.sendWithOutcome({
           from: agentName,
           to: params.to,
@@ -136,9 +63,6 @@ export function createMessageAgentTool(
           sessionKey: sk,
           sourceKind: "internal",
           correlationId,
-          requiresReply: params.requiresReply,
-          replyByTs: replyByMs,
-          originTaskId: params.originTaskId,
         });
 
         if (!outcome.queued) {
@@ -147,7 +71,7 @@ export function createMessageAgentTool(
           );
         }
 
-        // 5. Dual write: sender's session file
+        // Dual write: sender's session file
         try {
           deps.onSessionWrite?.(agentName, params.to, {
             ts: new Date().toISOString(),
@@ -159,21 +83,7 @@ export function createMessageAgentTool(
           // best-effort
         }
 
-        // 6. Register obligation if requiresReply
-        if (
-          params.requiresReply &&
-          replyByMs !== undefined &&
-          obligationStore
-        ) {
-          obligationStore.add({
-            correlationId,
-            from: agentName,
-            to: params.to,
-            replyByTs: replyByMs,
-            originTaskId: params.originTaskId,
-          });
-        }
-        return textResult(`${warnPrefix}Message sent to ${params.to}`);
+        return textResult(`Message sent to ${params.to}`);
       } catch {
         return textResult(`Error: agent "${params.to}" not found.`);
       }

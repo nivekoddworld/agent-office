@@ -100,14 +100,6 @@ export async function startUiServer(
     }
   }
 
-  function refreshPolicy(): void {
-    const yaml = loadOfficeYaml(officeId);
-    if (yaml) {
-      const ctx = buildOfficeContext(officeId, yaml);
-      workspace.office.policy = ctx.policy;
-    }
-  }
-
   const unsubTick = workspace.scheduler.onTick((state) =>
     broadcast("scheduler_tick", state),
   );
@@ -133,7 +125,6 @@ export async function startUiServer(
     getPort: () => boundPort,
     broadcast,
     refreshChannels,
-    refreshPolicy,
   };
 
   // Register all routes (order matters: specific paths before parameterized)

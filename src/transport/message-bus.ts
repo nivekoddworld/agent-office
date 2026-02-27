@@ -1,7 +1,6 @@
 import { LocalTransport } from "./local.js";
 import type { InboxMessage, Priority, SourceKind } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
-import type { CollaborationMetricsCollector } from "../collaboration/metrics.js";
 
 /**
  * Message bus — thin wrapper over transport with convenience helpers.
@@ -29,7 +28,6 @@ export class MessageBus {
     { count: number; windowStart: number }
   >();
   private store: MessageStore | null = null;
-  private metrics: CollaborationMetricsCollector | null = null;
 
   setStore(store: MessageStore): void {
     this.store = store;
@@ -46,17 +44,10 @@ export class MessageBus {
         session_key: msg.sessionKey ?? null,
         source_kind: msg.sourceKind ?? null,
         channel: msg.channel ?? null,
-        // Add new envelope fields
         correlation_id: msg.correlationId ?? null,
-        requires_reply: msg.requiresReply ? 1 : 0,
-        reply_by_ts: msg.replyByTs ?? null,
         origin_task_id: msg.originTaskId ?? null,
       });
     };
-  }
-
-  setMetrics(metrics: CollaborationMetricsCollector): void {
-    this.metrics = metrics;
   }
 
   register(name: string): void {
@@ -76,10 +67,7 @@ export class MessageBus {
           sessionKey: p.session_key ?? undefined,
           sourceKind: (p.source_kind as SourceKind) ?? undefined,
           channel: p.channel ?? undefined,
-          // Add new envelope fields
           correlationId: p.correlation_id ?? undefined,
-          requiresReply: (p.requires_reply ?? 0) === 1,
-          replyByTs: p.reply_by_ts ?? undefined,
           originTaskId: p.origin_task_id ?? undefined,
         }));
         this.transport.restore(name, msgs);
@@ -121,10 +109,7 @@ export class MessageBus {
     sessionKey?: string;
     sourceKind?: SourceKind;
     channel?: string;
-    // Envelope fields
     correlationId?: string;
-    requiresReply?: boolean;
-    replyByTs?: number;
     originTaskId?: string;
     hopCount?: number;
   }): { queued: boolean; reason?: string } {
@@ -146,12 +131,6 @@ export class MessageBus {
       }
     }
     this.transport.send(opts);
-
-    // Record baseline metrics
-    if (this.metrics) {
-      const isTaskNotification = opts.from === "__task__";
-      this.metrics.recordMessage(opts.from, opts.payload, isTaskNotification);
-    }
 
     return { queued: true };
   }

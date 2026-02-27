@@ -9,7 +9,6 @@ import {
   IconHash,
   IconMessage,
   IconFiles,
-  IconLink,
   IconCalendarEvent,
 } from "@tabler/icons-react";
 import { useFireAgent, useSetManager } from "../../api/use-api-mutations.js";
@@ -141,19 +140,14 @@ export function NodeActions({
               )}
             </List.Item>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="grape"><IconMessage size={12} /></ThemeIcon>}
+              icon={<ThemeIcon size={20} variant="light" color="sage"><IconMessage size={12} /></ThemeIcon>}
             >
               All DM history → deleted
             </List.Item>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="teal"><IconFiles size={12} /></ThemeIcon>}
+              icon={<ThemeIcon size={20} variant="light" color="sage"><IconFiles size={12} /></ThemeIcon>}
             >
               All session files → deleted
-            </List.Item>
-            <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="yellow"><IconLink size={12} /></ThemeIcon>}
-            >
-              All pending obligations → cleared
             </List.Item>
           </List>
           <Text size="xs" c="red" fw={600}>

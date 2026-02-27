@@ -153,8 +153,7 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
         />
         <Button
           size="xs"
-          variant="light"
-          color="cyan"
+          variant="filled"
           leftSection={<IconSearch size={14} />}
           onClick={handleSearch}
           disabled={!searchInput.trim()}
@@ -193,7 +192,7 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
                 </div>
                 <Button
                   size="xs"
-                  variant="light"
+                  variant="filled"
                   color={result.installed ? "gray" : "teal"}
                   onClick={() => handleInstall(result.packageName)}
                   disabled={result.installed || mutating}
@@ -225,8 +224,8 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
         />
         <Button
           size="xs"
-          variant="light"
-          color="teal"
+          variant="filled"
+          color="sage"
           onClick={() => handleInstall(manualPackage.trim())}
           disabled={!manualPackage.trim() || mutating}
           loading={installSkill.isPending}

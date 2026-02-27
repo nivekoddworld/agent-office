@@ -131,7 +131,7 @@ export function OrgChart({ agents, hierarchy, onSelectAgent }: OrgChartProps) {
         <Panel position="top-right">
           <ActionIcon
             variant="filled"
-            color="blue"
+            color="sage"
             size="lg"
             onClick={() => {
               setDefaultManager(null);

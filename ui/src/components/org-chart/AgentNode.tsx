@@ -42,7 +42,7 @@ export function AgentNode({ data }: NodeProps) {
               width: 40,
               height: 40,
               borderRadius: "22%",
-              backgroundColor: "var(--ao-accent-purple)",
+              backgroundColor: "var(--ao-accent-sage)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",

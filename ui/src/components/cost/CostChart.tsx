@@ -6,10 +6,10 @@ interface CostChartProps {
 
 const COLORS = [
   "cyan",
-  "violet",
+  "teal",
   "orange",
   "pink",
-  "teal",
+  "lime",
   "green",
   "yellow",
   "blue",

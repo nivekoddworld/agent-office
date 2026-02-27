@@ -163,7 +163,7 @@ export function HeartbeatEditor({ agent }: HeartbeatEditorProps) {
       <Group gap="xs">
         <Button
           size="xs"
-          variant="light"
+          variant="filled"
           onClick={save}
           loading={saving}
           disabled={intervalMin < 1}
@@ -173,7 +173,7 @@ export function HeartbeatEditor({ agent }: HeartbeatEditorProps) {
         {hb && (
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             color="red"
             onClick={clear}
             loading={saving}

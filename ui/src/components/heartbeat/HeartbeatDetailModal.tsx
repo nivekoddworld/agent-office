@@ -298,7 +298,7 @@ export function HeartbeatDetailModal({
         <Group justify="space-between">
           <Button
             size="xs"
-            variant="light"
+            variant="filled"
             leftSection={<IconPencil size={14} />}
             onClick={() => onEdit(entry)}
           >

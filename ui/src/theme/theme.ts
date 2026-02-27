@@ -1,15 +1,16 @@
 import { createTheme, virtualColor } from "@mantine/core";
-import { violet, coral, warmDark } from "./colors.js";
+import { sage, coral, warmDark } from "./colors.js";
 
 export const theme = createTheme({
-  primaryColor: "violet",
+  primaryColor: "sage",
+  primaryShade: { light: 6, dark: 6 },
   autoContrast: true,
   defaultRadius: "lg",
   fontFamily:
     'Lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   colors: {
     dark: warmDark,
-    violet,
+    sage,
     coral,
     surface: virtualColor({
       name: "surface",

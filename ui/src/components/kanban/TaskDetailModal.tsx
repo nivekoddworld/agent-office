@@ -129,7 +129,7 @@ export function TaskDetailModal({
             <Tooltip label={`Send DM to ${task.assignee}`} withArrow>
               <Button
                 size="xs"
-                variant="light"
+                variant="filled"
                 leftSection={<IconMessageCircle size={14} />}
                 onClick={handleDm}
               >
@@ -147,7 +147,7 @@ export function TaskDetailModal({
             {task.createdBy === "__user__" ? (
               <IconUser size={18} color="var(--ao-accent-blue)" />
             ) : task.createdBy === "__cron__" ? (
-              <IconClock size={18} color="var(--ao-accent-purple)" />
+              <IconClock size={18} color="var(--ao-accent-sage)" />
             ) : (
               <AgentAvatar name={task.createdBy} size={22} />
             )}
@@ -281,7 +281,7 @@ export function TaskDetailModal({
                   <Button
                     size="xs"
                     color="blue"
-                    variant="light"
+                    variant="filled"
                     leftSection={<IconRefresh size={14} />}
                     onClick={() => {
                       onRestart(task.id);

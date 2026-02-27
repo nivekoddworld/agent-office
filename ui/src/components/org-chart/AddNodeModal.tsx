@@ -145,7 +145,7 @@ export function AddNodeModal({
           {option.label}
         </Text>
         {info.reasoning && (
-          <Badge size="xs" variant="light" color="violet">
+          <Badge size="xs" variant="light" color="sage">
             reasoning
           </Badge>
         )}
