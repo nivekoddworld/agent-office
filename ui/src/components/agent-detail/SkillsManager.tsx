@@ -4,6 +4,7 @@ import {
   Text,
   Badge,
   Group,
+  Box,
   TextInput,
   Button,
   ActionIcon,
@@ -12,7 +13,7 @@ import {
   Loader,
   Divider,
 } from "@mantine/core";
-import { IconSearch, IconX } from "@tabler/icons-react";
+import { IconSearch, IconSparkles, IconX } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import {
   useAgentSkills,
@@ -94,67 +95,20 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
 
   return (
     <Stack gap="xs">
-      {isSkillsLoading ? (
-        <Group gap="xs">
-          <Loader size="xs" />
-          <Text size="xs" c="dimmed">
-            Loading skills...
-          </Text>
-        </Group>
-      ) : installedSkills.length > 0 ? (
-        <Group gap={4} wrap="wrap">
-          {installedSkills.map((skill) => (
-            <Badge
-              key={`${skill.source}:${skill.name}`}
-              size="sm"
-              variant="light"
-              color={skill.source === "project" ? "teal" : "cyan"}
-              rightSection={
-                <ActionIcon
-                  size={12}
-                  variant="transparent"
-                  onClick={() => handleRemove(skill)}
-                  disabled={mutating}
-                  aria-label={`Remove ${skill.name}`}
-                >
-                  <IconX size={10} />
-                </ActionIcon>
-              }
-            >
-              {skill.name}
-              {loadedNow.has(skill.name) ? " (loaded)" : ""}
-            </Badge>
-          ))}
-        </Group>
-      ) : (
-        <Text size="xs" c="dimmed">
-          No skills installed for this agent
-        </Text>
-      )}
-
-      <Text size="xs" c="dimmed">
-        Installed: {installedSkills.length} · Loaded in current prompt:{" "}
-        {agent.promptReport.skills.length}
-      </Text>
-
-      <Divider my={4} />
-
-      <Text size="xs" fw={600}>
-        Search skills.sh
-      </Text>
+      {/* Search & install — always visible at top */}
       <Group gap="xs">
         <TextInput
           size="xs"
-          placeholder="react testing, docs, deploy..."
+          placeholder="Search skills.sh..."
           value={searchInput}
           onChange={(e) => setSearchInput(e.currentTarget.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           style={{ flex: 1 }}
+          leftSection={<IconSearch size={14} />}
         />
         <Button
           size="xs"
           variant="filled"
-          leftSection={<IconSearch size={14} />}
           onClick={handleSearch}
           disabled={!searchInput.trim()}
           loading={searching}
@@ -163,11 +117,37 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
         </Button>
       </Group>
 
+      <Group gap="xs">
+        <TextInput
+          size="xs"
+          placeholder="owner/repo@skill-name"
+          value={manualPackage}
+          onChange={(e) => setManualPackage(e.currentTarget.value)}
+          onKeyDown={(e) =>
+            e.key === "Enter" &&
+            manualPackage.trim() &&
+            handleInstall(manualPackage.trim())
+          }
+          style={{ flex: 1 }}
+        />
+        <Button
+          size="xs"
+          variant="filled"
+          color="sage"
+          onClick={() => handleInstall(manualPackage.trim())}
+          disabled={!manualPackage.trim() || mutating}
+          loading={installSkill.isPending}
+        >
+          Install
+        </Button>
+      </Group>
+
+      {/* Search results */}
       {searchQuery && searching && (
         <Group gap="xs">
           <Loader size="xs" />
           <Text size="xs" c="dimmed">
-            Searching for "{searchQuery}"...
+            Searching for &quot;{searchQuery}&quot;...
           </Text>
         </Group>
       )}
@@ -205,37 +185,100 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
         </Stack>
       ) : searchQuery && !searching ? (
         <Text size="xs" c="dimmed">
-          No results for "{searchQuery}".
+          No results for &quot;{searchQuery}&quot;.
         </Text>
       ) : null}
 
-      <Group gap="xs" mt={4}>
-        <TextInput
-          size="xs"
-          placeholder="owner/repo@skill-name"
-          value={manualPackage}
-          onChange={(e) => setManualPackage(e.currentTarget.value)}
-          onKeyDown={(e) =>
-            e.key === "Enter" &&
-            manualPackage.trim() &&
-            handleInstall(manualPackage.trim())
-          }
-          style={{ flex: 1 }}
-        />
-        <Button
-          size="xs"
-          variant="filled"
-          color="sage"
-          onClick={() => handleInstall(manualPackage.trim())}
-          disabled={!manualPackage.trim() || mutating}
-          loading={installSkill.isPending}
-        >
-          Install Package
-        </Button>
+      <Divider my={4} />
+
+      {/* Installed skills — scrollable list */}
+      <Group justify="space-between" align="center">
+        <Text size="xs" fw={600}>
+          Installed ({installedSkills.length})
+        </Text>
+        {installedSkills.length > 0 && (
+          <Text size="xs" c="dimmed">
+            {installedSkills.filter((s) => loadedNow.has(s.name)).length} active
+          </Text>
+        )}
       </Group>
-      <Text size="xs" c="dimmed">
-        skills.sh package format: owner/repo@skill-name
-      </Text>
+
+      {isSkillsLoading ? (
+        <Group gap="xs">
+          <Loader size="xs" />
+          <Text size="xs" c="dimmed">
+            Loading skills...
+          </Text>
+        </Group>
+      ) : installedSkills.length > 0 ? (
+        <Box style={{ maxHeight: 280, overflowY: "auto" }}>
+          <Stack gap={0}>
+            {installedSkills.map((skill, i) => (
+              <Group
+                key={`${skill.source}:${skill.name}`}
+                gap="sm"
+                py={6}
+                px={4}
+                wrap="nowrap"
+                justify="space-between"
+                style={{
+                  borderBottom:
+                    i < installedSkills.length - 1
+                      ? "1px solid var(--ao-border)"
+                      : undefined,
+                }}
+              >
+                <Group
+                  gap="xs"
+                  wrap="nowrap"
+                  style={{ minWidth: 0, flex: 1 }}
+                >
+                  <IconSparkles
+                    size={14}
+                    style={{
+                      color: loadedNow.has(skill.name)
+                        ? "var(--ao-accent-sage)"
+                        : "var(--ao-text-muted)",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <Box style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={500} truncate>
+                      {skill.name}
+                    </Text>
+                    {skill.description && (
+                      <Text size="xs" c="dimmed" truncate>
+                        {skill.description}
+                      </Text>
+                    )}
+                  </Box>
+                </Group>
+                <Group gap={6} wrap="nowrap" style={{ flexShrink: 0 }}>
+                  {loadedNow.has(skill.name) && (
+                    <Badge size="xs" variant="light" color="sage">
+                      active
+                    </Badge>
+                  )}
+                  <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    color="red"
+                    onClick={() => handleRemove(skill)}
+                    disabled={mutating}
+                    aria-label={`Remove ${skill.name}`}
+                  >
+                    <IconX size={14} />
+                  </ActionIcon>
+                </Group>
+              </Group>
+            ))}
+          </Stack>
+        </Box>
+      ) : (
+        <Text size="xs" c="dimmed">
+          No skills installed
+        </Text>
+      )}
     </Stack>
   );
 }

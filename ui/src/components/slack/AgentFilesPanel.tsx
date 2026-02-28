@@ -31,6 +31,10 @@ import {
 } from "@tabler/icons-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
+
 import { apiFetch } from "../../api/client.js";
 
 interface FileEntry {
@@ -417,22 +421,39 @@ function FileViewer({
             Failed to load file: {(error as Error).message}
           </Text>
         )}
-        {data && (
-          <Box
-            component="pre"
-            style={{
-              fontFamily: "monospace",
-              fontSize: 13,
-              lineHeight: 1.6,
-              color: "var(--ao-text-primary)",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word",
-              margin: 0,
-            }}
-          >
-            {data.content}
-          </Box>
-        )}
+        {data &&
+          (filePath.endsWith(".md") ? (
+            <Box
+              className="markdown-body"
+              style={{
+                color: "var(--ao-text-primary)",
+                fontSize: 14,
+                lineHeight: 1.5,
+              }}
+            >
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeHighlight]}
+              >
+                {data.content}
+              </ReactMarkdown>
+            </Box>
+          ) : (
+            <Box
+              component="pre"
+              style={{
+                fontFamily: "monospace",
+                fontSize: 13,
+                lineHeight: 1.6,
+                color: "var(--ao-text-primary)",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                margin: 0,
+              }}
+            >
+              {data.content}
+            </Box>
+          ))}
       </ScrollArea>
     </Modal>
   );

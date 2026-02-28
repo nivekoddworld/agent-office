@@ -404,7 +404,7 @@ export function ChannelView({
                   <IconMessages
                     size={15}
                     color={
-                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                      active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
                     }
                   />
                 ),
@@ -412,7 +412,7 @@ export function ChannelView({
                   <IconMessageCircle
                     size={15}
                     color={
-                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                      active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
                     }
                   />
                 ),
@@ -420,7 +420,7 @@ export function ChannelView({
                   <IconFiles
                     size={15}
                     color={
-                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                      active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
                     }
                   />
                 ),
@@ -428,7 +428,7 @@ export function ChannelView({
                   <IconFileText
                     size={15}
                     color={
-                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                      active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
                     }
                   />
                 ),
@@ -436,7 +436,7 @@ export function ChannelView({
                   <IconSparkles
                     size={15}
                     color={
-                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                      active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
                     }
                   />
                 ),
@@ -444,7 +444,7 @@ export function ChannelView({
                   <IconSettings
                     size={15}
                     color={
-                      active ? "var(--ao-accent-blue)" : "var(--ao-text-muted)"
+                      active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
                     }
                   />
                 ),
@@ -466,7 +466,7 @@ export function ChannelView({
                   py={8}
                   onClick={() => setDmTab(tab)}
                   style={{
-                    borderBottom: `2px solid ${active ? "var(--ao-accent-blue)" : "transparent"}`,
+                    borderBottom: `2px solid ${active ? "var(--ao-accent-sage)" : "transparent"}`,
                     marginBottom: -1,
                   }}
                 >
