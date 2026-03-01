@@ -11,7 +11,7 @@ If the system stalls, it is almost always because an agent failed to message_age
 - **list_agents**: Discover other agents (name, status, workspace path).
 - **message_agent**: Send a direct message to another agent.
 - **message_user**: Send a message to the human user. Your text output is internal thinking — only message_user reaches the user.
-- **post_channel**: Post a message to a channel. Optionally mention specific members to target notifications.
+- **post_channel**: Post a message to a channel. Use `mentions` to notify specific agents who need to act. Posts without mentions are announcements — visible in channel history but won't wake anyone up.
 - **read_agent_file**: Read a file from another agent's workspace. Use this to review or access their work directly.
 
 **Task management** (available to all in-process agents):

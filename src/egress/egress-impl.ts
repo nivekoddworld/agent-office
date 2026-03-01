@@ -222,8 +222,14 @@ export function postChannel(
       recentIds.add(egressId);
     }
 
-    // Send bus messages to targets (mentions or all) EXCEPT self
-    const targets = mentions?.length ? mentions : channelConfig.members;
+    // User/system sources broadcast to all; agents require explicit mentions
+    const isSystemSource =
+      ctx.agentName === "__user__" || ctx.agentName.startsWith("__");
+    const targets = mentions?.length
+      ? mentions
+      : isSystemSource
+        ? channelConfig.members
+        : []; // agent without mentions = announcement only (JSONL persisted above)
     const busTargets = targets.filter((m) => m !== ctx.agentName);
     const sk = sessionKey("channel", channel);
     for (const target of busTargets) {

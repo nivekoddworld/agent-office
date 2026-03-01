@@ -195,21 +195,34 @@ describe("egress-impl", () => {
       }
     });
 
-    it("sends bus to others (not self)", () => {
+    it("agent post without mentions is announcement-only (no bus delivery)", () => {
       const bus = new MessageBus();
       bus.register("agent-a");
       bus.register("agent-b");
       bus.register("agent-c");
       const deps = makeDeps({ baseDir: dir, channels, bus });
-      postChannel(makeCtx(), deps, "general", "hi");
-      // self (agent-a) should NOT have a bus message
+      const result = postChannel(makeCtx(), deps, "general", "hi");
+      expect(result.ok).toBe(true);
+      // No bus messages — announcement only
       expect(bus.peek("agent-a")).toBe(0);
-      // others should
+      expect(bus.peek("agent-b")).toBe(0);
+      expect(bus.peek("agent-c")).toBe(0);
+    });
+
+    it("user post without mentions broadcasts to all members", () => {
+      const bus = new MessageBus();
+      bus.register("agent-a");
+      bus.register("agent-b");
+      bus.register("agent-c");
+      const deps = makeDeps({ baseDir: dir, channels, bus });
+      const ctx = makeCtx({ agentName: "__user__" });
+      postChannel(ctx, deps, "general", "hello all");
+      expect(bus.peek("agent-a")).toBe(1);
       expect(bus.peek("agent-b")).toBe(1);
       expect(bus.peek("agent-c")).toBe(1);
     });
 
-    it("respects mentions for bus targeting", () => {
+    it("agent post with mentions delivers only to mentioned agents", () => {
       const bus = new MessageBus();
       bus.register("agent-a");
       bus.register("agent-b");

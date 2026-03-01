@@ -185,7 +185,7 @@ function formatMessagePayload(
     }
     return (
       `[Message from ${msg.from}${ctx}]\n${msg.payload}\n\n` +
-      `[To reply, call post_channel with channel="#${msg.channel}". Only reply if you have something substantive to add — do NOT reply just to acknowledge or greet.]`
+      `[To reply, call post_channel with channel="#${msg.channel}" and mentions=["agent-name"]. Only mention agents who need to act on your message.]`
     );
   }
 
