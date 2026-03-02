@@ -70,10 +70,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
             </Tooltip>
           )}
 
-          <Tooltip
-            label={new Date(task.updatedAt).toLocaleString()}
-            withArrow
-          >
+          <Tooltip label={new Date(task.updatedAt).toLocaleString()} withArrow>
             <Group gap={2}>
               <IconClock
                 size={12}

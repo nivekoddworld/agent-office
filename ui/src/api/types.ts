@@ -54,12 +54,7 @@ export interface CronJobEntry {
   scope: "agent" | "office";
 }
 
-export type TaskStatus =
-  | "waiting"
-  | "todo"
-  | "in_progress"
-  | "done"
-  | "failed";
+export type TaskStatus = "waiting" | "todo" | "in_progress" | "done" | "failed";
 
 export interface Task {
   id: string;
@@ -322,4 +317,3 @@ export interface ModelsResponse {
   providers: string[];
   models: ModelInfo[];
 }
-

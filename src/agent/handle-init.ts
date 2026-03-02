@@ -8,11 +8,7 @@ import {
 import { streamSimple } from "@mariozechner/pi-ai";
 import { writeEffectivePrompt } from "./prompts/effective-prompt.js";
 import type { MessageBus } from "../transport/message-bus.js";
-import type {
-  AgentConfig,
-  AgentInfo,
-  ChannelConfig,
-} from "../types.js";
+import type { AgentConfig, AgentInfo, ChannelConfig } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { SandboxProvider, SandboxInfo } from "../sandbox/types.js";
 import type { HostApi } from "../sandbox/host-api.js";
@@ -351,7 +347,8 @@ export async function initInProcessAgent(
       tools,
     },
     streamFn: streamSimple,
-    getApiKey: oauthGetApiKey ?? (resolvedApiKey ? () => resolvedApiKey : undefined),
+    getApiKey:
+      oauthGetApiKey ?? (resolvedApiKey ? () => resolvedApiKey : undefined),
   });
 
   const secretValues: Record<string, string> = {};

@@ -15,14 +15,10 @@ export function computeFireImpact(
 ): FireImpact {
   const activeTasks = tasks.filter(
     (t) =>
-      t.assignee === agentName &&
-      t.status !== "done" &&
-      t.status !== "failed",
+      t.assignee === agentName && t.status !== "done" && t.status !== "failed",
   ).length;
 
-  const ownCronJobs = cronJobs.filter(
-    (j) => j.agentName === agentName,
-  ).length;
+  const ownCronJobs = cronJobs.filter((j) => j.agentName === agentName).length;
 
   let cronTemplatesInOtherJobs = 0;
   for (const job of cronJobs) {
@@ -36,5 +32,10 @@ export function computeFireImpact(
     .filter(([, cfg]) => cfg.members.includes(agentName))
     .map(([name]) => name);
 
-  return { activeTasks, ownCronJobs, cronTemplatesInOtherJobs, channelMemberships };
+  return {
+    activeTasks,
+    ownCronJobs,
+    cronTemplatesInOtherJobs,
+    channelMemberships,
+  };
 }

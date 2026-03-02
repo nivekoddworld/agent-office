@@ -193,13 +193,13 @@ As an alternative to API keys in `.env`, agents can authenticate with model prov
 
 ### Supported Providers
 
-| Provider ID          | Name              | Flow Type       | Requires                   |
-| -------------------- | ----------------- | --------------- | -------------------------- |
-| `anthropic`          | Anthropic         | Code paste      | Anthropic CLI              |
-| `openai-codex`       | OpenAI            | Callback server | OpenAI Codex CLI           |
-| `github-copilot`     | GitHub Copilot    | Code paste      | GitHub Copilot CLI         |
-| `google-gemini-cli`  | Google Gemini CLI | Callback server | Gemini CLI                 |
-| `google-antigravity` | Antigravity       | Callback server | Antigravity CLI            |
+| Provider ID          | Name              | Flow Type       | Requires           |
+| -------------------- | ----------------- | --------------- | ------------------ |
+| `anthropic`          | Anthropic         | Code paste      | Anthropic CLI      |
+| `openai-codex`       | OpenAI            | Callback server | OpenAI Codex CLI   |
+| `github-copilot`     | GitHub Copilot    | Code paste      | GitHub Copilot CLI |
+| `google-gemini-cli`  | Google Gemini CLI | Callback server | Gemini CLI         |
+| `google-antigravity` | Antigravity       | Callback server | Antigravity CLI    |
 
 **Code paste** providers open a browser URL and prompt you to paste back an auth code. **Callback server** providers start a local HTTP server and complete the flow automatically.
 
@@ -247,7 +247,7 @@ Set the `auth` field on an agent to use OAuth instead of an API key:
 agents:
   designer:
     model: anthropic:claude-sonnet-4-20250514
-    auth: "oauth:anthropic"    # use OAuth credentials
+    auth: "oauth:anthropic" # use OAuth credentials
   reviewer:
     model: openai:gpt-4o
     auth: "oauth:openai-codex" # use OAuth credentials
@@ -266,11 +266,11 @@ The auth selector only appears when credentials are available — if no OAuth lo
 
 ### OAuth REST API
 
-| Method   | Path                     | Description                                     |
-| -------- | ------------------------ | ----------------------------------------------- |
-| `GET`    | `/api/oauth/providers`   | List all providers with authentication status    |
-| `GET`    | `/api/oauth/status/:id`  | Check if credentials exist for a provider        |
-| `DELETE` | `/api/oauth/:id`         | Remove stored credentials for a provider         |
+| Method   | Path                    | Description                                   |
+| -------- | ----------------------- | --------------------------------------------- |
+| `GET`    | `/api/oauth/providers`  | List all providers with authentication status |
+| `GET`    | `/api/oauth/status/:id` | Check if credentials exist for a provider     |
+| `DELETE` | `/api/oauth/:id`        | Remove stored credentials for a provider      |
 
 ## Multi-Office Architecture
 
@@ -661,13 +661,13 @@ waiting → todo → in_progress → done
                              → failed
 ```
 
-| Status        | Allowed transitions  |
-| ------------- | -------------------- |
-| `waiting`     | `todo`               |
-| `todo`        | `in_progress`        |
-| `in_progress` | `done`, `failed`     |
-| `done`        | _(terminal)_         |
-| `failed`      | _(terminal)_         |
+| Status        | Allowed transitions |
+| ------------- | ------------------- |
+| `waiting`     | `todo`              |
+| `todo`        | `in_progress`       |
+| `in_progress` | `done`, `failed`    |
+| `done`        | _(terminal)_        |
+| `failed`      | _(terminal)_        |
 
 Tasks can be deleted from any state. Deleting a task cleans up dependency references and auto-unblocks dependent tasks.
 
@@ -1060,31 +1060,31 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 **Agents:**
 
-| Method   | Path                               | Description                        |
-| -------- | ---------------------------------- | ---------------------------------- |
-| `POST`   | `/api/agents`                      | Hire a new agent                   |
-| `GET`    | `/api/agents/:name`                | Get agent details                  |
-| `DELETE` | `/api/agents/:name`                | Fire an agent                      |
-| `POST`   | `/api/send`                        | Send a message to an agent         |
-| `GET`    | `/api/agents/:name/inbox`          | Get agent inbox queue              |
-| `GET`    | `/api/agents/:name/messages`       | Get agent DM history               |
-| `DELETE` | `/api/agents/:name/messages`       | Clear agent DM history             |
-| `GET`    | `/api/agents/:name/files`          | List agent workspace files         |
-| `GET`    | `/api/agents/:name/files/content`  | Read a file from agent workspace   |
-| `PATCH`  | `/api/agents/:name/prompt`         | Set, append, or clear agent prompt |
-| `PATCH`  | `/api/agents/:name/permissions`    | Update agent permissions           |
-| `PATCH`  | `/api/agents/:name/env`            | Set or unset agent env var         |
-| `PATCH`  | `/api/agents/:name/secret-refs`    | Set or unset agent secret ref      |
-| `PATCH`  | `/api/agents/:name/auth`           | Set or clear agent auth mode       |
-| `PATCH`  | `/api/agents/:name/manager`        | Set or clear agent manager         |
-| `PATCH`  | `/api/agents/:name/heartbeat`      | Set agent heartbeat config         |
-| `DELETE` | `/api/agents/:name/heartbeat`      | Clear agent heartbeat config       |
-| `GET`    | `/api/agents/:name/peers`          | List peer agents with conversations |
-| `GET`    | `/api/agents/:name/peers/:peer/messages` | Read inter-agent conversation  |
-| `GET`    | `/api/agents/:name/skills`         | List agent installed skills        |
-| `GET`    | `/api/agents/:name/skills/search`  | Search skills registry             |
-| `POST`   | `/api/agents/:name/skills/install` | Install a skill for an agent       |
-| `DELETE` | `/api/agents/:name/skills/:skill`  | Remove an installed skill          |
+| Method   | Path                                     | Description                         |
+| -------- | ---------------------------------------- | ----------------------------------- |
+| `POST`   | `/api/agents`                            | Hire a new agent                    |
+| `GET`    | `/api/agents/:name`                      | Get agent details                   |
+| `DELETE` | `/api/agents/:name`                      | Fire an agent                       |
+| `POST`   | `/api/send`                              | Send a message to an agent          |
+| `GET`    | `/api/agents/:name/inbox`                | Get agent inbox queue               |
+| `GET`    | `/api/agents/:name/messages`             | Get agent DM history                |
+| `DELETE` | `/api/agents/:name/messages`             | Clear agent DM history              |
+| `GET`    | `/api/agents/:name/files`                | List agent workspace files          |
+| `GET`    | `/api/agents/:name/files/content`        | Read a file from agent workspace    |
+| `PATCH`  | `/api/agents/:name/prompt`               | Set, append, or clear agent prompt  |
+| `PATCH`  | `/api/agents/:name/permissions`          | Update agent permissions            |
+| `PATCH`  | `/api/agents/:name/env`                  | Set or unset agent env var          |
+| `PATCH`  | `/api/agents/:name/secret-refs`          | Set or unset agent secret ref       |
+| `PATCH`  | `/api/agents/:name/auth`                 | Set or clear agent auth mode        |
+| `PATCH`  | `/api/agents/:name/manager`              | Set or clear agent manager          |
+| `PATCH`  | `/api/agents/:name/heartbeat`            | Set agent heartbeat config          |
+| `DELETE` | `/api/agents/:name/heartbeat`            | Clear agent heartbeat config        |
+| `GET`    | `/api/agents/:name/peers`                | List peer agents with conversations |
+| `GET`    | `/api/agents/:name/peers/:peer/messages` | Read inter-agent conversation       |
+| `GET`    | `/api/agents/:name/skills`               | List agent installed skills         |
+| `GET`    | `/api/agents/:name/skills/search`        | Search skills registry              |
+| `POST`   | `/api/agents/:name/skills/install`       | Install a skill for an agent        |
+| `DELETE` | `/api/agents/:name/skills/:skill`        | Remove an installed skill           |
 
 **Cron:**
 
@@ -1101,12 +1101,12 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 **Tasks:**
 
-| Method  | Path               | Description             |
-| ------- | ------------------ | ----------------------- |
-| `GET`   | `/api/tasks`       | List tasks with filters |
-| `POST`  | `/api/tasks`       | Create a task           |
-| `GET`   | `/api/tasks/board` | Get Kanban board data   |
-| `GET`   | `/api/tasks/:id`   | Get task details        |
+| Method   | Path               | Description             |
+| -------- | ------------------ | ----------------------- |
+| `GET`    | `/api/tasks`       | List tasks with filters |
+| `POST`   | `/api/tasks`       | Create a task           |
+| `GET`    | `/api/tasks/board` | Get Kanban board data   |
+| `GET`    | `/api/tasks/:id`   | Get task details        |
 | `PATCH`  | `/api/tasks/:id`   | Update task status/data |
 | `DELETE` | `/api/tasks/:id`   | Delete a task           |
 
@@ -1133,17 +1133,17 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 
 **Metrics:**
 
-| Method  | Path                         | Description                          |
-| ------- | ---------------------------- | ------------------------------------ |
-| `GET`   | `/api/cost`                  | Cost and token usage data            |
+| Method | Path        | Description               |
+| ------ | ----------- | ------------------------- |
+| `GET`  | `/api/cost` | Cost and token usage data |
 
 **OAuth:**
 
-| Method   | Path                     | Description                                  |
-| -------- | ------------------------ | -------------------------------------------- |
-| `GET`    | `/api/oauth/providers`   | List all providers with authentication status |
-| `GET`    | `/api/oauth/status/:id`  | Check credential status for a provider        |
-| `DELETE` | `/api/oauth/:id`         | Remove stored credentials for a provider      |
+| Method   | Path                    | Description                                   |
+| -------- | ----------------------- | --------------------------------------------- |
+| `GET`    | `/api/oauth/providers`  | List all providers with authentication status |
+| `GET`    | `/api/oauth/status/:id` | Check credential status for a provider        |
+| `DELETE` | `/api/oauth/:id`        | Remove stored credentials for a provider      |
 
 ## Agent Tools
 
@@ -1177,9 +1177,9 @@ Send a direct message to another agent's inbox. Messages are delivered on the ne
 
 Optional parameters:
 
-| Parameter        | Type    | Default | Description                                                                     |
-| ---------------- | ------- | ------- | ------------------------------------------------------------------------------- |
-| `originTaskId`   | string  | —       | Related task ID for correlation tracking                                        |
+| Parameter      | Type   | Default | Description                              |
+| -------------- | ------ | ------- | ---------------------------------------- |
+| `originTaskId` | string | —       | Related task ID for correlation tracking |
 
 Returns delivery confirmation: `{ queued: true }` on success, or `{ queued: false, reason: "..." }` on failure (e.g. `rate_limited`).
 
@@ -1727,10 +1727,10 @@ Watchdog behavior is configurable via `WorkspaceConfig.watchdog` (all fields opt
 
 Inbox queues and DM records are persisted to SQLite so they survive process restarts. Requires **Node.js 22+** (`node:sqlite`). DM conversations are **dual-written** to both SQLite (`dm_messages` table) and JSONL session files — SQLite is the primary source for UI DM display, while JSONL enables agent self-service lookup via `read_file`/`grep`. Inter-agent and channel messages are JSONL-only (see [Session History](#session-history)).
 
-| What        | DB location                            | Behavior                                                                                                                  |
-| ----------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.                          |
-| DM records  | Same DB file                           | Written by egress service with deterministic `egress_id` for idempotency. SQLite `INSERT OR IGNORE` gates JSONL writes.  |
+| What        | DB location                            | Behavior                                                                                                                |
+| ----------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Inbox queue | `<officeDir>/messages/messages.sqlite` | Pending messages restored on agent register; popped messages deleted; `fire <agent>` purges all.                        |
+| DM records  | Same DB file                           | Written by egress service with deterministic `egress_id` for idempotency. SQLite `INSERT OR IGNORE` gates JSONL writes. |
 
 The database is created automatically on first `start()`. WAL mode, `busy_timeout=5000`, and `synchronous=NORMAL` are set for safe concurrent reads and crash resilience. If `node:sqlite` is unavailable, startup fails with a clear error message.
 

@@ -228,11 +228,7 @@ export function SkillsManager({ agent }: SkillsManagerProps) {
                       : undefined,
                 }}
               >
-                <Group
-                  gap="xs"
-                  wrap="nowrap"
-                  style={{ minWidth: 0, flex: 1 }}
-                >
+                <Group gap="xs" wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
                   <IconSparkles
                     size={14}
                     style={{

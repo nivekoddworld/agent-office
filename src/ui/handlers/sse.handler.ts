@@ -28,9 +28,7 @@ export function register(ctx: SseHandlerContext): RouteDefinition[] {
         sseClients.add(res);
         req.on("close", () => sseClients.delete(res));
 
-        const headerVal = req.headers["last-event-id"] as
-          | string
-          | undefined;
+        const headerVal = req.headers["last-event-id"] as string | undefined;
         const queryVal = url.searchParams.get("lastEventId");
         const lastId = parseInt(headerVal ?? queryVal ?? "", 10);
         if (!isNaN(lastId)) {

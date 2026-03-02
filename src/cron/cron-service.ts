@@ -192,9 +192,7 @@ export class CronService {
 
     // Agent-scoped jobs
     for (const [key, job] of [...this.jobs]) {
-      const filtered = job.config.tasks.filter(
-        (t) => t.assignee !== agentName,
-      );
+      const filtered = job.config.tasks.filter((t) => t.assignee !== agentName);
       if (filtered.length === job.config.tasks.length) continue;
       affected++;
       if (filtered.length === 0) {
@@ -207,9 +205,7 @@ export class CronService {
 
     // Office-scoped jobs
     for (const [name, job] of [...this.officeJobs]) {
-      const filtered = job.config.tasks.filter(
-        (t) => t.assignee !== agentName,
-      );
+      const filtered = job.config.tasks.filter((t) => t.assignee !== agentName);
       if (filtered.length === job.config.tasks.length) continue;
       affected++;
       if (filtered.length === 0) {

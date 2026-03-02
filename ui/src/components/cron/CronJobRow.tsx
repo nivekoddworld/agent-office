@@ -2,10 +2,7 @@ import { useState, useMemo } from "react";
 import { Group, Text, Badge, ActionIcon, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { IconPlayerPlay, IconTrash, IconPencil } from "@tabler/icons-react";
-import {
-  useCronTrigger,
-  useCronRemove,
-} from "../../api/use-api-mutations.js";
+import { useCronTrigger, useCronRemove } from "../../api/use-api-mutations.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { Surface } from "../shared/Surface.js";
 import { ApiError } from "../../api/client.js";

@@ -195,10 +195,7 @@ export function AgentProfileDrawer({
                 Hierarchy
               </Accordion.Control>
               <Accordion.Panel>
-                <AgentHierarchySection
-                  agent={agent}
-                  agentNames={agentNames}
-                />
+                <AgentHierarchySection agent={agent} agentNames={agentNames} />
               </Accordion.Panel>
             </Accordion.Item>
 

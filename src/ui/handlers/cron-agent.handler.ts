@@ -138,12 +138,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         try {
           const ok = parsed.enabled
             ? await cronEnableCommand(officeId, agentName, jobName, workspace)
-            : await cronDisableCommand(
-                officeId,
-                agentName,
-                jobName,
-                workspace,
-              );
+            : await cronDisableCommand(officeId, agentName, jobName, workspace);
           if (!ok)
             return json(res, 404, { ok: false, error: "cron_job_not_found" });
           broadcast("state_changed", getBootstrapState(workspace, officeId));

@@ -71,8 +71,12 @@ export function oauthList(officeDir: string, officeId: string): void {
     console.log(`  ${status} ${p.id.padEnd(22)} ${p.name}`);
   }
   console.log();
-  console.log(`  Login:   pnpm dev oauth login <provider> --office ${officeId}`);
-  console.log(`  Logout:  pnpm dev oauth logout <provider> --office ${officeId}`);
+  console.log(
+    `  Login:   pnpm dev oauth login <provider> --office ${officeId}`,
+  );
+  console.log(
+    `  Logout:  pnpm dev oauth logout <provider> --office ${officeId}`,
+  );
 }
 
 /**

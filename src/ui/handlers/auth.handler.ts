@@ -12,8 +12,7 @@ export function register(_ctx: HandlerContext): RouteDefinition[] {
         if (!checkCsrf(req, _ctx.getPort()))
           return json(res, 403, { error: "csrf" });
         const xrw = req.headers["x-requested-with"];
-        if (xrw !== "XMLHttpRequest")
-          return json(res, 403, { error: "csrf" });
+        if (xrw !== "XMLHttpRequest") return json(res, 403, { error: "csrf" });
         const body = await readBody(req);
         let parsed: { token?: string };
         try {

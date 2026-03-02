@@ -112,25 +112,41 @@ export function NodeActions({
           </Text>
           <List size="sm" spacing={4}>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="red"><IconSubtask size={12} /></ThemeIcon>}
+              icon={
+                <ThemeIcon size={20} variant="light" color="red">
+                  <IconSubtask size={12} />
+                </ThemeIcon>
+              }
             >
               {impact.activeTasks} active task(s) → deleted
             </List.Item>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="orange"><IconClock size={12} /></ThemeIcon>}
+              icon={
+                <ThemeIcon size={20} variant="light" color="orange">
+                  <IconClock size={12} />
+                </ThemeIcon>
+              }
             >
               {impact.ownCronJobs} cron job(s) → cancelled
             </List.Item>
             {impact.cronTemplatesInOtherJobs > 0 && (
               <List.Item
-                icon={<ThemeIcon size={20} variant="light" color="orange"><IconCalendarEvent size={12} /></ThemeIcon>}
+                icon={
+                  <ThemeIcon size={20} variant="light" color="orange">
+                    <IconCalendarEvent size={12} />
+                  </ThemeIcon>
+                }
               >
                 {impact.cronTemplatesInOtherJobs} task template(s) in other cron
                 jobs → removed
               </List.Item>
             )}
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="blue"><IconHash size={12} /></ThemeIcon>}
+              icon={
+                <ThemeIcon size={20} variant="light" color="blue">
+                  <IconHash size={12} />
+                </ThemeIcon>
+              }
             >
               {impact.channelMemberships.length} channel membership(s) → removed
               {impact.channelMemberships.length > 0 && (
@@ -140,12 +156,20 @@ export function NodeActions({
               )}
             </List.Item>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="sage"><IconMessage size={12} /></ThemeIcon>}
+              icon={
+                <ThemeIcon size={20} variant="light" color="sage">
+                  <IconMessage size={12} />
+                </ThemeIcon>
+              }
             >
               All DM history → deleted
             </List.Item>
             <List.Item
-              icon={<ThemeIcon size={20} variant="light" color="sage"><IconFiles size={12} /></ThemeIcon>}
+              icon={
+                <ThemeIcon size={20} variant="light" color="sage">
+                  <IconFiles size={12} />
+                </ThemeIcon>
+              }
             >
               All session files → deleted
             </List.Item>

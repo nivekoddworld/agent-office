@@ -72,8 +72,7 @@ export function eventToMessages(
 
       if (isSystemEvent) {
         const sk = typeof d.sessionKey === "string" ? d.sessionKey : "";
-        const rc =
-          typeof d.reportChannel === "string" ? d.reportChannel : "";
+        const rc = typeof d.reportChannel === "string" ? d.reportChannel : "";
         if (sk.startsWith("ch:")) {
           if (!isChannelSession(d.sessionKey, channel.name)) continue;
         } else if (sk.startsWith("dm:")) {

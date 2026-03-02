@@ -168,46 +168,82 @@ export function InstructionFileEditor({
         <Group gap="xs" justify="space-between">
           <Group gap={4}>
             <Tooltip label="Bold">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("**", "**")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("**", "**")}
+              >
                 <IconBold size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Italic">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("_", "_")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("_", "_")}
+              >
                 <IconItalic size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Inline code">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("`", "`")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("`", "`")}
+              >
                 <IconCode size={15} />
               </ActionIcon>
             </Tooltip>
             <Box
-              style={{ width: 1, height: 18, backgroundColor: "var(--ao-border)" }}
+              style={{
+                width: 1,
+                height: 18,
+                backgroundColor: "var(--ao-border)",
+              }}
               mx={4}
             />
             <Tooltip label="Heading">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("## ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("## ")}
+              >
                 <IconHeading size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Bullet list">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("- ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("- ")}
+              >
                 <IconList size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Numbered list">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("1. ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("1. ")}
+              >
                 <IconListNumbers size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Quote">
-              <ActionIcon size="sm" variant="subtle" onClick={() => prefix("> ")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => prefix("> ")}
+              >
                 <IconBlockquote size={15} />
               </ActionIcon>
             </Tooltip>
             <Tooltip label="Code block">
-              <ActionIcon size="sm" variant="subtle" onClick={() => wrap("```\n", "\n```")}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={() => wrap("```\n", "\n```")}
+              >
                 <IconCode size={15} />
               </ActionIcon>
             </Tooltip>
@@ -253,7 +289,9 @@ export function InstructionFileEditor({
               flex: 1,
               display: "flex",
               flexDirection: "column",
-              borderRight: showPreview ? "1px solid var(--ao-border)" : undefined,
+              borderRight: showPreview
+                ? "1px solid var(--ao-border)"
+                : undefined,
               overflow: "hidden",
             }}
           >

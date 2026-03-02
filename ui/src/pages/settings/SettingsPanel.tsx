@@ -283,10 +283,7 @@ export function SettingsPanel() {
         <Box>
           <SectionHeader
             icon={
-              <IconCalendarEvent
-                size={16}
-                color={"var(--ao-accent-sage)"}
-              />
+              <IconCalendarEvent size={16} color={"var(--ao-accent-sage)"} />
             }
             label="Cron Jobs"
           />

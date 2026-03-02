@@ -6,7 +6,11 @@ interface PageHeaderProps {
   rightSection?: React.ReactNode;
 }
 
-export function PageHeader({ title, leftExtra, rightSection }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  leftExtra,
+  rightSection,
+}: PageHeaderProps) {
   return (
     <Group
       px="md"

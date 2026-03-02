@@ -52,7 +52,9 @@ const PROVIDER_ENV_VAR: Record<string, string> = {
   "azure-openai-responses": "AZURE_OPENAI_API_KEY",
 };
 
-export function ensureProviderKeyInDotEnv(provider: string): string | undefined {
+export function ensureProviderKeyInDotEnv(
+  provider: string,
+): string | undefined {
   const envVar = PROVIDER_ENV_VAR[provider];
   if (!envVar) return undefined;
   if (getEnvApiKey(provider)) return undefined;
@@ -340,7 +342,9 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           return json(res, 400, { error: "invalid_body" });
         }
         if (!parsed.model || typeof parsed.model !== "string") {
-          return json(res, 400, { error: "model is required (provider:model-id)" });
+          return json(res, 400, {
+            error: "model is required (provider:model-id)",
+          });
         }
         const parts = parsed.model.split(":");
         if (parts.length !== 2 || !parts[0] || !parts[1]) {
@@ -557,10 +561,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           return json(res, 400, { error: "invalid_body" });
         }
         const validPriorities = ["idle", "low", "normal", "high", "critical"];
-        if (
-          !parsed.priority ||
-          !validPriorities.includes(parsed.priority)
-        ) {
+        if (!parsed.priority || !validPriorities.includes(parsed.priority)) {
           return json(res, 400, {
             error: `priority must be one of: ${validPriorities.join(", ")}`,
           });
@@ -614,9 +615,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
               : null;
           await setAgentThinking(officeId, agentName, thinking);
           const handle = workspace.getAgent(agentName);
-          handle?.updateThinkingLevel(
-            thinking ? (thinking as any) : undefined,
-          );
+          handle?.updateThinkingLevel(thinking ? (thinking as any) : undefined);
           broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true });
         } catch (err) {

@@ -1,10 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Box, Button, Select, Text } from "@mantine/core";
 import { IconArrowDown } from "@tabler/icons-react";
-import {
-  useAgentPeers,
-  usePeerMessages,
-} from "../../api/use-peer-messages.js";
+import { useAgentPeers, usePeerMessages } from "../../api/use-peer-messages.js";
 import { SlackMessage } from "../slack/SlackMessage.js";
 import { DateDivider } from "../slack/DateDivider.js";
 import { MessageInput } from "../slack/MessageInput.js";
@@ -64,8 +61,7 @@ export function PeerConversations({
     let prevTs = 0;
 
     for (const msg of messages) {
-      const showDate =
-        items.length === 0 || !isSameDay(prevTs, msg.timestamp);
+      const showDate = items.length === 0 || !isSameDay(prevTs, msg.timestamp);
       if (showDate) {
         items.push({ kind: "date", timestamp: msg.timestamp });
         prevSender = null;

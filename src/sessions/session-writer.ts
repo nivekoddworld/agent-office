@@ -71,10 +71,7 @@ function rotate(filePath: string): void {
 }
 
 /** Delete all session files for a fired agent and cross-references from other agents. */
-export function deleteAgentSessions(
-  baseDir: string,
-  agentName: string,
-): void {
+export function deleteAgentSessions(baseDir: string, agentName: string): void {
   // 1. Remove the fired agent's entire sessions directory
   const agentSessionDir = join(baseDir, "agents", agentName, "sessions");
   rmSync(agentSessionDir, { recursive: true, force: true });

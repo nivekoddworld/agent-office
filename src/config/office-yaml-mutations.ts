@@ -460,8 +460,18 @@ export async function renameChannelInOfficeYaml(
     const members: string[] = entry.members ?? [];
     const baseDir = join(officeDir(officeId), "agents");
     for (const member of members) {
-      const oldPath = join(baseDir, member, "sessions", `channel-${oldName}.jsonl`);
-      const newPath = join(baseDir, member, "sessions", `channel-${newName}.jsonl`);
+      const oldPath = join(
+        baseDir,
+        member,
+        "sessions",
+        `channel-${oldName}.jsonl`,
+      );
+      const newPath = join(
+        baseDir,
+        member,
+        "sessions",
+        `channel-${newName}.jsonl`,
+      );
       try {
         renameSync(oldPath, newPath);
       } catch {

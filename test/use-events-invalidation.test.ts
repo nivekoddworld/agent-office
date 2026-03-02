@@ -13,12 +13,16 @@ describe("invalidateForEvent", () => {
   });
 
   it("invalidates DM on successful message_user (exactly once)", () => {
-    invalidateForEvent("agent_event", {
-      type: "tool_execution_end",
-      toolName: "message_user",
-      isError: false,
-      agent: "coder",
-    }, qc);
+    invalidateForEvent(
+      "agent_event",
+      {
+        type: "tool_execution_end",
+        toolName: "message_user",
+        isError: false,
+        agent: "coder",
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
@@ -27,44 +31,60 @@ describe("invalidateForEvent", () => {
   });
 
   it("does not invalidate on message_user error", () => {
-    invalidateForEvent("agent_event", {
-      type: "tool_execution_end",
-      toolName: "message_user",
-      isError: true,
-      agent: "coder",
-    }, qc);
+    invalidateForEvent(
+      "agent_event",
+      {
+        type: "tool_execution_end",
+        toolName: "message_user",
+        isError: true,
+        agent: "coder",
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it("does not invalidate when agent is missing", () => {
-    invalidateForEvent("agent_event", {
-      type: "tool_execution_end",
-      toolName: "message_user",
-      isError: false,
-    }, qc);
+    invalidateForEvent(
+      "agent_event",
+      {
+        type: "tool_execution_end",
+        toolName: "message_user",
+        isError: false,
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it("does not invalidate when agent is non-string", () => {
-    invalidateForEvent("agent_event", {
-      type: "tool_execution_end",
-      toolName: "message_user",
-      isError: false,
-      agent: 42,
-    }, qc);
+    invalidateForEvent(
+      "agent_event",
+      {
+        type: "tool_execution_end",
+        toolName: "message_user",
+        isError: false,
+        agent: 42,
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it("only targets agent-messages, never channel-messages", () => {
-    invalidateForEvent("agent_event", {
-      type: "tool_execution_end",
-      toolName: "message_user",
-      isError: false,
-      agent: "coder",
-    }, qc);
+    invalidateForEvent(
+      "agent_event",
+      {
+        type: "tool_execution_end",
+        toolName: "message_user",
+        isError: false,
+        agent: "coder",
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
@@ -78,23 +98,31 @@ describe("invalidateForEvent", () => {
   });
 
   it("does not trigger for non-agent_event messages", () => {
-    invalidateForEvent("scheduler_tick", {
-      type: "tool_execution_end",
-      toolName: "message_user",
-      isError: false,
-      agent: "coder",
-    }, qc);
+    invalidateForEvent(
+      "scheduler_tick",
+      {
+        type: "tool_execution_end",
+        toolName: "message_user",
+        isError: false,
+        agent: "coder",
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
 
   it("invalidates channel-messages on successful post_channel", () => {
-    invalidateForEvent("agent_event", {
-      type: "tool_execution_end",
-      toolName: "post_channel",
-      isError: false,
-      agent: "coder",
-    }, qc);
+    invalidateForEvent(
+      "agent_event",
+      {
+        type: "tool_execution_end",
+        toolName: "post_channel",
+        isError: false,
+        agent: "coder",
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
@@ -103,12 +131,16 @@ describe("invalidateForEvent", () => {
   });
 
   it("does not invalidate channel-messages on post_channel error", () => {
-    invalidateForEvent("agent_event", {
-      type: "tool_execution_end",
-      toolName: "post_channel",
-      isError: true,
-      agent: "coder",
-    }, qc);
+    invalidateForEvent(
+      "agent_event",
+      {
+        type: "tool_execution_end",
+        toolName: "post_channel",
+        isError: true,
+        agent: "coder",
+      },
+      qc,
+    );
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });

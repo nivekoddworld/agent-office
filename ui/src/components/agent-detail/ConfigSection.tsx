@@ -131,7 +131,9 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
     (p) => p.id === oauthProviderId && p.authenticated,
   );
   const showAuthSelector = !!oauthProviderId && providerHasCreds;
-  const currentAuthMode = agent.auth?.startsWith("oauth:") ? "OAuth" : "API Key";
+  const currentAuthMode = agent.auth?.startsWith("oauth:")
+    ? "OAuth"
+    : "API Key";
   const authenticated =
     oauthProviders?.providers.filter((p) => p.authenticated) ?? [];
 
@@ -194,7 +196,10 @@ export function ConfigSection({ agent }: ConfigSectionProps) {
     if (value === "API Key") {
       setAuth.mutate({ agentName: agent.name, auth: null });
     } else {
-      setAuth.mutate({ agentName: agent.name, auth: `oauth:${oauthProviderId}` });
+      setAuth.mutate({
+        agentName: agent.name,
+        auth: `oauth:${oauthProviderId}`,
+      });
     }
   };
 

@@ -62,7 +62,7 @@ export function HeartbeatForm({
   const endValid = !hasEnd || HH_MM_RE.test(endTrimmed);
   const hasActiveHours = hasStart && hasEnd && startValid && endValid;
   const activeHoursError =
-    (hasStart !== hasEnd)
+    hasStart !== hasEnd
       ? "Both start and end are required"
       : (hasStart && !startValid) || (hasEnd && !endValid)
         ? "Use HH:MM (00:00–23:59)"
@@ -70,8 +70,7 @@ export function HeartbeatForm({
           ? "Start must be before end"
           : undefined;
 
-  const canSubmit =
-    !!agent && intervalMin >= 1 && !activeHoursError;
+  const canSubmit = !!agent && intervalMin >= 1 && !activeHoursError;
 
   const handleSubmit = () => {
     if (!canSubmit) return;

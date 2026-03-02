@@ -105,8 +105,7 @@ export async function cronAddImpl(
   const allHaveAssignee = params.tasks.every((t) => t.assignee?.trim());
   if (hasAssignee && !allHaveAssignee)
     return audit(deps, "add", scope, params.name, "error", {
-      reason:
-        "either all tasks must have an assignee or none (office job)",
+      reason: "either all tasks must have an assignee or none (office job)",
     });
   if (params.timezone && !isValidTimezone(params.timezone))
     return audit(deps, "add", scope, params.name, "error", {

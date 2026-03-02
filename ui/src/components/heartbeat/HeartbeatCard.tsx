@@ -1,9 +1,5 @@
 import { Box, Text, Group, Tooltip, Badge } from "@mantine/core";
-import {
-  IconClock,
-  IconPlayerPlay,
-  IconSun,
-} from "@tabler/icons-react";
+import { IconClock, IconPlayerPlay, IconSun } from "@tabler/icons-react";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { HeartbeatEntry } from "../../api/types.js";
 
@@ -102,10 +98,7 @@ export function HeartbeatCard({ entry, onClick }: HeartbeatCardProps) {
               <Group gap={12} wrap="wrap">
                 <Group gap={4}>
                   <IconClock size={12} color="var(--ao-text-muted)" />
-                  <Text
-                    size="xs"
-                    style={{ color: "var(--ao-text-secondary)" }}
-                  >
+                  <Text size="xs" style={{ color: "var(--ao-text-secondary)" }}>
                     Every {formatInterval(cfg.intervalMs)}
                   </Text>
                 </Group>
@@ -162,11 +155,7 @@ export function HeartbeatCard({ entry, onClick }: HeartbeatCardProps) {
                 </Group>
               </Tooltip>
             ) : (
-              <Text
-                size="xs"
-                mb={2}
-                style={{ color: "var(--ao-text-muted)" }}
-              >
+              <Text size="xs" mb={2} style={{ color: "var(--ao-text-muted)" }}>
                 No runs yet
               </Text>
             )}

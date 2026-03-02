@@ -45,9 +45,7 @@ export function createMessageAgentTool(
     ) => {
       const to = params.to.trim();
       if (to.startsWith("__")) {
-        return textResult(
-          `Error: "${to}" is a reserved system address.`,
-        );
+        return textResult(`Error: "${to}" is a reserved system address.`);
       }
 
       const correlationId = randomUUID();

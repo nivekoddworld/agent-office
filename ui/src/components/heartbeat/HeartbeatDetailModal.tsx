@@ -36,8 +36,7 @@ function formatInterval(ms: number): string {
     return `Every ${totalMins} minute${totalMins !== 1 ? "s" : ""}`;
   const hrs = Math.floor(totalMins / 60);
   const rem = totalMins % 60;
-  if (rem === 0)
-    return hrs === 1 ? "Every hour" : `Every ${hrs} hours`;
+  if (rem === 0) return hrs === 1 ? "Every hour" : `Every ${hrs} hours`;
   return `Every ${hrs}h ${rem}m`;
 }
 
@@ -57,10 +56,8 @@ function formatTimeUntil(ts: number): string {
   const diff = ts - Date.now();
   if (diff <= 0) return "overdue";
   if (diff < 60_000) return "< 1 minute";
-  if (diff < 3_600_000)
-    return `in ${Math.ceil(diff / 60_000)} minutes`;
-  if (diff < 86_400_000)
-    return `in ${Math.floor(diff / 3_600_000)} hours`;
+  if (diff < 3_600_000) return `in ${Math.ceil(diff / 60_000)} minutes`;
+  if (diff < 86_400_000) return `in ${Math.floor(diff / 3_600_000)} hours`;
   return `in ${Math.floor(diff / 86_400_000)} days`;
 }
 
@@ -147,10 +144,7 @@ export function HeartbeatDetailModal({
       <Stack gap="md">
         {/* Status badges */}
         <Group gap={8} mt="xs">
-          <Badge
-            variant="dot"
-            color={cfg ? "green" : "gray"}
-          >
+          <Badge variant="dot" color={cfg ? "green" : "gray"}>
             {cfg ? "Active" : "Off"}
           </Badge>
           <Badge
@@ -231,10 +225,7 @@ export function HeartbeatDetailModal({
                   Last Run
                 </Text>
                 {entry.lastScheduledTs ? (
-                  <Tooltip
-                    label={formatDate(entry.lastScheduledTs)}
-                    withArrow
-                  >
+                  <Tooltip label={formatDate(entry.lastScheduledTs)} withArrow>
                     <Text
                       size="xs"
                       style={{ color: "var(--ao-text-secondary)" }}

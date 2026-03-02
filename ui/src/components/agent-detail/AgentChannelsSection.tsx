@@ -1,12 +1,5 @@
 import { useState } from "react";
-import {
-  Stack,
-  Group,
-  Text,
-  Badge,
-  ActionIcon,
-  Select,
-} from "@mantine/core";
+import { Stack, Group, Text, Badge, ActionIcon, Select } from "@mantine/core";
 import { IconHash, IconX, IconPlus } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { useBootstrapState } from "../../api/use-state.js";
@@ -17,9 +10,7 @@ interface AgentChannelsSectionProps {
   agentName: string;
 }
 
-export function AgentChannelsSection({
-  agentName,
-}: AgentChannelsSectionProps) {
+export function AgentChannelsSection({ agentName }: AgentChannelsSectionProps) {
   const { data: state } = useBootstrapState(true);
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);

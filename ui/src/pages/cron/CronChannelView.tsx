@@ -60,11 +60,7 @@ export function CronChannelView() {
       ) : (
         <Stack gap={8}>
           {cronJobs.map((job) => (
-            <CronJobRow
-              key={job.jobName}
-              job={job}
-              onEdit={openEdit}
-            />
+            <CronJobRow key={job.jobName} job={job} onEdit={openEdit} />
           ))}
         </Stack>
       )}

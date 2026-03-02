@@ -332,10 +332,7 @@ describe("Office cron validation", () => {
   it("rejects mixed assignee (some with, some without)", () => {
     const entry: OfficeCronYamlEntry = {
       schedule: "0 9 * * *",
-      tasks: [
-        { title: "standup", assignee: "pm" },
-        { title: "report" },
-      ],
+      tasks: [{ title: "standup", assignee: "pm" }, { title: "report" }],
     };
     const errors = validateOfficeCronEntry("mixed", entry, ["pm"]);
     expect(errors.some((e) => e.includes("either all tasks"))).toBe(true);

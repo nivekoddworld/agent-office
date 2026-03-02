@@ -83,7 +83,11 @@ export function CronAddForm({
   const [minute, setMinute] = useState<number>(0);
   const [hour, setHour] = useState<number>(9);
   const [selectedDays, setSelectedDays] = useState<string[]>([
-    "1", "2", "3", "4", "5",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
   ]);
   const [customSchedule, setCustomSchedule] = useState("");
   const defaultChannel = channels[0] ?? "";

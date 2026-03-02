@@ -40,18 +40,35 @@ export function humanReadableCron(expression: string): string {
   const dayOfWeek = parts[4]!;
 
   // Every N minutes: */15 * * * *
-  if (minute.startsWith("*/") && hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+  if (
+    minute.startsWith("*/") &&
+    hour === "*" &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    dayOfWeek === "*"
+  ) {
     const interval = minute.slice(2);
     return `Every ${interval} minutes`;
   }
 
   // Every minute: * * * * *
-  if (minute === "*" && hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+  if (
+    minute === "*" &&
+    hour === "*" &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    dayOfWeek === "*"
+  ) {
     return "Every minute";
   }
 
   // Hourly: N * * * *
-  if (hour === "*" && dayOfMonth === "*" && month === "*" && dayOfWeek === "*") {
+  if (
+    hour === "*" &&
+    dayOfMonth === "*" &&
+    month === "*" &&
+    dayOfWeek === "*"
+  ) {
     const m = parseInt(minute, 10);
     if (minute === "0") return "Every hour";
     return `Every hour at :${pad(m)}`;
@@ -109,17 +126,35 @@ export function parseCronToFields(expression: string): {
   const hour = parseInt(hourStr, 10);
 
   // Hourly: N * * * *
-  if (hourStr === "*" && dom === "*" && mon === "*" && dow === "*" && !isNaN(minute)) {
+  if (
+    hourStr === "*" &&
+    dom === "*" &&
+    mon === "*" &&
+    dow === "*" &&
+    !isNaN(minute)
+  ) {
     return { frequency: "hourly", minute, hour: 9, days: [] };
   }
 
   // Daily: N H * * *
-  if (dom === "*" && mon === "*" && dow === "*" && !isNaN(minute) && !isNaN(hour)) {
+  if (
+    dom === "*" &&
+    mon === "*" &&
+    dow === "*" &&
+    !isNaN(minute) &&
+    !isNaN(hour)
+  ) {
     return { frequency: "daily", minute, hour, days: [] };
   }
 
   // Weekly: N H * * DOW
-  if (dom === "*" && mon === "*" && dow !== "*" && !isNaN(minute) && !isNaN(hour)) {
+  if (
+    dom === "*" &&
+    mon === "*" &&
+    dow !== "*" &&
+    !isNaN(minute) &&
+    !isNaN(hour)
+  ) {
     const days: string[] = [];
     for (const part of dow.split(",")) {
       const range = part.split("-");

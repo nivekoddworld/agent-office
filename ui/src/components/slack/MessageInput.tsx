@@ -128,9 +128,7 @@ export function MessageInput({
         borderRadius: 8,
         backgroundColor: "var(--ao-bg-input)",
         overflow: "hidden",
-        ...(disabled
-          ? { opacity: 0.5, pointerEvents: "none" as const }
-          : {}),
+        ...(disabled ? { opacity: 0.5, pointerEvents: "none" as const } : {}),
       }}
     >
       <textarea

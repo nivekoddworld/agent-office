@@ -14,10 +14,7 @@ export function useAgentPeers(agentName: string | null) {
   });
 }
 
-export function usePeerMessages(
-  agentName: string | null,
-  peer: string | null,
-) {
+export function usePeerMessages(agentName: string | null, peer: string | null) {
   return useQuery<PeerMessagesResponse>({
     queryKey: ["peer-messages", agentName, peer],
     queryFn: () =>

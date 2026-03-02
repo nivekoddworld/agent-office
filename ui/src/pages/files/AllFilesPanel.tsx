@@ -67,9 +67,7 @@ export function AllFilesPanel() {
       toolbar={
         <TextInput
           placeholder="Filter agents..."
-          leftSection={
-            <IconSearch size={14} color="var(--ao-text-muted)" />
-          }
+          leftSection={<IconSearch size={14} color="var(--ao-text-muted)" />}
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
           size="xs"
@@ -112,15 +110,9 @@ export function AllFilesPanel() {
               >
                 <Group gap={10} wrap="nowrap">
                   {isOpen ? (
-                    <IconChevronDown
-                      size={14}
-                      color="var(--ao-text-muted)"
-                    />
+                    <IconChevronDown size={14} color="var(--ao-text-muted)" />
                   ) : (
-                    <IconChevronRight
-                      size={14}
-                      color="var(--ao-text-muted)"
-                    />
+                    <IconChevronRight size={14} color="var(--ao-text-muted)" />
                   )}
                   <AgentAvatar
                     name={agent.name}

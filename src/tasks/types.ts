@@ -1,11 +1,6 @@
 import type { Priority } from "../types.js";
 
-export type TaskStatus =
-  | "waiting"
-  | "todo"
-  | "in_progress"
-  | "done"
-  | "failed";
+export type TaskStatus = "waiting" | "todo" | "in_progress" | "done" | "failed";
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
   "waiting",
@@ -50,9 +45,9 @@ export interface TaskFilter {
 }
 
 /** Parse reportChannel into its target type and name. */
-export function parseReportTarget(reportChannel: string):
-  | { kind: "channel"; name: string }
-  | { kind: "agent"; name: string } {
+export function parseReportTarget(
+  reportChannel: string,
+): { kind: "channel"; name: string } | { kind: "agent"; name: string } {
   if (reportChannel.startsWith("@")) {
     return { kind: "agent", name: reportChannel.slice(1) };
   }

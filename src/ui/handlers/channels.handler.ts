@@ -31,10 +31,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         if (requireMutation(req, res, getPort())) return;
         let channelName: string;
         try {
-          channelName = decodeURIComponent(params.channel!).replace(
-            /^#/,
-            "",
-          );
+          channelName = decodeURIComponent(params.channel!).replace(/^#/, "");
         } catch {
           return json(res, 400, { error: "invalid_channel_encoding" });
         }
@@ -114,10 +111,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       handler: (_req, res, url, params) => {
         let channelName: string;
         try {
-          channelName = decodeURIComponent(params.channel!).replace(
-            /^#/,
-            "",
-          );
+          channelName = decodeURIComponent(params.channel!).replace(/^#/, "");
         } catch {
           return json(res, 400, { error: "invalid_channel_encoding" });
         }
@@ -125,12 +119,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         if (!cfg) {
           return json(res, 404, { error: "channel_not_found" });
         }
-        const rawLimit = parseInt(
-          url.searchParams.get("limit") ?? "50",
-          10,
-        );
-        if (isNaN(rawLimit))
-          return json(res, 400, { error: "invalid_limit" });
+        const rawLimit = parseInt(url.searchParams.get("limit") ?? "50", 10);
+        if (isNaN(rawLimit)) return json(res, 400, { error: "invalid_limit" });
         const limit = Math.max(1, Math.min(200, rawLimit));
         const sk = sessionKey("channel", channelName);
         const filename = sessionFilename(sk);
@@ -194,13 +184,9 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       paramNames: ["channel"],
       handler: (req, res, _url, params) => {
         if (requireMutation(req, res, getPort())) return;
-        const chName = decodeURIComponent(params.channel!).replace(
-          /^#/,
-          "",
-        );
+        const chName = decodeURIComponent(params.channel!).replace(/^#/, "");
         const cfg = workspace.office.channels.get(chName);
-        if (!cfg)
-          return json(res, 404, { error: "channel_not_found" });
+        if (!cfg) return json(res, 404, { error: "channel_not_found" });
 
         for (const member of cfg.members) {
           const sessionPath = join(
@@ -254,15 +240,11 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             description: parsed.description,
           });
           refreshChannels();
-          broadcast(
-            "state_changed",
-            getBootstrapState(workspace, officeId),
-          );
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 201, { ok: true });
         } catch (err) {
           return json(res, 409, {
-            error:
-              err instanceof Error ? err.message : "create_failed",
+            error: err instanceof Error ? err.message : "create_failed",
           });
         }
       },
@@ -317,8 +299,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             await renameChannelInOfficeYaml(officeId, name, newName);
           } catch (err) {
             return json(res, 409, {
-              error:
-                err instanceof Error ? err.message : "rename_failed",
+              error: err instanceof Error ? err.message : "rename_failed",
             });
           }
           name = newName;
@@ -344,15 +325,11 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             description,
           });
           refreshChannels();
-          broadcast(
-            "state_changed",
-            getBootstrapState(workspace, officeId),
-          );
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true, name });
         } catch (err) {
           return json(res, 409, {
-            error:
-              err instanceof Error ? err.message : "update_failed",
+            error: err instanceof Error ? err.message : "update_failed",
           });
         }
       },
@@ -383,15 +360,11 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         try {
           await deleteChannelFromOfficeYaml(officeId, name);
           refreshChannels();
-          broadcast(
-            "state_changed",
-            getBootstrapState(workspace, officeId),
-          );
+          broadcast("state_changed", getBootstrapState(workspace, officeId));
           return json(res, 200, { ok: true });
         } catch (err) {
           return json(res, 409, {
-            error:
-              err instanceof Error ? err.message : "delete_failed",
+            error: err instanceof Error ? err.message : "delete_failed",
           });
         }
       },

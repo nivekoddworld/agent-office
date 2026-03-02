@@ -96,7 +96,13 @@ describe("egress-impl", () => {
       const dms = store.queryDm("agent-a", 10);
       expect(dms).toHaveLength(1);
       // JSONL should also have only 1 line (SQLite dedup gates JSONL write)
-      const jsonlPath = join(dir, "agents", "agent-a", "sessions", "user-dm.jsonl");
+      const jsonlPath = join(
+        dir,
+        "agents",
+        "agent-a",
+        "sessions",
+        "user-dm.jsonl",
+      );
       const lines = readFileSync(jsonlPath, "utf-8").trim().split("\n");
       expect(lines).toHaveLength(1);
     });
@@ -284,7 +290,13 @@ describe("egress-impl", () => {
       const deps = makeDeps({ baseDir: dir, channels, bus });
       const ctx = makeCtx({ agentName: "__user__" });
       postChannel(ctx, deps, "general", "from user");
-      const p = join(dir, "agents", "agent-a", "sessions", "channel-general.jsonl");
+      const p = join(
+        dir,
+        "agents",
+        "agent-a",
+        "sessions",
+        "channel-general.jsonl",
+      );
       const entry = JSON.parse(readFileSync(p, "utf-8").trim());
       expect(entry.role).toBe("user");
     });

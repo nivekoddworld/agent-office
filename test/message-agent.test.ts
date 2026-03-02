@@ -17,7 +17,7 @@ function makeDeps(overrides?: Partial<MessageAgentDeps>): MessageAgentDeps {
 
 function getText(result: { content: { type: string; text?: string }[] }) {
   const first = result.content[0];
-  return first?.type === "text" ? first.text ?? "" : "";
+  return first?.type === "text" ? (first.text ?? "") : "";
 }
 
 describe("message_agent tool", () => {

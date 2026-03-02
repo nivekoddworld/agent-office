@@ -52,11 +52,7 @@ export function KanbanColumn({
             borderBottom: `2px solid ${STATUS_COLORS[status]}`,
           }}
         >
-          <Text
-            size="sm"
-            fw={700}
-            style={{ color: "var(--ao-text-primary)" }}
-          >
+          <Text size="sm" fw={700} style={{ color: "var(--ao-text-primary)" }}>
             {STATUS_LABELS[status]}
           </Text>
           <Badge size="sm" variant="filled" color="gray" circle>

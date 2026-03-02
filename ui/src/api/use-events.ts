@@ -6,9 +6,7 @@ type SSEHandler = (type: string, data: unknown) => void;
 type AuthExpiredHandler = () => void;
 
 type InvalidateClient = {
-  invalidateQueries(opts: {
-    queryKey: string[] | readonly string[];
-  }): void;
+  invalidateQueries(opts: { queryKey: string[] | readonly string[] }): void;
 };
 
 /** Targeted query invalidation for agent events. Exported for testing. */

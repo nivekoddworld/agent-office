@@ -106,7 +106,11 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         }
         if (typeof parsed.content !== "string")
           return json(res, 400, { error: "invalid_content" });
-        const result = await putInstructionFile(handle, params.file!, parsed.content);
+        const result = await putInstructionFile(
+          handle,
+          params.file!,
+          parsed.content,
+        );
         if ("error" in result) return json(res, 400, result);
         return json(res, 200, result);
       },

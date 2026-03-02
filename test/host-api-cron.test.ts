@@ -229,9 +229,14 @@ describe.skipIf(skipHostApi)("HostApi cron endpoints", () => {
 
   it("allows office-scope add with permission", async () => {
     api.unregisterAgent(token);
-    api.registerAgent("bot", token, { MODEL_API_KEY: "sk-test" }, {
-      office_cron: true,
-    });
+    api.registerAgent(
+      "bot",
+      token,
+      { MODEL_API_KEY: "sk-test" },
+      {
+        office_cron: true,
+      },
+    );
     const res = await postJson(
       port,
       "/api/cron-add",

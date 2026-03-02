@@ -1,8 +1,4 @@
-import {
-  createServer,
-  type ServerResponse,
-  type Server,
-} from "node:http";
+import { createServer, type ServerResponse, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { readFileSync, existsSync, statSync } from "node:fs";
 import { join, extname, resolve, relative, isAbsolute } from "node:path";
@@ -14,10 +10,7 @@ import type { HandlerContext } from "./handler-context.js";
 import { json } from "./http-helpers.js";
 import { newBootstrapToken, isAuthenticated, clearAuthState } from "./auth.js";
 import { getBootstrapState } from "./routes.js";
-import {
-  loadOfficeYaml,
-  buildOfficeContext,
-} from "../config/office-yaml.js";
+import { loadOfficeYaml, buildOfficeContext } from "../config/office-yaml.js";
 
 // Handler registrations
 import { register as registerAuth } from "./handlers/auth.handler.js";

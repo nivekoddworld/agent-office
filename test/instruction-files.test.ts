@@ -8,10 +8,7 @@ import {
   existsSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import {
-  getInstructionFile,
-  putInstructionFile,
-} from "../src/ui/routes.js";
+import { getInstructionFile, putInstructionFile } from "../src/ui/routes.js";
 
 const TEST_DIR = join(tmpdir(), "instr-test-" + process.pid);
 
@@ -49,14 +46,22 @@ describe("getInstructionFile", () => {
 describe("putInstructionFile", () => {
   it("writes and reads back content", async () => {
     const handle = mockHandle(TEST_DIR);
-    const writeResult = await putInstructionFile(handle, "IDENTITY.md", "i am bot");
+    const writeResult = await putInstructionFile(
+      handle,
+      "IDENTITY.md",
+      "i am bot",
+    );
     expect(writeResult).toEqual({ ok: true });
     const readResult = await getInstructionFile(handle, "IDENTITY.md");
     expect(readResult).toEqual({ content: "i am bot" });
   });
 
   it("rejects invalid filenames", async () => {
-    const result = await putInstructionFile(mockHandle(TEST_DIR), "HACK.md", "x");
+    const result = await putInstructionFile(
+      mockHandle(TEST_DIR),
+      "HACK.md",
+      "x",
+    );
     expect(result).toEqual({ error: "invalid_file" });
   });
 
@@ -73,6 +78,8 @@ describe("putInstructionFile", () => {
   it("creates instructions/ dir if missing", async () => {
     await putInstructionFile(mockHandle(TEST_DIR), "CONTEXT.md", "hello");
     expect(existsSync(join(TEST_DIR, "instructions", "CONTEXT.md"))).toBe(true);
-    expect(readFileSync(join(TEST_DIR, "instructions", "CONTEXT.md"), "utf-8")).toBe("hello");
+    expect(
+      readFileSync(join(TEST_DIR, "instructions", "CONTEXT.md"), "utf-8"),
+    ).toBe("hello");
   });
 });

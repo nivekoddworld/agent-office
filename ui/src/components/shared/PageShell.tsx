@@ -48,9 +48,7 @@ export function PageShell({
         px={noPadding ? 0 : "md"}
         py={noPadding ? 0 : "md"}
         style={
-          fullHeight
-            ? { display: "flex", flex: 1, minHeight: 0 }
-            : undefined
+          fullHeight ? { display: "flex", flex: 1, minHeight: 0 } : undefined
         }
       >
         {children}

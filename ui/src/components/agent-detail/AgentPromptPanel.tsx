@@ -220,15 +220,37 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
 
   return (
     <>
-      <Tabs defaultValue="prompt" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-        <Tabs.List style={{ flexShrink: 0, borderBottom: "1px solid var(--ao-border)", backgroundColor: "var(--ao-bg-surface)" }}>
+      <Tabs
+        defaultValue="prompt"
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          overflow: "hidden",
+        }}
+      >
+        <Tabs.List
+          style={{
+            flexShrink: 0,
+            borderBottom: "1px solid var(--ao-border)",
+            backgroundColor: "var(--ao-bg-surface)",
+          }}
+        >
           <Tabs.Tab value="prompt">Custom Prompt</Tabs.Tab>
           <Tabs.Tab value="CONTEXT.md">CONTEXT</Tabs.Tab>
           <Tabs.Tab value="IDENTITY.md">IDENTITY</Tabs.Tab>
           <Tabs.Tab value="SOUL.md">SOUL</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="prompt" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        <Tabs.Panel
+          value="prompt"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            overflow: "hidden",
+          }}
+        >
           <Box
             style={{
               display: "flex",
@@ -383,7 +405,11 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
                     onChange={(e) => setPromptText(e.currentTarget.value)}
                     placeholder="Write your agent's custom prompt in Markdown..."
                     styles={{
-                      root: { flex: 1, display: "flex", flexDirection: "column" },
+                      root: {
+                        flex: 1,
+                        display: "flex",
+                        flexDirection: "column",
+                      },
                       wrapper: { flex: 1, display: "flex" },
                       input: {
                         flex: 1,
@@ -429,7 +455,10 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
                   ) : (
                     <Text
                       size="sm"
-                      style={{ color: "var(--ao-text-muted)", fontStyle: "italic" }}
+                      style={{
+                        color: "var(--ao-text-muted)",
+                        fontStyle: "italic",
+                      }}
                     >
                       Markdown preview will appear here...
                     </Text>
@@ -501,15 +530,39 @@ export function AgentPromptPanel({ agentName }: AgentPromptPanelProps) {
           </Box>
         </Tabs.Panel>
 
-        <Tabs.Panel value="CONTEXT.md" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        <Tabs.Panel
+          value="CONTEXT.md"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            overflow: "hidden",
+          }}
+        >
           <InstructionFileEditor agentName={agentName} file="CONTEXT.md" />
         </Tabs.Panel>
 
-        <Tabs.Panel value="IDENTITY.md" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        <Tabs.Panel
+          value="IDENTITY.md"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            overflow: "hidden",
+          }}
+        >
           <InstructionFileEditor agentName={agentName} file="IDENTITY.md" />
         </Tabs.Panel>
 
-        <Tabs.Panel value="SOUL.md" style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+        <Tabs.Panel
+          value="SOUL.md"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            overflow: "hidden",
+          }}
+        >
           <InstructionFileEditor agentName={agentName} file="SOUL.md" />
         </Tabs.Panel>
       </Tabs>

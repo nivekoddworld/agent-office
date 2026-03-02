@@ -32,8 +32,7 @@ export function SectionHeader({
         mt={6}
         style={{
           height: 1,
-          background:
-            "linear-gradient(90deg, var(--ao-border), transparent)",
+          background: "linear-gradient(90deg, var(--ao-border), transparent)",
           opacity: 0.3,
         }}
       />

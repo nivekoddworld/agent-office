@@ -79,13 +79,10 @@ export function ChannelSettingsModal({
       if (name.trim() && name.trim() !== channelName) {
         body.name = name.trim();
       }
-      await apiFetch(
-        `/api/channels/${encodeURIComponent(channelName)}`,
-        {
-          method: "PATCH",
-          body: JSON.stringify(body),
-        },
-      );
+      await apiFetch(`/api/channels/${encodeURIComponent(channelName)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
       const finalName = name.trim() || channelName;
       onClose();
       onSaved(finalName);
@@ -134,7 +131,9 @@ export function ChannelSettingsModal({
           value={name}
           onChange={(e) => setName(e.currentTarget.value)}
           disabled={saving || isDefault}
-          description={isDefault ? "Default channel cannot be renamed" : undefined}
+          description={
+            isDefault ? "Default channel cannot be renamed" : undefined
+          }
         />
 
         <TextInput

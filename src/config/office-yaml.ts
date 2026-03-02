@@ -8,11 +8,7 @@ import {
   officeAgentsDir,
   validateOfficeId,
 } from "../constants.js";
-import type {
-  OfficeYaml,
-  OfficeContext,
-  ChannelConfig,
-} from "../types.js";
+import type { OfficeYaml, OfficeContext, ChannelConfig } from "../types.js";
 import type { AgentYamlEntry } from "./yaml-utils.js";
 import { resolveEnvRefs } from "./env-substitution.js";
 import { withOfficeLock } from "./lock.js";
@@ -298,9 +294,7 @@ export async function removeAgentFromChannels(
     for (const pair of (channels as any).items) {
       const members = pair.value?.get?.("members");
       if (!isSeq(members)) continue;
-      const idx = members.items.findIndex(
-        (item: any) => item.value === name,
-      );
+      const idx = members.items.findIndex((item: any) => item.value === name);
       if (idx >= 0) {
         members.items.splice(idx, 1);
         changed = true;

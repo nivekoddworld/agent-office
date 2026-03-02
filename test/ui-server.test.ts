@@ -945,10 +945,9 @@ describe("UI server", () => {
 
   it("GET /api/agents/:name/instructions/:file returns 400 for invalid filename", async () => {
     mockWs.getAgent.mockReturnValue({ cwd: "/tmp" });
-    const res = await fetch(
-      `${origin}/api/agents/alice/instructions/EVIL.md`,
-      { headers: { Cookie: sessionCookie } },
-    );
+    const res = await fetch(`${origin}/api/agents/alice/instructions/EVIL.md`, {
+      headers: { Cookie: sessionCookie },
+    });
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_file" });
   });
@@ -970,19 +969,18 @@ describe("UI server", () => {
     mkdirSync(dir, { recursive: true });
     mockWs.getAgent.mockReturnValue({ cwd: dir });
 
-    const res = await fetch(
-      `${origin}/api/agents/alice/instructions/SOUL.md`,
-      {
-        method: "PUT",
-        headers: authHeaders(),
-        body: JSON.stringify({ content: "be kind" }),
-      },
-    );
+    const res = await fetch(`${origin}/api/agents/alice/instructions/SOUL.md`, {
+      method: "PUT",
+      headers: authHeaders(),
+      body: JSON.stringify({ content: "be kind" }),
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
     const { readFileSync, rmSync } = await import("node:fs");
-    expect(readFileSync(join(dir, "instructions", "SOUL.md"), "utf-8")).toBe("be kind");
+    expect(readFileSync(join(dir, "instructions", "SOUL.md"), "utf-8")).toBe(
+      "be kind",
+    );
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -999,5 +997,4 @@ describe("UI server", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_content" });
   });
-
 });

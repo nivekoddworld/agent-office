@@ -19,12 +19,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         if (!workspace.store)
           return json(res, 200, { agent: name, messages: [] });
 
-        const rawLimit = parseInt(
-          url.searchParams.get("limit") ?? "50",
-          10,
-        );
-        if (isNaN(rawLimit))
-          return json(res, 400, { error: "invalid_limit" });
+        const rawLimit = parseInt(url.searchParams.get("limit") ?? "50", 10);
+        if (isNaN(rawLimit)) return json(res, 400, { error: "invalid_limit" });
         const limit = Math.max(1, Math.min(200, rawLimit));
 
         const rawBeforeTs = url.searchParams.get("beforeTs");
@@ -142,12 +138,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       paramNames: ["name"],
       handler: (_req, res, _url, params) => {
         const name = params.name!;
-        const dir = join(
-          workspace.office.dir,
-          "agents",
-          name,
-          "sessions",
-        );
+        const dir = join(workspace.office.dir, "agents", name, "sessions");
         let peers: string[] = [];
         try {
           peers = readdirSync(dir)
@@ -167,12 +158,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       handler: (_req, res, url, params) => {
         const name = params.name!;
         const peer = params.peer!;
-        const rawLimit = parseInt(
-          url.searchParams.get("limit") ?? "100",
-          10,
-        );
-        if (isNaN(rawLimit))
-          return json(res, 400, { error: "invalid_limit" });
+        const rawLimit = parseInt(url.searchParams.get("limit") ?? "100", 10);
+        if (isNaN(rawLimit)) return json(res, 400, { error: "invalid_limit" });
         const limit = Math.max(1, Math.min(500, rawLimit));
 
         const filePath = join(
