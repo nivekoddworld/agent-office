@@ -206,6 +206,18 @@ export function validateAgentEntry(
       if (!Array.isArray(job.tasks) || job.tasks.length === 0)
         errors.push(`${p}: tasks is required and must be a non-empty array`);
       else {
+        // Allow office-job pattern: either ALL tasks have assignee or NONE
+        const hasAssignee = job.tasks.some(
+          (t) => t && typeof t === "object" && t.assignee?.trim(),
+        );
+        const allHaveAssignee = job.tasks.every(
+          (t) => t && typeof t === "object" && t.assignee?.trim(),
+        );
+        if (hasAssignee && !allHaveAssignee) {
+          errors.push(
+            `${p}: either all tasks must have an assignee or none (office job)`,
+          );
+        }
         for (let i = 0; i < job.tasks.length; i++) {
           const t = job.tasks[i];
           if (!t || typeof t !== "object") {
@@ -213,12 +225,6 @@ export function validateAgentEntry(
           } else {
             if (!t.title || typeof t.title !== "string" || !t.title.trim())
               errors.push(`${p}: tasks[${i}].title is required`);
-            if (
-              !t.assignee ||
-              typeof t.assignee !== "string" ||
-              !t.assignee.trim()
-            )
-              errors.push(`${p}: tasks[${i}].assignee is required`);
             if (t.parent_id !== undefined && typeof t.parent_id !== "string")
               errors.push(`${p}: tasks[${i}].parent_id must be a string`);
             if (
