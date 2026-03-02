@@ -129,6 +129,7 @@ export function ChannelView({
         timestamp: m.ts,
         isBot: m.role === "assistant",
         requestId: m.requestId ?? undefined,
+        attachments: m.attachments,
       }));
     }
     if (conversationChannel) {

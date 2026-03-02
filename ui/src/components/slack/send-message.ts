@@ -4,6 +4,7 @@ export interface SendMessageInput {
   agent: string;
   message: string;
   requestId?: string;
+  images?: Array<{ data: string; filename: string; mimeType: string }>;
 }
 
 export function createClientRequestId(): string {
@@ -23,6 +24,7 @@ export async function sendMessage(input: SendMessageInput): Promise<void> {
       agent: input.agent,
       message: input.message,
       ...(input.requestId ? { requestId: input.requestId } : {}),
+      ...(input.images?.length ? { images: input.images } : {}),
     }),
   });
 }

@@ -11,7 +11,7 @@ import { join, relative, sep, dirname } from "node:path";
 import { execFile } from "node:child_process";
 import { platform } from "node:process";
 import type { Workspace } from "../workspace.js";
-import type { Priority } from "../types.js";
+import type { Attachment, Priority } from "../types.js";
 import type { AgentHandle } from "../agent/handle.js";
 import type { BootstrapState, AgentDetail, CommandResponse } from "./types.js";
 import { buildHierarchyMap } from "../config/hierarchy.js";
@@ -481,9 +481,10 @@ export function executeSend(
   message: string,
   priority?: Priority,
   requestId?: string,
+  attachments?: Attachment[],
 ): { ok: boolean; error?: string } {
   try {
-    workspace.send(agent, message, "prompt", priority, requestId);
+    workspace.send(agent, message, "prompt", priority, requestId, attachments);
     return { ok: true };
   } catch (err) {
     return {

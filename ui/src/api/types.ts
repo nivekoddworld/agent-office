@@ -245,12 +245,19 @@ export interface CommandEntry {
   hidden?: boolean;
 }
 
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+}
+
 export interface DmMessage {
   id: number;
   role: "user" | "assistant";
   text: string;
   ts: number;
   requestId: string | null;
+  attachments?: MessageAttachment[];
 }
 
 export interface DmHistoryResponse {

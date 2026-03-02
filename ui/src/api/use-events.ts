@@ -1,6 +1,24 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { BootstrapState, SchedulerState } from "./types.js";
+import type { AgentInfo, BootstrapState, SchedulerState } from "./types.js";
+
+/** Shallow-compare two agent arrays by value fields to avoid unnecessary state updates. */
+function agentsEqual(a: AgentInfo[], b: AgentInfo[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!,
+      y = b[i]!;
+    if (
+      x.name !== y.name ||
+      x.status !== y.status ||
+      x.queueDepth !== y.queueDepth ||
+      x.turns !== y.turns ||
+      x.priority !== y.priority
+    )
+      return false;
+  }
+  return true;
+}
 
 type SSEHandler = (type: string, data: unknown) => void;
 type AuthExpiredHandler = () => void;
@@ -60,6 +78,7 @@ export function useSSE(
         queryClient.setQueryData<BootstrapState>(["state"], (prev) => {
           if (!prev) return prev;
           const sd = data as SchedulerState;
+          if (agentsEqual(prev.agents, sd.agents)) return prev;
           return { ...prev, agents: sd.agents, scheduler: sd };
         });
       }

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { ImageContent } from "@mariozechner/pi-ai";
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { ChannelConfig, InboxMessage, SchedulerState } from "../types.js";
@@ -15,6 +18,7 @@ export class Scheduler {
   private _tickCount = 0;
   private _intervalMs: number;
   private _channels: Map<string, ChannelConfig>;
+  private _baseDir: string;
   private listeners: Array<(state: SchedulerState) => void> = [];
   private lastHeartbeatTs = new Map<string, number>();
 
@@ -23,11 +27,13 @@ export class Scheduler {
     bus: MessageBus,
     intervalMs = 2000,
     channels?: Map<string, ChannelConfig>,
+    baseDir?: string,
   ) {
     this.agents = agents;
     this.bus = bus;
     this._intervalMs = intervalMs;
     this._channels = channels ?? new Map();
+    this._baseDir = baseDir ?? "";
   }
 
   get tickCount(): number {
@@ -101,8 +107,11 @@ export class Scheduler {
       handle.setActiveCorrelationId(msg.correlationId);
 
       const payload = formatMessagePayload(msg, this._channels);
+      const images = resolveAttachments(msg, this._baseDir);
       const dispatch =
-        msg.type === "steer" ? handle.steer(payload) : handle.prompt(payload);
+        msg.type === "steer"
+          ? handle.steer(payload)
+          : handle.prompt(payload, images.length > 0 ? images : undefined);
 
       // Non-blocking — agent runs concurrently
       dispatch
@@ -165,6 +174,25 @@ function channelContext(
   const others = cfg.members.filter((m) => !exclude.has(m));
   if (others.length === 0) return ` in #${ch}`;
   return ` in #${ch}. Other members: ${others.join(", ")}`;
+}
+
+/** Read attachment files from disk and convert to Pi's ImageContent format. */
+function resolveAttachments(
+  msg: InboxMessage,
+  baseDir: string,
+): ImageContent[] {
+  if (!msg.attachments?.length || !baseDir) return [];
+  const dir = join(baseDir, "uploads");
+  return msg.attachments
+    .map((att) => {
+      try {
+        const data = readFileSync(join(dir, att.id)).toString("base64");
+        return { type: "image" as const, data, mimeType: att.mimeType };
+      } catch {
+        return null;
+      }
+    })
+    .filter((img): img is ImageContent => img !== null);
 }
 
 /** Prefix inter-agent messages with sender info so the recipient knows who to reply to. */

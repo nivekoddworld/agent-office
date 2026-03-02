@@ -9,9 +9,10 @@ export interface MessageStore {
   deleteInbox(id: string): void;
   deleteAllInbox(agent: string): void;
   saveDm(
-    record: Omit<DmRecord, "id" | "correlation_id" | "egress_id"> & {
+    record: Omit<DmRecord, "id" | "correlation_id" | "egress_id" | "attachments"> & {
       correlation_id?: string | null;
       egress_id?: string | null;
+      attachments?: string | null;
     },
   ): boolean;
   queryDm(agent: string, limit: number, beforeTs?: number): DmRecord[];
@@ -291,6 +292,24 @@ export function createMessageStore(dbPath: string): MessageStore {
     db.exec(`UPDATE schema_meta SET value = '8' WHERE key = 'version'`);
   }
 
+  // v8 → v9 migration: add attachments to dm_messages and inbox_messages
+  const v9Check = db
+    .prepare(`SELECT value FROM schema_meta WHERE key = 'version'`)
+    .get() as { value: string } | undefined;
+  if (v9Check && parseInt(v9Check.value) < 9) {
+    try {
+      db.exec(`ALTER TABLE dm_messages ADD COLUMN attachments TEXT`);
+    } catch {
+      /* already exists */
+    }
+    try {
+      db.exec(`ALTER TABLE inbox_messages ADD COLUMN attachments TEXT`);
+    } catch {
+      /* already exists */
+    }
+    db.exec(`UPDATE schema_meta SET value = '9' WHERE key = 'version'`);
+  }
+
   db.exec(
     `CREATE INDEX IF NOT EXISTS idx_dm_agent_ts_v2 ON dm_messages(agent, ts_ms DESC, id DESC)`,
   );
@@ -299,8 +318,8 @@ export function createMessageStore(dbPath: string): MessageStore {
   );
 
   const insertInbox = db.prepare(
-    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms, session_key, source_kind, channel, correlation_id, origin_task_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO inbox_messages (id, from_agent, to_agent, type, payload, priority, request_id, created_at_ms, session_key, source_kind, channel, correlation_id, origin_task_id, attachments)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const selectInbox = db.prepare(
     `SELECT * FROM inbox_messages WHERE to_agent = ? ORDER BY priority DESC, seq ASC`,
@@ -310,10 +329,10 @@ export function createMessageStore(dbPath: string): MessageStore {
     `DELETE FROM inbox_messages WHERE to_agent = ?`,
   );
   const insertDm = db.prepare(
-    `INSERT INTO dm_messages (agent, role, text, ts_ms, request_id, egress_id, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO dm_messages (agent, role, text, ts_ms, request_id, egress_id, correlation_id, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const insertDmIdempotent = db.prepare(
-    `INSERT OR IGNORE INTO dm_messages (agent, role, text, ts_ms, request_id, egress_id, correlation_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT OR IGNORE INTO dm_messages (agent, role, text, ts_ms, request_id, egress_id, correlation_id, attachments) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const selectDm = db.prepare(
     `SELECT * FROM dm_messages WHERE agent = ? AND ts_ms < ? ORDER BY ts_ms DESC, id DESC LIMIT ?`,
@@ -339,6 +358,7 @@ export function createMessageStore(dbPath: string): MessageStore {
         msg.channel ?? null,
         msg.correlation_id ?? null,
         msg.origin_task_id ?? null,
+        msg.attachments ?? null,
       );
     },
     loadInbox(agent) {
@@ -360,6 +380,7 @@ export function createMessageStore(dbPath: string): MessageStore {
         record.request_id,
         record.egress_id ?? null,
         record.correlation_id ?? null,
+        record.attachments ?? null,
       );
       return (result as any).changes > 0;
     },

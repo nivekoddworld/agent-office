@@ -49,6 +49,7 @@ import { createOAuthGetApiKey } from "../auth/oauth-resolver.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { applyToolPolicy } from "./tools/policy.js";
+import { createContextPruner } from "./context-pruner.js";
 
 export interface InitContext {
   name: string;
@@ -349,6 +350,10 @@ export async function initInProcessAgent(
     streamFn: streamSimple,
     getApiKey:
       oauthGetApiKey ?? (resolvedApiKey ? () => resolvedApiKey : undefined),
+    transformContext: createContextPruner(
+      ctx.config.model,
+      composed.text.length,
+    ),
   });
 
   const secretValues: Record<string, string> = {};

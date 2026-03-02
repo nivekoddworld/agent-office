@@ -5,7 +5,7 @@ type UnreadMap = Record<string, number>;
 function createUnreadStore() {
   let state: UnreadMap = {};
   let activeKey: string | null = null;
-  let lastReadTs: Record<string, number> = {};
+  const lastReadTs: Record<string, number> = {};
   const listeners = new Set<() => void>();
 
   const notify = () => {

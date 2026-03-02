@@ -38,6 +38,7 @@ import {
   createTaskDeleteProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
+import { createContextPruner } from "../context-pruner.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
 
 import { createRedactor } from "../../security/redact.js";
@@ -183,6 +184,7 @@ const agent = new Agent({
   },
   streamFn: streamSimple,
   getApiKey: () => MODEL_API_KEY,
+  transformContext: createContextPruner(model, SYSTEM_PROMPT.length),
 });
 
 let turns = 0;
@@ -241,7 +243,7 @@ async function handleRequest(
 
   if (req.method === "POST" && url.pathname === "/prompt") {
     const body = await readBody(req);
-    const { promptId, text } = JSON.parse(body);
+    const { promptId, text, images } = JSON.parse(body);
 
     // Dedup: if already seen, return 200 immediately
     if (seenPrompts.has(promptId)) {
@@ -261,7 +263,11 @@ async function handleRequest(
     );
     let error: string | undefined;
     try {
-      await agent.prompt(text);
+      if (images?.length) {
+        await agent.prompt(text, images);
+      } else {
+        await agent.prompt(text);
+      }
       console.log(`[agent-entry] Prompt completed (${promptId})`);
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);

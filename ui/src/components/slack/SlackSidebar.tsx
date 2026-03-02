@@ -28,6 +28,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { SidebarSection } from "./SidebarSection.js";
 import { CreateChannelModal } from "./CreateChannelModal.js";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
+import { useUnreadCounts } from "../../store/unread-store.js";
 import type { AgentInfo } from "../../api/types.js";
 import {
   usePauseAll,
@@ -38,7 +39,6 @@ import { useAppState } from "../layout/app-state-context.js";
 interface SlackSidebarProps {
   officeName: string;
   agents: AgentInfo[];
-  unreadCounts?: Record<string, number>;
   channels?: Record<string, { members: string[]; description?: string }>;
 }
 
@@ -104,7 +104,6 @@ function SidebarItem({
 export function SlackSidebar({
   officeName,
   agents,
-  unreadCounts = {},
   channels = {},
 }: SlackSidebarProps) {
   const navigate = useNavigate();
@@ -114,6 +113,7 @@ export function SlackSidebar({
   const pauseAll = usePauseAll();
   const schedulerAction = useSchedulerAction();
   const schedulerRunning = state.scheduler.running;
+  const unreadCounts = useUnreadCounts();
 
   const isActive = (path: string) => location.pathname === path;
 

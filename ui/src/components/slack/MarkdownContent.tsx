@@ -1,3 +1,4 @@
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -9,7 +10,9 @@ interface MarkdownContentProps {
 
 const MD_PATTERN = /[#*`[\]|>~]{2,}|```|^\s*[-*+] |^\s*\d+\. |^\s*>/m;
 
-export function MarkdownContent({ content }: MarkdownContentProps) {
+export const MarkdownContent = memo(function MarkdownContent({
+  content,
+}: MarkdownContentProps) {
   if (!MD_PATTERN.test(content)) {
     return (
       <Text
@@ -38,4 +41,4 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       </ReactMarkdown>
     </Box>
   );
-}
+});

@@ -1,3 +1,5 @@
+import type { MessageAttachment } from "../../api/types.js";
+
 export interface MessageUsage {
   totalTokens: number;
   totalCost: number;
@@ -14,4 +16,5 @@ export interface SlackMessageData {
   requestId?: string;
   kind?: string;
   jobName?: string;
+  attachments?: MessageAttachment[];
 }

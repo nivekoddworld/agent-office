@@ -77,12 +77,27 @@ export async function startUiServer(
   const eventBuffer = new EventBuffer();
   const sseClients = new Set<ServerResponse>();
 
-  // Wire SSE event sources
+  // Wire SSE event sources — batches rapid events into a single write per flush interval
+  const SSE_BATCH_MS = 100;
+  let pendingPayloads: string[] = [];
+  let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const flushSSE = () => {
+    flushTimer = null;
+    if (pendingPayloads.length === 0) return;
+    const batch = pendingPayloads.join("");
+    pendingPayloads = [];
+    for (const client of sseClients) {
+      client.write(batch);
+    }
+  };
+
   const broadcast = (type: string, data: unknown) => {
     const event = eventBuffer.push(type, data);
     const payload = `id: ${event.id}\nevent: ${type}\ndata: ${JSON.stringify(event.data)}\n\n`;
-    for (const client of sseClients) {
-      client.write(payload);
+    pendingPayloads.push(payload);
+    if (!flushTimer) {
+      flushTimer = setTimeout(flushSSE, SSE_BATCH_MS);
     }
   };
 
@@ -197,6 +212,8 @@ export async function startUiServer(
 
   const cleanup = () => {
     clearInterval(heartbeat);
+    if (flushTimer) clearTimeout(flushTimer);
+    flushSSE();
     unsubTick();
     unsubAgent();
     clearAuthState();

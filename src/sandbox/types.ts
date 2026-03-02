@@ -23,7 +23,12 @@ export interface SandboxProvider {
   start(agentName: string, opts: SandboxStartOpts): Promise<SandboxInfo>;
   stop(id: string): Promise<void>;
   isAlive(id: string): Promise<boolean>;
-  prompt(id: string, promptId: string, text: string): Promise<void>;
+  prompt(
+    id: string,
+    promptId: string,
+    text: string,
+    images?: import("@mariozechner/pi-ai").ImageContent[],
+  ): Promise<void>;
   steer(id: string, text: string): Promise<void>;
   abort(id: string): Promise<void>;
   health(id: string): Promise<{ ok: boolean; turns: number }>;

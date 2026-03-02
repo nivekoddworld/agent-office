@@ -109,7 +109,7 @@ export const CRON_ADD = {
         report_channel: Type.Optional(
           Type.String({
             description:
-              "Channel to notify when this task completes (optional)",
+              "Channel or agent to notify when this task completes. Use channel name for channels, or @agent_name for agent DMs (optional)",
           }),
         ),
       }),
@@ -138,7 +138,7 @@ export const CRON_ADD = {
     report_channel: Type.Optional(
       Type.String({
         description:
-          "Channel to post a summary when this cron job fires (optional)",
+          "Channel or agent to notify when this cron job fires. Use channel name for channels, or @agent_name for agent DMs (optional)",
       }),
     ),
   }),

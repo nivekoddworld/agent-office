@@ -115,7 +115,7 @@ export function CronJobRow({ job, onEdit }: CronJobRowProps) {
                     ·
                   </Text>
                   <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
-                    → #{job.config.reportChannel}
+                    → {job.config.reportChannel.startsWith("@") ? job.config.reportChannel : `#${job.config.reportChannel}`}
                   </Text>
                 </>
               )}

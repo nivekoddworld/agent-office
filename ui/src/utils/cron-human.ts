@@ -75,8 +75,16 @@ export function humanReadableCron(expression: string): string {
   }
 
   // Daily / Weekly with specific hour+minute
-  const h = parseInt(hour, 10);
   const m = parseInt(minute, 10);
+
+  // Multi-hour: M H1,H2,... * * *
+  if (hour.includes(",") && dayOfMonth === "*" && month === "*" && !isNaN(m)) {
+    const hours = hour.split(",").map((h) => `${pad(parseInt(h, 10))}:${pad(m)}`);
+    const daysPart = dayOfWeek !== "*" ? ` on ${parseDays(dayOfWeek)}` : "";
+    return `Daily at ${hours.join(", ")}${daysPart}`;
+  }
+
+  const h = parseInt(hour, 10);
 
   if (isNaN(h) || isNaN(m)) return expression;
 
@@ -136,24 +144,26 @@ export function parseCronToFields(expression: string): {
     return { frequency: "hourly", minute, hour: 9, days: [] };
   }
 
-  // Daily: N H * * *
+  // Daily: N H * * * (single hour only — multi-hour like "9,12,14" falls through to null/custom)
   if (
     dom === "*" &&
     mon === "*" &&
     dow === "*" &&
     !isNaN(minute) &&
-    !isNaN(hour)
+    !isNaN(hour) &&
+    String(hour) === hourStr
   ) {
     return { frequency: "daily", minute, hour, days: [] };
   }
 
-  // Weekly: N H * * DOW
+  // Weekly: N H * * DOW (single hour only)
   if (
     dom === "*" &&
     mon === "*" &&
     dow !== "*" &&
     !isNaN(minute) &&
-    !isNaN(hour)
+    !isNaN(hour) &&
+    String(hour) === hourStr
   ) {
     const days: string[] = [];
     for (const part of dow.split(",")) {

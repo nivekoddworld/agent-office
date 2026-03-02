@@ -113,7 +113,13 @@ export function CronAddForm({
           ? editJob.config.tasks.map((t) => ({ ...t }))
           : [emptyTask(defaultAssignee)],
       );
-      setReportChannel(editJob.config.reportChannel ?? null);
+      // Normalize: bare agent name → @agent (so it matches the Select option)
+      const rc = editJob.config.reportChannel ?? null;
+      if (rc && !rc.startsWith("@") && !channels.includes(rc) && agentNames.includes(rc)) {
+        setReportChannel(`@${rc}`);
+      } else {
+        setReportChannel(rc);
+      }
 
       // Reverse-parse schedule into form fields
       const parsed = parseCronToFields(editJob.config.schedule);
@@ -222,10 +228,28 @@ export function CronAddForm({
     );
   };
 
-  const channelOptions = [
-    { value: "", label: "None (no report)" },
-    ...channels.map((ch) => ({ value: ch, label: `#${ch}` })),
-  ];
+  const reportOptions = useMemo(() => {
+    const opts: (
+      | { value: string; label: string }
+      | { group: string; items: { value: string; label: string }[] }
+    )[] = [{ value: "", label: "None (no report)" }];
+    if (channels.length > 0) {
+      opts.push({
+        group: "Channels",
+        items: channels.map((ch) => ({ value: ch, label: `#${ch}` })),
+      });
+    }
+    if (agentNames.length > 0) {
+      opts.push({
+        group: "Agents (DM)",
+        items: agentNames.map((name) => ({
+          value: `@${name}`,
+          label: `@${name}`,
+        })),
+      });
+    }
+    return opts;
+  }, [channels, agentNames]);
 
   const isPending = cronAdd.isPending || cronRemove.isPending;
 
@@ -457,15 +481,13 @@ export function CronAddForm({
         </div>
 
         {/* Report Channel */}
-        {channels.length > 0 && (
-          <Select
-            label="Report channel"
-            description="Where cron trigger messages appear in the UI"
-            data={channelOptions}
-            value={reportChannel ?? ""}
-            onChange={(v) => setReportChannel(v || null)}
-          />
-        )}
+        <Select
+          label="Report to"
+          description="Channel or agent to notify when cron tasks complete"
+          data={reportOptions}
+          value={reportChannel ?? ""}
+          onChange={(v) => setReportChannel(v || null)}
+        />
 
         <Group justify="flex-end" mt="xs">
           <Button variant="default" onClick={onClose}>

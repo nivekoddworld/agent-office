@@ -71,6 +71,14 @@ export interface AgentInfo {
   lastHeartbeat: number;
 }
 
+// --- Attachment ---
+
+export interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+}
+
 // --- Inbox ---
 
 export interface InboxMessage {
@@ -88,6 +96,7 @@ export interface InboxMessage {
   correlationId?: string;
   originTaskId?: string;
   hopCount?: number;
+  attachments?: Attachment[];
 }
 
 // --- Scheduler ---

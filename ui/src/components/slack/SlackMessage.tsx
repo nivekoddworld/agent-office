@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   Box,
   Text,
@@ -120,7 +120,7 @@ function HoverActions({
   );
 }
 
-export function SlackMessage({
+export const SlackMessage = memo(function SlackMessage({
   message,
   onClickAvatar,
   onResend,
@@ -269,8 +269,34 @@ export function SlackMessage({
               {message.text}
             </Text>
           )}
+
+          {message.attachments && message.attachments.length > 0 && (
+            <Group gap={8} mt={4}>
+              {message.attachments.map((att) => (
+                <Box
+                  key={att.id}
+                  style={{
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    border: "1px solid var(--ao-border)",
+                    maxWidth: 300,
+                  }}
+                >
+                  <img
+                    src={`/api/uploads/${att.id}`}
+                    alt={att.filename}
+                    style={{
+                      maxWidth: "100%",
+                      display: "block",
+                      borderRadius: 8,
+                    }}
+                  />
+                </Box>
+              ))}
+            </Group>
+          )}
         </Box>
       </Group>
     </Box>
   );
-}
+});

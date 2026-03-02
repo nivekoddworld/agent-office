@@ -14,6 +14,7 @@ export interface PersistedInbox {
   // Envelope fields (snake_case for SQLite columns)
   correlation_id?: string | null;
   origin_task_id?: string | null;
+  attachments?: string | null;
 }
 
 export interface DmRecord {
@@ -25,4 +26,5 @@ export interface DmRecord {
   request_id: string | null;
   egress_id: string | null;
   correlation_id: string | null;
+  attachments: string | null;
 }

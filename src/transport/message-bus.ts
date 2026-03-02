@@ -1,5 +1,5 @@
 import { LocalTransport } from "./local.js";
-import type { InboxMessage, Priority, SourceKind } from "../types.js";
+import type { Attachment, InboxMessage, Priority, SourceKind } from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 
 /**
@@ -46,6 +46,9 @@ export class MessageBus {
         channel: msg.channel ?? null,
         correlation_id: msg.correlationId ?? null,
         origin_task_id: msg.originTaskId ?? null,
+        attachments: msg.attachments
+          ? JSON.stringify(msg.attachments)
+          : null,
       });
     };
   }
@@ -69,6 +72,9 @@ export class MessageBus {
           channel: p.channel ?? undefined,
           correlationId: p.correlation_id ?? undefined,
           originTaskId: p.origin_task_id ?? undefined,
+          attachments: p.attachments
+            ? (JSON.parse(p.attachments) as Attachment[])
+            : undefined,
         }));
         this.transport.restore(name, msgs);
       }
@@ -95,6 +101,7 @@ export class MessageBus {
     sourceKind?: SourceKind;
     channel?: string;
     hopCount?: number;
+    attachments?: Attachment[];
   }): void {
     this.sendWithOutcome(opts);
   }
@@ -112,6 +119,7 @@ export class MessageBus {
     correlationId?: string;
     originTaskId?: string;
     hopCount?: number;
+    attachments?: Attachment[];
   }): { queued: boolean; reason?: string } {
     // Rate-limit non-user/system sources to protect inbox health.
     const limit = resolveRateLimit(opts.from);

@@ -133,12 +133,31 @@ export async function cronAddImpl(
       return;
     }
 
+    // Collect known agent names for report_channel normalization
+    const agentsNode = doc.getIn(["agents"]);
+    const knownAgents = new Set<string>(
+      agentsNode && typeof agentsNode === "object"
+        ? Object.keys((agentsNode as any).toJSON?.() ?? agentsNode)
+        : [],
+    );
+
+    /** Normalize bare agent names → @agent so parseReportTarget works correctly. */
+    const normalizeReportChannel = (rc: string | undefined): string | undefined => {
+      if (!rc) return undefined;
+      if (rc.startsWith("@")) return rc;
+      if (knownAgents.has(rc)) return `@${rc}`;
+      return rc; // channel name — leave as-is
+    };
+
+    const normalizedJobReport = normalizeReportChannel(params.report_channel);
+
     const tasksYaml = params.tasks.map((t) => {
       const obj: Record<string, unknown> = { title: t.title };
       if (t.assignee) obj.assignee = t.assignee;
       if (t.description) obj.description = t.description;
       if (t.parent_id) obj.parent_id = t.parent_id;
-      if (t.report_channel) obj.report_channel = t.report_channel;
+      const taskReport = normalizeReportChannel(t.report_channel);
+      if (taskReport) obj.report_channel = taskReport;
       return obj;
     });
 
@@ -169,7 +188,7 @@ export async function cronAddImpl(
       };
       if (params.timezone) entry.timezone = params.timezone;
       if (params.catch_up) entry.catch_up = params.catch_up;
-      if (params.report_channel) entry.report_channel = params.report_channel;
+      if (normalizedJobReport) entry.report_channel = normalizedJobReport;
       doc.setIn(["agents", agentName, "cron", params.name], entry);
       atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
 
@@ -185,7 +204,7 @@ export async function cronAddImpl(
       };
       if (params.timezone) entry.timezone = params.timezone;
       if (params.catch_up) entry.catch_up = params.catch_up;
-      if (params.report_channel) entry.report_channel = params.report_channel;
+      if (normalizedJobReport) entry.report_channel = normalizedJobReport;
       doc.setIn(["office", "cron", params.name], entry);
       atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
 

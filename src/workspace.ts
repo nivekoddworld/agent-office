@@ -75,6 +75,7 @@ export class Workspace {
       this.bus,
       config.tickIntervalMs ?? 2000,
       this.office.channels,
+      this.office.dir,
     );
     this.watchdog = new Watchdog(
       this.agents,
@@ -589,6 +590,7 @@ export class Workspace {
     type: "prompt" | "steer" = "prompt",
     priority?: Priority,
     requestId?: string,
+    attachments?: import("./types.js").Attachment[],
   ): void {
     const handle = this.agents.get(agentName);
     if (!handle) throw new Error(`Agent "${agentName}" not found`);
@@ -601,6 +603,7 @@ export class Workspace {
       requestId,
       sessionKey: sessionKey("dm", agentName),
       sourceKind: "dm",
+      attachments,
     });
   }
 

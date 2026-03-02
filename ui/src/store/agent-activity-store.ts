@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export type AgentActivity =
   | { kind: "idle" }
@@ -85,7 +85,11 @@ export function useAgentActivity() {
   return state;
 }
 
+/** Per-agent selector — only re-renders when this specific agent's activity changes. */
 export function useAgentActivityFor(agent: string): AgentActivity {
-  const state = useAgentActivity();
-  return state[agent] ?? IDLE;
+  const getSnapshot = useCallback(
+    () => agentActivityStore.getActivity(agent),
+    [agent],
+  );
+  return useSyncExternalStore(agentActivityStore.subscribe, getSnapshot);
 }

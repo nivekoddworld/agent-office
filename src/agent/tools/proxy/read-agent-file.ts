@@ -19,8 +19,28 @@ export function createReadAgentFileProxy(hostFetch: HostFetch): AgentTool<any> {
           .catch(() => ({ error: "Unknown error" }))) as { error: string };
         return textResult(`Error: ${err.error}`);
       }
-      const data = (await res.json()) as { content: string };
-      return textResult(data.content);
+      const result = (await res.json()) as {
+        content?: string;
+        data?: string;
+        mimeType?: string;
+      };
+      if (result.mimeType && result.data) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Image from agent "${params.agent}": ${params.path}`,
+            },
+            {
+              type: "image" as const,
+              data: result.data,
+              mimeType: result.mimeType,
+            },
+          ],
+          details: {},
+        };
+      }
+      return textResult(result.content ?? "");
     },
   };
 }

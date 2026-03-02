@@ -6,7 +6,7 @@ import { useBootstrapState } from "../../api/use-state.js";
 import { useSSE } from "../../api/use-events.js";
 import { pushEvent } from "../../store/event-store.js";
 import { agentActivityStore } from "../../store/agent-activity-store.js";
-import { unreadStore, useUnreadCounts } from "../../store/unread-store.js";
+import { unreadStore } from "../../store/unread-store.js";
 import { debugCaptureStore } from "../../store/debug-capture-store.js";
 import { isChatRelevantSSE } from "../slack/debug-helpers.js";
 import { SlackSidebar } from "../slack/SlackSidebar.js";
@@ -95,8 +95,6 @@ export function RootLayout() {
     navigate,
   ]);
 
-  const unreadCounts = useUnreadCounts();
-
   const openAgentProfile = useCallback((name: string) => {
     setModal({ kind: "profile", agentName: name });
   }, []);
@@ -155,7 +153,6 @@ export function RootLayout() {
             <SlackSidebar
               officeName={state.officeName}
               agents={state.agents}
-              unreadCounts={unreadCounts}
               channels={state.channels}
             />
           </Box>

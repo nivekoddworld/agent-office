@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile, realpath } from "node:fs/promises";
-import { join, sep } from "node:path";
+import { join, sep, extname } from "node:path";
 import type { MessageBus } from "../transport/message-bus.js";
 import { Priority } from "../types.js";
 import { sessionKey } from "../messages/session-key.js";
@@ -10,6 +10,13 @@ const MAX_SEND_BODY = 65_536; // 64 KB
 const MAX_FILE_RESPONSE = 1_048_576; // 1 MB
 const FILE_READ_TIMEOUT_MS = 10_000;
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
+const IMAGE_EXTENSIONS: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
 
 /** Read request body with size limit. Returns null if exceeded. */
 export function readBody(
@@ -143,26 +150,36 @@ export async function handleAgentFile(
       return;
     }
 
+    // Check if file is an image
+    const ext = extname(resolved).toLowerCase();
+    const mimeType = IMAGE_EXTENSIONS[ext];
+
     const ac = new AbortController();
     const timeout = setTimeout(() => ac.abort(), FILE_READ_TIMEOUT_MS);
-    let content: string;
     try {
-      content = await readFile(resolved, {
-        encoding: "utf-8",
-        signal: ac.signal,
-      });
+      if (mimeType) {
+        const buffer = await readFile(resolved, { signal: ac.signal });
+        clearTimeout(timeout);
+        const data = buffer.toString("base64");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ data, mimeType, path: resolved }));
+      } else {
+        const content = await readFile(resolved, {
+          encoding: "utf-8",
+          signal: ac.signal,
+        });
+        clearTimeout(timeout);
+        if (Buffer.byteLength(content, "utf-8") > MAX_FILE_RESPONSE) {
+          res.writeHead(413, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "File too large" }));
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ content, path: resolved }));
+      }
     } finally {
       clearTimeout(timeout);
     }
-
-    if (Buffer.byteLength(content, "utf-8") > MAX_FILE_RESPONSE) {
-      res.writeHead(413, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "File too large" }));
-      return;
-    }
-
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ content, path: resolved }));
   } catch {
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "File not found" }));

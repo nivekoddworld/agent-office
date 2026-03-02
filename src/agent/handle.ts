@@ -323,12 +323,20 @@ export class AgentHandle {
     this._lastHeartbeat = Date.now();
   }
 
-  async prompt(text: string): Promise<void> {
+  async prompt(
+    text: string,
+    images?: import("@mariozechner/pi-ai").ImageContent[],
+  ): Promise<void> {
     if (this.provider && this.sandboxInfo && this.hostApi) {
       const promptId = randomUUID();
       const done = this.hostApi.waitForPromptDone(this.name, promptId);
       try {
-        await this.provider.prompt(this.sandboxInfo.id, promptId, text);
+        await this.provider.prompt(
+          this.sandboxInfo.id,
+          promptId,
+          text,
+          images,
+        );
       } catch (err) {
         this.hostApi.cancelPendingPrompt(this.name, promptId);
         throw err;
@@ -337,7 +345,18 @@ export class AgentHandle {
       return;
     }
     if (!this.agent) throw new Error(`Agent "${this.name}" not initialized`);
-    await this.agent.prompt(text);
+    if (images?.length) {
+      if (this.config.model.input.includes("image")) {
+        await this.agent.prompt(text, images);
+      } else {
+        await this.agent.prompt(
+          text +
+            "\n\n[System: Images were attached but this model does not support vision. Images were not sent.]",
+        );
+      }
+    } else {
+      await this.agent.prompt(text);
+    }
   }
 
   async steer(text: string): Promise<void> {
