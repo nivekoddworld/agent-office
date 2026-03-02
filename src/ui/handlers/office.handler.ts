@@ -70,5 +70,15 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         return json(res, 200, { ok: true });
       },
     },
+    {
+      method: "POST",
+      pattern: /^\/api\/workspace\/pause$/,
+      handler: (req, res) => {
+        if (requireMutation(req, res, getPort())) return;
+        const aborted = workspace.pauseAll();
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true, aborted });
+      },
+    },
   ];
 }

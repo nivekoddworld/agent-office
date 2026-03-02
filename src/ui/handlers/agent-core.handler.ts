@@ -80,9 +80,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         }
         const secretRefs: Record<string, string> = {};
         if (parsed.secret_refs) {
-          for (const [key, hostEnvName] of Object.entries(
-            parsed.secret_refs,
-          )) {
+          for (const [key, hostEnvName] of Object.entries(parsed.secret_refs)) {
             secretRefs[key] = hostEnvName;
           }
         }
@@ -108,7 +106,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
 
           let warning: string | undefined;
           if (!parsed.api_key_ref) {
-            const modelSpec = parsed.model ?? "anthropic:claude-sonnet-4-20250514";
+            const modelSpec =
+              parsed.model ?? "anthropic:claude-sonnet-4-20250514";
             const provider = modelSpec.split(":")[0];
             if (provider) {
               const missingVar = ensureProviderKeyInDotEnv(provider);
@@ -129,6 +128,24 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             error: err instanceof Error ? err.message : String(err),
           });
         }
+      },
+    },
+    // POST /api/agents/:name/stop (abort current execution)
+    {
+      method: "POST",
+      pattern: /^\/api\/agents\/([^/]+)\/stop$/,
+      paramNames: ["name"],
+      handler: (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        const name = params.name!;
+        const handle = workspace.getAgent(name);
+        if (!handle) return json(res, 404, { error: "agent_not_found" });
+        if (handle.status !== "running")
+          return json(res, 400, { error: "agent_not_running" });
+        handle.abort();
+        handle.setStatus("idle");
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 200, { ok: true });
       },
     },
     // DELETE /api/agents/:name (fire)

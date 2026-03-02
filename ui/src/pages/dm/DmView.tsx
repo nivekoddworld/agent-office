@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useAppState } from "../../components/layout/app-state-context.js";
 import { useAppActions } from "../../components/layout/app-actions-context.js";
+import { useStopAgent } from "../../api/use-api-mutations.js";
 import { ChannelView } from "../../components/slack/ChannelView.js";
 import type { ChannelId } from "../../components/slack/channel-types.js";
 
@@ -9,6 +10,7 @@ export function DmView() {
   const { agentName } = useParams<{ agentName: string }>();
   const state = useAppState();
   const { openAgentProfile } = useAppActions();
+  const stopAgent = useStopAgent();
 
   const channel: ChannelId = useMemo(
     () => ({ kind: "dm", agentName: agentName! }),
@@ -25,6 +27,9 @@ export function DmView() {
     [state.agents],
   );
 
+  const agent = state.agents.find((a) => a.name === agentName);
+  const isRunning = agent?.status === "running";
+
   return (
     <ChannelView
       channel={channel}
@@ -35,6 +40,9 @@ export function DmView() {
       tasks={state.tasks}
       defaultConversationChannel={state.defaultConversationChannel}
       channels={state.channels}
+      onStop={() => stopAgent.mutate(agentName!)}
+      stopLoading={stopAgent.isPending}
+      agentRunning={isRunning}
     />
   );
 }

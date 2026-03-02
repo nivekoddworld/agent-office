@@ -16,6 +16,17 @@ export function useSchedulerAction() {
   });
 }
 
+export function usePauseAll() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; aborted: number }>("/api/workspace/pause", {
+        method: "POST",
+      }),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
 export function useOfficeApply() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -44,12 +55,26 @@ export function useHireAgent() {
       thinking?: string;
       desc?: string;
     }) =>
-      apiFetch<{ ok: boolean; name: string; cwd: string | null; warning?: string }>(
-        "/api/agents",
-        {
-          method: "POST",
-          body: JSON.stringify(args),
-        },
+      apiFetch<{
+        ok: boolean;
+        name: string;
+        cwd: string | null;
+        warning?: string;
+      }>("/api/agents", {
+        method: "POST",
+        body: JSON.stringify(args),
+      }),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
+export function useStopAgent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (agentName: string) =>
+      apiFetch<{ ok: boolean }>(
+        `/api/agents/${encodeURIComponent(agentName)}/stop`,
+        { method: "POST" },
       ),
     onSuccess: () => invalidateState(queryClient),
   });
@@ -327,13 +352,7 @@ export function useHeartbeatClear() {
 export function useSetModel() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      agentName,
-      model,
-    }: {
-      agentName: string;
-      model: string;
-    }) =>
+    mutationFn: ({ agentName, model }: { agentName: string; model: string }) =>
       apiFetch<{ ok: boolean; warning?: string }>(
         `/api/agents/${encodeURIComponent(agentName)}/model`,
         {
@@ -416,10 +435,9 @@ export function useOAuthDelete() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ provider }: { provider: string }) =>
-      apiFetch<{ ok: boolean }>(
-        `/api/oauth/${encodeURIComponent(provider)}`,
-        { method: "DELETE" },
-      ),
+      apiFetch<{ ok: boolean }>(`/api/oauth/${encodeURIComponent(provider)}`, {
+        method: "DELETE",
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["oauth-providers"] });
       invalidateState(queryClient);

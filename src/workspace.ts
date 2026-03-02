@@ -27,7 +27,11 @@ import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
-import { CronService, type CronChannelFanout, type CronReportDm } from "./cron/cron-service.js";
+import {
+  CronService,
+  type CronChannelFanout,
+  type CronReportDm,
+} from "./cron/cron-service.js";
 import { CronStore } from "./cron/cron-store.js";
 import { TaskService } from "./tasks/task-service.js";
 import { TaskStore } from "./tasks/task-store.js";
@@ -101,7 +105,10 @@ export class Workspace {
       // Emit SSE event so frontend can track channel unreads in real-time
       const event = {
         type: "message_end",
-        message: { role: "assistant", content: [{ type: "text", text: message }] },
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: message }],
+        },
         sessionKey: sk,
         sourceKind: "channel",
       } as unknown as AgentEvent;
@@ -270,8 +277,7 @@ export class Workspace {
 
     // Ensure workspace scaffold (memory/ and logs/ dirs) before agent init
     const workspaceDir =
-      config.cwd ??
-      join(this.office.dir, "agents", config.name, "workspace");
+      config.cwd ?? join(this.office.dir, "agents", config.name, "workspace");
     ensureWorkspaceScaffold(workspaceDir);
 
     const useSandbox =
@@ -500,7 +506,6 @@ export class Workspace {
             // Best-effort: never fail agent flow
           }
         }
-
       }
 
       // Egress contract: track message_user calls per dispatch
@@ -523,8 +528,7 @@ export class Workspace {
           successes: 0,
         };
         const d = event as unknown as Record<string, unknown>;
-        const reqId =
-          (d.requestId as string) ?? requestId ?? null;
+        const reqId = (d.requestId as string) ?? requestId ?? null;
         const corrId =
           (d.correlationId as string) ??
           handle.getActiveCorrelationId() ??
@@ -555,10 +559,7 @@ export class Workspace {
                 fn(config.name, { type: "state_changed" } as any);
               }
             } catch (err) {
-              console.error(
-                "[workspace] DM contract fallback failed:",
-                err,
-              );
+              console.error("[workspace] DM contract fallback failed:", err);
             }
           }
         }
@@ -630,6 +631,20 @@ export class Workspace {
     };
   }
 
+  /** Abort all running agents and stop the scheduler. */
+  pauseAll(): number {
+    let aborted = 0;
+    for (const handle of this.agents.values()) {
+      if (handle.status === "running") {
+        handle.abort();
+        handle.setStatus("idle");
+        aborted++;
+      }
+    }
+    this.scheduler.stop();
+    return aborted;
+  }
+
   // --- Watchdog stuck handler ---
 
   private async handleStuck(name: string): Promise<void> {
@@ -650,7 +665,6 @@ export class Workspace {
     }
   }
 }
-
 
 const PROVIDER_ENV_KEYS: Record<string, string> = {
   openai: "OPENAI_API_KEY",

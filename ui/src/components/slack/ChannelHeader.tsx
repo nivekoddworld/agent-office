@@ -6,6 +6,7 @@ import {
   IconTrash,
   IconFileText,
   IconSettings,
+  IconPlayerStop,
 } from "@tabler/icons-react";
 
 import { AgentAvatar } from "../shared/AgentAvatar.js";
@@ -19,6 +20,9 @@ interface ChannelHeaderProps {
   onClearHistory?: () => void;
   clearLoading?: boolean;
   onOpenSettings?: () => void;
+  onStop?: () => void;
+  stopLoading?: boolean;
+  agentRunning?: boolean;
 }
 
 export function ChannelHeader({
@@ -29,6 +33,9 @@ export function ChannelHeader({
   onClearHistory,
   clearLoading,
   onOpenSettings,
+  onStop,
+  stopLoading,
+  agentRunning,
 }: ChannelHeaderProps) {
   const name = channel.kind === "dm" ? channel.agentName : channel.name;
   const desc = description ?? "";
@@ -89,6 +96,19 @@ export function ChannelHeader({
                   {agentCount}
                 </Text>
               </Group>
+            </Tooltip>
+          )}
+          {onStop && agentRunning && (
+            <Tooltip label="Stop agent">
+              <ActionIcon
+                variant="subtle"
+                color="red"
+                size="sm"
+                loading={stopLoading}
+                onClick={onStop}
+              >
+                <IconPlayerStop size={16} />
+              </ActionIcon>
             </Tooltip>
           )}
           {onClearHistory != null && (

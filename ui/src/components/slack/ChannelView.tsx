@@ -64,6 +64,9 @@ interface ChannelViewProps {
   tasks?: Task[];
   defaultConversationChannel?: string;
   channels?: Record<string, ChannelConfig>;
+  onStop?: () => void;
+  stopLoading?: boolean;
+  agentRunning?: boolean;
 }
 
 export function ChannelView({
@@ -75,6 +78,9 @@ export function ChannelView({
   tasks = [],
   defaultConversationChannel,
   channels,
+  onStop,
+  stopLoading,
+  agentRunning,
 }: ChannelViewProps) {
   const queryClient = useQueryClient();
   const { events } = useEventStore();
@@ -345,6 +351,9 @@ export function ChannelView({
             ? () => setSettingsOpen(true)
             : undefined
         }
+        onStop={onStop}
+        stopLoading={stopLoading}
+        agentRunning={agentRunning}
       />
 
       <ConfirmDialog

@@ -19,6 +19,8 @@ import {
   IconClock,
   IconFiles,
   IconHeartbeat,
+  IconPlayerPause,
+  IconPlayerPlay,
 } from "@tabler/icons-react";
 import { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -27,6 +29,11 @@ import { SidebarSection } from "./SidebarSection.js";
 import { CreateChannelModal } from "./CreateChannelModal.js";
 import { AgentAvatar } from "../shared/AgentAvatar.js";
 import type { AgentInfo } from "../../api/types.js";
+import {
+  usePauseAll,
+  useSchedulerAction,
+} from "../../api/use-api-mutations.js";
+import { useAppState } from "../layout/app-state-context.js";
 
 interface SlackSidebarProps {
   officeName: string;
@@ -103,6 +110,10 @@ export function SlackSidebar({
   const navigate = useNavigate();
   const location = useLocation();
   const [createOpen, setCreateOpen] = useState(false);
+  const state = useAppState();
+  const pauseAll = usePauseAll();
+  const schedulerAction = useSchedulerAction();
+  const schedulerRunning = state.scheduler.running;
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -120,14 +131,39 @@ export function SlackSidebar({
         py="sm"
         style={{ borderBottom: `1px solid var(--ao-border)` }}
       >
-        <Text
-          fw={700}
-          size="lg"
-          truncate
-          style={{ color: "var(--ao-text-bright)" }}
-        >
-          {officeName}
-        </Text>
+        <Group justify="space-between" wrap="nowrap">
+          <Text
+            fw={700}
+            size="lg"
+            truncate
+            style={{ color: "var(--ao-text-bright)" }}
+          >
+            {officeName}
+          </Text>
+          <Tooltip
+            label={schedulerRunning ? "Pause all agents" : "Resume scheduler"}
+          >
+            <ActionIcon
+              variant="subtle"
+              color={schedulerRunning ? "yellow" : "green"}
+              size="sm"
+              loading={pauseAll.isPending || schedulerAction.isPending}
+              onClick={() => {
+                if (schedulerRunning) {
+                  pauseAll.mutate();
+                } else {
+                  schedulerAction.mutate("start");
+                }
+              }}
+            >
+              {schedulerRunning ? (
+                <IconPlayerPause size={16} />
+              ) : (
+                <IconPlayerPlay size={16} />
+              )}
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Box>
 
       <ScrollArea style={{ flex: 1 }} scrollbarSize={4}>
@@ -136,7 +172,10 @@ export function SlackSidebar({
           <Box px={4} mb={6}>
             <SidebarItem
               icon={
-                <IconLayoutKanban size={16} color={"var(--ao-text-secondary)"} />
+                <IconLayoutKanban
+                  size={16}
+                  color={"var(--ao-text-secondary)"}
+                />
               }
               label="Tasks"
               active={isActive("/tasks")}
@@ -189,11 +228,15 @@ export function SlackSidebar({
               return (
                 <SidebarItem
                   key={ch}
-                  icon={<IconHash size={16} color={"var(--ao-text-secondary)"} />}
+                  icon={
+                    <IconHash size={16} color={"var(--ao-text-secondary)"} />
+                  }
                   label={ch}
                   active={isActive(`/channels/${encodeURIComponent(ch)}`)}
                   bold={chUnread > 0}
-                  onClick={() => navigate(`/channels/${encodeURIComponent(ch)}`)}
+                  onClick={() =>
+                    navigate(`/channels/${encodeURIComponent(ch)}`)
+                  }
                   rightSection={
                     chUnread > 0 ? (
                       <Badge
@@ -222,7 +265,13 @@ export function SlackSidebar({
               return (
                 <SidebarItem
                   key={agent.name}
-                  icon={<AgentAvatar name={agent.name} size={22} agentName={agent.name} />}
+                  icon={
+                    <AgentAvatar
+                      name={agent.name}
+                      size={22}
+                      agentName={agent.name}
+                    />
+                  }
                   label={agent.name}
                   active={isActive(`/dm/${encodeURIComponent(agent.name)}`)}
                   bold={unread > 0}
