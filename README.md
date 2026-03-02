@@ -2,6 +2,8 @@
 
 Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono). Orchestrates AI coding agents — similar to Claude Code or OpenClaw — with tick-based scheduling, priority queues, inbox IPC, cross-agent file access, watchdog monitoring, proactive cron jobs, optional Docker sandbox isolation, and declarative YAML configuration.
 
+![Web UI](docs/images/web-ui.png)
+
 ## Get Started
 
 Try one of these examples to get up and running quickly. Set env vars in the project root `.env` (not inside Docker — the host forwards them to containers).
