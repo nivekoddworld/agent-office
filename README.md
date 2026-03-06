@@ -4,6 +4,8 @@ Multi-agent workspace manager built on [Pi](https://github.com/badlogic/pi-mono)
 
 ![Web UI](docs/images/web-ui.png)
 
+https://github.com/user-attachments/assets/750d4ba5-beda-4def-8b43-4109038a373d
+
 ## Get Started
 
 Try one of these examples to get up and running quickly. Set env vars in the project root `.env` (not inside Docker — the host forwards them to containers).
