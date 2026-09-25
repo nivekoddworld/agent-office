@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { CronJobConfig, OfficeCronJobConfig } from "../cron/types.js";
 import type { OfficeCronYamlEntry } from "../types.js";
 import { Priority } from "../types.js";
+import { DEFAULT_MODEL_FALLBACK } from "../models/resolve-model.js";
 
 // --- Agent YAML entry type (canonical definition) ---
 
@@ -60,6 +61,7 @@ export const RESERVED_KEYS = new Set([
   "AUTH_TOKEN",
   "HOST_URL",
   "MODEL_NAME",
+  "MODEL_JSON",
   "SYSTEM_PROMPT",
   "SKILL_PATHS",
   "PERMISSIONS",
@@ -86,6 +88,7 @@ const PRIORITY_NUM_TO_NAME: Record<number, string> = {
 
 export {
   validateAgentEntry,
+  validateOfficeModels,
   validateOfficeCronEntry,
   validateChannelEntry,
   isValidTimezone,
@@ -180,10 +183,10 @@ export function atomicWriteYaml(path: string, content: string): void {
 export function buildYamlEntry(
   entry: AgentYamlEntry,
   rawSecrets?: Record<string, string>,
+  defaultModel: string = DEFAULT_MODEL_FALLBACK,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  if (entry.model && entry.model !== "anthropic:claude-sonnet-4-20250514")
-    out.model = entry.model;
+  if (entry.model && entry.model !== defaultModel) out.model = entry.model;
   if (entry.priority !== undefined) {
     const name = canonicalizePriority(entry.priority);
     if (name !== "normal") out.priority = name;

@@ -142,6 +142,11 @@ export interface OfficeYaml {
     secrets?: Record<string, string>;
     cron?: Record<string, OfficeCronYamlEntry>;
     channels?: Record<string, { members: string[]; description?: string }>;
+    default_model?: string;
+    providers?: Record<
+      string,
+      import("./models/resolve-model.js").LocalProviderConfig
+    >;
   };
   agents: Record<string, import("./config/yaml-utils.js").AgentYamlEntry>;
 }
@@ -154,6 +159,7 @@ export interface OfficeContext {
   secrets: Record<string, string>;
   dir: string;
   channels: Map<string, ChannelConfig>;
+  models: import("./models/resolve-model.js").OfficeModelSettings;
 }
 
 // --- Workspace ---

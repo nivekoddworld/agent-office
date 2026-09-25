@@ -323,4 +323,5 @@ export interface ModelInfo {
 export interface ModelsResponse {
   providers: string[];
   models: ModelInfo[];
+  defaultModel?: string;
 }

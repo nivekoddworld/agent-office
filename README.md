@@ -52,6 +52,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
   - [CLI Commands](#cli-commands)
   - [Using OAuth in office.yaml](#using-oauth-in-officeyaml)
   - [Web UI Auth Selector](#web-ui-auth-selector)
+- [Local Models (llama.cpp / vLLM)](#local-models-llamacpp--vllm)
 - [Multi-Office Architecture](#multi-office-architecture)
   - [Creating an Office](#creating-an-office)
   - [Office Configuration](#office-configuration-officeyaml)
@@ -246,13 +247,13 @@ Set the `auth` field on an agent to use OAuth instead of an API key:
 ```yaml
 agents:
   designer:
-    model: anthropic:claude-sonnet-4-20250514
+    model: anthropic:claude-sonnet-4-5
     auth: "oauth:anthropic" # use OAuth credentials
   reviewer:
     model: openai:gpt-4o
     auth: "oauth:openai-codex" # use OAuth credentials
   analyst:
-    model: google:gemini-2.0-flash
+    model: google:gemini-2.5-flash
     # no auth field — falls back to GEMINI_API_KEY from .env
 ```
 
@@ -271,6 +272,60 @@ The auth selector only appears when credentials are available — if no OAuth lo
 | `GET`    | `/api/oauth/providers`  | List all providers with authentication status |
 | `GET`    | `/api/oauth/status/:id` | Check if credentials exist for a provider     |
 | `DELETE` | `/api/oauth/:id`        | Remove stored credentials for a provider      |
+
+## Local Models (llama.cpp / vLLM)
+
+Agents can run on a model served by your own [llama.cpp](https://github.com/ggml-org/llama.cpp) or [vLLM](https://docs.vllm.ai) server. Both speak the OpenAI Chat Completions API; no API key or cloud account is needed.
+
+Use the `llamacpp` or `vllm` provider with whatever model id your server serves:
+
+```yaml
+office:
+  name: Local Team
+  default_model: llamacpp:qwen3-coder-30b # used by agents without a model: line
+
+agents:
+  coder:
+    description: "Writes code"
+  reviewer:
+    model: vllm:Qwen/Qwen3-32B
+```
+
+With no extra config, agent-office connects to the usual local addresses:
+
+| Provider   | Default URL                | Env override     | API key env (optional) |
+| ---------- | -------------------------- | ---------------- | ---------------------- |
+| `llamacpp` | `http://127.0.0.1:8080/v1` | `LLAMA_BASE_URL` | `LLAMA_API_KEY`        |
+| `vllm`     | `http://127.0.0.1:8000/v1` | `VLLM_BASE_URL`  | `VLLM_API_KEY`         |
+
+To point at another machine, change limits, or run several servers, add `office.providers`:
+
+```yaml
+office:
+  providers:
+    llamacpp:
+      base_url: http://192.168.1.50:8080 # /v1 is added if missing
+      context_window: 65536 # default 32768 — match your server's -c / --max-model-len
+      max_tokens: 8192 # default 8192
+    gpu-box: # any name + a type
+      type: vllm # llamacpp | vllm
+      base_url: http://gpu-box:8000
+      api_key_ref: GPU_BOX_KEY # env var holding the server's --api-key
+```
+
+Then use `gpu-box:<model-id>` as the model. The web UI lists the models each reachable server currently serves.
+
+**Starting the servers.** Tool calling must be enabled, since agents work through tools:
+
+```bash
+# llama.cpp
+llama-server -m ~/models/qwen3-coder-30b-Q4_K_M.gguf --jinja -c 32768 --host 127.0.0.1 --port 8080
+
+# vLLM (pick the tool-call parser for your model family)
+vllm serve Qwen/Qwen3-32B --enable-auto-tool-choice --tool-call-parser hermes --port 8000
+```
+
+**Docker sandbox.** Sandboxed agents reach your machine through `host.docker.internal` (`localhost` / `127.0.0.1` URLs are rewritten automatically), so the server must listen on an address containers can reach — e.g. `--host 0.0.0.0` — instead of `127.0.0.1`. Keep such a server behind a firewall or set an API key.
 
 ## Multi-Office Architecture
 
@@ -311,7 +366,7 @@ office:
 
 agents:
   designer:
-    model: anthropic:claude-sonnet-4-20250514
+    model: anthropic:claude-sonnet-4-5
     priority: normal # idle | low | normal | high | critical (or 0-4)
     thinking: low # off | minimal | low | medium | high | xhigh
     description: "Frontend designer — builds HTML/CSS"
@@ -340,28 +395,30 @@ agents:
 
 Office-level `env` and `secrets` are inherited by all agents. Agent-level values override office-level.
 
+Set `office.default_model` to change the model used by agents without a `model:` line (default `anthropic:claude-sonnet-4-5`). `office.providers` points agents at local llama.cpp / vLLM servers — see [Local Models](#local-models-llamacpp--vllm).
+
 All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.
 
-| Field              | Type             | Default                                                | Description                                                                      |
-| ------------------ | ---------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| `model`            | string           | `anthropic:claude-sonnet-4-20250514`                   | `provider:model-id`                                                              |
-| `priority`         | string \| number | `normal`                                               | Priority name or 0-4                                                             |
-| `thinking`         | string           | `low`                                                  | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`                          |
-| `description`      | string           | `""`                                                   | Visible to other agents                                                          |
-| `prompt_inline`    | string           | _(none)_                                               | Custom instructions (inline text, appended to base prompt)                       |
-| `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace` | Working directory                                                                |
-| `skills`           | string[]         | `[]`                                                   | GitHub sources to auto-install (`owner/repo`)                                    |
-| `auth`             | string           | _(none — uses API key)_                                | Auth mode: `oauth:<provider-id>` for OAuth (see [OAuth](#oauth-authentication))  |
-| `api_key_ref`      | string           | _(auto from provider)_                                 | Host env var name for model API key                                              |
-| `env`              | map              | `{}`                                                   | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)                  |
-| `secrets`          | map              | `{}`                                                   | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`)             |
-| `disclose_secrets` | boolean          | `false`                                                | Show secret names in system prompt                                               |
-| `cron`             | map              | `{}`                                                   | Named cron jobs (see [Cron Jobs](#cron-jobs))                                    |
-| `reports_to`       | string           | _(none — reports to user)_                             | Name of manager agent (see [Hierarchy](#hierarchy))                              |
-| `permissions`      | map              | `{}`                                                   | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
-| `prompt_mode`      | string           | `"full"`                                               | `full` (all blocks) or `minimal` (base + identity + custom only)                 |
-| `on_demand_skills` | boolean          | `true`                                                 | Advertise skill summaries; load full content on demand via `read_skill`          |
-| `heartbeat`        | map              | _(none)_                                               | Proactive heartbeat config (see [Heartbeat](#heartbeat))                         |
+| Field              | Type             | Default                                                    | Description                                                                      |
+| ------------------ | ---------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `model`            | string           | `office.default_model`, else `anthropic:claude-sonnet-4-5` | `provider:model-id` (local: `llamacpp:<id>` / `vllm:<id>`)                       |
+| `priority`         | string \| number | `normal`                                                   | Priority name or 0-4                                                             |
+| `thinking`         | string           | `low`                                                      | `off` / `minimal` / `low` / `medium` / `high` / `xhigh`                          |
+| `description`      | string           | `""`                                                       | Visible to other agents                                                          |
+| `prompt_inline`    | string           | _(none)_                                                   | Custom instructions (inline text, appended to base prompt)                       |
+| `cwd`              | string           | `~/.agent-office/offices/<id>/agents/<name>/workspace`     | Working directory                                                                |
+| `skills`           | string[]         | `[]`                                                       | GitHub sources to auto-install (`owner/repo`)                                    |
+| `auth`             | string           | _(none — uses API key)_                                    | Auth mode: `oauth:<provider-id>` for OAuth (see [OAuth](#oauth-authentication))  |
+| `api_key_ref`      | string           | _(auto from provider)_                                     | Host env var name for model API key                                              |
+| `env`              | map              | `{}`                                                       | Non-sensitive env vars (Docker `--env`, supports `${VAR}` refs)                  |
+| `secrets`          | map              | `{}`                                                       | Secret refs in `${VAR}` format (delivered via `authenticated_fetch`)             |
+| `disclose_secrets` | boolean          | `false`                                                    | Show secret names in system prompt                                               |
+| `cron`             | map              | `{}`                                                       | Named cron jobs (see [Cron Jobs](#cron-jobs))                                    |
+| `reports_to`       | string           | _(none — reports to user)_                                 | Name of manager agent (see [Hierarchy](#hierarchy))                              |
+| `permissions`      | map              | `{}`                                                       | Agent permissions (see [Permissions](#permissions), [Tool Policy](#tool-policy)) |
+| `prompt_mode`      | string           | `"full"`                                                   | `full` (all blocks) or `minimal` (base + identity + custom only)                 |
+| `on_demand_skills` | boolean          | `true`                                                     | Advertise skill summaries; load full content on demand via `read_skill`          |
+| `heartbeat`        | map              | _(none)_                                                   | Proactive heartbeat config (see [Heartbeat](#heartbeat))                         |
 
 **Task tools** (`task_create`, `task_update`, `task_list`, `task_get`, `task_delete`) are available to all in-process agents by default. Restrict access via `permissions.tools.deny`. See [Task Management](#task-management).
 
@@ -489,7 +546,7 @@ Agents can run proactively on schedules via per-agent cron jobs. The host-side `
 # In office.yaml under the agents section:
 agents:
   standup-bot:
-    model: anthropic:claude-sonnet-4-20250514
+    model: anthropic:claude-sonnet-4-5
     cron:
       daily-standup:
         schedule: "0 9 * * 1-5" # 5-field only (min hour dom month dow)
@@ -832,7 +889,7 @@ Host Process                        Docker Container (per agent)
 pnpm dev start --office acme --sandbox docker
 
 # API command strings (UI has equivalent controls):
-hire designer --model anthropic:claude-sonnet-4-20250514 --desc "Frontend designer"
+hire designer --model anthropic:claude-sonnet-4-5 --desc "Frontend designer"
 # → [agent:designer] Started in sandbox (http://localhost:13100)
 
 hire reviewer --model openai:gpt-4.1 --desc "Code reviewer"
@@ -952,7 +1009,7 @@ The table below lists all available operations and their descriptions:
 
 ```
 hire <name>
-  --model <provider:id>     Model (default: anthropic:claude-sonnet-4-20250514)
+  --model <provider:id>     Model (default: office default_model, else anthropic:claude-sonnet-4-5)
   --priority <0-4>          0=IDLE, 1=LOW, 2=NORMAL, 3=HIGH, 4=CRITICAL
   --thinking <level>        off, minimal, low, medium, high, xhigh
   --cwd <path>              Custom workspace dir
@@ -1268,7 +1325,7 @@ agent calls authenticated_fetch:
    ```yaml
    agents:
      my-agent:
-       model: anthropic:claude-sonnet-4-20250514
+       model: anthropic:claude-sonnet-4-5
        secrets:
          GITHUB_TOKEN: ${MY_GH_TOKEN}
          SLACK_TOKEN: ${MY_SLACK_TOKEN}
@@ -1903,9 +1960,9 @@ The frontend lives in `ui/` (Vite + React 19 + Mantine 7 + React Router v7). Dur
 Three agents collaborate on a landing page, all running in-process:
 
 ```
-hire designer --model openai:gpt-5.2-codex --desc "Frontend designer — builds HTML/CSS"
-hire copywriter --model openai:gpt-5.2-codex --desc "Copywriter — writes marketing copy"
-hire reviewer --model openai:gpt-5.2-codex --desc "Code reviewer — reviews quality"
+hire designer --model openai:gpt-5.3-codex --desc "Frontend designer — builds HTML/CSS"
+hire copywriter --model openai:gpt-5.3-codex --desc "Copywriter — writes marketing copy"
+hire reviewer --model openai:gpt-5.3-codex --desc "Code reviewer — reviews quality"
 ```
 
 What happens:
@@ -1928,10 +1985,10 @@ pnpm dev start --office my-team --sandbox docker
 ```
 
 ```
-hire backend --model anthropic:claude-sonnet-4-20250514 --desc "Backend developer — writes Node.js APIs"
+hire backend --model anthropic:claude-sonnet-4-5 --desc "Backend developer — writes Node.js APIs"
 # → Container started with --cap-drop=ALL, --user 1000:1000
 
-hire tester --model anthropic:claude-sonnet-4-20250514 --desc "QA engineer — writes and runs tests"
+hire tester --model anthropic:claude-sonnet-4-5 --desc "QA engineer — writes and runs tests"
 
 send backend "Build a REST API for a todo app with CRUD endpoints using Express"
 ```
@@ -1964,7 +2021,7 @@ export MY_GH_TOKEN="ghp_..."
 **Option A: Via Web UI/API**
 
 ```
-hire github-bot --model anthropic:claude-sonnet-4-20250514 \
+hire github-bot --model anthropic:claude-sonnet-4-5 \
     --desc "GitHub integration bot" \
     --secret-ref GITHUB_TOKEN=MY_GH_TOKEN
 
@@ -1980,7 +2037,7 @@ office:
 
 agents:
   github-bot:
-    model: anthropic:claude-sonnet-4-20250514
+    model: anthropic:claude-sonnet-4-5
     description: "GitHub integration bot"
     secrets:
       GITHUB_TOKEN: ${MY_GH_TOKEN}

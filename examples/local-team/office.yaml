@@ -1,0 +1,36 @@
+# Runs entirely on a local llama.cpp server — no API keys or cloud account.
+# Replace qwen3-coder-30b with the model id your server serves
+# (curl http://127.0.0.1:8080/v1/models).
+
+office:
+  name: Local Team
+  description: "A two-agent team running on a local model"
+  default_model: llamacpp:qwen3-coder-30b
+
+  # Optional: only needed if your server isn't at the default address.
+  # providers:
+  #   llamacpp:
+  #     base_url: http://127.0.0.1:8080
+  #     context_window: 32768 # match llama-server -c
+  #   gpu-box: # a vLLM server on another machine
+  #     type: vllm
+  #     base_url: http://gpu-box:8000
+
+agents:
+  coder:
+    priority: normal
+    thinking: "off"
+    description: "Developer — writes and debugs code"
+    reports_to: lead
+    prompt_inline: |
+      You are a developer. Write clean, tested code.
+
+  lead:
+    priority: high
+    thinking: "off"
+    description: "Team lead — plans work and reviews results"
+    prompt_inline: |
+      You are the team lead. Break work into tasks for the coder and review
+      what comes back.
+    # Use a vLLM server for just this agent:
+    # model: vllm:Qwen/Qwen3-32B

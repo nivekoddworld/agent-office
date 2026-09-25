@@ -30,7 +30,7 @@ import {
 } from "../../config/office-yaml.js";
 import { Priority } from "../../types.js";
 import { getEnvApiKey } from "@earendil-works/pi-ai/compat";
-import { getBuiltinModel as getModel } from "@earendil-works/pi-ai/providers/all";
+import { resolveModel, splitModelSpec } from "../../models/resolve-model.js";
 import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -347,17 +347,24 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             error: "model is required (provider:model-id)",
           });
         }
-        const parts = parsed.model.split(":");
-        if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        const parts = splitModelSpec(parsed.model);
+        if (!parts) {
           return json(res, 400, {
             error: 'Invalid model format — must be "provider:model-id"',
           });
         }
         const handle = workspace.getAgent(agentName);
         if (!handle) return json(res, 404, { error: "agent_not_found" });
+        let model;
         try {
-          const provider = parts[0]!;
-          const model = getModel(provider as any, parts[1] as any);
+          model = resolveModel(parsed.model, workspace.office.models);
+        } catch (err) {
+          return json(res, 400, {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        try {
+          const provider = parts[0];
           await setAgentModel(officeId, agentName, parsed.model);
           handle.updateModel(model);
 

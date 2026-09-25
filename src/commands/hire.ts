@@ -1,8 +1,11 @@
-import { getBuiltinModel as getModel } from "@earendil-works/pi-ai/providers/all";
 import type { Workspace } from "../workspace.js";
 import { Priority } from "../types.js";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { upsertAgentToOfficeYaml } from "../config/office-yaml.js";
+import {
+  effectiveDefaultModel,
+  resolveModel,
+} from "../models/resolve-model.js";
 
 export interface HireArgs {
   name: string;
@@ -23,9 +26,9 @@ export async function hireCommand(
   args: HireArgs,
 ): Promise<void> {
   const officeId = workspace.office?.id;
-  const modelSpec = args.model ?? "anthropic:claude-sonnet-4-20250514";
-  const [provider, modelId] = parseModel(modelSpec);
-  const model = getModel(provider as any, modelId as any);
+  const officeModels = workspace.office?.models;
+  const modelSpec = args.model ?? effectiveDefaultModel(officeModels);
+  const model = resolveModel(modelSpec, officeModels);
   const priority = parsePriority(args.priority ?? "2");
 
   const secrets: Record<string, string> = {};
@@ -74,16 +77,6 @@ export async function hireCommand(
       );
     }
   }
-}
-
-function parseModel(spec: string): [string, string] {
-  const parts = spec.split(":");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    throw new Error(
-      `Invalid model spec "${spec}" — expected "provider:model-id"`,
-    );
-  }
-  return [parts[0], parts[1]];
 }
 
 function parsePriority(val: string): Priority {

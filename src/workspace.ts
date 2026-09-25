@@ -23,6 +23,7 @@ import {
 } from "./sessions/session-writer.js";
 import { resolveEnvRefs } from "./config/env-substitution.js";
 import { resolveOAuthKeySync } from "./auth/oauth-resolver.js";
+import { resolveLocalApiKey } from "./models/resolve-model.js";
 import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
@@ -691,6 +692,9 @@ function resolveModelKey(config: AgentConfig, officeDir?: string): string {
   }
   // Explicit apiKey (legacy in-process path)
   if (config.apiKey) return config.apiKey;
+  // Local llama.cpp / vLLM server (placeholder when keyless)
+  const localKey = resolveLocalApiKey(config.model);
+  if (localKey) return localKey;
   // Auto-resolve from model provider
   const envVar = PROVIDER_ENV_KEYS[config.model.provider];
   const key = envVar ? process.env[envVar] : undefined;

@@ -53,8 +53,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
     {
       method: "GET",
       pattern: /^\/api\/models$/,
-      handler: (_req, res) => {
-        return json(res, 200, getModelsResponse());
+      handler: async (_req, res) => {
+        return json(res, 200, await getModelsResponse(workspace.office.models));
       },
     },
   ];

@@ -2,7 +2,7 @@
 
 Each folder contains an `office.yaml` and a README describing the setup. These are demonstration defaults illustrating available features, not required production defaults.
 
-> **Note:** Examples use `openai:gpt-5.2-codex` as the model. Model availability depends on your provider account — replace with your preferred `provider:model-id` if unavailable.
+> **Note:** Examples use `openai:gpt-5.3-codex` as the model. Model availability depends on your provider account — replace with your preferred `provider:model-id` if unavailable.
 
 ## [basic-team](basic-team/)
 
@@ -19,6 +19,15 @@ Demonstrates additional features:
 ```bash
 cp -r examples/basic-team/ ~/.agent-office/offices/basic-team/
 pnpm dev start --office basic-team --sandbox docker
+```
+
+## [local-team](local-team/)
+
+Two-agent team (lead + coder) running on a local llama.cpp server — no API keys. Shows `office.default_model` and the optional `office.providers` block, plus how to switch one agent to vLLM.
+
+```bash
+cp -r examples/local-team/ ~/.agent-office/offices/local-team/
+pnpm dev start --office local-team
 ```
 
 ## [openserv-team](openserv-team/)

@@ -5,6 +5,7 @@ import { getBootstrapState, getAgentDetail } from "../routes.js";
 import { hireCommand, type HireArgs } from "../../commands/hire.js";
 import { fireCommand } from "../../commands/fire.js";
 import { ensureProviderKeyInDotEnv } from "./agent-config.handler.js";
+import { effectiveDefaultModel } from "../../models/resolve-model.js";
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
   const { workspace, officeId, getPort, broadcast } = ctx;
@@ -107,7 +108,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           let warning: string | undefined;
           if (!parsed.api_key_ref) {
             const modelSpec =
-              parsed.model ?? "anthropic:claude-sonnet-4-20250514";
+              parsed.model ?? effectiveDefaultModel(workspace.office.models);
             const provider = modelSpec.split(":")[0];
             if (provider) {
               const missingVar = ensureProviderKeyInDotEnv(provider);

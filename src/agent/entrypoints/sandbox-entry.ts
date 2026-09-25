@@ -122,7 +122,10 @@ function parseModelSpec(spec: string) {
   return getModel(spec.slice(0, idx) as any, spec.slice(idx + 1) as any);
 }
 
-const model = parseModelSpec(MODEL_NAME);
+// Local llama.cpp / vLLM models arrive as a full definition (see handle-init).
+const model = process.env["MODEL_JSON"]
+  ? (JSON.parse(process.env["MODEL_JSON"]) as ReturnType<typeof parseModelSpec>)
+  : parseModelSpec(MODEL_NAME);
 
 // --- Agent setup ---
 

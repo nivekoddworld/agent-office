@@ -6,7 +6,7 @@ office:
 
 agents:
   scout:
-    model: openai:gpt-5.2-codex
+    model: openai:gpt-5.3-codex
     priority: normal
     thinking: low
     description: "Idea scout — monitors the Ideaboard for new opportunities"
@@ -31,7 +31,7 @@ agents:
             assignee: scout
 
   lead:
-    model: openai:gpt-5.2-codex
+    model: openai:gpt-5.3-codex
     priority: high
     thinking: medium
     description: "Team lead — coordinates the team and assigns work"
@@ -47,7 +47,7 @@ agents:
       the exact steps.
 
   agent-dev:
-    model: openai:gpt-5.2-codex
+    model: openai:gpt-5.3-codex
     priority: normal
     thinking: medium
     description: "Agent developer — builds and deploys OpenServ agents"
@@ -63,7 +63,7 @@ agents:
       the exact steps.
 
   launcher:
-    model: openai:gpt-5.2-codex
+    model: openai:gpt-5.3-codex
     priority: normal
     thinking: low
     description: "Token launcher — launches tokens via the OpenServ Launch API"

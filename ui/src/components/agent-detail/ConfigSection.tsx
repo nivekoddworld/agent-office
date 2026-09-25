@@ -35,15 +35,15 @@ const FALLBACK_MODELS: ComboboxItemGroup[] = [
   {
     group: "anthropic",
     items: [
-      { value: "anthropic:claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-      { value: "anthropic:claude-haiku-3-20240307", label: "Claude Haiku 3" },
+      { value: "anthropic:claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+      { value: "anthropic:claude-haiku-4-5", label: "Claude Haiku 4.5" },
     ],
   },
   {
     group: "openai",
     items: [
-      { value: "openai:gpt-4o", label: "GPT-4o" },
-      { value: "openai:gpt-4o-mini", label: "GPT-4o Mini" },
+      { value: "openai:gpt-5.4", label: "GPT-5.4" },
+      { value: "openai:gpt-5.4-mini", label: "GPT-5.4 Mini" },
     ],
   },
 ];

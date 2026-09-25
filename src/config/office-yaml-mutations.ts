@@ -74,7 +74,12 @@ export async function upsertAgentToOfficeYaml(
 
     const raw = readFileSync(path, "utf-8");
     const doc = parseDocument(raw);
-    const clean = buildYamlEntry(entry, rawSecrets);
+    const defaultModel = doc.getIn(["office", "default_model"]);
+    const clean = buildYamlEntry(
+      entry,
+      rawSecrets,
+      typeof defaultModel === "string" ? defaultModel : undefined,
+    );
 
     const existing = doc.getIn(["agents", name]);
     if (existing && typeof existing === "object") {

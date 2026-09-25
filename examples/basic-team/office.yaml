@@ -1,6 +1,6 @@
 # Requires GitHub CLI (gh) installed for OAuth login.
 # Model availability depends on your provider account.
-# Replace github-copilot:gpt-5.1-codex with your preferred provider:model-id if unavailable.
+# Replace github-copilot:gpt-5.3-codex with your preferred provider:model-id if unavailable.
 
 office:
   name: Basic Team
@@ -17,7 +17,7 @@ office:
 
 agents:
   coder:
-    model: github-copilot:gpt-5.1-codex
+    model: github-copilot:gpt-5.3-codex
     auth: "oauth:github-copilot"
     priority: normal
     thinking: low
@@ -43,7 +43,7 @@ agents:
       ```
 
   reviewer:
-    model: github-copilot:gpt-5.1-codex
+    model: github-copilot:gpt-5.3-codex
     auth: "oauth:github-copilot"
     priority: high
     thinking: medium
@@ -72,7 +72,7 @@ agents:
       Always include the task ID when messaging coder: "Changes needed for [T-xxx]: ..."
 
   pm:
-    model: github-copilot:gpt-5.1-codex
+    model: github-copilot:gpt-5.3-codex
     auth: "oauth:github-copilot"
     priority: high
     thinking: medium
