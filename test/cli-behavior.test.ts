@@ -48,8 +48,8 @@ vi.mock("../src/constants.js", async () => {
   };
 });
 
-vi.mock("@mariozechner/pi-ai", () => ({
-  getModel: vi.fn(() => ({
+vi.mock("@earendil-works/pi-ai/providers/all", () => ({
+  getBuiltinModel: vi.fn(() => ({
     provider: "anthropic",
     id: "test-model",
     name: "test-model",

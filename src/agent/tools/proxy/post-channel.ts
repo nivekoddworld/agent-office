@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { POST_CHANNEL } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createPostChannelProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createPostChannelProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof POST_CHANNEL.parameters> {
   return {
     ...POST_CHANNEL,
     execute: async (

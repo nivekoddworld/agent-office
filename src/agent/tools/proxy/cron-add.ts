@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { CRON_ADD } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createCronAddProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createCronAddProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof CRON_ADD.parameters> {
   return {
     ...CRON_ADD,
     execute: async (_id, params) => {

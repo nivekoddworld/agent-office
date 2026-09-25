@@ -52,8 +52,6 @@ const OAUTH_PROVIDER_MAP: Record<string, string> = {
   anthropic: "anthropic",
   openai: "openai-codex",
   "github-copilot": "github-copilot",
-  "google-gemini-cli": "google-gemini-cli",
-  "google-antigravity": "google-antigravity",
 };
 
 interface OAuthProviderStatus {

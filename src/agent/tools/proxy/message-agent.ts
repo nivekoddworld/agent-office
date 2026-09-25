@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { MESSAGE_AGENT } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -8,7 +8,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createMessageAgentProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createMessageAgentProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof MESSAGE_AGENT.parameters> {
   return {
     ...MESSAGE_AGENT,
     execute: async (_id, params: { to: string; message: string }) => {

@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import type { Model } from "@mariozechner/pi-ai";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Model } from "@earendil-works/pi-ai";
 
 export interface ContextPrunerConfig {
   /** Fraction of contextWindow to reserve as safety margin (default: 0.10) */
@@ -159,7 +159,11 @@ export function createContextPruner(
       keepFromIndex = groups.length - 1;
     }
 
-    const kept = groups.slice(keepFromIndex).flat();
+    // System messages carry the prompt and tool declarations (already counted
+    // in the budget via systemPromptChars), so never prune them.
+    const kept = groups
+      .filter((g, i) => i >= keepFromIndex || (g[0] as any).role === "system")
+      .flat();
     const prunedCount = messages.length - kept.length;
 
     if (prunedCount > 0) {

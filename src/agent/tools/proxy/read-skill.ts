@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { READ_SKILL } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createReadSkillProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createReadSkillProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof READ_SKILL.parameters> {
   return {
     ...READ_SKILL,
     execute: async (_id, params: { name: string }) => {

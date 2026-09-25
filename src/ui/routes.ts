@@ -19,7 +19,10 @@ import { loadOfficeYaml } from "../config/office-yaml.js";
 import { COMMAND_MANIFEST } from "./manifest.js";
 import { readUsageRecords, summarizeUsage } from "../metrics/usage-tracker.js";
 import { officeDir } from "../constants.js";
-import { getProviders, getModels } from "@mariozechner/pi-ai";
+import {
+  getBuiltinProviders as getProviders,
+  getBuiltinModels as getModels,
+} from "@earendil-works/pi-ai/providers/all";
 
 // --- Scoped logger ---
 

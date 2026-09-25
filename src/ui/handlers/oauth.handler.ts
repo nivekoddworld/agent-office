@@ -9,8 +9,6 @@ const ALL_PROVIDERS = [
   { id: "anthropic", name: "Anthropic" },
   { id: "openai-codex", name: "OpenAI" },
   { id: "github-copilot", name: "GitHub Copilot" },
-  { id: "google-gemini-cli", name: "Google Gemini CLI" },
-  { id: "google-antigravity", name: "Antigravity" },
 ];
 
 export function register(ctx: HandlerContext): RouteDefinition[] {

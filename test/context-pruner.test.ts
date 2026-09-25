@@ -4,7 +4,7 @@ import {
   groupMessages,
   createContextPruner,
 } from "../src/agent/context-pruner.js";
-import type { AgentMessage } from "@mariozechner/pi-agent-core";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
 
 // -- helpers --
 
@@ -176,6 +176,24 @@ describe("createContextPruner", () => {
     const result = await pruner(msgs);
     expect(result.length).toBeLessThan(msgs.length);
     // The most recent message should be kept
+    expect(result[result.length - 1]).toBe(msgs[msgs.length - 1]);
+  });
+
+  it("never prunes system messages (prompt + tool declarations)", async () => {
+    const model = fakeModel(500, 100);
+    const pruner = createContextPruner(model, 100);
+
+    const system = { role: "system", content: "You are an agent." } as any;
+    const msgs = [
+      system,
+      userMsg("A".repeat(2000)),
+      userMsg("B".repeat(2000)),
+      userMsg("recent short"),
+    ];
+
+    const result = await pruner(msgs);
+    expect(result.length).toBeLessThan(msgs.length);
+    expect(result[0]).toBe(system);
     expect(result[result.length - 1]).toBe(msgs[msgs.length - 1]);
   });
 

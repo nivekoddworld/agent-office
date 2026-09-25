@@ -131,7 +131,7 @@ export class DockerProvider implements SandboxProvider {
     id: string,
     promptId: string,
     text: string,
-    images?: import("@mariozechner/pi-ai").ImageContent[],
+    images?: import("@earendil-works/pi-ai").ImageContent[],
   ): Promise<void> {
     await this.sandboxFetch(id, "/prompt", {
       promptId,

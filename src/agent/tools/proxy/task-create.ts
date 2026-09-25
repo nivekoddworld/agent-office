@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { TASK_CREATE } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createTaskCreateProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createTaskCreateProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof TASK_CREATE.parameters> {
   return {
     ...TASK_CREATE,
     execute: async (_id, params) => {

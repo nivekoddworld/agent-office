@@ -1,4 +1,4 @@
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 /** Shared tool metadata — single source of truth for name/label/description/parameters. */
 

@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { SKILL_CREATE } from "./contracts.js";
 import { skillCreateImpl, type SkillToolDeps } from "./skill-impl.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createSkillCreateTool(deps: SkillToolDeps): AgentTool<any> {
+export function createSkillCreateTool(
+  deps: SkillToolDeps,
+): AgentTool<typeof SKILL_CREATE.parameters> {
   return {
     ...SKILL_CREATE,
     execute: async (_id, params) => textResult(skillCreateImpl(deps, params)),

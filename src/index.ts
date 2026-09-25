@@ -102,7 +102,7 @@ const oauthCmd = program
 oauthCmd
   .command("login <provider>")
   .description(
-    "Login with OAuth provider (anthropic, openai-codex, github-copilot, google-gemini-cli, google-antigravity)",
+    "Login with OAuth provider (anthropic, openai-codex, github-copilot)",
   )
   .requiredOption("--office <id>", "Office to store credentials for")
   .action(async (provider: string, opts: { office: string }) => {

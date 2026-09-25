@@ -1,11 +1,11 @@
-import { Agent, type AgentTool } from "@mariozechner/pi-agent-core";
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import {
   createCodingTools,
   loadSkills,
   formatSkillsForPrompt,
-} from "@mariozechner/pi-coding-agent";
-import { streamSimple } from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-coding-agent";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
 import { writeEffectivePrompt } from "./prompts/effective-prompt.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentConfig, AgentInfo, ChannelConfig } from "../types.js";
@@ -90,6 +90,7 @@ export async function initSandboxAgent(
     cwd: ctx.cwd,
     agentDir: ctx.agentDir,
     skillPaths,
+    includeDefaults: true,
   });
 
   let sandboxSkillsPrompt: string | undefined;
@@ -208,6 +209,7 @@ export async function initInProcessAgent(
     cwd: ctx.cwd,
     agentDir: ctx.agentDir,
     skillPaths,
+    includeDefaults: true,
   });
   if (skills.length > 0)
     console.log(
@@ -296,9 +298,11 @@ export async function initInProcessAgent(
           cwd: ctx.cwd,
           agentDir: ctx.agentDir,
           skillPaths,
+          includeDefaults: true,
         });
         const skillsMap = new Map<string, string>();
-        for (const s of latestSkills) skillsMap.set(s.name, s.source);
+        for (const s of latestSkills)
+          skillsMap.set(s.name, s.sourceInfo.source);
         return skillsMap;
       }),
     );

@@ -29,7 +29,8 @@ import {
   loadOfficeYaml,
 } from "../../config/office-yaml.js";
 import { Priority } from "../../types.js";
-import { getModel, getEnvApiKey } from "@mariozechner/pi-ai";
+import { getEnvApiKey } from "@earendil-works/pi-ai/compat";
+import { getBuiltinModel as getModel } from "@earendil-works/pi-ai/providers/all";
 import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -365,8 +366,6 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
             "anthropic",
             "openai",
             "github-copilot",
-            "google-gemini-cli",
-            "google-antigravity",
           ]);
           if (!OAUTH_PROVIDERS.has(provider) && handle.config.auth) {
             await clearAgentAuth(officeId, agentName);

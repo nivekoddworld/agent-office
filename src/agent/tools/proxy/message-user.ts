@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { MESSAGE_USER } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createMessageUserProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createMessageUserProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof MESSAGE_USER.parameters> {
   return {
     ...MESSAGE_USER,
     execute: async (_id, params: { message: string }) => {

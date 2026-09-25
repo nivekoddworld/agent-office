@@ -17,14 +17,14 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 // Mock pi-coding-agent to control skill loading
-vi.mock("@mariozechner/pi-coding-agent", () => ({
+vi.mock("@earendil-works/pi-coding-agent", () => ({
   createCodingTools: () => [],
   loadSkills: vi.fn(() => ({ skills: [], diagnostics: [] })),
   formatSkillsForPrompt: vi.fn(() => ""),
 }));
 
 // Mock pi-ai
-vi.mock("@mariozechner/pi-ai", () => ({
+vi.mock("@earendil-works/pi-ai/compat", () => ({
   streamSimple: vi.fn(),
 }));
 
@@ -36,26 +36,91 @@ vi.mock("../src/agent/prompt.js", () => ({
 
 // Mock tools
 vi.mock("../src/agent/tools/index.js", () => ({
-  createMessageAgentTool: () => ({ name: "message_agent", execute: vi.fn() }),
-  createListAgentsTool: () => ({ name: "list_agents", execute: vi.fn() }),
-  createReadAgentFileTool: () => ({
-    name: "read_agent_file",
+  createMessageAgentTool: () => ({
+    name: "message_agent",
+    parameters: {},
     execute: vi.fn(),
   }),
-  createCronAddTool: () => ({ name: "cron_add", execute: vi.fn() }),
-  createCronRemoveTool: () => ({ name: "cron_remove", execute: vi.fn() }),
-  createCronListTool: () => ({ name: "cron_list", execute: vi.fn() }),
-  createSkillSearchTool: () => ({ name: "skill_search", execute: vi.fn() }),
-  createSkillInstallTool: () => ({ name: "skill_install", execute: vi.fn() }),
-  createSkillRemoveTool: () => ({ name: "skill_remove", execute: vi.fn() }),
-  createSkillCreateTool: () => ({ name: "skill_create", execute: vi.fn() }),
-  createTaskCreateTool: () => ({ name: "task_create", execute: vi.fn() }),
-  createTaskUpdateTool: () => ({ name: "task_update", execute: vi.fn() }),
-  createTaskListTool: () => ({ name: "task_list", execute: vi.fn() }),
-  createTaskGetTool: () => ({ name: "task_get", execute: vi.fn() }),
-  createTaskDeleteTool: () => ({ name: "task_delete", execute: vi.fn() }),
-  createMessageUserTool: () => ({ name: "message_user", execute: vi.fn() }),
-  createPostChannelTool: () => ({ name: "post_channel", execute: vi.fn() }),
+  createListAgentsTool: () => ({
+    name: "list_agents",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createReadAgentFileTool: () => ({
+    name: "read_agent_file",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createCronAddTool: () => ({
+    name: "cron_add",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createCronRemoveTool: () => ({
+    name: "cron_remove",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createCronListTool: () => ({
+    name: "cron_list",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createSkillSearchTool: () => ({
+    name: "skill_search",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createSkillInstallTool: () => ({
+    name: "skill_install",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createSkillRemoveTool: () => ({
+    name: "skill_remove",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createSkillCreateTool: () => ({
+    name: "skill_create",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createTaskCreateTool: () => ({
+    name: "task_create",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createTaskUpdateTool: () => ({
+    name: "task_update",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createTaskListTool: () => ({
+    name: "task_list",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createTaskGetTool: () => ({
+    name: "task_get",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createTaskDeleteTool: () => ({
+    name: "task_delete",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createMessageUserTool: () => ({
+    name: "message_user",
+    parameters: {},
+    execute: vi.fn(),
+  }),
+  createPostChannelTool: () => ({
+    name: "post_channel",
+    parameters: {},
+    execute: vi.fn(),
+  }),
 }));
 
 function makeBus(): MessageBus {
@@ -196,11 +261,14 @@ describe("AgentHandle sandbox skills", () => {
   });
 
   it("registers sandbox read_skill resolver and includes custom skillDirs", async () => {
-    const { loadSkills } = await import("@mariozechner/pi-coding-agent");
+    const { loadSkills } = await import("@earendil-works/pi-coding-agent");
     (loadSkills as any).mockReturnValue({
       skills: [
-        { name: "base-skill", source: "Base skill content" },
-        { name: "custom-skill", source: "Custom dir skill content" },
+        { name: "base-skill", sourceInfo: { source: "Base skill content" } },
+        {
+          name: "custom-skill",
+          sourceInfo: { source: "Custom dir skill content" },
+        },
       ],
       diagnostics: [],
     });
@@ -237,11 +305,12 @@ describe("AgentHandle sandbox skills", () => {
         join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills"),
         "/tmp/custom-skills",
       ],
+      includeDefaults: true,
     });
   });
 
   it("does not pass skillsPaths for in-process agents", async () => {
-    const { loadSkills } = await import("@mariozechner/pi-coding-agent");
+    const { loadSkills } = await import("@earendil-works/pi-coding-agent");
     (loadSkills as any).mockReturnValue({ skills: [], diagnostics: [] });
 
     const config = makeConfig();
@@ -261,6 +330,7 @@ describe("AgentHandle sandbox skills", () => {
       cwd: expect.stringContaining("workspace"),
       agentDir: expect.stringContaining("test-agent"),
       skillPaths: [join(AGENT_OFFICE_DIR, "agents", "test-agent", "skills")],
+      includeDefaults: true,
     });
   });
 });

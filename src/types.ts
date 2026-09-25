@@ -1,5 +1,5 @@
-import type { AgentTool, ThinkingLevel } from "@mariozechner/pi-agent-core";
-import type { Model } from "@mariozechner/pi-ai";
+import type { AgentTool, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Model } from "@earendil-works/pi-ai";
 import type { SandboxMode } from "./sandbox/types.js";
 
 // --- Priority ---

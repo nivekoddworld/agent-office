@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { READ_SKILL } from "./contracts.js";
 
 const textResult = (text: string) => ({
@@ -15,7 +15,7 @@ function resolveSkillsMap(source: SkillsSource): Map<string, string> {
 /** Create a read_skill tool backed by a skills map or map loader. */
 export function createReadSkillTool(
   skillsSource: SkillsSource,
-): AgentTool<any> {
+): AgentTool<typeof READ_SKILL.parameters> {
   return {
     ...READ_SKILL,
     execute: async (_id, params: { name: string }) => {

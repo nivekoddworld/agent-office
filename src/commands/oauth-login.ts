@@ -1,11 +1,60 @@
 import { createInterface } from "node:readline";
-import { getOAuthProvider } from "@mariozechner/pi-ai";
+import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
+import { getOAuthProvider } from "../auth/oauth-resolver.js";
 import {
   saveCredentials,
   credentialsPath,
   loadCredentials,
 } from "../auth/oauth-store.js";
 import { unlinkSync } from "node:fs";
+
+function ask(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise<string>((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+async function promptUser(prompt: AuthPrompt): Promise<string> {
+  if (prompt.type === "select") {
+    console.log(prompt.message);
+    prompt.options.forEach((o, i) =>
+      console.log(
+        `  ${i + 1}. ${o.label}${o.description ? ` — ${o.description}` : ""}`,
+      ),
+    );
+    const answer = await ask("Choose a number: ");
+    const option = prompt.options[Number(answer) - 1];
+    if (!option) throw new Error(`Invalid selection "${answer}"`);
+    return option.id;
+  }
+  return ask(
+    prompt.message +
+      (prompt.placeholder ? ` (${prompt.placeholder})` : "") +
+      ": ",
+  );
+}
+
+function notifyUser(event: AuthEvent): void {
+  switch (event.type) {
+    case "auth_url":
+      console.log(`[oauth] Open this URL to authenticate:\n  ${event.url}`);
+      if (event.instructions) console.log(`\n${event.instructions}`);
+      break;
+    case "device_code":
+      console.log(
+        `[oauth] Open ${event.verificationUri} and enter code: ${event.userCode}`,
+      );
+      break;
+    case "info":
+    case "progress":
+      console.log(`[oauth] ${event.message}`);
+      break;
+  }
+}
 
 /**
  * Run interactive OAuth login for a provider.
@@ -18,35 +67,16 @@ export async function oauthLogin(
   const provider = getOAuthProvider(providerId);
   if (!provider) {
     throw new Error(
-      `Unknown OAuth provider "${providerId}". Available: anthropic, openai-codex, github-copilot, google-gemini-cli, google-antigravity`,
+      `Unknown OAuth provider "${providerId}". Available: ${ALL_PROVIDERS.map((p) => p.id).join(", ")}`,
     );
   }
 
   console.log(`[oauth] Logging in to ${provider.name}...`);
 
   const creds = await provider.login({
-    onAuth: (info) => {
-      console.log(`[oauth] Open this URL to authenticate:\n  ${info.url}`);
-      if (info.instructions) console.log(`\n${info.instructions}`);
-    },
-    onPrompt: async (prompt) => {
-      const rl = createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-      return new Promise<string>((resolve) => {
-        rl.question(
-          prompt.message +
-            (prompt.placeholder ? ` (${prompt.placeholder})` : "") +
-            ": ",
-          (answer) => {
-            rl.close();
-            resolve(answer || (prompt.allowEmpty ? "" : answer));
-          },
-        );
-      });
-    },
-    onProgress: (msg) => console.log(`[oauth] ${msg}`),
+    signal: new AbortController().signal,
+    prompt: promptUser,
+    notify: notifyUser,
   });
 
   saveCredentials(officeDir, providerId, creds);
@@ -57,8 +87,6 @@ const ALL_PROVIDERS = [
   { id: "anthropic", name: "Anthropic" },
   { id: "openai-codex", name: "OpenAI" },
   { id: "github-copilot", name: "GitHub Copilot" },
-  { id: "google-gemini-cli", name: "Google Gemini CLI" },
-  { id: "google-antigravity", name: "Antigravity" },
 ];
 
 /**

@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { READ_AGENT_FILE } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createReadAgentFileProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createReadAgentFileProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof READ_AGENT_FILE.parameters> {
   return {
     ...READ_AGENT_FILE,
     execute: async (_id, params: { agent: string; path: string }) => {

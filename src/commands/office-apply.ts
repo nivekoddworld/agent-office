@@ -1,5 +1,5 @@
-import { getModel } from "@mariozechner/pi-ai";
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import { getBuiltinModel as getModel } from "@earendil-works/pi-ai/providers/all";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { existsSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";

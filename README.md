@@ -197,13 +197,11 @@ As an alternative to API keys in `.env`, agents can authenticate with model prov
 
 ### Supported Providers
 
-| Provider ID          | Name              | Flow Type       | Requires           |
-| -------------------- | ----------------- | --------------- | ------------------ |
-| `anthropic`          | Anthropic         | Code paste      | Anthropic CLI      |
-| `openai-codex`       | OpenAI            | Callback server | OpenAI Codex CLI   |
-| `github-copilot`     | GitHub Copilot    | Code paste      | GitHub Copilot CLI |
-| `google-gemini-cli`  | Google Gemini CLI | Callback server | Gemini CLI         |
-| `google-antigravity` | Antigravity       | Callback server | Antigravity CLI    |
+| Provider ID      | Name           | Flow Type       | Requires           |
+| ---------------- | -------------- | --------------- | ------------------ |
+| `anthropic`      | Anthropic      | Code paste      | Anthropic CLI      |
+| `openai-codex`   | OpenAI         | Callback server | OpenAI Codex CLI   |
+| `github-copilot` | GitHub Copilot | Code paste      | GitHub Copilot CLI |
 
 **Code paste** providers open a browser URL and prompt you to paste back an auth code. **Callback server** providers start a local HTTP server and complete the flow automatically.
 
@@ -234,8 +232,6 @@ $ pnpm dev oauth list --office my-team
   ✓ anthropic              Anthropic
   ✗ openai-codex           OpenAI
   ✗ github-copilot         GitHub Copilot
-  ✗ google-gemini-cli      Google Gemini CLI
-  ✗ google-antigravity     Antigravity
 
   Login:   pnpm dev oauth login <provider> --office my-team
   Logout:  pnpm dev oauth logout <provider> --office my-team

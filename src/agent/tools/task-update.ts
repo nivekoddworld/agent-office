@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { TASK_UPDATE } from "./contracts.js";
 import type { TaskToolDeps } from "./task-impl.js";
 import { taskUpdateImpl } from "./task-impl.js";
@@ -8,7 +8,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createTaskUpdateTool(deps: TaskToolDeps): AgentTool<any> {
+export function createTaskUpdateTool(
+  deps: TaskToolDeps,
+): AgentTool<typeof TASK_UPDATE.parameters> {
   return {
     ...TASK_UPDATE,
     execute: async (_id, params) => textResult(taskUpdateImpl(deps, params)),

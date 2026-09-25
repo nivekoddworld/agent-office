@@ -5,12 +5,12 @@ import {
   type AgentEvent,
   type Agent,
   type ThinkingLevel,
-} from "@mariozechner/pi-agent-core";
-import type { Model } from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-agent-core";
+import type { Model } from "@earendil-works/pi-ai";
 import {
   loadSkills,
   formatSkillsForPrompt,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import type { MessageBus } from "../transport/message-bus.js";
 import {
   Priority,
@@ -203,7 +203,7 @@ export class AgentHandle {
   /** Live-update model without restarting the agent. */
   updateModel(model: Model<any>): void {
     (this.config as { model: Model<any> }).model = model;
-    this.agent?.setModel(model);
+    if (this.agent) this.agent.state.model = model;
   }
 
   /** Live-update description without restarting the agent. */
@@ -219,7 +219,7 @@ export class AgentHandle {
   /** Live-update thinking level without restarting the agent. */
   updateThinkingLevel(level: ThinkingLevel | undefined): void {
     (this.config as { thinkingLevel?: ThinkingLevel }).thinkingLevel = level;
-    this.agent?.setThinkingLevel(level ?? "low");
+    if (this.agent) this.agent.state.thinkingLevel = level ?? "low";
   }
 
   private get agentDir(): string {
@@ -255,9 +255,10 @@ export class AgentHandle {
       cwd: this.cwd,
       agentDir: this.agentDir,
       skillPaths: this.skillPaths,
+      includeDefaults: true,
     });
     const skillsMap = new Map<string, string>();
-    for (const skill of skills) skillsMap.set(skill.name, skill.source);
+    for (const skill of skills) skillsMap.set(skill.name, skill.sourceInfo.source);
     return skillsMap;
   }
 
@@ -325,7 +326,7 @@ export class AgentHandle {
 
   async prompt(
     text: string,
-    images?: import("@mariozechner/pi-ai").ImageContent[],
+    images?: import("@earendil-works/pi-ai").ImageContent[],
   ): Promise<void> {
     if (this.provider && this.sandboxInfo && this.hostApi) {
       const promptId = randomUUID();
@@ -406,6 +407,7 @@ export class AgentHandle {
       cwd: this.cwd,
       agentDir: this.agentDir,
       skillPaths: this.skillPaths,
+      includeDefaults: true,
     });
 
     let skillsPrompt: string | undefined;
@@ -448,7 +450,13 @@ export class AgentHandle {
   }
 
   clearConversation(): void {
-    this.agent?.replaceMessages([]);
+    // The system prompt and tool declarations live in the transcript as system
+    // messages, so keep those. reset() would also do this but throws mid-run.
+    if (this.agent) {
+      this.agent.state.messages = this.agent.state.messages.filter(
+        (m) => m.role === "system",
+      );
+    }
   }
 
   async destroy(): Promise<void> {

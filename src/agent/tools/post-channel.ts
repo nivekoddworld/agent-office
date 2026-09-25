@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { POST_CHANNEL } from "./contracts.js";
 import { postChannel } from "../../egress/egress-impl.js";
 import type { EgressContext, EgressDeps } from "../../egress/types.js";
@@ -16,7 +16,9 @@ export interface PostChannelDeps extends EgressDeps {
   getActiveHopCount: () => number;
 }
 
-export function createPostChannelTool(deps: PostChannelDeps): AgentTool<any> {
+export function createPostChannelTool(
+  deps: PostChannelDeps,
+): AgentTool<typeof POST_CHANNEL.parameters> {
   return {
     ...POST_CHANNEL,
     execute: async (

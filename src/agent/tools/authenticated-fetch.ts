@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { AUTHENTICATED_FETCH } from "./contracts.js";
 import {
   validateFetchParams,
@@ -16,7 +16,7 @@ const textResult = (text: string) => ({
 
 export function createAuthenticatedFetchTool(
   resolvedSecrets: Record<string, string>,
-): AgentTool<any> {
+): AgentTool<typeof AUTHENTICATED_FETCH.parameters> {
   return {
     ...AUTHENTICATED_FETCH,
     execute: async (_id, params: FetchParams) => {

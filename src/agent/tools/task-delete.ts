@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { TASK_DELETE } from "./contracts.js";
 import type { TaskToolDeps } from "./task-impl.js";
 import { taskDeleteImpl } from "./task-impl.js";
@@ -8,7 +8,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createTaskDeleteTool(deps: TaskToolDeps): AgentTool<any> {
+export function createTaskDeleteTool(
+  deps: TaskToolDeps,
+): AgentTool<typeof TASK_DELETE.parameters> {
   return {
     ...TASK_DELETE,
     execute: async (_id, params) => textResult(taskDeleteImpl(deps, params)),

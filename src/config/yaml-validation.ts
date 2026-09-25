@@ -1,4 +1,4 @@
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { isValidCron } from "../cron/cron-parser.js";
 import type { OfficeCronYamlEntry } from "../types.js";
 import type { AgentYamlEntry } from "./yaml-utils.js";

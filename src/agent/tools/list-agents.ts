@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { AgentInfo } from "../../types.js";
 import { LIST_AGENTS } from "./contracts.js";
 
@@ -12,7 +12,7 @@ export function createListAgentsTool(
   selfName: string,
   listFn: () => AgentInfo[],
   baseDir: string,
-): AgentTool<any> {
+): AgentTool<typeof LIST_AGENTS.parameters> {
   return {
     ...LIST_AGENTS,
     execute: async () => {

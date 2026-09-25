@@ -1,7 +1,7 @@
-import { getModel } from "@mariozechner/pi-ai";
+import { getBuiltinModel as getModel } from "@earendil-works/pi-ai/providers/all";
 import type { Workspace } from "../workspace.js";
 import { Priority } from "../types.js";
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { upsertAgentToOfficeYaml } from "../config/office-yaml.js";
 
 export interface HireArgs {

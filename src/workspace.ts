@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import { AgentHandle } from "./agent/handle.js";
 import { MessageBus } from "./transport/message-bus.js";
 import { Scheduler } from "./scheduler/scheduler.js";
