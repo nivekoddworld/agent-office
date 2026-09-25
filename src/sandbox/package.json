@@ -4,10 +4,10 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@mariozechner/pi-agent-core": "0.52.7",
-    "@mariozechner/pi-ai": "0.52.7",
-    "@mariozechner/pi-coding-agent": "0.52.7",
-    "@sinclair/typebox": "^0.34.0",
+    "@mariozechner/pi-agent-core": "0.73.1",
+    "@mariozechner/pi-ai": "0.73.1",
+    "@mariozechner/pi-coding-agent": "0.73.1",
+    "typebox": "^1.1.24",
     "tsx": "^4.19.3"
   }
 }
