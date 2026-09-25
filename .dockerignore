@@ -1,0 +1,14 @@
+.git
+.claude
+.env
+.env.*
+!.env.example
+node_modules
+ui/node_modules
+ui/dist
+dist
+*.tsbuildinfo
+.DS_Store
+Dockerfile
+docker-compose.yml
+.dockerignore

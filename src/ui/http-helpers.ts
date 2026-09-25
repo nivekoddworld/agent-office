@@ -1,6 +1,20 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-const HOST = "127.0.0.1";
+const DEFAULT_HOST = "127.0.0.1";
+
+/**
+ * Address to bind (UI_HOST, default loopback) and the host shown in the
+ * dashboard URL, which is also the only origin checkCsrf accepts. A wildcard
+ * bind (e.g. inside Docker, published on the host's loopback) shows 127.0.0.1.
+ */
+export function resolveUiHost(env: NodeJS.ProcessEnv = process.env): {
+  bindHost: string;
+  displayHost: string;
+} {
+  const bindHost = env["UI_HOST"]?.trim() || DEFAULT_HOST;
+  const wildcard = bindHost === "0.0.0.0" || bindHost === "::";
+  return { bindHost, displayHost: wildcard ? DEFAULT_HOST : bindHost };
+}
 
 export function json(res: ServerResponse, status: number, data: unknown): void {
   const body = JSON.stringify(data);
@@ -27,7 +41,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function checkCsrf(req: IncomingMessage, port: number): boolean {
   const origin = req.headers.origin;
   if (!origin) return false;
-  return origin === `http://${HOST}:${port}`;
+  return origin === `http://${resolveUiHost().displayHost}:${port}`;
 }
 
 /**

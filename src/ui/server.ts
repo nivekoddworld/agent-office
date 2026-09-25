@@ -7,7 +7,7 @@ import type { Workspace } from "../workspace.js";
 import { EventBuffer } from "./event-buffer.js";
 import { Router } from "./router.js";
 import type { HandlerContext } from "./handler-context.js";
-import { json } from "./http-helpers.js";
+import { json, resolveUiHost } from "./http-helpers.js";
 import { newBootstrapToken, isAuthenticated, clearAuthState } from "./auth.js";
 import { getBootstrapState } from "./routes.js";
 import { loadOfficeYaml, buildOfficeContext } from "../config/office-yaml.js";
@@ -30,7 +30,6 @@ import { register as registerAnalytics } from "./handlers/analytics.handler.js";
 import { register as registerOAuth } from "./handlers/oauth.handler.js";
 
 const DEFAULT_PORT = 3847;
-const HOST = "127.0.0.1";
 const HEARTBEAT_MS = 15_000;
 
 const MIME: Record<string, string> = {
@@ -69,7 +68,7 @@ export async function startUiServer(
       );
     }
     const token = newBootstrapToken();
-    const url = `http://${HOST}:${instance.port}/#token=${token}`;
+    const url = `http://${resolveUiHost().displayHost}:${instance.port}/#token=${token}`;
     return { port: instance.port, url };
   }
 
@@ -155,7 +154,7 @@ export async function startUiServer(
   router.register(registerAnalytics(ctx));
 
   const server = createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", `http://${HOST}:${boundPort}`);
+    const url = new URL(req.url ?? "/", `http://127.0.0.1:${boundPort}`);
     const path = url.pathname;
     const method = req.method ?? "GET";
 
@@ -226,10 +225,11 @@ export async function startUiServer(
       reject(err);
     });
 
-    server.listen(requestedPort, HOST, () => {
+    const { bindHost, displayHost } = resolveUiHost();
+    server.listen(requestedPort, bindHost, () => {
       boundPort = (server.address() as AddressInfo).port;
       instance = { port: boundPort, bootstrapToken: token, server, cleanup };
-      const serverUrl = `http://${HOST}:${boundPort}/#token=${token}`;
+      const serverUrl = `http://${displayHost}:${boundPort}/#token=${token}`;
       console.log(`[ui] Dashboard: ${serverUrl}`);
       resolve({ port: boundPort, url: serverUrl });
     });

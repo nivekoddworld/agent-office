@@ -228,6 +228,16 @@ program
       const office = buildOfficeContext(opts.office, yaml);
 
       const sandboxMode = opts.sandbox as "none" | "docker";
+      if (
+        sandboxMode === "docker" &&
+        process.env["AGENT_OFFICE_IN_CONTAINER"] === "1"
+      ) {
+        console.error(
+          "Error: --sandbox docker is not supported when agent-office itself runs in Docker. " +
+            "The container already isolates all agents from your machine — start without --sandbox.",
+        );
+        process.exit(1);
+      }
       const workspace = new Workspace({
         office,
         tickIntervalMs,
