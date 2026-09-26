@@ -1,5 +1,8 @@
-# agent-office orchestrator: scheduler + web UI + in-process agents.
-# Usage: docker compose up (see README "Running in Docker").
+# agent-office orchestrator: scheduler + web UI + agents (in-process, or one
+# sandbox container per agent with --sandbox docker). Usage: see README.md.
+
+# Docker CLI, used to start per-agent sandbox containers (--sandbox docker).
+FROM docker:29-cli AS dockercli
 
 FROM node:22-slim AS build
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
@@ -22,16 +25,20 @@ RUN apt-get update \
        git ripgrep fd-find curl ca-certificates tini \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=dockercli /usr/local/libexec/docker/cli-plugins/docker-buildx \
+     /usr/local/libexec/docker/cli-plugins/docker-buildx
+
 WORKDIR /app
 COPY --from=build /app/package.json /app/tsconfig.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/examples ./examples
 COPY --from=build /app/ui/dist ./ui/dist
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-# node:22-slim provides user "node" (uid 1000). Pre-create the data dir so a
-# named volume mounted there inherits node's ownership. /app stays writable
-# for the .env that the UI may append missing provider keys to.
+# node:22-slim provides user "node" (uid 1000), which agent-office runs as.
+# /app stays writable for the .env the UI may append missing provider keys to.
 RUN mkdir -p /home/node/.agent-office \
     && chown node:node /home/node/.agent-office /app
 
@@ -40,12 +47,12 @@ ENV AGENT_OFFICE_IN_CONTAINER=1 \
     UI_PORT=3847 \
     PI_OFFLINE=1
 
-USER node
+# Starts as root only to grant the Docker socket's group, then runs as node
+# (see docker-entrypoint.sh).
 EXPOSE 3847
-VOLUME ["/home/node/.agent-office"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS "http://127.0.0.1:${UI_PORT}/" > /dev/null || exit 1
 
-ENTRYPOINT ["tini", "--", "node_modules/.bin/tsx", "src/index.ts"]
+ENTRYPOINT ["tini", "--", "docker-entrypoint.sh"]
 CMD ["--help"]

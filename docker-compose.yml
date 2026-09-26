@@ -9,7 +9,8 @@ services:
   agent-office:
     build: .
     image: agent-office
-    command: ["start", "--office", "${OFFICE:-}"]
+    command:
+      ["start", "--office", "${OFFICE:-}", "--sandbox", "${SANDBOX:-none}"]
     ports:
       # Host and container port must match: the UI only accepts requests
       # from the origin it prints (http://127.0.0.1:<UI_PORT>).

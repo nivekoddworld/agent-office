@@ -14,8 +14,9 @@ COPY sandbox/package.json ./
 RUN npm install
 
 COPY agent/entrypoints/sandbox-entry.ts ./agent/entrypoints/
+COPY agent/context-pruner.ts ./agent/
 COPY agent/prompts/ ./agent/prompts/
-COPY agent/tools/contracts.ts ./agent/tools/
+COPY agent/tools/contracts.ts agent/tools/policy.ts ./agent/tools/
 COPY agent/tools/proxy/ ./agent/tools/proxy/
 COPY security/ ./security/
 
