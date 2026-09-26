@@ -97,12 +97,17 @@ export function resolveLocalProvider(
   const preset = LOCAL_PRESETS[type];
   // Preset env vars only apply to the provider named after the preset.
   const envBaseUrl = name === type ? env[preset.baseUrlEnv] : undefined;
+  const baseUrl = normalizeBaseUrl(
+    cfg?.base_url ?? envBaseUrl ?? preset.defaultBaseUrl,
+  );
   return {
     name,
     type,
-    baseUrl: normalizeBaseUrl(
-      cfg?.base_url ?? envBaseUrl ?? preset.defaultBaseUrl,
-    ),
+    // Inside the agent-office container, localhost is the container itself.
+    baseUrl:
+      env["AGENT_OFFICE_IN_CONTAINER"] === "1"
+        ? toDockerHostUrl(baseUrl)
+        : baseUrl,
     apiKeyEnv: cfg?.api_key_ref ?? preset.apiKeyEnv,
     apiKeyRequired: cfg?.api_key_ref !== undefined,
     contextWindow: cfg?.context_window ?? DEFAULT_CONTEXT_WINDOW,
@@ -190,15 +195,20 @@ export function resolveLocalApiKey(
   return LOCAL_API_KEY_PLACEHOLDER;
 }
 
+/** Rewrite a localhost URL to the Docker host, as seen from a container. */
+export function toDockerHostUrl(baseUrl: string): string {
+  const url = new URL(baseUrl);
+  if (!["localhost", "127.0.0.1", "[::1]", "0.0.0.0"].includes(url.hostname)) {
+    return baseUrl;
+  }
+  url.hostname = "host.docker.internal";
+  return url.toString().replace(/\/+$/, "");
+}
+
 /** Point localhost URLs at the Docker host so sandbox containers can reach them. */
 export function toSandboxModel<T extends Model<any>>(model: T): T {
   if (!isLocalModel(model)) return model;
-  const url = new URL(model.baseUrl);
-  if (!["localhost", "127.0.0.1", "[::1]", "0.0.0.0"].includes(url.hostname)) {
-    return model;
-  }
-  url.hostname = "host.docker.internal";
-  return { ...model, baseUrl: url.toString().replace(/\/+$/, "") };
+  return { ...model, baseUrl: toDockerHostUrl(model.baseUrl) };
 }
 
 /** All local providers: the built-in presets plus any from office.yaml. */
