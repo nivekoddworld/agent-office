@@ -6,3 +6,8 @@ dist/
 AGENTS.md
 CLAUDE.md
 .spec2commit/
+
+# Docker: your offices and personal compose overrides
+offices/*
+!offices/.gitkeep
+docker-compose.override.yml

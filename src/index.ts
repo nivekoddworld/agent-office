@@ -183,6 +183,15 @@ program
       sandbox: string;
       ui: boolean;
     }) => {
+      const inContainer = process.env["AGENT_OFFICE_IN_CONTAINER"] === "1";
+      const dockerHint =
+        "Set OFFICE=<name> in .env, where offices/<name>/office.yaml exists " +
+        "(e.g. cp -r examples/local-team offices/<name>), then run: docker compose up -d";
+      if (inContainer && !opts.office.trim()) {
+        console.error(`Error: no office selected. ${dockerHint}`);
+        process.exit(1);
+      }
+
       // Validate office id
       try {
         validateOfficeId(opts.office);
@@ -203,7 +212,9 @@ program
       // Check office exists
       if (!officeExists(opts.office)) {
         console.error(
-          `Office "${opts.office}" not found. Run: agent-office office create ${opts.office}`,
+          inContainer
+            ? `Office "${opts.office}" not found in ./offices. ${dockerHint}`
+            : `Office "${opts.office}" not found. Run: agent-office office create ${opts.office}`,
         );
         process.exit(1);
       }

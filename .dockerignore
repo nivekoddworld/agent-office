@@ -12,3 +12,5 @@ dist
 Dockerfile
 docker-compose.yml
 .dockerignore
+offices
+docker-compose.override*.yml

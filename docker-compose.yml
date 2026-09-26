@@ -1,14 +1,15 @@
-# Run agent-office in Docker. See README "Running in Docker".
+# Run agent-office in Docker. Setup: see README.md.
 #
-#   docker compose run --rm agent-office office create my-office
-#   OFFICE=my-office docker compose up -d
-#   docker compose logs agent-office   # dashboard URL with login token
+#   cp -r examples/local-team offices/my-office   # then edit its office.yaml
+#   echo "OFFICE=my-office" > .env
+#   docker compose up -d
+#   docker compose logs agent-office | grep Dashboard
 
 services:
   agent-office:
     build: .
     image: agent-office
-    command: ["start", "--office", "${OFFICE:-default}"]
+    command: ["start", "--office", "${OFFICE:-}"]
     ports:
       # Host and container port must match: the UI only accepts requests
       # from the origin it prints (http://127.0.0.1:<UI_PORT>).
@@ -19,12 +20,9 @@ services:
       - path: .env
         required: false
     volumes:
-      - agent-office-data:/home/node/.agent-office
+      # Your offices (config, agent workspaces, logs) live in ./offices.
+      - ./offices:/home/node/.agent-office/offices
     extra_hosts:
-      # Lets agents reach llama.cpp / vLLM running on this machine (Linux).
+      # Lets agents reach llama.cpp / vLLM running on this machine.
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
-
-volumes:
-  agent-office-data:
-    name: agent-office-data
