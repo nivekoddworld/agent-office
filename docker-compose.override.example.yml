@@ -1,5 +1,8 @@
-# Connect agent-office to a Docker network that already exists, e.g. the one
-# your llama.cpp / vLLM container runs on. To use it:
+# Personal additions to docker-compose.yml. Copy this file to
+# docker-compose.override.yml (git ignores it) and keep what you need.
+#
+# A) Connect to a Docker network that already exists, e.g. the one your
+#    llama.cpp / vLLM container runs on:
 #
 #   1. Find the network name:  docker network ls
 #   2. Copy this file:         cp docker-compose.override.example.yml docker-compose.override.yml
@@ -10,12 +13,19 @@
 #            llamacpp:
 #              base_url: http://llama:8080   # container name + port inside it
 #   5. docker compose up -d
+#
+# B) Run each agent in its own sandbox container: set SANDBOX=docker in .env
+#    and uncomment the volumes lines below. This gives agent-office control of
+#    Docker on your machine (the socket is effectively root access), which is
+#    what lets it start and stop the agent containers.
 
 services:
   agent-office:
     networks:
       - default
       - llm
+    # volumes:
+    #   - /var/run/docker.sock:/var/run/docker.sock
 
 networks:
   llm:

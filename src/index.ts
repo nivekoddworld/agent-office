@@ -241,11 +241,13 @@ program
       const sandboxMode = opts.sandbox as "none" | "docker";
       if (
         sandboxMode === "docker" &&
-        process.env["AGENT_OFFICE_IN_CONTAINER"] === "1"
+        inContainer &&
+        !existsSync("/var/run/docker.sock")
       ) {
         console.error(
-          "Error: --sandbox docker is not supported when agent-office itself runs in Docker. " +
-            "The container already isolates all agents from your machine — start without --sandbox.",
+          "Error: --sandbox docker needs access to Docker. Mount the Docker socket " +
+            "(uncomment /var/run/docker.sock in docker-compose.override.yml), " +
+            "or set SANDBOX=none in .env.",
         );
         process.exit(1);
       }

@@ -1,6 +1,26 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { DockerProvider } from "../src/sandbox/docker-provider.js";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  DockerProvider,
+  parseSelfContainer,
+  toHostPath,
+} from "../src/sandbox/docker-provider.js";
 import type { HostApi } from "../src/sandbox/host-api.js";
+
+// `docker inspect <hostname>` output for the agent-office container itself
+const SELF_INSPECT = JSON.stringify([
+  {
+    Name: "/agent-office-agent-office-1",
+    NetworkSettings: {
+      Networks: { "agent-office_default": {}, "llm-net": {} },
+    },
+    Mounts: [
+      {
+        Source: "/home/me/agent-office/offices",
+        Destination: "/tmp/ao-test/offices",
+      },
+    ],
+  },
+]);
 
 // Mock child_process.execFile
 let runCounter = 0;
@@ -17,7 +37,11 @@ vi.mock("node:child_process", () => ({
       if (subcmd === "run")
         return cb(null, `container-id-${++runCounter}\n`, "");
       if (subcmd === "rm") return cb(null, "", "");
-      if (subcmd === "inspect") return cb(null, "true\n", "");
+      if (subcmd === "inspect")
+        return args[1]!.startsWith("--format")
+          ? cb(null, "true\n", "")
+          : cb(null, SELF_INSPECT, "");
+      if (subcmd === "network") return cb(null, "", "");
       cb(new Error(`Unknown docker subcommand: ${subcmd}`), "", "");
     },
   ),
@@ -414,5 +438,103 @@ describe("DockerProvider", () => {
     });
 
     expect(info1.url).not.toBe(info2.url);
+  });
+});
+
+describe("DockerProvider inside the agent-office container", () => {
+  let hostApi: ReturnType<typeof makeHostApi>;
+  let provider: DockerProvider;
+  const workspacePath = "/tmp/ao-test/offices/o/agents/coder/workspace";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env["AGENT_OFFICE_IN_CONTAINER"] = "1";
+    hostApi = makeHostApi();
+    provider = new DockerProvider(hostApi, 13000);
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, turns: 0 }),
+    });
+  });
+
+  afterEach(() => {
+    delete process.env["AGENT_OFFICE_IN_CONTAINER"];
+  });
+
+  async function startCoder() {
+    const info = await provider.start("coder", {
+      token: "tok",
+      hostUrl: "",
+      systemPrompt: "p",
+      modelName: "llamacpp:m",
+      workspacePath,
+    });
+    const { execFile } = await import("node:child_process");
+    const calls = (execFile as any).mock.calls.map((c: any[]) => c[1]);
+    return { info, calls, run: calls.find((a: string[]) => a[0] === "run") };
+  }
+
+  it("joins our networks instead of publishing a port", async () => {
+    const { info, calls, run } = await startCoder();
+    expect(run).not.toContain("-p");
+    expect(run[run.indexOf("--network") + 1]).toBe("agent-office_default");
+    expect(calls).toContainEqual([
+      "network",
+      "connect",
+      "llm-net",
+      expect.stringMatching(/^container-id-/),
+    ]);
+    expect(info.url).toBe("http://pi-agent-coder:3100");
+  });
+
+  it("calls back to agent-office by container name", async () => {
+    const { run } = await startCoder();
+    expect(run).toContain("HOST_URL=http://agent-office-agent-office-1:13000");
+  });
+
+  it("mounts the workspace by its path on the Docker host", async () => {
+    const { run } = await startCoder();
+    expect(run).toContain(
+      "/home/me/agent-office/offices/o/agents/coder/workspace:/workspace",
+    );
+  });
+
+  it("talks to the sandbox by container name", async () => {
+    const { info } = await startCoder();
+    await provider.prompt(info.id, "p1", "hi");
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      "http://pi-agent-coder:3100/prompt",
+      expect.anything(),
+    );
+  });
+});
+
+describe("toHostPath / parseSelfContainer", () => {
+  const self = parseSelfContainer(SELF_INSPECT);
+
+  it("parses name, networks and mounts", () => {
+    expect(self.name).toBe("agent-office-agent-office-1");
+    expect(self.networks).toEqual(["agent-office_default", "llm-net"]);
+  });
+
+  it("maps paths under a mount, preferring the deepest mount", () => {
+    expect(toHostPath(self, "/tmp/ao-test/offices")).toBe(
+      "/home/me/agent-office/offices",
+    );
+    const nested = {
+      ...self,
+      mounts: [
+        ...self.mounts,
+        { source: "/data/ws", destination: "/tmp/ao-test/offices/o/ws" },
+      ],
+    };
+    expect(toHostPath(nested, "/tmp/ao-test/offices/o/ws/a")).toBe(
+      "/data/ws/a",
+    );
+  });
+
+  it("rejects paths outside any mount (including prefix look-alikes)", () => {
+    expect(() => toHostPath(self, "/app/src")).toThrow(/\.\/offices/);
+    expect(() => toHostPath(self, "/tmp/ao-test/offices2/x")).toThrow();
   });
 });
