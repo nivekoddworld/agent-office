@@ -171,6 +171,31 @@ describe("toSandboxModel", () => {
   });
 });
 
+describe("running inside the agent-office container", () => {
+  const IN_CONTAINER = { AGENT_OFFICE_IN_CONTAINER: "1" } as NodeJS.ProcessEnv;
+
+  it("points localhost servers at the Docker host", () => {
+    expect(resolveModel("llamacpp:m", undefined, IN_CONTAINER).baseUrl).toBe(
+      "http://host.docker.internal:8080/v1",
+    );
+    const office: OfficeModelSettings = {
+      providers: { vllm: { base_url: "http://127.0.0.1:9000" } },
+    };
+    expect(resolveModel("vllm:m", office, IN_CONTAINER).baseUrl).toBe(
+      "http://host.docker.internal:9000/v1",
+    );
+  });
+
+  it("leaves remote servers alone", () => {
+    const office: OfficeModelSettings = {
+      providers: { llamacpp: { base_url: "http://gpu-box:8080" } },
+    };
+    expect(resolveModel("llamacpp:m", office, IN_CONTAINER).baseUrl).toBe(
+      "http://gpu-box:8080/v1",
+    );
+  });
+});
+
 describe("defaults and provider listing", () => {
   it("uses office default_model, else the fallback", () => {
     expect(effectiveDefaultModel()).toBe(DEFAULT_MODEL_FALLBACK);

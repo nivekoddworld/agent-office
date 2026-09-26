@@ -70,6 +70,7 @@ See [`examples/`](examples/) for more details — each has a README describing t
 - [Sandbox Modes](#sandbox-modes)
   - [In-Process Mode](#in-process-mode-default)
   - [Docker Sandbox Mode](#docker-sandbox-mode)
+- [Running in Docker](#running-in-docker)
 - [Commands](#commands)
   - [Hire Options](#hire-options)
   - [CLI Flags](#cli-flags)
@@ -943,6 +944,46 @@ The Host API runs on port 13000 (configurable) and provides the bridge between s
 | `POST` | `/api/tool-count`                | Report agent tool count (auth required)                        |
 
 All endpoints require `Authorization: Bearer <token>` header. The token is generated per agent by the host and injected into the container as an environment variable. Model API keys are never passed as Docker env vars — they are fetched via `GET /api/secrets` at boot and stored in memory only.
+
+## Running in Docker
+
+You can run agent-office itself — scheduler, web UI and agents — in a container. The container is the isolation boundary: all agents run in-process inside it and can only see its filesystem, not your machine.
+
+```bash
+# 1. Build the image
+docker compose build
+
+# 2. Create an office (stored in the agent-office-data volume)
+docker compose run --rm agent-office office create my-office
+
+# 3. Start it
+OFFICE=my-office docker compose up -d
+
+# 4. Open the dashboard: the log line contains the login token
+docker compose logs agent-office | grep Dashboard
+```
+
+The dashboard is published on `http://127.0.0.1:3847` only (not your LAN). Set `UI_PORT` to use another port — host and container ports must stay equal, because the UI only accepts requests from the address it prints.
+
+**Configuration.** API keys go in `.env` next to `docker-compose.yml` (loaded if present). To edit an office's `office.yaml`, open a shell in the volume:
+
+```bash
+docker compose run --rm --entrypoint sh agent-office
+# then: vi ~/.agent-office/offices/my-office/office.yaml  (or cat > ... <<EOF)
+```
+
+or copy an example in (then start it with `OFFICE=local-team`):
+
+```bash
+docker compose run --rm -v "$PWD/examples:/ex:ro" --entrypoint sh agent-office \
+  -c 'mkdir -p ~/.agent-office/offices && cp -r /ex/local-team ~/.agent-office/offices/'
+```
+
+Any CLI command works the same way, e.g. `docker compose run --rm -it agent-office oauth login anthropic --office my-office`. Flows that open a local callback server (`openai-codex`) cannot complete inside the container — log in with a code-paste provider, or run the login on the host and copy `~/.agent-office/offices/<id>/oauth/` into the volume.
+
+**Local models.** `llamacpp:<id>` / `vllm:<id>` work unchanged: inside the container, `localhost` server addresses are rewritten to `host.docker.internal`, which the compose file maps to your machine. Start the server listening on an address containers can reach — e.g. `llama-server … --host 0.0.0.0` — and keep it behind a firewall or give it an `--api-key`.
+
+**Limitations.** `--sandbox docker` is not supported inside the container (the container already provides the isolation, and nesting would require mounting the Docker socket, which grants root on the host). Agents' files live in the `agent-office-data` volume; back it up with `docker run --rm -v agent-office-data:/d -v "$PWD:/b" alpine tar czf /b/agent-office-data.tgz -C /d .`.
 
 ## Commands
 
