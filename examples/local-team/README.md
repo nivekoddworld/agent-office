@@ -40,5 +40,5 @@ With `--sandbox docker`, agents reach your machine through
 `host.docker.internal`, so start the server with `--host 0.0.0.0` instead of
 the default `127.0.0.1`.
 
-See [Local Models](../../README.md#local-models-llamacpp--vllm) in the main
+See [Local Models](../../docs/REFERENCE.md#local-models-llamacpp--vllm) in the main
 README for every option.

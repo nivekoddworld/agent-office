@@ -1,0 +1,23 @@
+# Connect agent-office to a Docker network that already exists, e.g. the one
+# your llama.cpp / vLLM container runs on. To use it:
+#
+#   1. Find the network name:  docker network ls
+#   2. Copy this file:         cp docker-compose.override.example.yml docker-compose.override.yml
+#   3. Replace my-llm-network below with that name
+#   4. In offices/<name>/office.yaml, point at the container by name, e.g.
+#        office:
+#          providers:
+#            llamacpp:
+#              base_url: http://llama:8080   # container name + port inside it
+#   5. docker compose up -d
+
+services:
+  agent-office:
+    networks:
+      - default
+      - llm
+
+networks:
+  llm:
+    external: true
+    name: my-llm-network
