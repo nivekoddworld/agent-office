@@ -1,11 +1,11 @@
-import { Agent, type AgentTool } from "@mariozechner/pi-agent-core";
+import { Agent, type AgentTool } from "@earendil-works/pi-agent-core";
 import { join } from "node:path";
 import {
   createCodingTools,
   loadSkills,
   formatSkillsForPrompt,
-} from "@mariozechner/pi-coding-agent";
-import { streamSimple } from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-coding-agent";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
 import { writeEffectivePrompt } from "./prompts/effective-prompt.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { AgentConfig, AgentInfo, ChannelConfig } from "../types.js";
@@ -46,6 +46,12 @@ import type { TaskToolDeps } from "./tools/task-impl.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { createOAuthGetApiKey } from "../auth/oauth-resolver.js";
+import {
+  LOCAL_API_KEY_PLACEHOLDER,
+  isLocalModel,
+  resolveLocalApiKey,
+  toSandboxModel,
+} from "../models/resolve-model.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { applyToolPolicy } from "./tools/policy.js";
@@ -90,6 +96,7 @@ export async function initSandboxAgent(
     cwd: ctx.cwd,
     agentDir: ctx.agentDir,
     skillPaths,
+    includeDefaults: true,
   });
 
   let sandboxSkillsPrompt: string | undefined;
@@ -136,6 +143,10 @@ export async function initSandboxAgent(
         ? { PERMISSIONS: JSON.stringify(ctx.config.permissions) }
         : {}),
       ...(ctx.config.onDemandSkills !== false ? { ON_DEMAND_SKILLS: "1" } : {}),
+      // Local models aren't in Pi's catalog, so ship the full definition.
+      ...(isLocalModel(model)
+        ? { MODEL_JSON: JSON.stringify(toSandboxModel(model)) }
+        : {}),
     },
   });
 
@@ -192,6 +203,11 @@ export async function initInProcessAgent(
   } else if (ctx.config.apiKey) {
     resolvedApiKey = ctx.config.apiKey;
   }
+  // Local llama.cpp / vLLM key; throws now if a required api_key_ref is unset.
+  const localApiKey =
+    oauthGetApiKey || resolvedApiKey
+      ? undefined
+      : resolveLocalApiKey(ctx.config.model);
 
   const resolvedSecrets: Record<string, string> = {};
   if (ctx.config.secrets) {
@@ -208,6 +224,7 @@ export async function initInProcessAgent(
     cwd: ctx.cwd,
     agentDir: ctx.agentDir,
     skillPaths,
+    includeDefaults: true,
   });
   if (skills.length > 0)
     console.log(
@@ -296,9 +313,11 @@ export async function initInProcessAgent(
           cwd: ctx.cwd,
           agentDir: ctx.agentDir,
           skillPaths,
+          includeDefaults: true,
         });
         const skillsMap = new Map<string, string>();
-        for (const s of latestSkills) skillsMap.set(s.name, s.source);
+        for (const s of latestSkills)
+          skillsMap.set(s.name, s.sourceInfo.source);
         return skillsMap;
       }),
     );
@@ -340,7 +359,7 @@ export async function initInProcessAgent(
     `[agent:${ctx.name}] Prompt ${composed.version} (${composed.hash})`,
   );
 
-  const agent = new Agent({
+  const agent: Agent = new Agent({
     initialState: {
       systemPrompt: composed.text,
       model: ctx.config.model,
@@ -348,8 +367,10 @@ export async function initInProcessAgent(
       tools,
     },
     streamFn: streamSimple,
+    // Look up local keys per request so live model switches keep working.
     getApiKey:
-      oauthGetApiKey ?? (resolvedApiKey ? () => resolvedApiKey : undefined),
+      oauthGetApiKey ??
+      (() => resolvedApiKey ?? resolveLocalApiKey(agent.state.model)),
     transformContext: createContextPruner(
       ctx.config.model,
       composed.text.length,
@@ -358,6 +379,8 @@ export async function initInProcessAgent(
 
   const secretValues: Record<string, string> = {};
   if (resolvedApiKey) secretValues.MODEL_API_KEY = resolvedApiKey;
+  else if (localApiKey && localApiKey !== LOCAL_API_KEY_PLACEHOLDER)
+    secretValues.MODEL_API_KEY = localApiKey;
   Object.assign(secretValues, resolvedSecrets);
   const redact = createRedactor(secretValues);
 

@@ -27,7 +27,7 @@ export interface SandboxProvider {
     id: string,
     promptId: string,
     text: string,
-    images?: import("@mariozechner/pi-ai").ImageContent[],
+    images?: import("@earendil-works/pi-ai").ImageContent[],
   ): Promise<void>;
   steer(id: string, text: string): Promise<void>;
   abort(id: string): Promise<void>;

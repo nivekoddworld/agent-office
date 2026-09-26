@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { LIST_AGENTS } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -10,7 +10,7 @@ const textResult = (text: string) => ({
 export function createListAgentsProxy(
   selfName: string,
   hostFetch: HostFetch,
-): AgentTool<any> {
+): AgentTool<typeof LIST_AGENTS.parameters> {
   return {
     ...LIST_AGENTS,
     execute: async () => {

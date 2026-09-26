@@ -14,6 +14,7 @@ import { resolveEnvRefs } from "./env-substitution.js";
 import { withOfficeLock } from "./lock.js";
 import {
   validateAgentEntry,
+  validateOfficeModels,
   validateOfficeCronEntry,
   validateChannelEntry,
   atomicWriteYaml,
@@ -148,6 +149,8 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       channels: office.channels as
         | Record<string, { members: string[]; description?: string }>
         | undefined,
+      default_model: office.default_model as string | undefined,
+      providers: office.providers as OfficeYaml["office"]["providers"],
     },
     agents: result,
   };
@@ -158,6 +161,7 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
 export function validateOfficeConfig(config: OfficeYaml): string[] {
   const errors: string[] = [];
   if (!config.office.name?.trim()) errors.push("office.name is required");
+  errors.push(...validateOfficeModels(config.office));
   const agentNames = Object.keys(config.agents);
   for (const [name, entry] of Object.entries(config.agents)) {
     errors.push(...validateAgentEntry(name, entry));
@@ -241,6 +245,10 @@ export function buildOfficeContext(
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),
     channels,
+    models: {
+      defaultModel: yaml.office.default_model,
+      providers: yaml.office.providers,
+    },
   };
 }
 

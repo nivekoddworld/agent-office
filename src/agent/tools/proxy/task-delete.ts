@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { TASK_DELETE } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createTaskDeleteProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createTaskDeleteProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof TASK_DELETE.parameters> {
   return {
     ...TASK_DELETE,
     execute: async (_id, params) => {

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
-import { loadSkills } from "@mariozechner/pi-coding-agent";
+import { loadSkills } from "@earendil-works/pi-coding-agent";
 import type { AgentPermissions } from "../types.js";
 import { redactText } from "../security/redact.js";
 import {
@@ -306,9 +306,11 @@ export async function handleReadSkill(
       cwd: join(agentDir, "workspace"),
       agentDir,
       skillPaths: [join(agentDir, "skills")],
+      includeDefaults: true,
     });
     skillsMap = new Map<string, string>();
-    for (const skill of skills) skillsMap.set(skill.name, skill.source);
+    for (const skill of skills)
+      skillsMap.set(skill.name, skill.sourceInfo.source);
   }
 
   const content = skillsMap.get(params.name);

@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { CRON_REMOVE } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createCronRemoveProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createCronRemoveProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof CRON_REMOVE.parameters> {
   return {
     ...CRON_REMOVE,
     execute: async (_id, params) => {

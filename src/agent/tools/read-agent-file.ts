@@ -1,6 +1,6 @@
 import { readFile, realpath } from "node:fs/promises";
 import { join, sep, extname } from "node:path";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { READ_AGENT_FILE } from "./contracts.js";
 
 const AGENT_NAME_RE = /^[a-zA-Z0-9_-]+$/;
@@ -18,7 +18,9 @@ const textResult = (text: string, details: Record<string, string> = {}) => ({
   details,
 });
 
-export function createReadAgentFileTool(baseDir: string): AgentTool<any> {
+export function createReadAgentFileTool(
+  baseDir: string,
+): AgentTool<typeof READ_AGENT_FILE.parameters> {
   return {
     ...READ_AGENT_FILE,
     execute: async (_id, params: { agent: string; path: string }) => {

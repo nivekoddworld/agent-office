@@ -19,7 +19,16 @@ import { loadOfficeYaml } from "../config/office-yaml.js";
 import { COMMAND_MANIFEST } from "./manifest.js";
 import { readUsageRecords, summarizeUsage } from "../metrics/usage-tracker.js";
 import { officeDir } from "../constants.js";
-import { getProviders, getModels } from "@mariozechner/pi-ai";
+import {
+  effectiveDefaultModel,
+  listLocalProviders,
+  listServerModels,
+  type OfficeModelSettings,
+} from "../models/resolve-model.js";
+import {
+  getBuiltinProviders as getProviders,
+  getBuiltinModels as getModels,
+} from "@earendil-works/pi-ai/providers/all";
 
 // --- Scoped logger ---
 
@@ -238,12 +247,37 @@ export interface ModelInfo {
 export interface ModelsResponse {
   providers: string[];
   models: ModelInfo[];
+  defaultModel: string;
 }
 
-export function getModelsResponse(): ModelsResponse {
-  const providers = getProviders();
+export async function getModelsResponse(
+  office?: OfficeModelSettings,
+): Promise<ModelsResponse> {
+  const catalog = getProviders();
+  const providers: string[] = [...catalog];
   const models: ModelInfo[] = [];
-  for (const provider of providers) {
+
+  // Local llama.cpp / vLLM servers first, listing whatever they serve right now.
+  const local = listLocalProviders(office);
+  const served = await Promise.all(local.map((p) => listServerModels(p)));
+  local.forEach((p, i) => {
+    const ids = served[i] ?? [];
+    if (ids.length === 0) return;
+    providers.unshift(p.name);
+    for (const id of ids) {
+      models.push({
+        id: `${p.name}:${id}`,
+        name: id,
+        provider: p.name,
+        reasoning: false,
+        contextWindow: p.contextWindow,
+        maxTokens: p.maxTokens,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      });
+    }
+  });
+
+  for (const provider of catalog) {
     for (const m of getModels(provider)) {
       models.push({
         id: `${provider}:${m.id}`,
@@ -256,7 +290,7 @@ export function getModelsResponse(): ModelsResponse {
       });
     }
   }
-  return { providers, models };
+  return { providers, models, defaultModel: effectiveDefaultModel(office) };
 }
 
 // --- Agent file listing ---

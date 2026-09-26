@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { SKILL_SEARCH } from "../contracts.js";
 import type { HostFetch } from "./index.js";
 
@@ -7,7 +7,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createSkillSearchProxy(hostFetch: HostFetch): AgentTool<any> {
+export function createSkillSearchProxy(
+  hostFetch: HostFetch,
+): AgentTool<typeof SKILL_SEARCH.parameters> {
   return {
     ...SKILL_SEARCH,
     execute: async (_id, params) => {

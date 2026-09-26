@@ -1,6 +1,12 @@
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { isValidCron } from "../cron/cron-parser.js";
-import type { OfficeCronYamlEntry } from "../types.js";
+import { getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
+import type { OfficeCronYamlEntry, OfficeYaml } from "../types.js";
+import {
+  LOCAL_PRESETS,
+  isLocalPreset,
+  splitModelSpec,
+} from "../models/resolve-model.js";
 import type { AgentYamlEntry } from "./yaml-utils.js";
 import { ENV_KEY_RE, ENV_REF_RE, RESERVED_KEYS } from "./yaml-utils.js";
 
@@ -82,8 +88,7 @@ export function validateAgentEntry(
   }
 
   if (entry.model !== undefined) {
-    const parts = entry.model.split(":");
-    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    if (typeof entry.model !== "string" || !splitModelSpec(entry.model)) {
       errors.push(
         `Invalid model "${entry.model}" — must be "provider:model-id"`,
       );
@@ -430,5 +435,64 @@ export function validateChannelEntry(
   }
   if (entry.description !== undefined && typeof entry.description !== "string")
     errors.push(`${p}: description must be a string`);
+  return errors;
+}
+
+/** Validate `office.default_model` and `office.providers`. */
+export function validateOfficeModels(office: OfficeYaml["office"]): string[] {
+  const errors: string[] = [];
+  const dm = office.default_model;
+  if (dm !== undefined && (typeof dm !== "string" || !splitModelSpec(dm))) {
+    errors.push(
+      `office.default_model: invalid model "${String(dm)}" — must be "provider:model-id"`,
+    );
+  }
+
+  const providers = office.providers;
+  if (providers === undefined) return errors;
+  if (typeof providers !== "object" || providers === null) {
+    errors.push("office.providers must be an object");
+    return errors;
+  }
+  const types = Object.keys(LOCAL_PRESETS).join(", ");
+  const builtin = new Set<string>(getBuiltinProviders());
+  for (const [name, cfg] of Object.entries(providers)) {
+    const at = `office.providers.${name}`;
+    if (builtin.has(name)) {
+      errors.push(
+        `${at}: "${name}" is a built-in provider — pick another name`,
+      );
+      continue;
+    }
+    if (typeof cfg !== "object" || cfg === null) {
+      errors.push(`${at} must be an object`);
+      continue;
+    }
+    if (cfg.type !== undefined && !isLocalPreset(cfg.type)) {
+      errors.push(`${at}.type must be one of: ${types}`);
+    } else if (cfg.type === undefined && !isLocalPreset(name)) {
+      errors.push(`${at}.type is required (one of: ${types})`);
+    }
+    if (cfg.base_url !== undefined) {
+      let ok = false;
+      try {
+        ok = ["http:", "https:"].includes(new URL(cfg.base_url).protocol);
+      } catch {
+        ok = false;
+      }
+      if (!ok) errors.push(`${at}.base_url must be an http(s) URL`);
+    }
+    if (cfg.api_key_ref !== undefined && !ENV_KEY_RE.test(cfg.api_key_ref)) {
+      errors.push(
+        `${at}.api_key_ref must be an env var name (e.g. LLAMA_API_KEY)`,
+      );
+    }
+    for (const field of ["context_window", "max_tokens"] as const) {
+      const v = cfg[field];
+      if (v !== undefined && !(Number.isInteger(v) && v > 0)) {
+        errors.push(`${at}.${field} must be a positive integer`);
+      }
+    }
+  }
   return errors;
 }

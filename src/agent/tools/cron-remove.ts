@@ -1,4 +1,4 @@
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { CRON_REMOVE } from "./contracts.js";
 import type { CronToolDeps } from "./cron-impl.js";
 import { cronRemoveImpl } from "./cron-impl.js";
@@ -8,7 +8,9 @@ const textResult = (text: string) => ({
   details: {},
 });
 
-export function createCronRemoveTool(deps: CronToolDeps): AgentTool<any> {
+export function createCronRemoveTool(
+  deps: CronToolDeps,
+): AgentTool<typeof CRON_REMOVE.parameters> {
   return {
     ...CRON_REMOVE,
     execute: async (_id, params) =>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import type { MessageBus } from "../../transport/message-bus.js";
 import { Priority } from "../../types.js";
 import { sessionKey } from "../../messages/session-key.js";
@@ -25,7 +25,7 @@ export interface MessageAgentDeps {
 export function createMessageAgentTool(
   agentNameOrDeps: string | MessageAgentDeps,
   bus?: MessageBus,
-): AgentTool<any> {
+): AgentTool<typeof MESSAGE_AGENT.parameters> {
   // Support both legacy (agentName, bus) and new (deps) call signatures
   const deps: MessageAgentDeps =
     typeof agentNameOrDeps === "string"

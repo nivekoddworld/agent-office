@@ -1,5 +1,4 @@
-import { getModel } from "@mariozechner/pi-ai";
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { existsSync, mkdirSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -20,6 +19,11 @@ import {
 } from "../config/yaml-utils.js";
 import { resolveCustomPrompt } from "../agent/prompts/prompt-loader.js";
 import { buildHierarchyMap } from "../config/hierarchy.js";
+import {
+  DEFAULT_MODEL_FALLBACK,
+  effectiveDefaultModel,
+  resolveModel,
+} from "../models/resolve-model.js";
 import {
   fetchSkills,
   isSkillInstalled,
@@ -66,9 +70,10 @@ function normalizeEntry(
     string,
     { manager: string | null; peers: string[]; reports: string[] }
   >,
+  defaultModel: string = DEFAULT_MODEL_FALLBACK,
 ): NormalizedConfig {
   return {
-    model: entry.model ?? "anthropic:claude-sonnet-4-20250514",
+    model: entry.model ?? defaultModel,
     priority: resolvePriority(entry.priority),
     thinking: entry.thinking ?? "low",
     description: entry.description ?? "",
@@ -173,6 +178,7 @@ export async function applyOfficeYaml(
   // Refresh channel membership from latest YAML
   const freshContext = buildOfficeContext(officeId, yaml);
   workspace.updateChannels(freshContext.channels);
+  workspace.office.models = freshContext.models;
 
   const hierarchyMap = buildHierarchyMap(yaml.agents);
   const entries = Object.entries(yaml.agents);
@@ -191,7 +197,13 @@ export async function applyOfficeYaml(
 
       const running = normalizeRunning(baseDir, name, workspace);
       if (running) {
-        const desired = normalizeEntry(baseDir, name, entry, hierarchyMap);
+        const desired = normalizeEntry(
+          baseDir,
+          name,
+          entry,
+          hierarchyMap,
+          effectiveDefaultModel(freshContext.models),
+        );
         if (configsEqual(desired, running)) {
           skipped++;
           continue;
@@ -211,14 +223,9 @@ export async function applyOfficeYaml(
       await installMissingSkills(baseDir, name, entry.skills ?? []);
       await backfillSourceMap(baseDir, name, entry.skills ?? []);
 
-      const modelSpec = entry.model ?? "anthropic:claude-sonnet-4-20250514";
-      const parts = modelSpec.split(":");
-      if (parts.length !== 2 || !parts[0] || !parts[1]) {
-        throw new Error(
-          `Invalid model "${modelSpec}" — must be "provider:model-id"`,
-        );
-      }
-      const model = getModel(parts[0] as any, parts[1] as any);
+      const modelSpec =
+        entry.model ?? effectiveDefaultModel(freshContext.models);
+      const model = resolveModel(modelSpec, freshContext.models);
 
       await workspace.spawn({
         name,

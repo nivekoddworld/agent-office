@@ -7,15 +7,16 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { Agent } from "@mariozechner/pi-agent-core";
+import { Agent } from "@earendil-works/pi-agent-core";
 import {
   createCodingTools,
   createGrepTool,
   createFindTool,
   createLsTool,
-} from "@mariozechner/pi-coding-agent";
-import { getModel, streamSimple } from "@mariozechner/pi-ai";
-import type { AgentTool } from "@mariozechner/pi-agent-core";
+} from "@earendil-works/pi-coding-agent";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
+import { getBuiltinModel as getModel } from "@earendil-works/pi-ai/providers/all";
+import type { AgentTool } from "@earendil-works/pi-agent-core";
 import {
   createMessageAgentProxy,
   createListAgentsProxy,
@@ -121,7 +122,10 @@ function parseModelSpec(spec: string) {
   return getModel(spec.slice(0, idx) as any, spec.slice(idx + 1) as any);
 }
 
-const model = parseModelSpec(MODEL_NAME);
+// Local llama.cpp / vLLM models arrive as a full definition (see handle-init).
+const model = process.env["MODEL_JSON"]
+  ? (JSON.parse(process.env["MODEL_JSON"]) as ReturnType<typeof parseModelSpec>)
+  : parseModelSpec(MODEL_NAME);
 
 // --- Agent setup ---
 
