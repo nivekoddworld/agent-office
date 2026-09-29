@@ -35,7 +35,10 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/src ./src
 COPY --from=build /app/examples ./examples
 COPY --from=build /app/ui/dist ./ui/dist
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# --chmod and the CR strip keep it runnable even from a checkout that lost the
+# executable bit or got Windows line endings (e.g. cloned with Windows Git).
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh
 
 # node:22-slim provides user "node" (uid 1000), which agent-office runs as.
 # /app stays writable for the .env the UI may append missing provider keys to.
