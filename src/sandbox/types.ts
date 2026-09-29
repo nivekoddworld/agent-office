@@ -15,6 +15,8 @@ export interface SandboxStartOpts {
   systemPrompt: string;
   modelName: string;
   workspacePath: string;
+  /** Team shared folder, mounted at /shared (office.shared_dir). */
+  sharedPath?: string;
   /** Non-sensitive env vars passed as Docker --env flags. */
   env?: Record<string, string>;
 }

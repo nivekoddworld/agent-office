@@ -26,6 +26,14 @@ export function officeAgentsDir(id: string): string {
   return join(officeDir(id), "agents");
 }
 
+/** The team's shared folder (office.shared_dir). */
+export function officeSharedDir(id: string): string {
+  return join(officeDir(id), "shared");
+}
+
+/** Where the shared folder is mounted inside sandbox containers. */
+export const SANDBOX_SHARED_PATH = "/shared";
+
 export function officeLockPath(id: string): string {
   return join(officeDir(id), ".lock");
 }

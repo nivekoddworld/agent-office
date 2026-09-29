@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { mkdirSync } from "node:fs";
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import { AgentHandle } from "./agent/handle.js";
 import { MessageBus } from "./transport/message-bus.js";
@@ -201,6 +202,9 @@ export class Workspace {
   }
 
   async start(): Promise<void> {
+    if (this.office.sharedDir) {
+      mkdirSync(this.office.sharedDir, { recursive: true });
+    }
     const dbPath = join(this.office.dir, "messages", "messages.sqlite");
     this.messageStore = createMessageStore(dbPath);
     this.bus.setStore(this.messageStore);
@@ -323,6 +327,7 @@ export class Workspace {
       officeId: this.office.id,
       officeName: this.office.name,
       officeDescription: this.office.description,
+      sharedDir: this.office.sharedDir,
       cronService: this.cron,
       taskService: this.tasks,
       messageStore: this.messageStore ?? undefined,

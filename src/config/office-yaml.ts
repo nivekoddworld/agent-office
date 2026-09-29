@@ -6,6 +6,7 @@ import {
   officeDir,
   officeYamlPath,
   officeAgentsDir,
+  officeSharedDir,
   validateOfficeId,
 } from "../constants.js";
 import type { OfficeYaml, OfficeContext, ChannelConfig } from "../types.js";
@@ -143,6 +144,7 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
     office: {
       name: office.name as string,
       description: office.description as string | undefined,
+      shared_dir: office.shared_dir as boolean | undefined,
       env: officeEnv,
       secrets: (office.secrets as Record<string, string>) ?? {},
       cron: office.cron as Record<string, OfficeCronYamlEntry> | undefined,
@@ -161,6 +163,12 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
 export function validateOfficeConfig(config: OfficeYaml): string[] {
   const errors: string[] = [];
   if (!config.office.name?.trim()) errors.push("office.name is required");
+  if (
+    config.office.shared_dir !== undefined &&
+    typeof config.office.shared_dir !== "boolean"
+  ) {
+    errors.push("office.shared_dir must be true or false");
+  }
   errors.push(...validateOfficeModels(config.office));
   const agentNames = Object.keys(config.agents);
   for (const [name, entry] of Object.entries(config.agents)) {
@@ -241,6 +249,7 @@ export function buildOfficeContext(
     id,
     name: yaml.office.name,
     description: yaml.office.description,
+    ...(yaml.office.shared_dir ? { sharedDir: officeSharedDir(id) } : {}),
     env: yaml.office.env ?? {},
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),

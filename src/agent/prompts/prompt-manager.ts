@@ -15,6 +15,8 @@ export type PromptMode = "full" | "minimal";
 export interface PromptContext {
   name: string;
   cwd: string;
+  /** Team folder shared by every agent in the office, if enabled. */
+  sharedDir?: string;
   description?: string;
   customPrompt?: string;
   envNames?: string[];
@@ -62,9 +64,15 @@ function buildRuntimeBlock(ctx: PromptContext): string {
 
 function buildIdentityBlock(ctx: PromptContext): string {
   const desc = ctx.description ? ` — ${ctx.description}` : "";
+  const shared = ctx.sharedDir
+    ? `\nThe team's shared folder is ${ctx.sharedDir}. Every agent in the office can read and write it: ` +
+      `put work your teammates need there (designs, art, code to combine) and build joint projects there. ` +
+      `Keep your part in its own subfolder unless told otherwise, and don't overwrite teammates' files without asking.`
+    : "";
   return (
     `\n\nYou are agent "${ctx.name}"${desc}.\n` +
-    `Your workspace is ${ctx.cwd}. All file tools (read, write, edit, bash) operate in this directory.`
+    `Your workspace is ${ctx.cwd}. All file tools (read, write, edit, bash) operate in this directory.` +
+    shared
   );
 }
 

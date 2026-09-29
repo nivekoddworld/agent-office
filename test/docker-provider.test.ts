@@ -125,6 +125,30 @@ describe("DockerProvider", () => {
     expect(args.some((a: string) => a.includes(`${ws}:/workspace`))).toBe(true);
   });
 
+  it("mounts the team's shared folder at /shared only when given", async () => {
+    const { execFile } = await import("node:child_process");
+    const runArgs = () =>
+      (execFile as any).mock.calls.findLast((c: any[]) => c[1][0] === "run")[1];
+    await provider.start("solo", {
+      token: "t",
+      hostUrl: "",
+      systemPrompt: "test",
+      modelName: "test",
+      workspacePath: "/tmp/pi-test-solo/workspace",
+    });
+    expect(runArgs().some((a: string) => a.endsWith(":/shared"))).toBe(false);
+
+    await provider.start("team", {
+      token: "t",
+      hostUrl: "",
+      systemPrompt: "test",
+      modelName: "test",
+      workspacePath: "/tmp/pi-test-team/workspace",
+      sharedPath: "/tmp/pi-test-team/shared",
+    });
+    expect(runArgs()).toContain("/tmp/pi-test-team/shared:/shared");
+  });
+
   it("does not mount skill directories (host-resolved)", async () => {
     const { execFile } = await import("node:child_process");
     await provider.start("skill-agent", {
@@ -505,6 +529,22 @@ describe("DockerProvider inside the agent-office container", () => {
     expect(run).toContain(
       "/home/me/agent-office/offices/o/agents/coder/workspace:/workspace",
     );
+  });
+
+  it("mounts the shared folder by its path on the Docker host", async () => {
+    await provider.start("coder", {
+      token: "tok",
+      hostUrl: "",
+      systemPrompt: "p",
+      modelName: "llamacpp:m",
+      workspacePath,
+      sharedPath: "/tmp/ao-test/offices/o/shared",
+    });
+    const { execFile } = await import("node:child_process");
+    const run = (execFile as any).mock.calls.findLast(
+      (c: any[]) => c[1][0] === "run",
+    )[1];
+    expect(run).toContain("/home/me/agent-office/offices/o/shared:/shared");
   });
 
   it("talks to the sandbox by container name", async () => {

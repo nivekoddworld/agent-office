@@ -89,6 +89,8 @@ agents:
     reports_to: lead
 ```
 
+**Team projects:** each agent has its own private workspace. Add `shared_dir: true` under `office:` to also give them a shared folder that all of them can read and write (`offices/my-office/shared/`, which agents in their own containers see as `/shared`). For example, the lead puts the design there, the artist the art, and the coder builds the game from both.
+
 More ready-made offices are in [`examples/`](examples/). Every option (cron jobs, permissions, tools, channels, OAuth logins, …) is in the **[full reference](docs/REFERENCE.md)**.
 
 ## Without Docker
