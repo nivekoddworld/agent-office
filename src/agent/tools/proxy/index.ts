@@ -23,3 +23,4 @@ export { createTaskGetProxy } from "./task-get.js";
 export { createTaskDeleteProxy } from "./task-delete.js";
 export { createMessageUserProxy } from "./message-user.js";
 export { createPostChannelProxy } from "./post-channel.js";
+export { createReadChannelProxy } from "./read-channel.js";

@@ -150,6 +150,7 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
         | Record<string, { members: string[]; description?: string }>
         | undefined,
       default_model: office.default_model as string | undefined,
+      channel_context: office.channel_context as number | undefined,
       providers: office.providers as OfficeYaml["office"]["providers"],
     },
     agents: result,
@@ -245,6 +246,7 @@ export function buildOfficeContext(
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),
     channels,
+    channelContext: yaml.office.channel_context,
     models: {
       defaultModel: yaml.office.default_model,
       providers: yaml.office.providers,

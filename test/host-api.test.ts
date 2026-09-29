@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HostApi } from "../src/sandbox/host-api.js";
 import { Priority, type AgentInfo } from "../src/types.js";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /** Skip unless HOST_API_TESTS=1 (port binding may be restricted). */
 const skipHostApi = process.env["HOST_API_TESTS"] !== "1";
@@ -488,5 +491,79 @@ describe.skipIf(skipHostApi)("HostApi", () => {
 
     const res = await getJson(port, "/api/agents", token);
     expect(res.status).toBe(401);
+  });
+});
+
+describe.skipIf(skipHostApi)("HostApi /api/read-channel", () => {
+  let api: HostApi;
+  let port: number;
+  let baseDir: string;
+
+  beforeEach(async () => {
+    baseDir = mkdtempSync(join(tmpdir(), "hostapi-ch-"));
+    const dir = join(baseDir, "agents", "agent-a", "sessions");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "channel-general.jsonl"),
+      JSON.stringify({ from: "agent-b", text: "I vote A" }) + "\n",
+    );
+    port = nextPort();
+    const bus = makeBus();
+    api = new HostApi(bus, makeListFn(), baseDir);
+    api.setEgressDeps({
+      baseDir,
+      bus: bus as any,
+      channels: new Map([
+        ["general", { members: ["agent-a", "agent-b"] }],
+        ["private", { members: ["agent-b"] }],
+      ]),
+    });
+    api.registerAgent("agent-a", "tok-a");
+    api.registerAgent(
+      "agent-c",
+      "tok-c",
+      {},
+      {
+        tools: { deny: ["read_channel"] },
+      },
+    );
+    await api.start(port);
+  });
+
+  afterEach(async () => {
+    await api.stop();
+    rmSync(baseDir, { recursive: true, force: true });
+  });
+
+  it("returns the channel history to a member", async () => {
+    const res = await postJson(
+      port,
+      "/api/read-channel",
+      { channel: "general" },
+      "tok-a",
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).result).toContain("agent-b: I vote A");
+  });
+
+  it("refuses channels the agent isn't in", async () => {
+    const res = await postJson(
+      port,
+      "/api/read-channel",
+      { channel: "private" },
+      "tok-a",
+    );
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/not a member of #private/);
+  });
+
+  it("respects the tool policy", async () => {
+    const res = await postJson(
+      port,
+      "/api/read-channel",
+      { channel: "general" },
+      "tok-c",
+    );
+    expect(res.status).toBe(403);
   });
 });

@@ -393,7 +393,23 @@ export const POST_CHANNEL = {
     message: Type.String({ description: "Message content" }),
     mentions: Type.Optional(
       Type.Array(Type.String(), {
-        description: "Agent names to notify (default: all members)",
+        description:
+          "Agent names to wake up and notify. Without mentions the message is posted but nobody is notified; they can still see it with read_channel.",
+      }),
+    ),
+  }),
+};
+
+export const READ_CHANNEL = {
+  name: "read_channel" as const,
+  label: "Read Channel",
+  description:
+    "Read the recent messages in a channel you belong to, oldest first, including posts that did not mention you. Use it to catch up on a discussion, collect votes or answers, or check what teammates already said.",
+  parameters: Type.Object({
+    channel: Type.String({ description: "Channel name (without #)" }),
+    limit: Type.Optional(
+      Type.Number({
+        description: "How many recent messages to read (default 30, max 100)",
       }),
     ),
   }),
