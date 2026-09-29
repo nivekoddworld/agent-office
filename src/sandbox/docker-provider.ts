@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir } from "node:fs/promises";
+import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -17,9 +18,54 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 interface ContainerEntry {
   containerId: string;
-  port: number;
+  url: string;
   agentName: string;
   token: string;
+}
+
+/**
+ * The agent-office container itself, when agent-office runs in Docker and
+ * starts sandboxes through the host's Docker socket. Sandboxes are siblings:
+ * they join our networks (reaching us, and e.g. a llama.cpp container, by
+ * name) and bind-mount workspaces by their path on the Docker host.
+ */
+export interface SelfContainer {
+  name: string;
+  networks: string[];
+  mounts: Array<{ source: string; destination: string }>;
+}
+
+/** Parse `docker inspect` output for our own container. */
+export function parseSelfContainer(inspectJson: string): SelfContainer {
+  const [info] = JSON.parse(inspectJson) as Array<{
+    Name: string;
+    NetworkSettings?: { Networks?: Record<string, unknown> };
+    Mounts?: Array<{ Source: string; Destination: string }>;
+  }>;
+  if (!info) throw new Error("docker inspect returned no container");
+  return {
+    name: info.Name.replace(/^\//, ""),
+    networks: Object.keys(info.NetworkSettings?.Networks ?? {}),
+    mounts: (info.Mounts ?? []).map((m) => ({
+      source: m.Source,
+      destination: m.Destination,
+    })),
+  };
+}
+
+/** Translate a path inside our container to the same file's path on the Docker host. */
+export function toHostPath(self: SelfContainer, path: string): string {
+  const mount = self.mounts
+    .filter(
+      (m) => path === m.destination || path.startsWith(`${m.destination}/`),
+    )
+    .sort((a, b) => b.destination.length - a.destination.length)[0];
+  if (!mount) {
+    throw new Error(
+      `"${path}" is not on a volume shared with the Docker host, so a sandbox container cannot mount it. Keep agent workspaces under ./offices.`,
+    );
+  }
+  return mount.source + path.slice(mount.destination.length);
 }
 
 export class DockerProvider implements SandboxProvider {
@@ -28,14 +74,36 @@ export class DockerProvider implements SandboxProvider {
   private buildPromise: Promise<void> | null = null;
   private hostApi: HostApi;
   private hostApiPort: number;
+  private selfPromise: Promise<SelfContainer | null> | null = null;
 
   constructor(hostApi: HostApi, hostApiPort: number) {
     this.hostApi = hostApi;
     this.hostApiPort = hostApiPort;
   }
 
+  /** Our own container when agent-office runs in Docker, else null. */
+  private getSelf(): Promise<SelfContainer | null> {
+    if (process.env["AGENT_OFFICE_IN_CONTAINER"] !== "1") {
+      return Promise.resolve(null);
+    }
+    this.selfPromise ??= exec("docker", ["inspect", hostname()]).then(
+      parseSelfContainer,
+      (err) => {
+        this.selfPromise = null;
+        throw err;
+      },
+    );
+    return this.selfPromise;
+  }
+
   async start(agentName: string, opts: SandboxStartOpts): Promise<SandboxInfo> {
     await this.ensureImage();
+    const self = await this.getSelf();
+    if (self && self.networks.length === 0) {
+      throw new Error(
+        "agent-office's container has no Docker network for sandboxes to join",
+      );
+    }
 
     // Ensure workspace dir exists
     await mkdir(opts.workspacePath, { recursive: true });
@@ -47,8 +115,15 @@ export class DockerProvider implements SandboxProvider {
     }
     await exec("docker", ["rm", "-f", containerName]).catch(() => {});
 
-    const port = this.nextPort++;
-    const hostUrl = `http://host.docker.internal:${this.hostApiPort}`;
+    // On the host: publish a port and call back via host.docker.internal.
+    // In a container: share our networks and talk by container name.
+    const port = self ? 3100 : this.nextPort++;
+    const hostUrl = self
+      ? `http://${self.name}:${this.hostApiPort}`
+      : `http://host.docker.internal:${this.hostApiPort}`;
+    const workspaceSource = self
+      ? toHostPath(self, opts.workspacePath)
+      : opts.workspacePath;
 
     const containerId = await exec("docker", [
       "run",
@@ -62,7 +137,7 @@ export class DockerProvider implements SandboxProvider {
       "--security-opt",
       "no-new-privileges",
       "-v",
-      `${opts.workspacePath}:/workspace`,
+      `${workspaceSource}:/workspace`,
       "-e",
       `AGENT_NAME=${agentName}`,
       "-e",
@@ -77,16 +152,20 @@ export class DockerProvider implements SandboxProvider {
         "-e",
         `${k}=${v}`,
       ]),
-      "-p",
-      `${port}:3100`,
+      ...(self ? ["--network", self.networks[0]!] : ["-p", `${port}:3100`]),
       IMAGE_NAME,
     ]);
 
     const id = containerId.trim();
-    const url = `http://localhost:${port}`;
+    for (const network of self?.networks.slice(1) ?? []) {
+      await exec("docker", ["network", "connect", network, id]);
+    }
+    const url = self
+      ? `http://${containerName}:3100`
+      : `http://localhost:${port}`;
     const entry: ContainerEntry = {
       containerId: id,
-      port,
+      url,
       agentName,
       token: opts.token,
     };
@@ -152,7 +231,7 @@ export class DockerProvider implements SandboxProvider {
     const entry = this.containers.get(id);
     if (!entry) return { ok: false, turns: 0 };
     try {
-      const res = await fetch(`http://localhost:${entry.port}/health`, {
+      const res = await fetch(`${entry.url}/health`, {
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       return (await res.json()) as { ok: boolean; turns: number };
@@ -169,7 +248,7 @@ export class DockerProvider implements SandboxProvider {
     const entry = this.containers.get(id);
     if (!entry) throw new Error(`Sandbox ${id} not found`);
 
-    const url = `http://localhost:${entry.port}${path}`;
+    const url = `${entry.url}${path}`;
     let lastError: Error | null = null;
 
     // 1 try + 1 retry on network/timeout errors only (not non-2xx)

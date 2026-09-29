@@ -951,7 +951,7 @@ All endpoints require `Authorization: Bearer <token>` header. The token is gener
 
 Setup is in the [README quick start](../README.md#quick-start-docker). Details:
 
-- The container runs the scheduler, web UI and all agents in-process; it is the isolation boundary. `--sandbox docker` is not supported inside it (nesting would require mounting the Docker socket, which grants root on the host).
+- By default the container runs the scheduler, web UI and all agents in-process; it is the isolation boundary. With `SANDBOX=docker` in `.env` and the Docker socket mounted (see `docker-compose.override.example.yml`), each agent runs in its own sibling container instead: sandboxes join agent-office's networks and reach it by container name, and workspaces are bind-mounted by their host path (read from agent-office's own mounts, so they must live under `./offices`). The socket grants root-equivalent control of the host's Docker.
 - `./offices` on the host is mounted at `~/.agent-office/offices` in the container, so offices are plain folders you can edit and back up.
 - The dashboard is published on `127.0.0.1` only. Set `UI_PORT` in `.env` to change the port; host and container ports stay equal because the UI only accepts requests from the origin it prints.
 - Inside the container, `localhost` llama.cpp / vLLM addresses are rewritten to `host.docker.internal`. To reach a server in another container, join its network with `docker-compose.override.yml` (see `docker-compose.override.example.yml`) and use its container name in `base_url`.

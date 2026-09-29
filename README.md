@@ -48,6 +48,18 @@ office:
 
 **Cloud model** — e.g. `anthropic:claude-sonnet-4-5` or `openai:gpt-5.4`, with the API key in `.env` (`ANTHROPIC_API_KEY=…`, `OPENAI_API_KEY=…`; see `.env.example`).
 
+## One container per agent (optional)
+
+By default all agents run inside the one `agent-office` container: isolated from your machine, but not from each other. To give **each agent its own container** (it only sees its own workspace, and gets only its own model key, not the rest of `.env`):
+
+1. In `.env`: `SANDBOX=docker`
+2. In `docker-compose.override.yml` (copy it from `docker-compose.override.example.yml`), uncomment the two `volumes:` lines that mount `/var/run/docker.sock`
+3. `docker compose up -d` — the first start builds the agent image, which takes a few minutes
+
+Agent containers show up as `pi-agent-<name>` in `docker ps`, join the same networks as agent-office (so they reach your llama.cpp container too), and are removed on `docker compose down`.
+
+> **Trade-off:** mounting the Docker socket lets agent-office control Docker on your machine, which is effectively root access. The agents themselves never get the socket.
+
 ## Everyday commands
 
 | What                        | Command                                              |
