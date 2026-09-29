@@ -10,6 +10,7 @@ import type { HostApi } from "../src/sandbox/host-api.js";
 const SELF_INSPECT = JSON.stringify([
   {
     Name: "/agent-office-agent-office-1",
+    Config: { Labels: { "com.docker.compose.project": "agent-office" } },
     NetworkSettings: {
       Networks: { "agent-office_default": {}, "llm-net": {} },
     },
@@ -180,7 +181,8 @@ describe("DockerProvider", () => {
     expect(await provider.isAlive(second.id)).toBe(true);
   });
 
-  it("cleans up on health timeout", { timeout: 15_000 }, async () => {
+  it("cleans up on health timeout", async () => {
+    provider = new DockerProvider(hostApi, 13000, { healthTimeoutMs: 1_000 });
     mockFetch.mockRejectedValue(new Error("connection refused"));
     const { execFile } = await import("node:child_process");
 
@@ -487,6 +489,12 @@ describe("DockerProvider inside the agent-office container", () => {
     expect(info.url).toBe("http://pi-agent-coder:3100");
   });
 
+  it("labels sandboxes with our Compose project so they group with it", async () => {
+    const { run } = await startCoder();
+    expect(run).toContain("com.docker.compose.project=agent-office");
+    expect(run).toContain("com.docker.compose.service=pi-agent-coder");
+  });
+
   it("calls back to agent-office by container name", async () => {
     const { run } = await startCoder();
     expect(run).toContain("HOST_URL=http://agent-office-agent-office-1:13000");
@@ -512,8 +520,14 @@ describe("DockerProvider inside the agent-office container", () => {
 describe("toHostPath / parseSelfContainer", () => {
   const self = parseSelfContainer(SELF_INSPECT);
 
-  it("parses name, networks and mounts", () => {
+  it("parses name, networks, mounts and Compose project", () => {
     expect(self.name).toBe("agent-office-agent-office-1");
+    expect(self.composeProject).toBe("agent-office");
+    expect(
+      parseSelfContainer(
+        JSON.stringify([{ Name: "/x", Config: { Labels: null } }]),
+      ).composeProject,
+    ).toBeUndefined();
     expect(self.networks).toEqual(["agent-office_default", "llm-net"]);
   });
 

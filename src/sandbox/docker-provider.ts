@@ -13,7 +13,8 @@ import type { HostApi } from "./host-api.js";
 const IMAGE_NAME = "pi-sandbox";
 const BUILD_TIMEOUT_MS = 300_000; // 5 min — first build pulls base image + npm install
 const HEALTH_POLL_MS = 500;
-const HEALTH_TIMEOUT_MS = 10_000;
+// A fresh image's first start (tsx compiling the entrypoint) can take >10s.
+const HEALTH_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 
 interface ContainerEntry {
@@ -33,12 +34,15 @@ export interface SelfContainer {
   name: string;
   networks: string[];
   mounts: Array<{ source: string; destination: string }>;
+  /** Docker Compose project we were started in, if any. */
+  composeProject?: string;
 }
 
 /** Parse `docker inspect` output for our own container. */
 export function parseSelfContainer(inspectJson: string): SelfContainer {
   const [info] = JSON.parse(inspectJson) as Array<{
     Name: string;
+    Config?: { Labels?: Record<string, string> | null };
     NetworkSettings?: { Networks?: Record<string, unknown> };
     Mounts?: Array<{ Source: string; Destination: string }>;
   }>;
@@ -50,6 +54,7 @@ export function parseSelfContainer(inspectJson: string): SelfContainer {
       source: m.Source,
       destination: m.Destination,
     })),
+    composeProject: info.Config?.Labels?.["com.docker.compose.project"],
   };
 }
 
@@ -76,9 +81,16 @@ export class DockerProvider implements SandboxProvider {
   private hostApiPort: number;
   private selfPromise: Promise<SelfContainer | null> | null = null;
 
-  constructor(hostApi: HostApi, hostApiPort: number) {
+  private healthTimeoutMs: number;
+
+  constructor(
+    hostApi: HostApi,
+    hostApiPort: number,
+    opts?: { healthTimeoutMs?: number },
+  ) {
     this.hostApi = hostApi;
     this.hostApiPort = hostApiPort;
+    this.healthTimeoutMs = opts?.healthTimeoutMs ?? HEALTH_TIMEOUT_MS;
   }
 
   /** Our own container when agent-office runs in Docker, else null. */
@@ -153,6 +165,18 @@ export class DockerProvider implements SandboxProvider {
         `${k}=${v}`,
       ]),
       ...(self ? ["--network", self.networks[0]!] : ["-p", `${port}:3100`]),
+      // Group agent containers with agent-office in Docker Desktop. Compose
+      // itself ignores them (no orphan warnings; `down` leaves them to us).
+      ...(self?.composeProject
+        ? [
+            "--label",
+            `com.docker.compose.project=${self.composeProject}`,
+            "--label",
+            `com.docker.compose.service=${containerName}`,
+            "--label",
+            "com.docker.compose.oneoff=False",
+          ]
+        : []),
       IMAGE_NAME,
     ]);
 
@@ -306,7 +330,7 @@ export class DockerProvider implements SandboxProvider {
   }
 
   private async pollHealth(url: string): Promise<boolean> {
-    const deadline = Date.now() + HEALTH_TIMEOUT_MS;
+    const deadline = Date.now() + this.healthTimeoutMs;
     while (Date.now() < deadline) {
       try {
         const res = await fetch(`${url}/health`, {
