@@ -35,6 +35,27 @@ export function isChannelSession(
   return sessionKey === `ch:${channelName}`;
 }
 
+/** The system line shown for an agent event ("coder started tool: bash"), or "" if none. */
+export function systemEventText(
+  type: string,
+  agent: string,
+  d: { toolName?: unknown; isError?: unknown },
+): string {
+  if (type === "tool_execution_start") {
+    return `${agent} started tool: ${d.toolName as string}`;
+  } else if (type === "tool_execution_end") {
+    const status = d.isError ? "failed" : "completed";
+    return `${agent} tool ${d.toolName as string} ${status}`;
+  } else if (type === "agent_end") {
+    return `${agent} finished`;
+  } else if (type === "turn_start") {
+    return `${agent} turn started`;
+  } else if (type === "turn_end") {
+    return `${agent} turn ended`;
+  }
+  return "";
+}
+
 export type DisplayItem =
   | { kind: "message"; data: SlackMessageData; compact: boolean }
   | { kind: "system"; data: SlackMessageData }
@@ -93,19 +114,7 @@ export function eventToMessages(
     // Agent text output is telemetry only — chat messages come from baseline APIs.
     // Only render system events from SSE.
     {
-      let systemText = "";
-      if (type === "tool_execution_start") {
-        systemText = `${agent} started tool: ${d.toolName as string}`;
-      } else if (type === "tool_execution_end") {
-        const status = d.isError ? "failed" : "completed";
-        systemText = `${agent} tool ${d.toolName as string} ${status}`;
-      } else if (type === "agent_end") {
-        systemText = `${agent} finished`;
-      } else if (type === "turn_start") {
-        systemText = `${agent} turn started`;
-      } else if (type === "turn_end") {
-        systemText = `${agent} turn ended`;
-      }
+      const systemText = systemEventText(type, agent, d);
 
       if (systemText) {
         msgs.push({

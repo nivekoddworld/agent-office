@@ -325,3 +325,14 @@ export interface ModelsResponse {
   models: ModelInfo[];
   defaultModel?: string;
 }
+
+/** One saved agent event, as returned by GET /api/agents/:name/activity. */
+export interface AgentActivityEntry {
+  ts: number;
+  type: string;
+  toolName?: string;
+  isError?: boolean;
+  sessionKey?: string;
+  sourceKind?: string;
+  originTaskId?: string;
+}

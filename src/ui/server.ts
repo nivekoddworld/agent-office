@@ -17,6 +17,7 @@ import { register as registerAuth } from "./handlers/auth.handler.js";
 import { register as registerSse } from "./handlers/sse.handler.js";
 import { register as registerState } from "./handlers/state.handler.js";
 import { register as registerAgentFiles } from "./handlers/agent-files.handler.js";
+import { register as registerActivity } from "./handlers/activity.handler.js";
 import { register as registerAgentSkills } from "./handlers/agent-skills.handler.js";
 import { register as registerAgentConfig } from "./handlers/agent-config.handler.js";
 import { register as registerAgentMessaging } from "./handlers/agent-messaging.handler.js";
@@ -141,6 +142,7 @@ export async function startUiServer(
   router.register(registerSse({ ...ctx, sseClients, eventBuffer }));
   router.register(registerState(ctx));
   router.register(registerAgentFiles(ctx));
+  router.register(registerActivity(ctx));
   router.register(registerAgentSkills(ctx));
   router.register(registerAgentConfig(ctx));
   router.register(registerOAuth(ctx));

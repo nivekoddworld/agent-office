@@ -1140,6 +1140,7 @@ The Web UI server exposes typed REST endpoints for all operations. All mutating 
 | `GET`    | `/api/agents/:name/inbox`                | Get agent inbox queue               |
 | `GET`    | `/api/agents/:name/messages`             | Get agent DM history                |
 | `DELETE` | `/api/agents/:name/messages`             | Clear agent DM history              |
+| `GET`    | `/api/agents/:name/activity`             | Agent's recent turns and tool calls |
 | `GET`    | `/api/agents/:name/files`                | List agent workspace files          |
 | `GET`    | `/api/agents/:name/files/content`        | Read a file from agent workspace    |
 | `PATCH`  | `/api/agents/:name/prompt`               | Set, append, or clear agent prompt  |
@@ -1728,6 +1729,7 @@ Each office gets an isolated directory, and each agent within it gets its own wo
             channel-general.jsonl # channel conversations
           skills/                 # installed skill directories
             .sources.json         # skill folder → GitHub source mapping
+          activity.jsonl          # turns and tool calls (Activity tab)
           .effective-prompt.md    # generated snapshot (do not edit)
         reviewer/
           workspace/
@@ -1936,6 +1938,7 @@ This is separate from the sandbox Host API auth (bearer token per agent, describ
 - **Agent DMs** — conversation threads per agent with message input, tabbed view (Messages, Internal, Files, Prompt, Skills, Configure), and clear history via three-dot menu
 - **Internal conversations** — read-only viewer for agent-to-agent messages with peer selector dropdown and disabled message input
 - **Agent detail** — skills tab for viewing installed skills per agent
+- **Agent activity** — Activity tab on each agent's page listing every turn and tool call (the same lines the chat shows, e.g. `coder started tool: bash`) from DMs, channels, tasks and heartbeats, with filters for event type (turns, tools, errors), source (DM, channel, internal, other) and tool. Saved to `agents/<name>/activity.jsonl` (served by `GET /api/agents/:name/activity?limit=`), so it survives a reload; the oldest half is dropped once the file passes 2 MB
 - **Agent fire** — comprehensive cleanup with impact modal showing affected tasks, cron jobs, and channel memberships before confirmation
 - **Dynamic model selection** — Hire modal displays all 700+ available models from pi-ai, grouped by provider with metadata (reasoning capability, context window, costs). Auto-updates when pi-ai upgrades.
 - **OAuth auth selector** — per-agent Config tab shows auth mode toggle (API Key / OAuth) when OAuth credentials exist for the agent's model provider, plus authenticated provider badges with one-click credential removal

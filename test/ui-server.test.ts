@@ -8,6 +8,10 @@ import {
   afterAll,
 } from "vitest";
 import http from "node:http";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { appendActivity } from "../src/activity/activity-log.js";
 
 // --- Mocks (hoisted) ---
 
@@ -770,6 +774,37 @@ describe("UI server", () => {
     const body = await res.json();
     expect(body.defaultConversationChannel).toBe("general");
     mockWs.office.channels = original;
+  });
+
+  it("GET /api/agents/:name/activity returns the agent's saved activity", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ui-activity-"));
+    const originalDir = mockWs.office.dir;
+    mockWs.office.dir = dir;
+    try {
+      appendActivity(dir, "coder", { ts: 1, type: "turn_start" });
+      appendActivity(dir, "coder", {
+        ts: 2,
+        type: "tool_execution_start",
+        toolName: "bash",
+      });
+      mockWs.getAgent.mockReturnValue({ name: "coder" });
+      const res = await fetch(`${origin}/api/agents/coder/activity?limit=1`, {
+        headers: { Cookie: sessionCookie },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        entries: [{ ts: 2, type: "tool_execution_start", toolName: "bash" }],
+      });
+
+      mockWs.getAgent.mockReturnValue(undefined);
+      const missing = await fetch(`${origin}/api/agents/ghost/activity`, {
+        headers: { Cookie: sessionCookie },
+      });
+      expect(missing.status).toBe(404);
+    } finally {
+      mockWs.office.dir = originalDir;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   // --- eventToMessages routing semantics ---

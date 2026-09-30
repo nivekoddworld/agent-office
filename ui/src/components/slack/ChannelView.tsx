@@ -11,6 +11,7 @@ import {
   IconFileText,
   IconSparkles,
   IconMessageCircle,
+  IconActivity,
 } from "@tabler/icons-react";
 import { useEventStore } from "../../store/event-store.js";
 
@@ -26,6 +27,7 @@ import { AgentConfigPanel } from "../agent-detail/AgentConfigPanel.js";
 import { AgentPromptPanel } from "../agent-detail/AgentPromptPanel.js";
 import { AgentSkillsPanel } from "../agent-detail/AgentSkillsPanel.js";
 import { PeerConversations } from "../agent-detail/PeerConversations.js";
+import { AgentActivityPanel } from "../agent-detail/AgentActivityPanel.js";
 import { ConfirmDialog } from "../shared/ConfirmDialog.js";
 import { ChannelSettingsModal } from "./ChannelSettingsModal.js";
 import {
@@ -50,6 +52,7 @@ import { unreadStore } from "../../store/unread-store.js";
 type DmTab =
   | "messages"
   | "conversations"
+  | "activity"
   | "files"
   | "prompt"
   | "skills"
@@ -402,6 +405,7 @@ export function ChannelView({
               [
                 "messages",
                 "conversations",
+                "activity",
                 "files",
                 "prompt",
                 "skills",
@@ -420,6 +424,14 @@ export function ChannelView({
                 ),
                 conversations: (
                   <IconMessageCircle
+                    size={15}
+                    color={
+                      active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
+                    }
+                  />
+                ),
+                activity: (
+                  <IconActivity
                     size={15}
                     color={
                       active ? "var(--ao-accent-sage)" : "var(--ao-text-muted)"
@@ -462,6 +474,7 @@ export function ChannelView({
               const labels: Record<DmTab, string> = {
                 messages: "Messages",
                 conversations: "Internal",
+                activity: "Activity",
                 files: "Files",
                 prompt: "Prompt",
                 skills: "Skills",
@@ -506,6 +519,8 @@ export function ChannelView({
           agentName={channel.agentName}
           onClickAvatar={onClickAvatar}
         />
+      ) : isDm && dmTab === "activity" ? (
+        <AgentActivityPanel agentName={channel.agentName} />
       ) : isDm && dmTab === "configure" ? (
         <AgentConfigPanel
           agentName={channel.agentName}
