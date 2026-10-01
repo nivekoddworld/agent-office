@@ -1,3 +1,4 @@
+import { appendSession } from "../sessions/session-writer.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile, realpath } from "node:fs/promises";
 import { join, sep, extname } from "node:path";
@@ -62,6 +63,7 @@ export async function handleMessageAgent(
   agentName: string,
   bus: MessageBus,
   seenMessages: Map<string, number>,
+  baseDir?: string,
 ): Promise<void> {
   const body = await readBody(req, MAX_SEND_BODY);
   if (!body) {
@@ -115,6 +117,21 @@ export async function handleMessageAgent(
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: msg }));
     return;
+  }
+
+  // Sender's copy of the conversation, as the in-process message_agent tool
+  // writes it (the bus only files the recipient's copy).
+  if (baseDir) {
+    try {
+      appendSession(baseDir, agentName, `agent-${to}.jsonl`, {
+        ts: new Date().toISOString(),
+        role: "user",
+        from: agentName,
+        text: payload,
+      });
+    } catch {
+      // best-effort, like the in-process tool
+    }
   }
 
   res.writeHead(200, { "Content-Type": "application/json" });
