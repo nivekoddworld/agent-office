@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HostApi } from "../src/sandbox/host-api.js";
 import { Priority, type AgentInfo } from "../src/types.js";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -122,6 +128,33 @@ describe.skipIf(skipHostApi)("HostApi", () => {
         priority: Priority.NORMAL,
       }),
     );
+  });
+
+  it("records the sender's copy of the DM for the Internal tab", async () => {
+    const file = join(
+      "/tmp/test-office-dir",
+      "agents",
+      agentName,
+      "sessions",
+      "agent-agent-b.jsonl",
+    );
+    rmSync(file, { force: true });
+    const send = () =>
+      postJson(
+        port,
+        "/api/message-agent",
+        { to: "agent-b", payload: "hi b", messageId: "msg-copy" },
+        token,
+      );
+    await send();
+    await send(); // duplicate messageId: delivered once, recorded once
+    const lines = readFileSync(file, "utf-8").trim().split("\n");
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({
+      from: agentName,
+      text: "hi b",
+    });
+    rmSync(file, { force: true });
   });
 
   it("deduplicates by messageId", async () => {

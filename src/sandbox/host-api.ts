@@ -277,6 +277,7 @@ export class HostApi {
           agentName,
           this.bus,
           this.seenMessages,
+          this.baseDir,
         );
       } else if (req.method === "GET" && path === "/api/agents") {
         handleAgents(res, this.listFn);
