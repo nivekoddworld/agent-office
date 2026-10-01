@@ -138,6 +138,7 @@ export interface OfficeYaml {
   office: {
     name: string;
     description?: string;
+    shared_dir?: boolean;
     env?: Record<string, string>;
     secrets?: Record<string, string>;
     cron?: Record<string, OfficeCronYamlEntry>;
@@ -156,6 +157,8 @@ export interface OfficeContext {
   id: string;
   name: string;
   description?: string;
+  /** Team folder every agent can read and write (office.shared_dir). */
+  sharedDir?: string;
   env: Record<string, string>;
   secrets: Record<string, string>;
   dir: string;

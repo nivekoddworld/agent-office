@@ -398,6 +398,8 @@ agents:
 
 Office-level `env` and `secrets` are inherited by all agents. Agent-level values override office-level.
 
+Set `office.shared_dir: true` to give the team a [shared folder](#shared-folder) that every agent can read and write.
+
 `office.channel_context` sets how many earlier channel messages an agent sees when a channel message wakes it (default `10`; see [`read_channel`](#read_channel)). Set `office.default_model` to change the model used by agents without a `model:` line (default `anthropic:claude-sonnet-4-5`). `office.providers` points agents at local llama.cpp / vLLM servers — see [Local Models](#local-models-llamacpp--vllm).
 
 All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.
@@ -1723,6 +1725,7 @@ Each office gets an isolated directory, and each agent within it gets its own wo
       .lock                 # per-office config lock
       cron/
         state.json          # cron job state
+      shared/               # team shared folder (office.shared_dir: true)
       tasks/
         tasks.json          # task store
       logs/
@@ -1756,6 +1759,18 @@ Each office gets an isolated directory, and each agent within it gets its own wo
 All file tools (read, write, edit, bash) are scoped to the agent's workspace directory. Agents can read each other's files via `read_agent_file` but cannot write to them.
 
 In Docker sandbox mode, the workspace directory is volume-mounted into the container at `/workspace`. File changes made inside the container persist on the host.
+
+#### Shared folder
+
+Workspaces are private, so agents can't put their work together in one place. For team projects, turn on the shared folder:
+
+```yaml
+office:
+  name: Game Studio
+  shared_dir: true
+```
+
+This creates `~/.agent-office/offices/<id>/shared/` (with Docker Compose: `offices/<id>/shared/`). Every agent can read and write it: in-process agents use its full path, and sandbox containers get it mounted at `/shared`. Each agent's system prompt says where it is and asks it to keep its part in its own subfolder (e.g. `shared/design/`, `shared/art/`, `shared/game/`). Nothing stops two agents from editing the same file, so split the work with tasks. Restart after changing it.
 
 ### Skills
 

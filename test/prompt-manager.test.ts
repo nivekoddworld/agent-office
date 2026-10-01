@@ -24,6 +24,12 @@ describe("composeSystemPrompt", () => {
     expect(text).toContain("Agent-to-agent requests");
   });
 
+  it("points the agent at the team's shared folder when enabled", () => {
+    const { text } = composeSystemPrompt({ ...BASE_CTX, sharedDir: "/shared" });
+    expect(text).toContain("The team's shared folder is /shared.");
+    expect(composeSystemPrompt(BASE_CTX).text).not.toContain("shared folder");
+  });
+
   it("includes base prompt even with custom prompt", () => {
     const { text } = composeSystemPrompt({
       ...BASE_CTX,

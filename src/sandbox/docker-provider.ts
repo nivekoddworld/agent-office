@@ -9,6 +9,7 @@ import type {
   SandboxStartOpts,
 } from "./types.js";
 import type { HostApi } from "./host-api.js";
+import { SANDBOX_SHARED_PATH } from "../constants.js";
 
 const IMAGE_NAME = "pi-sandbox";
 const BUILD_TIMEOUT_MS = 300_000; // 5 min — first build pulls base image + npm install
@@ -119,6 +120,7 @@ export class DockerProvider implements SandboxProvider {
 
     // Ensure workspace dir exists
     await mkdir(opts.workspacePath, { recursive: true });
+    if (opts.sharedPath) await mkdir(opts.sharedPath, { recursive: true });
 
     // Clean up stale container + map entry
     const containerName = `pi-agent-${agentName}`;
@@ -136,6 +138,10 @@ export class DockerProvider implements SandboxProvider {
     const workspaceSource = self
       ? toHostPath(self, opts.workspacePath)
       : opts.workspacePath;
+    const sharedSource =
+      opts.sharedPath && self
+        ? toHostPath(self, opts.sharedPath)
+        : opts.sharedPath;
 
     const containerId = await exec("docker", [
       "run",
@@ -150,6 +156,7 @@ export class DockerProvider implements SandboxProvider {
       "no-new-privileges",
       "-v",
       `${workspaceSource}:/workspace`,
+      ...(sharedSource ? ["-v", `${sharedSource}:${SANDBOX_SHARED_PATH}`] : []),
       "-e",
       `AGENT_NAME=${agentName}`,
       "-e",

@@ -36,6 +36,9 @@ vi.mock("../src/constants.js", async () => {
   function officeLockPath(id: string): string {
     return path.join(officeDir(id), ".lock");
   }
+  function officeSharedDir(id: string): string {
+    return path.join(officeDir(id), "shared");
+  }
   return {
     AGENT_OFFICE_DIR: base,
     OFFICES_DIR: offices,
@@ -45,6 +48,7 @@ vi.mock("../src/constants.js", async () => {
     officeYamlPath,
     officeAgentsDir,
     officeLockPath,
+    officeSharedDir,
   };
 });
 
@@ -364,6 +368,14 @@ describe("validateOfficeConfig", () => {
     expect(errors).toEqual([]);
   });
 
+  it("rejects a non-boolean office.shared_dir", () => {
+    const errors = validateOfficeConfig({
+      office: { name: "Test", shared_dir: "yes" as unknown as boolean },
+      agents: {},
+    });
+    expect(errors).toContain("office.shared_dir must be true or false");
+  });
+
   it("rejects empty office.name", () => {
     const errors = validateOfficeConfig({
       office: { name: "" },
@@ -613,6 +625,15 @@ describe("buildOfficeContext", () => {
     expect(ctx.dir).toBe(officeDir("acme"));
     expect(ctx.env).toEqual({});
     expect(ctx.secrets).toEqual({});
+    expect(ctx.sharedDir).toBeUndefined();
+  });
+
+  it("sets the shared folder when office.shared_dir is on", () => {
+    const ctx = buildOfficeContext("acme", {
+      office: { name: "Acme", shared_dir: true },
+      agents: {},
+    });
+    expect(ctx.sharedDir).toBe(join(officeDir("acme"), "shared"));
   });
 });
 

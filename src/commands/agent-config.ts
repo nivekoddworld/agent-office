@@ -18,7 +18,7 @@ import {
   setAgentHeartbeat,
   clearAgentHeartbeat,
 } from "../config/office-yaml.js";
-import { officeDir } from "../constants.js";
+import { officeDir, officeSharedDir } from "../constants.js";
 import { createRedactor } from "../security/redact.js";
 import { resolveEnvRefs } from "../config/env-substitution.js";
 import { composeSystemPrompt } from "../agent/prompts/prompt-manager.js";
@@ -164,6 +164,7 @@ export function agentPromptShowCommand(
   const composed = composeSystemPrompt({
     name: agentName,
     cwd: resolveCwd(officeId, agentName, entry.cwd),
+    sharedDir: yaml.office.shared_dir ? officeSharedDir(officeId) : undefined,
     description: entry.description,
     customPrompt: resolvedPrompt,
     envNames: mergedEnvKeys.length > 0 ? mergedEnvKeys : undefined,

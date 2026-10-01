@@ -57,6 +57,7 @@ import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { applyToolPolicy } from "./tools/policy.js";
 import { createContextPruner } from "./context-pruner.js";
+import { SANDBOX_SHARED_PATH } from "../constants.js";
 
 export interface InitContext {
   name: string;
@@ -66,6 +67,8 @@ export interface InitContext {
   officeId: string;
   officeName: string;
   officeDescription?: string;
+  /** Host path of the team's shared folder, if enabled. */
+  sharedDir?: string;
   config: AgentConfig;
 }
 
@@ -114,6 +117,7 @@ export async function initSandboxAgent(
   const composed = composeSystemPrompt({
     name: ctx.name,
     cwd: "/workspace",
+    sharedDir: ctx.sharedDir ? SANDBOX_SHARED_PATH : undefined,
     description: ctx.config.description,
     customPrompt: ctx.config.systemPrompt,
     envNames: Object.keys(ctx.config.env ?? {}),
@@ -138,6 +142,7 @@ export async function initSandboxAgent(
     systemPrompt: composed.text,
     modelName: `${model.provider}:${model.id}`,
     workspacePath: ctx.cwd,
+    sharedPath: ctx.sharedDir,
     env: {
       ...ctx.config.env,
       ...(ctx.config.permissions?.tools
@@ -344,6 +349,7 @@ export async function initInProcessAgent(
   const composed = composeSystemPrompt({
     name: ctx.name,
     cwd: ctx.cwd,
+    sharedDir: ctx.sharedDir,
     description: ctx.config.description,
     customPrompt: ctx.config.systemPrompt,
     envNames: Object.keys(ctx.config.env ?? {}),

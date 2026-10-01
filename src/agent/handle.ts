@@ -33,6 +33,7 @@ import type { CronService } from "../cron/cron-service.js";
 import type { TaskService } from "../tasks/task-service.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
+import { SANDBOX_SHARED_PATH } from "../constants.js";
 import {
   initSandboxAgent,
   initInProcessAgent,
@@ -57,6 +58,7 @@ export interface AgentHandleDeps {
   officeId: string;
   officeName: string;
   officeDescription?: string;
+  sharedDir?: string;
   cronService?: CronService;
   taskService?: TaskService;
   messageStore?: MessageStore;
@@ -89,6 +91,7 @@ export class AgentHandle {
   private officeId: string;
   private officeName: string;
   private officeDescription?: string;
+  private sharedDir?: string;
   private cronService?: CronService;
   private taskService?: TaskService;
   private _messageStore?: MessageStore;
@@ -106,6 +109,7 @@ export class AgentHandle {
     this.officeId = deps.officeId;
     this.officeName = deps.officeName;
     this.officeDescription = deps.officeDescription;
+    this.sharedDir = deps.sharedDir;
     this.cronService = deps.cronService;
     this.taskService = deps.taskService;
     this._messageStore = deps.messageStore;
@@ -235,6 +239,7 @@ export class AgentHandle {
       officeId: this.officeId,
       officeName: this.officeName,
       officeDescription: this.officeDescription,
+      sharedDir: this.sharedDir,
       config: this.config,
     };
   }
@@ -258,7 +263,8 @@ export class AgentHandle {
       includeDefaults: true,
     });
     const skillsMap = new Map<string, string>();
-    for (const skill of skills) skillsMap.set(skill.name, skill.sourceInfo.source);
+    for (const skill of skills)
+      skillsMap.set(skill.name, skill.sourceInfo.source);
     return skillsMap;
   }
 
@@ -332,12 +338,7 @@ export class AgentHandle {
       const promptId = randomUUID();
       const done = this.hostApi.waitForPromptDone(this.name, promptId);
       try {
-        await this.provider.prompt(
-          this.sandboxInfo.id,
-          promptId,
-          text,
-          images,
-        );
+        await this.provider.prompt(this.sandboxInfo.id, promptId, text, images);
       } catch (err) {
         this.hostApi.cancelPendingPrompt(this.name, promptId);
         throw err;
@@ -421,6 +422,8 @@ export class AgentHandle {
     const composed = composeSystemPrompt({
       name: this.name,
       cwd: this.provider ? "/workspace" : this.cwd,
+      sharedDir:
+        this.sharedDir && this.provider ? SANDBOX_SHARED_PATH : this.sharedDir,
       description: this.config.description,
       customPrompt: this.config.systemPrompt,
       envNames: Object.keys(this.config.env ?? {}),
