@@ -77,6 +77,7 @@ export class Workspace {
       config.tickIntervalMs ?? 2000,
       this.office.channels,
       this.office.dir,
+      this.office.channelContext,
     );
     this.watchdog = new Watchdog(
       this.agents,

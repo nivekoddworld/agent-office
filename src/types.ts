@@ -143,6 +143,7 @@ export interface OfficeYaml {
     cron?: Record<string, OfficeCronYamlEntry>;
     channels?: Record<string, { members: string[]; description?: string }>;
     default_model?: string;
+    channel_context?: number;
     providers?: Record<
       string,
       import("./models/resolve-model.js").LocalProviderConfig
@@ -160,6 +161,8 @@ export interface OfficeContext {
   dir: string;
   channels: Map<string, ChannelConfig>;
   models: import("./models/resolve-model.js").OfficeModelSettings;
+  /** Channel messages shown before one that wakes an agent (office.channel_context). */
+  channelContext?: number;
 }
 
 // --- Workspace ---

@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Scheduler } from "../src/scheduler/scheduler.js";
 import { MessageBus } from "../src/transport/message-bus.js";
@@ -76,9 +79,11 @@ describe("Scheduler", () => {
     // Both should be dispatched — high first due to priority sort
     expect(high.prompt).toHaveBeenCalledWith(
       "[Message from user]\nhi\n\n[To reply, call message_user]",
+      undefined,
     );
     expect(low.prompt).toHaveBeenCalledWith(
       "[Message from user]\nlo\n\n[To reply, call message_user]",
+      undefined,
     );
     expect(high.setStatus).toHaveBeenCalledWith("running");
     expect(low.setStatus).toHaveBeenCalledWith("running");
@@ -158,6 +163,7 @@ describe("Scheduler", () => {
     expect(target.prompt).toHaveBeenCalledWith(
       "[Message from copywriter]\nhere's the copy\n\n" +
         '[To reply, call message_agent with to="copywriter"]',
+      undefined,
     );
   });
 
@@ -184,6 +190,7 @@ describe("Scheduler", () => {
 
     expect(target.prompt).toHaveBeenCalledWith(
       "[Message from user]\ndo stuff\n\n[To reply, call message_user]",
+      undefined,
     );
   });
 
@@ -210,6 +217,7 @@ describe("Scheduler", () => {
 
     expect(target.prompt).toHaveBeenCalledWith(
       "[Scheduled trigger]\nRun standup",
+      undefined,
     );
   });
 
@@ -383,6 +391,85 @@ describe("Scheduler", () => {
       return new Map(entries);
     }
 
+    it("includes earlier channel messages the agent was not mentioned in", () => {
+      const baseDir = mkdtempSync(join(tmpdir(), "sched-ch-"));
+      const sessions = join(baseDir, "agents", "lead", "sessions");
+      mkdirSync(sessions, { recursive: true });
+      const log = [
+        { from: "__user__", text: "Everyone vote A or B" },
+        { from: "coder", text: "I vote A" },
+        { from: "designer", text: "B for me" },
+        { from: "__user__", text: "@lead count the votes" },
+      ];
+      writeFileSync(
+        join(sessions, "channel-general.jsonl"),
+        log.map((e) => JSON.stringify(e)).join("\n") + "\n",
+      );
+
+      const agents = new Map<string, any>();
+      const bus = new MessageBus();
+      const target = mockHandle("lead", Priority.NORMAL);
+      agents.set("lead", target);
+      bus.register("lead");
+      bus.send({
+        from: "__user__",
+        to: "lead",
+        type: "prompt",
+        payload: "@lead count the votes",
+        priority: Priority.NORMAL,
+        sourceKind: "channel",
+        channel: "general",
+      });
+
+      const channels = makeChannels([
+        "general",
+        { members: ["lead", "coder", "designer"] },
+      ]);
+      const sched = new Scheduler(agents, bus, 100, channels, baseDir, 2);
+      sched.start();
+      vi.advanceTimersByTime(100);
+      sched.stop();
+
+      const prompt = target.prompt.mock.calls[0]![0] as string;
+      expect(prompt).toMatch(
+        /^\[Earlier in #general, oldest first\]\ncoder: I vote A\ndesigner: B for me\n\n\[Message from user in #general/,
+      );
+      // limited to 2 earlier messages, and the trigger isn't repeated
+      expect(prompt).not.toContain("Everyone vote A or B");
+      expect(prompt.match(/count the votes/g)).toHaveLength(1);
+      rmSync(baseDir, { recursive: true, force: true });
+    });
+
+    it("adds no earlier messages when channel_context is 0", () => {
+      const baseDir = mkdtempSync(join(tmpdir(), "sched-ch-"));
+      const sessions = join(baseDir, "agents", "lead", "sessions");
+      mkdirSync(sessions, { recursive: true });
+      writeFileSync(
+        join(sessions, "channel-general.jsonl"),
+        JSON.stringify({ from: "coder", text: "I vote A" }) + "\n",
+      );
+      const agents = new Map<string, any>();
+      const bus = new MessageBus();
+      const target = mockHandle("lead", Priority.NORMAL);
+      agents.set("lead", target);
+      bus.register("lead");
+      bus.send({
+        from: "__user__",
+        to: "lead",
+        type: "prompt",
+        payload: "count",
+        priority: Priority.NORMAL,
+        sourceKind: "channel",
+        channel: "general",
+      });
+      const sched = new Scheduler(agents, bus, 100, new Map(), baseDir, 0);
+      sched.start();
+      vi.advanceTimersByTime(100);
+      sched.stop();
+      expect(target.prompt.mock.calls[0]![0]).not.toContain("Earlier in");
+      rmSync(baseDir, { recursive: true, force: true });
+    });
+
     it("prepends channel context to user messages", () => {
       const agents = new Map<string, any>();
       const bus = new MessageBus();
@@ -412,6 +499,7 @@ describe("Scheduler", () => {
       expect(target.prompt).toHaveBeenCalledWith(
         "[Message from user in #general. Other members: designer, pm]\nHello everyone\n\n" +
           '[To reply, call post_channel with channel="#general"]',
+        undefined,
       );
     });
 
@@ -445,6 +533,7 @@ describe("Scheduler", () => {
         "[Message from pm in #general. Other members: designer]\n" +
           "I think we should refactor\n\n" +
           '[To reply, call post_channel with channel="#general" and mentions=["agent-name"]. Only mention agents who need to act on your message.]',
+        undefined,
       );
     });
 
@@ -474,6 +563,7 @@ describe("Scheduler", () => {
       expect(target.prompt).toHaveBeenCalledWith(
         "[Message from user in #dev. Other members: bob]\nhi\n\n" +
           '[To reply, call post_channel with channel="#dev"]',
+        undefined,
       );
     });
 
@@ -502,6 +592,7 @@ describe("Scheduler", () => {
 
       expect(target.prompt).toHaveBeenCalledWith(
         '[Message from user in #unknown]\nhello\n\n[To reply, call post_channel with channel="#unknown"]',
+        undefined,
       );
     });
   });

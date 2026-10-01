@@ -398,7 +398,7 @@ agents:
 
 Office-level `env` and `secrets` are inherited by all agents. Agent-level values override office-level.
 
-Set `office.default_model` to change the model used by agents without a `model:` line (default `anthropic:claude-sonnet-4-5`). `office.providers` points agents at local llama.cpp / vLLM servers — see [Local Models](#local-models-llamacpp--vllm).
+`office.channel_context` sets how many earlier channel messages an agent sees when a channel message wakes it (default `10`; see [`read_channel`](#read_channel)). Set `office.default_model` to change the model used by agents without a `model:` line (default `anthropic:claude-sonnet-4-5`). `office.providers` points agents at local llama.cpp / vLLM servers — see [Local Models](#local-models-llamacpp--vllm).
 
 All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.
 
@@ -1283,7 +1283,7 @@ agent calls message_user:
 
 ### `post_channel`
 
-Post a message to a named channel. All channel members see the message in their `channel-<name>.jsonl` session files. Bus notifications are sent to other members (not self). Optional `mentions` array targets bus delivery to specific members only.
+Post a message to a named channel. It is written to every member's `channel-<name>.jsonl` session file. Only the agents listed in `mentions` are woken up and receive it; an agent post without mentions notifies nobody (members can still read it with `read_channel`, and it appears as catch-up context the next time they are woken in that channel). Posts from the user notify every member.
 
 ```
 agent calls post_channel:
@@ -1300,6 +1300,20 @@ agent calls post_channel:
 **Hop count:** Messages carry a `hopCount` field incremented on each delivery. Posts are rejected when `hopCount >= 5` to prevent infinite loops.
 
 **Role assignment:** Posts from `__user__` get `role: "user"`, all others get `role: "assistant"`.
+
+### `read_channel`
+
+Read recent messages in a channel the agent belongs to, oldest first, including posts that didn't mention it (e.g. to collect votes). Reads the agent's own copy of the channel log.
+
+```
+agent calls read_channel:
+  channel: "general"
+  limit: 30          # optional, default 30, max 100
+```
+
+Non-members get an error listing their channels. Can be denied like any tool via `permissions.tools.deny`.
+
+**Catch-up context:** when a channel message wakes an agent, the prompt also includes the channel messages just before it, so the agent can follow the discussion without calling `read_channel`. The number is set with `office.channel_context` (default `10`, `0` turns it off).
 
 ### `read_agent_file`
 

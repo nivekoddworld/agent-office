@@ -4,6 +4,12 @@ import type { ImageContent } from "@earendil-works/pi-ai";
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
 import type { ChannelConfig, InboxMessage, SchedulerState } from "../types.js";
+import {
+  DEFAULT_CHANNEL_CONTEXT,
+  formatChannelLog,
+  messagesBefore,
+  readChannelLog,
+} from "../channels/channel-history.js";
 import { DEFAULT_HEARTBEAT_PROMPT, isWithinActiveHours } from "./heartbeat.js";
 
 /**
@@ -19,6 +25,7 @@ export class Scheduler {
   private _intervalMs: number;
   private _channels: Map<string, ChannelConfig>;
   private _baseDir: string;
+  private _channelContext: number;
   private listeners: Array<(state: SchedulerState) => void> = [];
   private lastHeartbeatTs = new Map<string, number>();
 
@@ -28,12 +35,14 @@ export class Scheduler {
     intervalMs = 2000,
     channels?: Map<string, ChannelConfig>,
     baseDir?: string,
+    channelContext = DEFAULT_CHANNEL_CONTEXT,
   ) {
     this.agents = agents;
     this.bus = bus;
     this._intervalMs = intervalMs;
     this._channels = channels ?? new Map();
     this._baseDir = baseDir ?? "";
+    this._channelContext = channelContext;
   }
 
   get tickCount(): number {
@@ -106,7 +115,11 @@ export class Scheduler {
       handle.setActiveHopCount(msg.hopCount ?? 0);
       handle.setActiveCorrelationId(msg.correlationId);
 
-      const payload = formatMessagePayload(msg, this._channels);
+      const payload = formatMessagePayload(
+        msg,
+        this._channels,
+        this.earlierInChannel(handle.name, msg),
+      );
       const images = resolveAttachments(msg, this._baseDir);
       const dispatch =
         msg.type === "steer"
@@ -159,6 +172,21 @@ export class Scheduler {
     const state = this.state();
     for (const fn of this.listeners) fn(state);
   }
+  /**
+   * Channel messages before the one waking `agentName`, so it can follow a
+   * discussion it wasn't mentioned in (e.g. collecting votes).
+   */
+  private earlierInChannel(agentName: string, msg: InboxMessage): string {
+    if (msg.sourceKind !== "channel" || !msg.channel || !this._baseDir) {
+      return "";
+    }
+    const earlier = messagesBefore(
+      readChannelLog(this._baseDir, agentName, msg.channel),
+      { from: msg.from, text: msg.payload },
+      this._channelContext,
+    );
+    return earlier.length > 0 ? formatChannelLog(earlier) : "";
+  }
 }
 
 /** Build channel context suffix like ` in #general. Other members: a, b`. */
@@ -199,19 +227,25 @@ function resolveAttachments(
 function formatMessagePayload(
   msg: InboxMessage,
   channels: Map<string, ChannelConfig>,
+  earlier = "",
 ): string {
   if (msg.sourceKind === "channel" && msg.channel) {
     const ctx = channelContext(msg, channels);
+    const history = earlier
+      ? `[Earlier in #${msg.channel}, oldest first]\n${earlier}\n\n`
+      : "";
     if (msg.from === "__user__") {
       return (
+        history +
         `[Message from user${ctx}]\n${msg.payload}\n\n` +
         `[To reply, call post_channel with channel="#${msg.channel}"]`
       );
     }
     if (msg.from === "__cron__") {
-      return `[Scheduled trigger${ctx}]\n${msg.payload}`;
+      return `${history}[Scheduled trigger${ctx}]\n${msg.payload}`;
     }
     return (
+      history +
       `[Message from ${msg.from}${ctx}]\n${msg.payload}\n\n` +
       `[To reply, call post_channel with channel="#${msg.channel}" and mentions=["agent-name"]. Only mention agents who need to act on your message.]`
     );
