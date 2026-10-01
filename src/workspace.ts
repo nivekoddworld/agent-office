@@ -29,6 +29,7 @@ import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
+import { appendActivity, toActivityEntry } from "./activity/activity-log.js";
 import {
   CronService,
   type CronChannelFanout,
@@ -387,7 +388,19 @@ export class Workspace {
         ...(sk ? { sessionKey: sk } : {}),
         ...(sourceKind ? { sourceKind } : {}),
         ...(reportChannel ? { reportChannel } : {}),
+        ...(originTaskId ? { originTaskId } : {}),
       } as unknown as AgentEvent;
+
+      const activity = toActivityEntry(
+        event as unknown as Record<string, unknown>,
+      );
+      if (activity) {
+        try {
+          appendActivity(this.office.dir, config.name, activity);
+        } catch {
+          // Best-effort: never fail agent flow
+        }
+      }
 
       if (event.type === "message_start") {
         const _e = event as unknown as Record<string, unknown>;
