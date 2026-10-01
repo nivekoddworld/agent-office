@@ -121,6 +121,11 @@ vi.mock("../src/agent/tools/index.js", () => ({
     parameters: {},
     execute: vi.fn(),
   }),
+  createReadChannelTool: () => ({
+    name: "read_channel",
+    parameters: {},
+    execute: vi.fn(),
+  }),
 }));
 
 function makeBus(): MessageBus {

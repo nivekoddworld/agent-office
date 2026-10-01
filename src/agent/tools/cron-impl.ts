@@ -142,7 +142,9 @@ export async function cronAddImpl(
     );
 
     /** Normalize bare agent names → @agent so parseReportTarget works correctly. */
-    const normalizeReportChannel = (rc: string | undefined): string | undefined => {
+    const normalizeReportChannel = (
+      rc: string | undefined,
+    ): string | undefined => {
       if (!rc) return undefined;
       if (rc.startsWith("@")) return rc;
       if (knownAgents.has(rc)) return `@${rc}`;

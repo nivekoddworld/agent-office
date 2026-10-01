@@ -438,7 +438,7 @@ export function validateChannelEntry(
   return errors;
 }
 
-/** Validate `office.default_model` and `office.providers`. */
+/** Validate `office.default_model`, `office.channel_context` and `office.providers`. */
 export function validateOfficeModels(office: OfficeYaml["office"]): string[] {
   const errors: string[] = [];
   const dm = office.default_model;
@@ -446,6 +446,11 @@ export function validateOfficeModels(office: OfficeYaml["office"]): string[] {
     errors.push(
       `office.default_model: invalid model "${String(dm)}" — must be "provider:model-id"`,
     );
+  }
+
+  const cc = office.channel_context;
+  if (cc !== undefined && !(Number.isInteger(cc) && cc >= 0 && cc <= 100)) {
+    errors.push("office.channel_context must be a whole number from 0 to 100");
   }
 
   const providers = office.providers;

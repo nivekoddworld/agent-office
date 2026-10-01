@@ -1,3 +1,4 @@
+import { readChannelForAgent } from "../channels/channel-history.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import { loadSkills } from "@earendil-works/pi-coding-agent";
@@ -523,4 +524,39 @@ export async function handlePostChannel(
   const status = result.ok ? 200 : (EGRESS_STATUS_MAP[result.reason] ?? 500);
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(result));
+}
+
+export async function handleReadChannel(
+  req: IncomingMessage,
+  res: ServerResponse,
+  agentName: string,
+  deps: EgressDeps,
+): Promise<void> {
+  const body = await readBody(req);
+  let parsed: { channel?: unknown; limit?: unknown } = {};
+  try {
+    parsed = JSON.parse(body || "{}");
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Invalid JSON" }));
+    return;
+  }
+  if (typeof parsed.channel !== "string" || !parsed.channel.trim()) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Missing channel" }));
+    return;
+  }
+  const result = readChannelForAgent(
+    deps.baseDir,
+    agentName,
+    deps.channels,
+    parsed.channel,
+    typeof parsed.limit === "number" ? parsed.limit : undefined,
+  );
+  res.writeHead(result.ok ? 200 : 403, { "Content-Type": "application/json" });
+  res.end(
+    JSON.stringify(
+      result.ok ? { result: result.text } : { error: result.error },
+    ),
+  );
 }

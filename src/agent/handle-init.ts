@@ -33,6 +33,7 @@ import {
   createTaskDeleteTool,
   createMessageUserTool,
   createPostChannelTool,
+  createReadChannelTool,
 } from "./tools/index.js";
 import { appendSession } from "../sessions/session-writer.js";
 import {
@@ -304,6 +305,11 @@ export async function initInProcessAgent(
       getActiveCorrelationId: () => handle?.getActiveCorrelationId(),
       getActiveSessionKey: () => handle?.getActiveSessionKey(),
       getActiveHopCount: () => handle?.getActiveHopCount() ?? 0,
+    }),
+    createReadChannelTool({
+      agentName: ctx.name,
+      baseDir: ctx.baseDir,
+      channels: sessionDeps?.channels ?? new Map(),
     }),
     ...(ctx.config.tools ?? []),
   ];
