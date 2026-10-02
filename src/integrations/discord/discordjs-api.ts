@@ -11,6 +11,8 @@ import {
   type Guild,
   type GuildBasedChannel,
 } from "discord.js";
+import type { RESTOptions } from "discord.js";
+import { discordFetch } from "./discord-fetch.js";
 import {
   UnknownMessageError,
   UnknownWebhookError,
@@ -171,7 +173,13 @@ export async function connectDiscord(
         // Uploads can take longer than the default 15 s timeout.
         wc = new WebhookClient(
           { id: hook.id, token: hook.token },
-          { rest: { timeout: 60_000, retries: 1 } },
+          {
+            rest: {
+              timeout: 60_000,
+              retries: 1,
+              makeRequest: discordFetch as RESTOptions["makeRequest"],
+            },
+          },
         );
         webhookClients.set(hook.id, wc);
       }
