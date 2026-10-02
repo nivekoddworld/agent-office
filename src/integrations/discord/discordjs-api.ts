@@ -7,6 +7,7 @@ import {
   GatewayIntentBits,
   PermissionFlagsBits,
   RESTJSONErrorCodes,
+  Routes,
   WebhookClient,
   type Guild,
   type GuildBasedChannel,
@@ -32,6 +33,8 @@ const REQUIRED = {
   ManageChannels: PermissionFlagsBits.ManageChannels,
   ManageRoles: PermissionFlagsBits.ManageRoles,
   ManageWebhooks: PermissionFlagsBits.ManageWebhooks,
+  AddReactions: PermissionFlagsBits.AddReactions,
+  SendMessagesInThreads: PermissionFlagsBits.SendMessagesInThreads,
 };
 
 /** Log in as the bot and return the Discord operations the bridge uses. */
@@ -84,6 +87,28 @@ export async function connectDiscord(
     );
 
   const webhookClients = new Map<string, WebhookClient>();
+  /** A channel or thread the bot can post in (threads aren't always cached). */
+  const sendable = async (id: string) => {
+    const c =
+      guild.channels.cache.get(id) ??
+      (await client.channels.fetch(id).catch(() => null));
+    return c && c.isSendable() && "guildId" in c ? c : undefined;
+  };
+  const gone = (err: unknown) =>
+    err instanceof DiscordAPIError &&
+    (err.code === RESTJSONErrorCodes.UnknownMessage ||
+      err.code === RESTJSONErrorCodes.UnknownChannel);
+  /** Missing permissions etc.: log once per kind and carry on. */
+  const warned = new Set<string>();
+  const bestEffort = (what: string) => (err: unknown) => {
+    if (gone(err)) throw err;
+    if (!warned.has(what)) {
+      warned.add(what);
+      console.warn(
+        `[discord] Couldn't ${what}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  };
   const find = (pred: (c: GuildBasedChannel) => boolean) =>
     guild.channels.cache.find(pred);
 
@@ -160,7 +185,11 @@ export async function connectDiscord(
 
     async createWebhook(channelId) {
       const channel = guild.channels.cache.get(channelId);
-      if (!channel || channel.type !== ChannelType.GuildText)
+      if (
+        !channel ||
+        (channel.type !== ChannelType.GuildText &&
+          channel.type !== ChannelType.GuildForum)
+      )
         throw new Error(`Discord channel ${channelId} not found`);
       const hook = await channel.createWebhook({ name: "agent-office" });
       if (!hook.token)
@@ -191,6 +220,7 @@ export async function connectDiscord(
           ...(msg.avatarUrl ? { avatarURL: msg.avatarUrl } : {}),
           // Only the roles we mean to ping; never @everyone or users.
           allowedMentions: { parse: [], roles: msg.pingRoles ?? [] },
+          ...(msg.threadId ? { threadId: msg.threadId } : {}),
           ...(msg.files?.length
             ? {
                 files: msg.files.map((f) => ({
@@ -216,9 +246,8 @@ export async function connectDiscord(
     },
 
     async sendMessage(channelId, content) {
-      const channel = guild.channels.cache.get(channelId);
-      if (!channel || channel.type !== ChannelType.GuildText)
-        throw new Error(`Discord channel ${channelId} not found`);
+      const channel = await sendable(channelId);
+      if (!channel) throw new Error(`Discord channel ${channelId} not found`);
       const msg = await channel.send({
         content,
         allowedMentions: { parse: [] },
@@ -245,6 +274,91 @@ export async function connectDiscord(
       }
     },
 
+    async ensureForum(name, categoryId, opts) {
+      const known = opts.knownId && guild.channels.cache.get(opts.knownId);
+      let forum =
+        known && known.type === ChannelType.GuildForum
+          ? known
+          : guild.channels.cache.find(
+              (c) =>
+                c.type === ChannelType.GuildForum &&
+                c.name === name &&
+                c.parentId === categoryId,
+            );
+      if (!forum || forum.type !== ChannelType.GuildForum) {
+        forum = await guild.channels.create({
+          name,
+          type: ChannelType.GuildForum,
+          parent: categoryId,
+          ...(opts.topic ? { topic: opts.topic.slice(0, 1024) } : {}),
+          availableTags: opts.tags.map((t) => ({ name: t })),
+        });
+      }
+      const have = new Set(forum.availableTags.map((t) => t.name));
+      const missing = opts.tags.filter((t) => !have.has(t));
+      if (missing.length)
+        forum = await forum.setAvailableTags([
+          ...forum.availableTags,
+          ...missing.map((t) => ({ name: t })),
+        ]);
+      const tags = Object.fromEntries(
+        forum.availableTags.map((t) => [t.name, t.id]),
+      );
+      return { id: forum.id, tags };
+    },
+
+    async createPost(forumId, title, content, tagIds) {
+      const forum = guild.channels.cache.get(forumId);
+      if (!forum || forum.type !== ChannelType.GuildForum)
+        throw new Error(`Discord forum ${forumId} not found`);
+      const thread = await forum.threads.create({
+        name: title.slice(0, 100),
+        message: { content, allowedMentions: { parse: [] } },
+        appliedTags: tagIds.slice(0, 5),
+      });
+      // A forum post's first message has the thread's id.
+      return { threadId: thread.id, messageId: thread.id };
+    },
+
+    async updatePost(threadId, messageId, change) {
+      try {
+        const thread = await client.channels.fetch(threadId);
+        if (!thread?.isThread()) throw new UnknownMessageError("not a thread");
+        if (thread.archived && change.archived !== true)
+          await thread
+            .setArchived(false)
+            .catch(bestEffort("reopen a task post"));
+        if (change.content !== undefined)
+          await thread.messages.edit(messageId, {
+            content: change.content,
+            allowedMentions: { parse: [] },
+          });
+        if (change.tagIds)
+          await thread
+            .setAppliedTags(change.tagIds.slice(0, 5))
+            .catch(bestEffort("set a task post's tags"));
+        if (
+          change.archived !== undefined &&
+          change.archived !== thread.archived
+        )
+          await thread
+            .setArchived(change.archived)
+            .catch(bestEffort("archive a task post"));
+      } catch (err) {
+        if (gone(err)) throw new UnknownMessageError(String(err));
+        throw err;
+      }
+    },
+
+    async react(channelId, messageId, emoji, on) {
+      const route = Routes.channelMessageOwnReaction(
+        channelId,
+        messageId,
+        encodeURIComponent(emoji),
+      );
+      await (on ? client.rest.put(route) : client.rest.delete(route));
+    },
+
     async sendTyping(channelId) {
       const channel = guild.channels.cache.get(channelId);
       if (channel?.type === ChannelType.GuildText) await channel.sendTyping();
@@ -262,8 +376,16 @@ export async function connectDiscord(
     onMessage(fn: (m: IncomingMessage) => void) {
       client.on(Events.MessageCreate, (m) => {
         if (m.guildId !== guildId) return;
+        const thread = m.channel.isThread() ? m.channel : undefined;
         fn({
+          id: m.id,
           channelId: m.channelId,
+          ...(thread
+            ? {
+                parentId: thread.parentId ?? undefined,
+                threadName: thread.name,
+              }
+            : {}),
           content: m.content,
           roleIds: [...m.mentions.roles.keys()],
           attachmentUrls: [...m.attachments.values()].map((a) => a.url),

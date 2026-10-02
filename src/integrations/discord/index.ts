@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { attachmentPath, saveUpload } from "../../egress/files.js";
 import { avatarFromIdentity } from "../../agent/tools/set-avatar.js";
 import type { Workspace } from "../../workspace.js";
+import { Priority } from "../../types.js";
 import { onEgress } from "../../egress/egress-impl.js";
 import { DiscordBridge } from "./bridge.js";
 import { connectDiscord } from "./discordjs-api.js";
@@ -101,6 +102,12 @@ export async function startDiscordBridge(
             attachments,
           ),
         attachmentPath: (id) => attachmentPath(workspace.office.dir, id),
+        tasks: () => workspace.tasks.list(),
+        createTask: (t) =>
+          workspace.tasks.create("__user__", {
+            ...t,
+            priority: Priority.NORMAL,
+          }),
         importImage: async (img) => {
           const res = await fetch(img.url, {
             signal: AbortSignal.timeout(30_000),
@@ -123,6 +130,7 @@ export async function startDiscordBridge(
           env["DISCORD_AVATAR_URL"],
         ),
         activity: env["DISCORD_ACTIVITY"]?.trim().toLowerCase() !== "off",
+        alerts: env["DISCORD_ALERTS"]?.trim().toLowerCase() !== "off",
         typing: env["DISCORD_TYPING"]?.trim().toLowerCase() !== "off",
         ...(Number(env["DISCORD_MAX_UPLOAD_MB"]) > 0
           ? { maxUploadBytes: Number(env["DISCORD_MAX_UPLOAD_MB"]) * 1048576 }
@@ -134,6 +142,7 @@ export async function startDiscordBridge(
       onEgress((e) => bridge.handleEgress(e)),
       workspace.onUserDm((e) => bridge.handleUserDm(e)),
       workspace.onActivity((name, entry) => bridge.handleActivity(name, entry)),
+      workspace.tasks.onChange(() => bridge.handleTasksChanged()),
       workspace.onAgentEvent((name, event) =>
         bridge.handleAgentEvent(
           name,

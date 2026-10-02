@@ -15,6 +15,7 @@ import {
   type WebhookMessage,
 } from "../src/integrations/discord/types.js";
 import type { ChannelConfig } from "../src/types.js";
+import type { Task } from "../src/tasks/types.js";
 
 /** In-memory Discord server. */
 class FakeDiscord implements DiscordApi {
@@ -73,6 +74,70 @@ class FakeDiscord implements DiscordApi {
     this.hooks.set(id, channelId);
     return { id, token: `tok-${id}` };
   }
+  forums = new Map<
+    string,
+    { name: string; parent: string; tags: Record<string, string> }
+  >();
+  /** Forum posts by thread id. */
+  threads = new Map<
+    string,
+    {
+      forumId: string;
+      title: string;
+      tagIds: string[];
+      archived: boolean;
+      messages: Map<string, string>;
+    }
+  >();
+  reactions: string[] = [];
+  async ensureForum(
+    name: string,
+    parent: string,
+    opts: { knownId?: string; topic?: string; tags: string[] },
+  ) {
+    let id = opts.knownId && this.forums.has(opts.knownId) ? opts.knownId : "";
+    if (!id) {
+      id = this.id();
+      this.forums.set(id, { name, parent, tags: {} });
+    }
+    const f = this.forums.get(id)!;
+    for (const t of opts.tags) f.tags[t] ??= `tag-${t}`;
+    return { id, tags: { ...f.tags } };
+  }
+  async createPost(
+    forumId: string,
+    title: string,
+    content: string,
+    tagIds: string[],
+  ) {
+    const threadId = this.id();
+    this.threads.set(threadId, {
+      forumId,
+      title,
+      tagIds,
+      archived: false,
+      messages: new Map([[threadId, content]]),
+    });
+    return { threadId, messageId: threadId };
+  }
+  async updatePost(
+    threadId: string,
+    messageId: string,
+    change: { content?: string; tagIds?: string[]; archived?: boolean },
+  ) {
+    const t = this.threads.get(threadId);
+    if (!t || !t.messages.has(messageId)) throw new UnknownMessageError("gone");
+    if (change.content !== undefined) t.messages.set(messageId, change.content);
+    if (change.tagIds) t.tagIds = change.tagIds;
+    if (change.archived !== undefined) t.archived = change.archived;
+  }
+  async react(_c: string, messageId: string, emoji: string, on: boolean) {
+    this.reactions.push(`${on ? "+" : "-"}${emoji} ${messageId}`);
+  }
+  /** A post's card (its first message). */
+  card(threadId: string) {
+    return this.threads.get(threadId)?.messages.get(threadId);
+  }
   async sendWebhook(hook: { id: string }, msg: WebhookMessage) {
     if (this.deadHooks.has(hook.id)) throw new UnknownWebhookError("gone");
     this.sent.push({ channelId: this.hooks.get(hook.id)!, ...msg });
@@ -86,6 +151,7 @@ class FakeDiscord implements DiscordApi {
   presence: Array<{ text: string; busy: boolean }> = [];
   async sendMessage(channelId: string, content: string) {
     const id = this.id();
+    this.threads.get(channelId)?.messages.set(id, content);
     this.botMessages.set(id, { channelId, content });
     return id;
   }
@@ -869,5 +935,265 @@ describe("egress events", () => {
         origin: "discord",
       },
     ]);
+  });
+});
+
+describe("Discord tasks forum, receipts and alerts", () => {
+  let dir: string;
+  let discord: FakeDiscord;
+  let host: ReturnType<typeof makeHost> & {
+    tasks(): Task[];
+    createTask: BridgeHost["createTask"];
+  };
+  let tasks: Task[];
+  let bridge: DiscordBridge;
+  const T = 1_700_000_000_000;
+
+  const task = (id: string, over: Partial<Task> = {}): Task => ({
+    id,
+    title: `Task ${id}`,
+    description: `Do ${id}`,
+    status: "todo",
+    priority: 2,
+    assignee: "coder",
+    createdBy: "lead",
+    dependsOn: [],
+    createdAt: T,
+    updatedAt: T,
+    ...over,
+  });
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), "discord-tasks-"));
+    discord = new FakeDiscord();
+    tasks = [
+      task("a1"),
+      task("b2", { dependsOn: ["a1"], status: "waiting" }),
+      // Long done: no post.
+      task("old", { status: "done", completedAt: T }),
+    ];
+    host = Object.assign(makeHost(), {
+      tasks: () => tasks,
+      createTask: vi.fn(
+        (t: { title: string; description: string; assignee: string }) => {
+          const made = task("new1", t);
+          tasks.push(made);
+          return made;
+        },
+      ),
+    });
+    bridge = new DiscordBridge(discord, host, {
+      guildId: "g1",
+      statePath: join(dir, "discord.json"),
+      avatarUrl: (n) => `https://avatars/${n}.png`,
+      activityIntervals: { editIntervalMs: 0, presenceIntervalMs: 0 },
+    });
+    await bridge.start();
+  });
+  afterEach(async () => {
+    await bridge.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const post = (title: string) =>
+    [...discord.threads].find(([, t]) => t.title === title)!;
+  const forumId = () =>
+    [...discord.forums].find(([, f]) => f.name === "tasks")![0];
+  const say = (m: Partial<IncomingMessage>) =>
+    discord.listener!({
+      channelId: "",
+      content: "",
+      roleIds: [],
+      attachmentUrls: [],
+      fromBot: false,
+      ...m,
+    });
+
+  it("makes a post per task with a card and status/priority tags", () => {
+    expect([...discord.threads.values()].map((t) => t.title)).toEqual([
+      "Task a1",
+      "Task b2",
+    ]);
+    const f = discord.forums.get(forumId())!;
+    expect(discord.categories.get(f.parent)?.name).toBe("Local Team");
+    const [aId, a] = post("Task a1");
+    expect(a.tagIds).toEqual(["tag-todo", "tag-normal"]);
+    expect(discord.card(aId)).toContain("`#a1` · **todo** · normal priority");
+    expect(discord.card(aId)).toContain(
+      "Assigned to **coder** · created by **lead**",
+    );
+    const [bId, b] = post("Task b2");
+    expect(b.tagIds).toEqual(["tag-waiting", "tag-normal"]);
+    expect(discord.card(bId)).toContain(`Depends on: <#${aId}> (todo)`);
+  });
+
+  it("updates the card, posts the result as the assignee and archives it when done", async () => {
+    const [aId] = post("Task a1");
+    tasks[0] = task("a1", {
+      status: "done",
+      result: "Built it",
+      startedAt: T + 1000,
+      completedAt: T + 60_000,
+    });
+    bridge.handleTasksChanged();
+    await bridge.idle();
+    const a = discord.threads.get(aId)!;
+    expect(a.tagIds).toEqual(["tag-done", "tag-normal"]);
+    expect(a.archived).toBe(true);
+    expect(discord.card(aId)).toContain("**done**");
+    const result = discord.sent.find((s) => s.threadId === aId)!;
+    expect(result).toMatchObject({
+      username: "coder",
+      content: "**Done.** Built it",
+      avatarUrl: "https://avatars/coder.png",
+    });
+    // The dependent task's card follows.
+    expect(discord.card(post("Task b2")[0])).toContain(`<#${aId}> (done)`);
+    // Nothing changed: nothing sent again.
+    const n = discord.sent.length;
+    bridge.handleTasksChanged();
+    await bridge.idle();
+    expect(discord.sent.length).toBe(n);
+  });
+
+  it("marks deleted tasks", async () => {
+    const [bId] = post("Task b2");
+    tasks = tasks.filter((t) => t.id !== "b2");
+    bridge.handleTasksChanged();
+    await bridge.idle();
+    expect(discord.card(bId)).toMatch(/^~~.*~~\n\nThis task was deleted\.$/s);
+    expect(discord.threads.get(bId)!.archived).toBe(true);
+  });
+
+  it("sends your reply in a post to the assignee, and its answer back to the post", async () => {
+    const [aId] = post("Task a1");
+    say({ id: "m1", channelId: aId, parentId: forumId(), content: "use blue" });
+    await bridge.idle();
+    const text = '[About task #a1 "Task a1"]\nuse blue';
+    expect(host.dms).toEqual([{ agent: "coder", text, origin: "discord" }]);
+    expect(discord.reactions).toEqual(["+👍 m1"]);
+
+    bridge.handleActivity("coder", {
+      ts: T,
+      type: "agent_start",
+      trigger: { from: "__user__", text },
+    });
+    bridge.handleEgress({ kind: "dm", agent: "coder", text: "Will do" });
+    bridge.handleActivity("coder", { ts: T + 1, type: "agent_end" });
+    await bridge.idle();
+    expect(discord.sent.at(-1)).toMatchObject({
+      threadId: aId,
+      username: "coder",
+      content: "Will do",
+    });
+    expect(discord.reactions).toEqual(["+👍 m1", "-👍 m1"]);
+    // Later DMs go to the DM channel as usual.
+    bridge.handleEgress({ kind: "dm", agent: "coder", text: "Hi" });
+    await bridge.idle();
+    expect(discord.posts("dm-coder")).toEqual(["coder: Hi"]);
+  });
+
+  it("turns a post you start into a task for the agent it mentions", async () => {
+    say({
+      id: "p1",
+      channelId: "p1",
+      parentId: forumId(),
+      threadName: "Make a logo",
+      content: "@artist something round",
+    });
+    await bridge.idle();
+    expect(host.createTask).toHaveBeenCalledWith({
+      title: "Make a logo",
+      description: "@artist something round",
+      assignee: "artist",
+    });
+    // Its card goes in as the bot's reply in your post.
+    expect(discord.botPosts("").length).toBe(0);
+    const cards = [...discord.botMessages.values()].filter(
+      (m) => m.channelId === "p1",
+    );
+    expect(cards[0]!.content).toContain("`#new1` · **todo**");
+
+    say({ id: "p2", channelId: "p2", parentId: forumId(), content: "hello" });
+    await bridge.idle();
+    expect(
+      [...discord.botMessages.values()].find((m) => m.channelId === "p2")!
+        .content,
+    ).toBe("To make this post a task, mention who should do it, e.g. @coder.");
+  });
+
+  it("puts a 👍 on your DM until the agent's wake-up for it ends", async () => {
+    discord.type("dm-lead", "first", { id: "d1" });
+    discord.type("dm-lead", "second", { id: "d2" });
+    await bridge.idle();
+    expect(discord.reactions).toEqual(["+👍 d1", "+👍 d2"]);
+    for (const text of ["first", "second"]) {
+      bridge.handleActivity("lead", {
+        ts: T,
+        type: "agent_start",
+        trigger: { from: "__user__", text },
+      });
+      bridge.handleActivity("lead", { ts: T + 1, type: "agent_end" });
+      await bridge.idle();
+    }
+    expect(discord.reactions).toEqual(["+👍 d1", "+👍 d2", "-👍 d1", "-👍 d2"]);
+  });
+
+  it("in a channel, keeps the 👍 until every agent it woke is done", async () => {
+    discord.type("work", "@coder @lead go", { id: "c1" });
+    await bridge.idle();
+    const end = (agent: string) => {
+      bridge.handleActivity(agent, {
+        ts: T,
+        type: "agent_start",
+        trigger: { from: "__user__", text: "@coder @lead go", channel: "work" },
+      });
+      bridge.handleActivity(agent, { ts: T + 1, type: "agent_end" });
+    };
+    end("coder");
+    await bridge.idle();
+    expect(discord.reactions).toEqual(["+👍 c1"]);
+    end("lead");
+    await bridge.idle();
+    expect(discord.reactions).toEqual(["+👍 c1", "-👍 c1"]);
+  });
+
+  it("alerts you about failed tasks and failing agents, once each", async () => {
+    const userRole = discord.roleId("office-user");
+    tasks[0] = task("a1", {
+      status: "failed",
+      result: "tests broke",
+      completedAt: T + 5,
+    });
+    bridge.handleTasksChanged();
+    bridge.handleTasksChanged();
+    await bridge.idle();
+    const [aId] = post("Task a1");
+    expect(discord.posts("alerts")).toEqual([
+      `agent-office: <@&${userRole}> Task **Task a1** (<#${aId}>) failed (coder): tests broke`,
+    ]);
+    const alertMsg = discord.sent.find(
+      (x) => x.channelId === discord.channelId("alerts"),
+    )!;
+    expect(alertMsg.pingRoles).toEqual([userRole]);
+
+    for (let i = 0; i < 4; i++)
+      bridge.handleActivity("lead", {
+        ts: T + i,
+        type: "agent_end",
+        error: "400: too long",
+      });
+    await bridge.idle();
+    expect(discord.posts("alerts").at(-1)).toBe(
+      `agent-office: <@&${userRole}> **lead**'s last 3 wake-ups failed. Latest error: 400: too long`,
+    );
+    expect(discord.posts("alerts")).toHaveLength(2);
+  });
+
+  it("counts tasks in #status", async () => {
+    await bridge.idle();
+    expect(discord.botPosts("status").at(-1)).toContain(
+      "**Tasks** · 1 todo · 1 waiting",
+    );
   });
 });

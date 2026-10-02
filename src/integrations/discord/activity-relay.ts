@@ -26,6 +26,8 @@ export interface ActivityRelayHooks {
   statusMessageId(): string | undefined;
   setStatusMessageId(id: string): void;
   agentNames(): string[];
+  /** A line about tasks for #status, e.g. "3 in progress · 1 failed". */
+  taskSummary?(): string | undefined;
 }
 
 interface AgentNow {
@@ -62,7 +64,7 @@ interface RunView {
 
 const sec = (ms: number) => Math.floor(ms / 1000);
 /** Discord timestamp markup: shown in the reader's time zone. */
-const at = (ms: number, style: "T" | "R") => `<t:${sec(ms)}:${style}>`;
+export const at = (ms: number, style: "T" | "R") => `<t:${sec(ms)}:${style}>`;
 /** Inline code, safe for any text. */
 const code = (s: string) => `\`${s.replace(/`/g, "ʼ")}\``;
 
@@ -252,6 +254,8 @@ export class ActivityRelay {
         : `thinking since ${at(n.since, "R")}`;
       lines.push(`**${agent}** · ${doing} · for ${n.trigger}`);
     }
+    const tasks = this.hooks.taskSummary?.();
+    if (tasks) lines.push(`**Tasks** · ${tasks}`);
     return chunkLines(lines)[0]!;
   }
 
@@ -278,6 +282,11 @@ export class ActivityRelay {
   }
 
   /** Update `key` at most once per interval, always with the latest state. */
+  /** Redraw #status (e.g. when tasks change). */
+  refreshStatus(): void {
+    this.schedule("status");
+  }
+
   private schedule(key: string): void {
     if (this.stopped || this.timers.has(key)) return;
     const interval =

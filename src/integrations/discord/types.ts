@@ -32,6 +32,36 @@ export interface DiscordApi {
   ): Promise<void>;
   /** Show "<bot> is typing…" in a channel for about 10 seconds. */
   sendTyping(channelId: string): Promise<void>;
+  /** Find or create a forum channel with these tags; returns ids. */
+  ensureForum(
+    name: string,
+    categoryId: string,
+    opts: { knownId?: string; topic?: string; tags: string[] },
+  ): Promise<{ id: string; tags: Record<string, string> }>;
+  /** Start a forum post as the bot; returns the thread and first message. */
+  createPost(
+    forumId: string,
+    title: string,
+    content: string,
+    tagIds: string[],
+  ): Promise<{ threadId: string; messageId: string }>;
+  /**
+   * Edit a post: its message (the bot's), tags, and whether it's archived.
+   * Tags and archiving are best-effort (they need the bot to own the post).
+   * Throws UnknownMessageError if the post or message was deleted.
+   */
+  updatePost(
+    threadId: string,
+    messageId: string,
+    change: { content?: string; tagIds?: string[]; archived?: boolean },
+  ): Promise<void>;
+  /** Add or remove the bot's reaction on a message. */
+  react(
+    channelId: string,
+    messageId: string,
+    emoji: string,
+    on: boolean,
+  ): Promise<void>;
   /** The bot's status line under its name, e.g. "coder: bash · lead: thinking". */
   setPresence(text: string, busy: boolean): void;
   onMessage(fn: (m: IncomingMessage) => void): void;
@@ -51,11 +81,18 @@ export interface WebhookMessage {
   pingRoles?: string[];
   /** Files to upload with the message. */
   files?: Array<{ path: string; name: string }>;
+  /** Post in this thread of the webhook's channel (e.g. a forum post). */
+  threadId?: string;
 }
 
 /** A message someone typed in the Discord server. */
 export interface IncomingMessage {
+  /** The message's id (for reactions). */
+  id?: string;
   channelId: string;
+  /** For a message in a thread (e.g. a forum post): the thread's parent channel and name. */
+  parentId?: string;
+  threadName?: string;
   content: string;
   /** Roles @mentioned in the message. */
   roleIds: string[];

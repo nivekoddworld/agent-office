@@ -49,6 +49,7 @@ export class TaskService {
   private agentExists: (name: string) => boolean;
   private doneHook: ((task: Task) => void) | undefined;
   private stateChangedCallback: (() => void) | undefined;
+  private changeListeners = new Set<() => void>();
 
   constructor(
     store: TaskStore,
@@ -65,6 +66,23 @@ export class TaskService {
   /** Register a callback invoked whenever a task transitions to "done". */
   setDoneHook(hook: (task: Task) => void): void {
     this.doneHook = hook;
+  }
+
+  /** Called after any task is created, changed or deleted. */
+  onChange(fn: () => void): () => void {
+    this.changeListeners.add(fn);
+    return () => this.changeListeners.delete(fn);
+  }
+
+  private changed(): void {
+    this.stateChangedCallback?.();
+    for (const fn of this.changeListeners) {
+      try {
+        fn();
+      } catch (err) {
+        console.error("[tasks] change listener failed:", err);
+      }
+    }
   }
 
   /** Register a callback invoked whenever task state changes (create or update). */
@@ -133,7 +151,7 @@ export class TaskService {
 
     this.tasks[task.id] = task;
     this.persist();
-    this.stateChangedCallback?.();
+    this.changed();
 
     auditTaskAction(this.officeDir, {
       ts: new Date().toISOString(),
@@ -213,7 +231,7 @@ export class TaskService {
     }
 
     this.persist();
-    this.stateChangedCallback?.();
+    this.changed();
 
     auditTaskAction(this.officeDir, {
       ts: new Date().toISOString(),
@@ -257,7 +275,7 @@ export class TaskService {
     task.updatedAt = Date.now();
 
     this.persist();
-    this.stateChangedCallback?.();
+    this.changed();
 
     auditTaskAction(this.officeDir, {
       ts: new Date().toISOString(),
@@ -311,7 +329,7 @@ export class TaskService {
     }
     this.persist();
 
-    this.stateChangedCallback?.();
+    this.changed();
 
     auditTaskAction(this.officeDir, {
       ts: new Date().toISOString(),
@@ -432,6 +450,7 @@ export class TaskService {
       this.notifyAssignee(task, "ready");
     }
     this.persist();
+    this.changed();
   }
 
   private notifyCreator(task: Task, oldStatus: TaskStatus): void {

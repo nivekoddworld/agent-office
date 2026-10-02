@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { WebhookRef } from "./types.js";
+import type { TaskPost } from "./task-forum.js";
 
 /** What the Discord bridge remembers between restarts (discord.json). */
 export interface BridgeState {
@@ -15,6 +16,8 @@ export interface BridgeState {
   userRole?: string;
   /** The live message in #status. */
   statusMessageId?: string;
+  /** Task id → its post in the tasks forum. */
+  taskPosts?: Record<string, TaskPost>;
 }
 
 export function emptyState(guildId: string): BridgeState {
