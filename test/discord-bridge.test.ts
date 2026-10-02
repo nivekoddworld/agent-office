@@ -240,13 +240,9 @@ describe("DiscordBridge", () => {
       origin: "discord",
     });
     await bridge.idle();
-    const ping = `<@&${discord.roleId("office-user")}>`;
-    expect(discord.posts("dm-coder")).toEqual([
-      `coder: ${ping} Done!`,
-      "user: thanks",
-    ]);
-    // Only the human role is pinged.
-    expect(discord.sent[0]!.pingRoles).toEqual([discord.roleId("office-user")]);
+    expect(discord.posts("dm-coder")).toEqual(["coder: Done!", "user: thanks"]);
+    // A 1:1 DM pings nobody.
+    expect(discord.sent[0]!.pingRoles).toBeUndefined();
   });
 
   it("creates a read-only pair channel when two agents first message each other", async () => {
@@ -440,7 +436,7 @@ describe("DiscordBridge", () => {
     bridge.handleEgress({ kind: "dm", agent: "lead", text: long });
     await bridge.idle();
     const posts = discord.posts("dm-lead");
-    expect(posts[0]).toBe(`lead: <@&${discord.roleId("office-user")}> first`);
+    expect(posts[0]).toBe("lead: first");
     expect(posts.length).toBeGreaterThan(2);
     for (const p of discord.sent)
       expect(p.content.length).toBeLessThanOrEqual(2000);
