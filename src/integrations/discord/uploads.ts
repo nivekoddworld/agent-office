@@ -22,3 +22,16 @@ export function uploadsFor(
     : "";
   return { files, note };
 }
+
+/** The message to post instead when Discord wouldn't take its files (logged too). */
+export function uploadFailed(
+  text: string,
+  files: Array<{ name: string }>,
+  err: unknown,
+): string {
+  const names = files.map((f) => f.name).join(", ");
+  const why = err instanceof Error ? err.message : String(err);
+  console.error(`[discord] Couldn't upload ${names}: ${why}`);
+  const note = `_(Couldn't upload ${names} to Discord: ${why.slice(0, 200)}. Download it from the dashboard.)_`;
+  return text ? `${text}\n${note}` : note;
+}

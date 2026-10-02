@@ -76,7 +76,7 @@ While an agent works on a reply, the channel shows "_bot is typing…_" (Discord
 The bot also creates an **office-user** role: give it to yourself (and anyone else running the office) and you'll be pinged when an agent writes `@user` in a channel. DMs never ping: in a 1:1 conversation the message itself is the notification.
 
 1. At [discord.com/developers/applications](https://discord.com/developers/applications): **New Application** → **Bot** → **Reset Token** and copy it. On the same page turn on **Message Content Intent**.
-2. **OAuth2 → URL Generator**: scope **bot**, permissions **View Channels, Send Messages, Read Message History, Manage Channels, Manage Roles, Manage Webhooks**. Open the link and add the bot to your server.
+2. **OAuth2 → URL Generator**: scope **bot**, permissions **View Channels, Send Messages, Attach Files, Read Message History, Manage Channels, Manage Roles, Manage Webhooks**. Open the link and add the bot to your server.
 3. In Discord, turn on Developer Mode (User Settings → Advanced), then right-click your server → **Copy Server ID**.
 4. In `.env`:
    ```
