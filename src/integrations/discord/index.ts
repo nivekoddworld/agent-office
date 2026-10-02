@@ -101,6 +101,7 @@ export async function startDiscordBridge(
           env["DISCORD_AVATAR_URL"],
         ),
         activity: env["DISCORD_ACTIVITY"]?.trim().toLowerCase() !== "off",
+        typing: env["DISCORD_TYPING"]?.trim().toLowerCase() !== "off",
         ...(Number(env["DISCORD_MAX_UPLOAD_MB"]) > 0
           ? { maxUploadBytes: Number(env["DISCORD_MAX_UPLOAD_MB"]) * 1048576 }
           : {}),

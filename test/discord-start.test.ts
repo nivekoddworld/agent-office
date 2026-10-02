@@ -18,6 +18,7 @@ const fakeApi: DiscordApi = {
   sendMessage: async () => "m1",
   editMessage: async () => {},
   setPresence: () => {},
+  sendTyping: async () => {},
   onMessage: () => {},
   close: async () => {},
 };

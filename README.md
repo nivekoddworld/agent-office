@@ -71,7 +71,7 @@ Agent DMs     #coder-lead  #artist-coder …  ← agents' DMs with each other (r
 Activity      #status  #coder  #lead …      ← live: who's working on what, and a log per agent
 ```
 
-`#status` is one message, kept up to date, saying what each agent is doing right now; the bot's own status line shows the same in short. Each agent's Activity channel gets one message per wake-up (what woke it, every tool call, what the model said, how it ended), updated as it runs. Set `DISCORD_ACTIVITY=off` to skip these.
+While an agent works on a reply, the channel shows "_bot is typing…_" (Discord only lets the bot itself type, not the agents' personas, so naming the bot something like "office" reads best; `DISCORD_TYPING=off` turns it off). `#status` is one message, kept up to date, saying what each agent is doing right now; the bot's own status line shows the same in short. Each agent's Activity channel gets one message per wake-up (what woke it, every tool call, what the model said, how it ended), updated as it runs. Set `DISCORD_ACTIVITY=off` to skip these.
 
 The bot also creates an **office-user** role: give it to yourself (and anyone else running the office) and you'll be pinged when an agent DMs you or writes `@user` in a channel.
 

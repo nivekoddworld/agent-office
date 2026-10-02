@@ -228,6 +228,11 @@ export async function connectDiscord(
       }
     },
 
+    async sendTyping(channelId) {
+      const channel = guild.channels.cache.get(channelId);
+      if (channel?.type === ChannelType.GuildText) await channel.sendTyping();
+    },
+
     setPresence(text, busy) {
       client.user?.setPresence({
         status: busy ? "online" : "idle",
