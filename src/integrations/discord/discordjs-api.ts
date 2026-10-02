@@ -1,4 +1,5 @@
 import {
+  ActivityType,
   ChannelType,
   Client,
   DiscordAPIError,
@@ -11,6 +12,7 @@ import {
   type GuildBasedChannel,
 } from "discord.js";
 import {
+  UnknownMessageError,
   UnknownWebhookError,
   type DiscordApi,
   type IncomingMessage,
@@ -172,8 +174,8 @@ export async function connectDiscord(
           content: msg.content,
           username: msg.username.slice(0, 80),
           ...(msg.avatarUrl ? { avatarURL: msg.avatarUrl } : {}),
-          // Never let message text ping @everyone, roles or users.
-          allowedMentions: { parse: [] },
+          // Only the roles we mean to ping; never @everyone or users.
+          allowedMentions: { parse: [], roles: msg.pingRoles ?? [] },
         });
       } catch (err) {
         if (
@@ -186,6 +188,45 @@ export async function connectDiscord(
         }
         throw err;
       }
+    },
+
+    async sendMessage(channelId, content) {
+      const channel = guild.channels.cache.get(channelId);
+      if (!channel || channel.type !== ChannelType.GuildText)
+        throw new Error(`Discord channel ${channelId} not found`);
+      const msg = await channel.send({
+        content,
+        allowedMentions: { parse: [] },
+      });
+      return msg.id;
+    },
+
+    async editMessage(channelId, messageId, content) {
+      const channel = guild.channels.cache.get(channelId);
+      if (!channel || channel.type !== ChannelType.GuildText)
+        throw new UnknownMessageError(`Discord channel ${channelId} not found`);
+      try {
+        await channel.messages.edit(messageId, {
+          content,
+          allowedMentions: { parse: [] },
+        });
+      } catch (err) {
+        if (
+          err instanceof DiscordAPIError &&
+          err.code === RESTJSONErrorCodes.UnknownMessage
+        )
+          throw new UnknownMessageError(err.message);
+        throw err;
+      }
+    },
+
+    setPresence(text, busy) {
+      client.user?.setPresence({
+        status: busy ? "online" : "idle",
+        activities: [
+          { name: "Custom Status", type: ActivityType.Custom, state: text },
+        ],
+      });
     },
 
     onMessage(fn: (m: IncomingMessage) => void) {

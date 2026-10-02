@@ -2,6 +2,8 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import type { ChannelConfig } from "../../types.js";
 import type { EgressEvent } from "../../egress/egress-impl.js";
 import { SentMessageTracker, splitForDiscord } from "../discord-webhook.js";
+import type { ActivityEntry } from "../../activity/activity-log.js";
+import { ActivityRelay } from "./activity-relay.js";
 import {
   UnknownWebhookError,
   type DiscordApi,
@@ -22,6 +24,9 @@ export const DISCORD_ORIGIN = "discord";
 const SYNC_INTERVAL_MS = 60_000;
 const DM_CATEGORY = "DMs";
 const PAIR_CATEGORY = "Agent DMs";
+const ACTIVITY_CATEGORY = "Activity";
+/** Role for the humans running the office; agents' messages to you ping it. */
+export const USER_ROLE = "office-user";
 
 export interface BridgeHost {
   officeName(): string;
@@ -46,6 +51,10 @@ export interface BridgeOptions {
   statePath: string;
   /** Avatar image for a sender name, if any. */
   avatarUrl?: (name: string) => string | undefined;
+  /** Activity channels, #status and the bot's status line (default on). */
+  activity?: boolean;
+  /** Relay throttling, for tests. */
+  activityIntervals?: { editIntervalMs?: number; presenceIntervalMs?: number };
 }
 
 export interface BridgeState {
@@ -57,6 +66,10 @@ export interface BridgeState {
   roles: Record<string, string>;
   /** Discord channel id → webhook. */
   webhooks: Record<string, WebhookRef>;
+  /** The office-user role (humans who get pinged). */
+  userRole?: string;
+  /** The live message in #status. */
+  statusMessageId?: string;
 }
 
 export function emptyState(guildId: string): BridgeState {
@@ -82,6 +95,8 @@ export function pairChannel(
   return { key: `pair:${x}|${y}`, name: `${x}-${y}` };
 }
 
+type CategoryKind = "office" | "dms" | "pairs" | "activity";
+
 function senderName(from: string): string {
   if (from === "__user__") return "user";
   return from.replace(/^__|__$/g, "");
@@ -101,12 +116,30 @@ export class DiscordBridge {
     },
   );
 
+  private relay: ActivityRelay | undefined;
+
   constructor(
     private readonly api: DiscordApi,
     private readonly host: BridgeHost,
     private readonly opts: BridgeOptions,
   ) {
     this.state = loadState(opts.statePath, opts.guildId);
+    if (opts.activity !== false) {
+      this.relay = new ActivityRelay(
+        api,
+        {
+          // Channel creation goes through the bridge's queue, like all setup.
+          channel: (key) => this.run(() => this.channel(key)),
+          statusMessageId: () => this.state.statusMessageId,
+          setStatusMessageId: (id) => {
+            this.state.statusMessageId = id;
+            this.save();
+          },
+          agentNames: () => host.agentNames(),
+        },
+        opts.activityIntervals,
+      );
+    }
   }
 
   get botName(): string {
@@ -120,6 +153,7 @@ export class DiscordBridge {
   /** Create missing categories, channels and roles, then start listening. */
   async start(): Promise<void> {
     await this.run(() => this.syncNow());
+    await this.relay?.start();
     this.api.onMessage((m) => {
       try {
         this.handleIncoming(m);
@@ -137,12 +171,14 @@ export class DiscordBridge {
 
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
+    this.relay?.stop();
     await this.chain.catch(() => {});
     await this.api.close();
   }
 
   /** Wait until queued Discord work is done (for tests and shutdown). */
   async idle(): Promise<void> {
+    await this.relay?.idle();
     await this.chain.catch(() => {});
   }
 
@@ -151,7 +187,13 @@ export class DiscordBridge {
   /** A message an agent sent you, or a channel post (from anyone). */
   handleEgress(e: EgressEvent): void {
     if (e.kind === "dm") {
-      this.enqueuePost(`dm:${e.agent}`, e.agent, e.text);
+      // An agent reaching out to you: ping the humans.
+      this.enqueue(async () => {
+        const role = await this.userRole();
+        await this.post(`dm:${e.agent}`, e.agent, `<@&${role}> ${e.text}`, [
+          role,
+        ]);
+      });
       return;
     }
     if (e.origin === DISCORD_ORIGIN) return;
@@ -160,8 +202,26 @@ export class DiscordBridge {
       const roles = [];
       for (const m of mentions) roles.push(`<@&${await this.role(m)}>`);
       const prefix = roles.length ? `${roles.join(" ")} ` : "";
-      await this.post(`ch:${e.channel}`, senderName(e.from), prefix + e.text);
+      // An agent writing "@user" in a channel pings the humans too.
+      let text = e.text;
+      const ping: string[] = [];
+      if (e.from !== "__user__" && /@user\b/i.test(text)) {
+        const role = await this.userRole();
+        text = text.replace(/@user\b/gi, `<@&${role}>`);
+        ping.push(role);
+      }
+      await this.post(
+        `ch:${e.channel}`,
+        senderName(e.from),
+        prefix + text,
+        ping,
+      );
     });
+  }
+
+  /** Activity log entries: shown in the Activity channels and #status. */
+  handleActivity(agent: string, entry: ActivityEntry): void {
+    this.relay?.handle(agent, entry);
   }
 
   /** A DM you sent an agent. */
@@ -278,29 +338,46 @@ export class DiscordBridge {
   }
 
   private async syncNow(): Promise<void> {
+    await this.userRole();
     for (const name of this.host.channels().keys())
       await this.channel(`ch:${name}`);
     for (const agent of this.host.agentNames()) {
       await this.channel(`dm:${agent}`);
       await this.role(agent);
     }
+    if (this.relay) {
+      await this.channel("status");
+      for (const agent of this.host.agentNames())
+        await this.channel(`act:${agent}`);
+    }
     for (const key of Object.keys(this.state.channels))
       if (key.startsWith("pair:")) await this.channel(key);
     this.save();
   }
 
-  private async category(kind: "office" | "dms" | "pairs"): Promise<string> {
+  private async category(kind: CategoryKind): Promise<string> {
     const name =
       kind === "office"
         ? this.host.officeName()
         : kind === "dms"
           ? DM_CATEGORY
-          : PAIR_CATEGORY;
+          : kind === "pairs"
+            ? PAIR_CATEGORY
+            : ACTIVITY_CATEGORY;
     const id = await this.api.ensureCategory(name, {
       knownId: this.state.categories[kind],
-      readOnly: kind === "pairs",
+      readOnly: kind === "pairs" || kind === "activity",
     });
     this.state.categories[kind] = id;
+    return id;
+  }
+
+  private async userRole(): Promise<string> {
+    const id = await this.api.ensureRole(USER_ROLE, this.state.userRole);
+    if (this.state.userRole !== id) {
+      this.state.userRole = id;
+      this.save();
+    }
     return id;
   }
 
@@ -317,9 +394,18 @@ export class DiscordBridge {
   private async channel(key: string): Promise<string> {
     const rest = key.slice(key.indexOf(":") + 1);
     let name: string;
-    let kind: "office" | "dms" | "pairs";
+    let kind: CategoryKind;
     let topic: string | undefined;
-    if (key.startsWith("ch:")) {
+    if (key === "status") {
+      name = "status";
+      kind = "activity";
+      topic =
+        "What every agent is doing right now (one message, kept up to date).";
+    } else if (key.startsWith("act:")) {
+      name = rest;
+      kind = "activity";
+      topic = `What ${rest} is doing: one message per wake-up, updated as it runs.`;
+    } else if (key.startsWith("ch:")) {
       name = rest;
       kind = "office";
       topic = this.host.channels().get(rest)?.description;
@@ -349,6 +435,7 @@ export class DiscordBridge {
     key: string,
     username: string,
     content: string,
+    pingRoles: string[] = [],
   ): Promise<void> {
     const channelId = await this.channel(key);
     const avatarUrl = this.opts.avatarUrl?.(username);
@@ -365,6 +452,7 @@ export class DiscordBridge {
             username,
             content: chunk,
             ...(avatarUrl ? { avatarUrl } : {}),
+            ...(pingRoles.length ? { pingRoles } : {}),
           });
           break;
         } catch (err) {

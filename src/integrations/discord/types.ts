@@ -22,6 +22,16 @@ export interface DiscordApi {
   createWebhook(channelId: string): Promise<WebhookRef>;
   /** Throws UnknownWebhookError if the webhook was deleted. */
   sendWebhook(hook: WebhookRef, msg: WebhookMessage): Promise<void>;
+  /** Post as the bot itself; returns the message id. */
+  sendMessage(channelId: string, content: string): Promise<string>;
+  /** Throws UnknownMessageError if the message was deleted. */
+  editMessage(
+    channelId: string,
+    messageId: string,
+    content: string,
+  ): Promise<void>;
+  /** The bot's status line under its name, e.g. "coder: bash · lead: thinking". */
+  setPresence(text: string, busy: boolean): void;
   onMessage(fn: (m: IncomingMessage) => void): void;
   close(): Promise<void>;
 }
@@ -35,6 +45,8 @@ export interface WebhookMessage {
   username: string;
   content: string;
   avatarUrl?: string;
+  /** Roles this message may ping; everything else is never pinged. */
+  pingRoles?: string[];
 }
 
 /** A message someone typed in the Discord server. */
@@ -50,3 +62,4 @@ export interface IncomingMessage {
 }
 
 export class UnknownWebhookError extends Error {}
+export class UnknownMessageError extends Error {}

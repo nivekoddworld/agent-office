@@ -60,12 +60,14 @@ export async function startDiscordBridge(
         guildId,
         statePath: join(workspace.office.dir, "discord.json"),
         avatarUrl: avatarFor(env["DISCORD_AVATAR_URL"]),
+        activity: env["DISCORD_ACTIVITY"]?.trim().toLowerCase() !== "off",
       },
     );
     await bridge.start();
     const unsubs = [
       onEgress((e) => bridge.handleEgress(e)),
       workspace.onUserDm((e) => bridge.handleUserDm(e)),
+      workspace.onActivity((name, entry) => bridge.handleActivity(name, entry)),
       workspace.onAgentEvent((name, event) =>
         bridge.handleAgentEvent(
           name,
