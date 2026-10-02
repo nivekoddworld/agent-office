@@ -17,6 +17,36 @@ import {
 
 const CHANNEL_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
+/** A delivered message, for integrations such as the Discord bridge. */
+export type EgressEvent =
+  | { kind: "dm"; agent: string; text: string }
+  | {
+      kind: "channel";
+      from: string;
+      channel: string;
+      text: string;
+      mentions?: string[];
+      origin?: string;
+    };
+
+const egressListeners = new Set<(e: EgressEvent) => void>();
+
+/** Called once for each message an agent sends you, and each channel post. */
+export function onEgress(fn: (e: EgressEvent) => void): () => void {
+  egressListeners.add(fn);
+  return () => egressListeners.delete(fn);
+}
+
+function emitEgress(e: EgressEvent): void {
+  for (const fn of egressListeners) {
+    try {
+      fn(e);
+    } catch (err) {
+      console.error("[egress] listener failed:", err);
+    }
+  }
+}
+
 /** Derive a deterministic egress ID from an idempotency key. */
 function deriveEgressId(key: string): string {
   const hash = createHash("sha256")
@@ -135,6 +165,7 @@ export function messageUser(
         "utf-8",
       );
       recentIds.add(egressId);
+      emitEgress({ kind: "dm", agent: ctx.agentName, text: trimmed });
     }
 
     deps.onStateChanged?.();
@@ -220,6 +251,14 @@ export function postChannel(
         );
       }
       recentIds.add(egressId);
+      emitEgress({
+        kind: "channel",
+        from: ctx.agentName,
+        channel,
+        text: trimmed,
+        ...(mentions?.length ? { mentions } : {}),
+        ...(ctx.origin ? { origin: ctx.origin } : {}),
+      });
     }
 
     // User/system sources broadcast to all; agents require explicit mentions

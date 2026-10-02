@@ -130,6 +130,9 @@ function createMockWorkspace() {
     updateChannels: vi.fn(),
     getAgent: vi.fn(() => undefined),
     onActivity: vi.fn(() => vi.fn()),
+    onUserDm: vi.fn(() => vi.fn()),
+    sendUserDm: vi.fn(() => ({ ok: true })),
+    discordBridgeStatus: { state: "off" },
     discord: new DiscordWebhookMirror(
       undefined,
       async () => new Response(null, { status: 204 }),
@@ -838,6 +841,7 @@ describe("UI server", () => {
     expect(await saved.json()).toEqual({
       configured: true,
       webhook: "https://discord.com/api/webhooks/42/…oken",
+      bridge: { state: "off" },
     });
     expect(mockSetOfficeDiscordWebhook).toHaveBeenCalledWith(
       "test-office",
@@ -857,7 +861,10 @@ describe("UI server", () => {
     expect(test.status).toBe(200);
 
     const removed = await put("");
-    expect(await removed.json()).toEqual({ configured: false });
+    expect(await removed.json()).toEqual({
+      configured: false,
+      bridge: { state: "off" },
+    });
     expect(mockSetOfficeDiscordWebhook).toHaveBeenLastCalledWith(
       "test-office",
       undefined,

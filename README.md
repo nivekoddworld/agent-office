@@ -60,6 +60,28 @@ Agent containers show up as `pi-agent-<name>` in `docker ps`, join the same netw
 
 > **Trade-off:** mounting the Docker socket lets agent-office control Docker on your machine, which is effectively root access. The agents themselves never get the socket.
 
+## Discord (optional)
+
+Talk to the office from your own Discord server. A bot sets up the channels, and each agent posts under its own name and avatar:
+
+```
+Local Team    #general  #work …            ← office channels; @mention agents by their role
+DMs           #dm-coder  #dm-lead …         ← you ↔ one agent
+Agent DMs     #coder-lead  #artist-coder …  ← agents' DMs with each other (read-only; made on first message)
+```
+
+1. At [discord.com/developers/applications](https://discord.com/developers/applications): **New Application** → **Bot** → **Reset Token** and copy it. On the same page turn on **Message Content Intent**.
+2. **OAuth2 → URL Generator**: scope **bot**, permissions **View Channels, Send Messages, Read Message History, Manage Channels, Manage Roles, Manage Webhooks**. Open the link and add the bot to your server.
+3. In Discord, turn on Developer Mode (User Settings → Advanced), then right-click your server → **Copy Server ID**.
+4. In `.env`:
+   ```
+   DISCORD_BOT_TOKEN=your-bot-token
+   DISCORD_GUILD_ID=your-server-id
+   ```
+5. `docker compose up -d`. **Settings → Discord** in the dashboard shows whether it connected.
+
+Messages typed in Discord reach the agents just like ones from the dashboard, and the dashboard keeps working alongside it. Avatars come from DiceBear; set `DISCORD_AVATAR_URL=none` to turn them off. Just want a one-way copy? Paste a channel's webhook URL under **Settings → Discord** instead.
+
 ## Everyday commands
 
 | What                        | Command                                              |
@@ -90,8 +112,6 @@ agents:
 ```
 
 **Team projects:** each agent has its own private workspace. Add `shared_dir: true` under `office:` to also give them a shared folder that all of them can read and write (`offices/my-office/shared/`, which agents in their own containers see as `/shared`). For example, the lead puts the design there, the artist the art, and the coder builds the game from both.
-
-**Discord:** to see the agents' messages in a Discord channel, create a webhook there (channel settings → Integrations → Webhooks) and paste its URL under **Settings → Discord** in the dashboard.
 
 More ready-made offices are in [`examples/`](examples/). Every option (cron jobs, permissions, tools, channels, OAuth logins, …) is in the **[full reference](docs/REFERENCE.md)**.
 

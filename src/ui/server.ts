@@ -17,6 +17,8 @@ import { register as registerAuth } from "./handlers/auth.handler.js";
 import { register as registerSse } from "./handlers/sse.handler.js";
 import { register as registerState } from "./handlers/state.handler.js";
 import { register as registerAgentFiles } from "./handlers/agent-files.handler.js";
+import { onEgress } from "../egress/egress-impl.js";
+import { DISCORD_ORIGIN } from "../integrations/discord/bridge.js";
 import { register as registerActivity } from "./handlers/activity.handler.js";
 import { register as registerAgentSkills } from "./handlers/agent-skills.handler.js";
 import { register as registerAgentConfig } from "./handlers/agent-config.handler.js";
@@ -115,6 +117,17 @@ export async function startUiServer(
   const unsubAgent = workspace.onAgentEvent((name, event) =>
     broadcast("agent_event", { agent: name, ...event }),
   );
+  // Messages typed in Discord: refresh the dashboard like a local send does.
+  const unsubDiscordIn = [
+    onEgress((e) => {
+      if (e.kind === "channel" && e.origin === DISCORD_ORIGIN)
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+    }),
+    workspace.onUserDm((e) => {
+      if (e.origin === DISCORD_ORIGIN)
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+    }),
+  ];
   const unsubActivity = workspace.onActivity((name, entry) =>
     broadcast("activity", { agent: name, ...entry }),
   );
@@ -221,6 +234,7 @@ export async function startUiServer(
     unsubTick();
     unsubAgent();
     unsubActivity();
+    for (const u of unsubDiscordIn) u();
     clearAuthState();
     instance = null;
   };

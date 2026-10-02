@@ -9,6 +9,8 @@ export interface EgressContext {
   correlationId?: string;
   originSession?: string;
   hopCount: number;
+  /** Where a user's message was typed, e.g. "discord" (default: the web UI). */
+  origin?: string;
 }
 
 export interface EgressDeps {

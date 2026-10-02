@@ -1,0 +1,98 @@
+import { join } from "node:path";
+import type { Workspace } from "../../workspace.js";
+import { onEgress } from "../../egress/egress-impl.js";
+import { DiscordBridge } from "./bridge.js";
+import { connectDiscord } from "./discordjs-api.js";
+
+export interface DiscordBridgeStatus {
+  state: "off" | "connecting" | "connected" | "error";
+  bot?: string;
+  server?: string;
+  error?: string;
+}
+
+const DEFAULT_AVATAR =
+  "https://api.dicebear.com/9.x/bottts-neutral/png?seed={name}";
+
+/** Avatar per sender from DISCORD_AVATAR_URL ("{name}" is replaced; "none" turns avatars off). */
+function avatarFor(template: string | undefined) {
+  const t = template?.trim() || DEFAULT_AVATAR;
+  if (t === "none") return undefined;
+  return (name: string) => t.replace("{name}", encodeURIComponent(name));
+}
+
+/**
+ * Start the Discord bot bridge if DISCORD_BOT_TOKEN is set. Never throws:
+ * problems are logged and shown on the Settings page.
+ */
+export async function startDiscordBridge(
+  workspace: Workspace,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ stop: () => Promise<void> } | null> {
+  const token = env["DISCORD_BOT_TOKEN"]?.trim();
+  if (!token) return null;
+  const guildId = env["DISCORD_GUILD_ID"]?.trim();
+  if (!guildId) {
+    workspace.discordBridgeStatus = {
+      state: "error",
+      error:
+        "Set DISCORD_GUILD_ID in .env to your server's ID (right-click the server → Copy Server ID, with Developer Mode on).",
+    };
+    console.error(`[discord] ${workspace.discordBridgeStatus.error}`);
+    return null;
+  }
+
+  workspace.discordBridgeStatus = { state: "connecting" };
+  try {
+    const api = await connectDiscord(token, guildId);
+    const bridge = new DiscordBridge(
+      api,
+      {
+        officeName: () => workspace.office.name,
+        channels: () => workspace.office.channels,
+        agentNames: () => workspace.list().map((a) => a.name),
+        sendUserDm: (agent, text, origin) =>
+          workspace.sendUserDm(agent, text, { origin }),
+        postUserChannel: (channel, text, mentions, origin) =>
+          workspace.postUserChannel(channel, text, mentions, origin),
+      },
+      {
+        guildId,
+        statePath: join(workspace.office.dir, "discord.json"),
+        avatarUrl: avatarFor(env["DISCORD_AVATAR_URL"]),
+      },
+    );
+    await bridge.start();
+    const unsubs = [
+      onEgress((e) => bridge.handleEgress(e)),
+      workspace.onUserDm((e) => bridge.handleUserDm(e)),
+      workspace.onAgentEvent((name, event) =>
+        bridge.handleAgentEvent(
+          name,
+          event as unknown as Record<string, unknown>,
+        ),
+      ),
+    ];
+    // The bot posts everything now; the simple webhook copy would duplicate it.
+    workspace.discord.enabled = false;
+    workspace.discordBridgeStatus = {
+      state: "connected",
+      bot: bridge.botName,
+      server: bridge.guildName,
+    };
+    console.log(
+      `[discord] Connected as ${bridge.botName} to "${bridge.guildName}"`,
+    );
+    return {
+      stop: async () => {
+        for (const u of unsubs) u();
+        await bridge.stop();
+      },
+    };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    workspace.discordBridgeStatus = { state: "error", error };
+    console.error(`[discord] Bridge not started: ${error}`);
+    return null;
+  }
+}

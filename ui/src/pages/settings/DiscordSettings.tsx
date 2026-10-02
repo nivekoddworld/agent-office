@@ -10,6 +10,45 @@ import { Surface } from "../../components/shared/Surface.js";
 interface DiscordState {
   configured: boolean;
   webhook?: string;
+  bridge?: {
+    state: "off" | "connecting" | "connected" | "error";
+    bot?: string;
+    server?: string;
+    error?: string;
+  };
+}
+
+function BridgeStatus({ bridge }: { bridge: DiscordState["bridge"] }) {
+  const state = bridge?.state ?? "off";
+  const text =
+    state === "connected"
+      ? `Connected as ${bridge?.bot} to "${bridge?.server}". Channels, DMs and agent-to-agent DMs are synced both ways, so the webhook copy below is off.`
+      : state === "connecting"
+        ? "Connecting…"
+        : state === "error"
+          ? `Not connected: ${bridge?.error}`
+          : "Off. For two-way chat in Discord, set DISCORD_BOT_TOKEN and DISCORD_GUILD_ID in .env and restart (see the README).";
+  return (
+    <Group justify="space-between" py={4} wrap="nowrap" align="flex-start">
+      <Text size="sm" style={{ color: "var(--ao-text-muted)", flexShrink: 0 }}>
+        Bot
+      </Text>
+      <Text
+        size="sm"
+        ta="right"
+        style={{
+          color:
+            state === "error"
+              ? "var(--mantine-color-red-6)"
+              : state === "connected"
+                ? "var(--ao-text-primary)"
+                : "var(--ao-text-muted)",
+        }}
+      >
+        {text}
+      </Text>
+    </Group>
+  );
 }
 
 const KEY = ["office-discord"];
@@ -74,8 +113,9 @@ export function DiscordSettings() {
         label="Discord"
       />
       <Surface>
-        <Text size="sm" style={{ color: "var(--ao-text-primary)" }}>
-          Copy agents' messages to Discord
+        <BridgeStatus bridge={data?.bridge} />
+        <Text size="sm" mt="sm" style={{ color: "var(--ao-text-primary)" }}>
+          Webhook copy (one-way)
         </Text>
         <Text size="xs" style={{ color: "var(--ao-text-muted)" }} mb="xs">
           Every message an agent sends (to you, to another agent, or to a

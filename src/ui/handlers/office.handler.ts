@@ -13,10 +13,16 @@ import {
   maskWebhookUrl,
 } from "../../integrations/discord-webhook.js";
 
-function discordState(url: string | undefined) {
-  return url
-    ? { configured: true, webhook: maskWebhookUrl(url) }
-    : { configured: false };
+function discordState(
+  url: string | undefined,
+  bridge: { state: string } & Record<string, unknown>,
+) {
+  return {
+    ...(url
+      ? { configured: true, webhook: maskWebhookUrl(url) }
+      : { configured: false }),
+    bridge,
+  };
 }
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
@@ -71,7 +77,13 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       method: "GET",
       pattern: /^\/api\/office\/discord$/,
       handler: (_req, res) => {
-        return json(res, 200, discordState(workspace.discord.webhookUrl));
+        return json(
+          res,
+          200,
+          discordState(workspace.discord.webhookUrl, {
+            ...workspace.discordBridgeStatus,
+          }),
+        );
       },
     },
     {
@@ -101,7 +113,13 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           });
         }
         workspace.discord.setUrl(url || undefined);
-        return json(res, 200, discordState(workspace.discord.webhookUrl));
+        return json(
+          res,
+          200,
+          discordState(workspace.discord.webhookUrl, {
+            ...workspace.discordBridgeStatus,
+          }),
+        );
       },
     },
     {

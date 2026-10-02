@@ -30,6 +30,7 @@ import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
 import { DiscordWebhookMirror } from "./integrations/discord-webhook.js";
+import { postChannel } from "./egress/egress-impl.js";
 import {
   appendActivity,
   toActivityEntry,
@@ -63,6 +64,12 @@ export class Workspace {
   readonly tasks: TaskService;
   readonly office: OfficeContext;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
+  private userDmListeners: Array<
+    (e: { agent: string; text: string; origin?: string }) => void
+  > = [];
+  /** The Discord bot bridge, if DISCORD_BOT_TOKEN is set (see integrations/discord). */
+  discordBridgeStatus: import("./integrations/discord/index.js").DiscordBridgeStatus =
+    { state: "off" };
   /** Copies agents' messages to a Discord webhook (office.discord_webhook). */
   readonly discord: DiscordWebhookMirror;
   private activityListeners: Array<
@@ -643,6 +650,90 @@ export class Workspace {
       sourceKind: "dm",
       attachments,
     });
+  }
+
+  /**
+   * A DM from you to an agent: delivered, saved to the DM history and
+   * announced to listeners (e.g. the Discord bridge). `origin` is where it
+   * was typed, so a listener can skip its own messages.
+   */
+  sendUserDm(
+    agentName: string,
+    text: string,
+    opts: {
+      priority?: Priority;
+      requestId?: string;
+      attachments?: import("./types.js").Attachment[];
+      origin?: string;
+    } = {},
+  ): { ok: boolean; error?: string } {
+    try {
+      this.send(
+        agentName,
+        text,
+        "prompt",
+        opts.priority,
+        opts.requestId,
+        opts.attachments,
+      );
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+    if (this.messageStore) {
+      try {
+        this.messageStore.saveDm({
+          agent: agentName,
+          role: "user",
+          text,
+          ts_ms: Date.now(),
+          request_id: opts.requestId ?? null,
+          correlation_id: null,
+          egress_id: null,
+          attachments: opts.attachments
+            ? JSON.stringify(opts.attachments)
+            : null,
+        });
+      } catch (err) {
+        console.error("[workspace] Failed to persist user DM:", err);
+      }
+    }
+    for (const fn of this.userDmListeners)
+      fn({ agent: agentName, text, origin: opts.origin });
+    return { ok: true };
+  }
+
+  /** Called for each DM you send an agent, wherever it was typed. */
+  onUserDm(
+    fn: (e: { agent: string; text: string; origin?: string }) => void,
+  ): () => void {
+    this.userDmListeners.push(fn);
+    return () => {
+      this.userDmListeners = this.userDmListeners.filter((l) => l !== fn);
+    };
+  }
+
+  /** A channel post from you (as the dashboard's channel box does). */
+  postUserChannel(
+    channel: string,
+    text: string,
+    mentions: string[] = [],
+    origin?: string,
+  ): { ok: boolean; error?: string } {
+    const result = postChannel(
+      { agentName: "__user__", hopCount: 0, ...(origin ? { origin } : {}) },
+      {
+        baseDir: this.office.dir,
+        bus: this.bus,
+        channels: this.office.channels,
+      },
+      channel,
+      text,
+      mentions.length ? mentions : undefined,
+    );
+    return result.ok ? { ok: true } : { ok: false, error: result.reason };
   }
 
   getAgent(name: string): AgentHandle | undefined {
