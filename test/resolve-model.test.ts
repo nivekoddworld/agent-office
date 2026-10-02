@@ -408,7 +408,8 @@ describe("context size from the server", () => {
     });
     const m = await withServerInfo(model(url));
     expect(m.contextWindow).toBe(131072);
-    expect(m.maxTokens).toBe(8192);
+    // An eighth of a big context, so a long file fits in one reply.
+    expect(m.maxTokens).toBe(16384);
     vi.restoreAllMocks();
   });
 

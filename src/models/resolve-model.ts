@@ -346,10 +346,14 @@ export async function withServerInfo<T extends Model<any>>(
       console.log(
         `[models] ${name}: context ${contextWindow} tokens (from the server)`,
       );
-    // Leave most of a small context for the conversation.
+    // Replies get an eighth of a big context (room to write a whole file),
+    // but never more than a quarter of a small one.
     const maxTokens =
       model.localLimits?.maxTokens ??
-      Math.min(model.maxTokens, Math.floor(contextWindow / 4));
+      Math.min(
+        Math.max(model.maxTokens, Math.floor(contextWindow / 8)),
+        Math.floor(contextWindow / 4),
+      );
     out = { ...out, contextWindow, maxTokens };
   }
   return out as unknown as T;
