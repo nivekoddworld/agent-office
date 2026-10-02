@@ -376,6 +376,18 @@ describe("validateOfficeConfig", () => {
     expect(errors).toContain("office.shared_dir must be true or false");
   });
 
+  it("checks office.discord_webhook is a Discord webhook URL", () => {
+    const check = (discord_webhook: string) =>
+      validateOfficeConfig({
+        office: { name: "T", discord_webhook },
+        agents: {},
+      });
+    expect(check("https://discord.com/api/webhooks/1/abc")).toEqual([]);
+    expect(check("https://example.com/x")[0]).toContain(
+      "office.discord_webhook",
+    );
+  });
+
   it("rejects empty office.name", () => {
     const errors = validateOfficeConfig({
       office: { name: "" },

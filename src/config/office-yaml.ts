@@ -21,6 +21,7 @@ import {
   atomicWriteYaml,
 } from "./yaml-utils.js";
 import type { OfficeCronYamlEntry } from "../types.js";
+import { isDiscordWebhookUrl } from "../integrations/discord-webhook.js";
 import { describeCron } from "../cron/cron-parser.js";
 
 // --- Existence check ---
@@ -145,6 +146,7 @@ export function loadOfficeYaml(id: string): OfficeYaml | null {
       name: office.name as string,
       description: office.description as string | undefined,
       shared_dir: office.shared_dir as boolean | undefined,
+      discord_webhook: office.discord_webhook as string | undefined,
       env: officeEnv,
       secrets: (office.secrets as Record<string, string>) ?? {},
       cron: office.cron as Record<string, OfficeCronYamlEntry> | undefined,
@@ -169,6 +171,15 @@ export function validateOfficeConfig(config: OfficeYaml): string[] {
     typeof config.office.shared_dir !== "boolean"
   ) {
     errors.push("office.shared_dir must be true or false");
+  }
+  const webhook = config.office.discord_webhook;
+  if (
+    webhook !== undefined &&
+    (typeof webhook !== "string" || !isDiscordWebhookUrl(webhook))
+  ) {
+    errors.push(
+      "office.discord_webhook must be a Discord webhook URL (https://discord.com/api/webhooks/…)",
+    );
   }
   errors.push(...validateOfficeModels(config.office));
   const agentNames = Object.keys(config.agents);
@@ -251,6 +262,9 @@ export function buildOfficeContext(
     name: yaml.office.name,
     description: yaml.office.description,
     ...(yaml.office.shared_dir ? { sharedDir: officeSharedDir(id) } : {}),
+    ...(yaml.office.discord_webhook
+      ? { discordWebhook: yaml.office.discord_webhook }
+      : {}),
     env: yaml.office.env ?? {},
     secrets: yaml.office.secrets ?? {},
     dir: officeDir(id),

@@ -33,6 +33,7 @@ import { ChannelManager } from "../../components/slack/ChannelManager.js";
 import { useAppState } from "../../components/layout/app-state-context.js";
 import { SectionHeader } from "../../components/shared/SectionHeader.js";
 import { PageShell } from "../../components/shared/PageShell.js";
+import { DiscordSettings } from "./DiscordSettings.js";
 import { Surface } from "../../components/shared/Surface.js";
 import {
   usePreferences,
@@ -156,6 +157,7 @@ export function SettingsPanel() {
             />
           </Surface>
         </Box>
+        <DiscordSettings />
         {/* Display */}
         <Box>
           <SectionHeader

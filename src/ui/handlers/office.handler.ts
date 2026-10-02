@@ -7,6 +7,17 @@ import {
   officeValidateCommand,
 } from "../../commands/office-apply.js";
 import { officeYamlPath } from "../../constants.js";
+import { setOfficeDiscordWebhook } from "../../config/office-yaml-mutations.js";
+import {
+  isDiscordWebhookUrl,
+  maskWebhookUrl,
+} from "../../integrations/discord-webhook.js";
+
+function discordState(url: string | undefined) {
+  return url
+    ? { configured: true, webhook: maskWebhookUrl(url) }
+    : { configured: false };
+}
 
 export function register(ctx: HandlerContext): RouteDefinition[] {
   const { workspace, officeId, getPort, broadcast } = ctx;
@@ -53,6 +64,53 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       pattern: /^\/api\/office\/path$/,
       handler: (_req, res) => {
         return json(res, 200, { path: officeYamlPath(officeId) });
+      },
+    },
+    // Discord webhook that agents' messages are copied to
+    {
+      method: "GET",
+      pattern: /^\/api\/office\/discord$/,
+      handler: (_req, res) => {
+        return json(res, 200, discordState(workspace.discord.webhookUrl));
+      },
+    },
+    {
+      method: "PUT",
+      pattern: /^\/api\/office\/discord$/,
+      handler: async (req, res) => {
+        if (requireMutation(req, res, getPort())) return;
+        let parsed: { webhook?: unknown };
+        try {
+          parsed = JSON.parse(await readBody(req));
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        const url =
+          typeof parsed.webhook === "string" ? parsed.webhook.trim() : "";
+        if (url && !isDiscordWebhookUrl(url)) {
+          return json(res, 400, {
+            error:
+              "Not a Discord webhook URL. Copy it from Discord: channel settings → Integrations → Webhooks → Copy Webhook URL.",
+          });
+        }
+        try {
+          await setOfficeDiscordWebhook(officeId, url || undefined);
+        } catch (err) {
+          return json(res, 500, {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        workspace.discord.setUrl(url || undefined);
+        return json(res, 200, discordState(workspace.discord.webhookUrl));
+      },
+    },
+    {
+      method: "POST",
+      pattern: /^\/api\/office\/discord\/test$/,
+      handler: async (req, res) => {
+        if (requireMutation(req, res, getPort())) return;
+        const result = await workspace.discord.test(workspace.office.name);
+        return json(res, result.ok ? 200 : 502, result);
       },
     },
     {

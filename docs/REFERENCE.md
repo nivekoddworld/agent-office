@@ -400,6 +400,8 @@ Office-level `env` and `secrets` are inherited by all agents. Agent-level values
 
 Set `office.shared_dir: true` to give the team a [shared folder](#shared-folder) that every agent can read and write.
 
+Set `office.discord_webhook` to a Discord webhook URL (or paste it under **Settings → Discord** in the web UI, which saves it here and applies it right away) to copy every message an agent sends (`message_user`, `message_agent`, `post_channel`) to that Discord channel. Each post uses the agent's name as the sender and starts with who or which channel it was for, e.g. **coder → #work**. Pings (`@everyone`, roles, users) are disabled, and long messages are split to fit Discord's 2,000-character limit.
+
 `office.channel_context` sets how many earlier channel messages an agent sees when a channel message wakes it (default `10`; see [`read_channel`](#read_channel)). Set `office.default_model` to change the model used by agents without a `model:` line (default `anthropic:claude-sonnet-4-5`). `office.providers` points agents at local llama.cpp / vLLM servers — see [Local Models](#local-models-llamacpp--vllm).
 
 All agent fields are optional. Agents are spawned sequentially in declaration order; if one fails, the rest still start. Model availability depends on your provider account — replace the `model` value with your preferred `provider:model-id` if the default is unavailable.

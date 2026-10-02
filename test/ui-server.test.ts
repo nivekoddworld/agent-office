@@ -12,6 +12,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendActivity } from "../src/activity/activity-log.js";
+import { DiscordWebhookMirror } from "../src/integrations/discord-webhook.js";
 
 // --- Mocks (hoisted) ---
 
@@ -74,6 +75,13 @@ vi.mock("../src/config/office-yaml.js", () => ({
   updateChannelInOfficeYaml: vi.fn(async () => {}),
   deleteChannelFromOfficeYaml: vi.fn(async () => {}),
 }));
+const { mockSetOfficeDiscordWebhook } = vi.hoisted(() => ({
+  mockSetOfficeDiscordWebhook: vi.fn(async () => undefined),
+}));
+vi.mock("../src/config/office-yaml-mutations.js", async (importOriginal) => ({
+  ...((await importOriginal()) as Record<string, unknown>),
+  setOfficeDiscordWebhook: mockSetOfficeDiscordWebhook,
+}));
 vi.mock("../src/config/yaml-validation.js", () => ({
   validateChannelEntry: vi.fn(() => []),
 }));
@@ -122,6 +130,10 @@ function createMockWorkspace() {
     updateChannels: vi.fn(),
     getAgent: vi.fn(() => undefined),
     onActivity: vi.fn(() => vi.fn()),
+    discord: new DiscordWebhookMirror(
+      undefined,
+      async () => new Response(null, { status: 204 }),
+    ),
     onAgentEvent: vi.fn((fn: (name: string, event: any) => void) => {
       agentEventListener = fn;
       return vi.fn();
@@ -806,6 +818,51 @@ describe("UI server", () => {
       mockWs.office.dir = originalDir;
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("saves, shows (masked), tests and removes the Discord webhook", async () => {
+    const hook = "https://discord.com/api/webhooks/42/secret-token";
+    const put = (webhook: string) =>
+      fetch(`${origin}/api/office/discord`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({ webhook }),
+      });
+
+    const bad = await put("https://example.com/hook");
+    expect(bad.status).toBe(400);
+    expect(mockSetOfficeDiscordWebhook).not.toHaveBeenCalled();
+
+    const saved = await put(hook);
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toEqual({
+      configured: true,
+      webhook: "https://discord.com/api/webhooks/42/…oken",
+    });
+    expect(mockSetOfficeDiscordWebhook).toHaveBeenCalledWith(
+      "test-office",
+      hook,
+    );
+    expect(mockWs.discord.webhookUrl).toBe(hook);
+
+    const got = await fetch(`${origin}/api/office/discord`, {
+      headers: { Cookie: sessionCookie },
+    });
+    expect((await got.json()).webhook).not.toContain("secret");
+
+    const test = await fetch(`${origin}/api/office/discord/test`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    expect(test.status).toBe(200);
+
+    const removed = await put("");
+    expect(await removed.json()).toEqual({ configured: false });
+    expect(mockSetOfficeDiscordWebhook).toHaveBeenLastCalledWith(
+      "test-office",
+      undefined,
+    );
+    expect(mockWs.discord.webhookUrl).toBeUndefined();
   });
 
   // --- eventToMessages routing semantics ---
