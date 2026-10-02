@@ -24,6 +24,7 @@ import {
 const REQUIRED = {
   ViewChannel: PermissionFlagsBits.ViewChannel,
   SendMessages: PermissionFlagsBits.SendMessages,
+  AttachFiles: PermissionFlagsBits.AttachFiles,
   ReadMessageHistory: PermissionFlagsBits.ReadMessageHistory,
   ManageChannels: PermissionFlagsBits.ManageChannels,
   ManageRoles: PermissionFlagsBits.ManageRoles,
@@ -109,6 +110,7 @@ export async function connectDiscord(
                   allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.AttachFiles,
                     PermissionFlagsBits.ManageWebhooks,
                   ],
                 },
@@ -166,7 +168,11 @@ export async function connectDiscord(
     async sendWebhook(hook: WebhookRef, msg: WebhookMessage) {
       let wc = webhookClients.get(hook.id);
       if (!wc) {
-        wc = new WebhookClient({ id: hook.id, token: hook.token });
+        // Uploads can take longer than the default 15 s timeout.
+        wc = new WebhookClient(
+          { id: hook.id, token: hook.token },
+          { rest: { timeout: 60_000, retries: 1 } },
+        );
         webhookClients.set(hook.id, wc);
       }
       try {
@@ -194,6 +200,8 @@ export async function connectDiscord(
           webhookClients.delete(hook.id);
           throw new UnknownWebhookError(err.message);
         }
+        if (err instanceof Error && err.name === "AbortError")
+          throw new Error("Discord didn't answer within 60 s", { cause: err });
         throw err;
       }
     },

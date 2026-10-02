@@ -4,7 +4,7 @@ import { mentionsInText, type EgressEvent } from "../../egress/egress-impl.js";
 import { SentMessageTracker, splitForDiscord } from "../discord-webhook.js";
 import type { ActivityEntry } from "../../activity/activity-log.js";
 import { ActivityRelay } from "./activity-relay.js";
-import { DEFAULT_MAX_UPLOAD, uploadsFor } from "./uploads.js";
+import { DEFAULT_MAX_UPLOAD, uploadFailed, uploadsFor } from "./uploads.js";
 import { loadState, type BridgeState } from "./state.js";
 import { atName, pairChannel, senderName } from "./names.js";
 import { TypingIndicator } from "./typing.js";
@@ -12,6 +12,7 @@ import {
   UnknownWebhookError,
   type DiscordApi,
   type IncomingMessage,
+  type WebhookMessage,
 } from "./types.js";
 
 /**
@@ -429,33 +430,41 @@ export class DiscordBridge {
   ): Promise<void> {
     const channelId = await this.channel(key);
     const avatarUrl = this.opts.avatarUrl?.(username);
+    const base = { username, pingRoles, ...(avatarUrl ? { avatarUrl } : {}) };
     const chunks = splitForDiscord(content);
     for (const [i, chunk] of chunks.entries()) {
-      const last = i === chunks.length - 1;
-      for (let attempt = 0; ; attempt++) {
-        let hook = this.state.webhooks[channelId];
-        if (!hook) {
-          hook = await this.api.createWebhook(channelId);
-          this.state.webhooks[channelId] = hook;
-          this.save();
+      if (i < chunks.length - 1 || !files.length) {
+        await this.send(channelId, { ...base, content: chunk });
+        continue;
+      }
+      try {
+        await this.send(channelId, { ...base, content: chunk, files });
+      } catch (err) {
+        // Don't lose the message over its files: post it without them.
+        for (const part of splitForDiscord(uploadFailed(chunk, files, err)))
+          await this.send(channelId, { ...base, content: part });
+      }
+    }
+  }
+
+  /** Send through the channel's webhook, remaking it if someone deleted it. */
+  private async send(channelId: string, msg: WebhookMessage): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+      let hook = this.state.webhooks[channelId];
+      if (!hook) {
+        hook = await this.api.createWebhook(channelId);
+        this.state.webhooks[channelId] = hook;
+        this.save();
+      }
+      try {
+        await this.api.sendWebhook(hook, msg);
+        return;
+      } catch (err) {
+        if (err instanceof UnknownWebhookError && attempt === 0) {
+          delete this.state.webhooks[channelId];
+          continue;
         }
-        try {
-          await this.api.sendWebhook(hook, {
-            username,
-            content: chunk,
-            ...(avatarUrl ? { avatarUrl } : {}),
-            ...(pingRoles.length ? { pingRoles } : {}),
-            ...(last && files.length ? { files } : {}),
-          });
-          break;
-        } catch (err) {
-          // Someone deleted the webhook: make a new one and try again.
-          if (err instanceof UnknownWebhookError && attempt === 0) {
-            delete this.state.webhooks[channelId];
-            continue;
-          }
-          throw err;
-        }
+        throw err;
       }
     }
   }

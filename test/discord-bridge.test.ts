@@ -250,7 +250,7 @@ describe("DiscordBridge", () => {
     await bridge.idle();
     expect(discord.posts("dm-coder")).toEqual(["coder: Done!", "user: thanks"]);
     // A 1:1 DM pings nobody.
-    expect(discord.sent[0]!.pingRoles).toBeUndefined();
+    expect(discord.sent[0]!.pingRoles ?? []).toEqual([]);
   });
 
   it("creates a read-only pair channel when two agents first message each other", async () => {
@@ -448,6 +448,32 @@ describe("DiscordBridge", () => {
     expect(posts.length).toBeGreaterThan(2);
     for (const p of discord.sent)
       expect(p.content.length).toBeLessThanOrEqual(2000);
+  });
+
+  it("posts the message without its files when the upload fails", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const send = discord.sendWebhook.bind(discord);
+    discord.sendWebhook = async (hook, msg) => {
+      if (msg.files?.length) throw new Error("Request entity too large");
+      await send(hook, msg);
+    };
+    bridge.handleEgress({
+      kind: "channel",
+      from: "coder",
+      channel: "work",
+      text: "Here's the build",
+      attachments: [
+        { id: "b.zip", filename: "build.zip", mimeType: "application/zip" },
+      ],
+    });
+    await bridge.idle();
+    expect(discord.posts("work")).toEqual([
+      "coder: Here's the build\n_(Couldn't upload build.zip to Discord: Request entity too large. Download it from the dashboard.)_",
+    ]);
+    expect(err).toHaveBeenCalledWith(
+      expect.stringContaining("Couldn't upload build.zip"),
+    );
+    err.mockRestore();
   });
 
   it("logs and carries on when Discord fails", async () => {
