@@ -1,0 +1,209 @@
+import {
+  ChannelType,
+  Client,
+  DiscordAPIError,
+  Events,
+  GatewayIntentBits,
+  PermissionFlagsBits,
+  RESTJSONErrorCodes,
+  WebhookClient,
+  type Guild,
+  type GuildBasedChannel,
+} from "discord.js";
+import {
+  UnknownWebhookError,
+  type DiscordApi,
+  type IncomingMessage,
+  type WebhookMessage,
+  type WebhookRef,
+} from "./types.js";
+
+/** Permissions the bot needs in the server. */
+const REQUIRED = {
+  ViewChannel: PermissionFlagsBits.ViewChannel,
+  SendMessages: PermissionFlagsBits.SendMessages,
+  ReadMessageHistory: PermissionFlagsBits.ReadMessageHistory,
+  ManageChannels: PermissionFlagsBits.ManageChannels,
+  ManageRoles: PermissionFlagsBits.ManageRoles,
+  ManageWebhooks: PermissionFlagsBits.ManageWebhooks,
+};
+
+/** Log in as the bot and return the Discord operations the bridge uses. */
+export async function connectDiscord(
+  token: string,
+  guildId: string,
+): Promise<DiscordApi> {
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+  });
+  const ready = new Promise<void>((resolve) =>
+    client.once(Events.ClientReady, () => resolve()),
+  );
+  try {
+    await client.login(token);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      /disallowed intents/i.test(msg)
+        ? 'The bot needs the "Message Content Intent": Discord Developer Portal → your app → Bot → Privileged Gateway Intents.'
+        : /token/i.test(msg)
+          ? "Discord rejected DISCORD_BOT_TOKEN. Copy it again from Developer Portal → your app → Bot → Reset Token."
+          : msg,
+    );
+  }
+  await ready;
+
+  let guild: Guild;
+  try {
+    guild = await client.guilds.fetch(guildId);
+  } catch {
+    await client.destroy();
+    throw new Error(
+      `The bot isn't in the server ${guildId}. Invite it (Developer Portal → OAuth2 → URL Generator, scope "bot") or check DISCORD_GUILD_ID.`,
+    );
+  }
+  await guild.channels.fetch();
+  await guild.roles.fetch();
+  const me = await guild.members.fetchMe();
+  const missing = Object.entries(REQUIRED)
+    .filter(([, flag]) => !me.permissions.has(flag))
+    .map(([name]) => name);
+  if (missing.length)
+    console.warn(
+      `[discord] The bot is missing permissions: ${missing.join(", ")}. Give its role these in Server Settings → Roles.`,
+    );
+
+  const webhookClients = new Map<string, WebhookClient>();
+  const find = (pred: (c: GuildBasedChannel) => boolean) =>
+    guild.channels.cache.find(pred);
+
+  return {
+    botName: client.user?.username ?? "bot",
+    guildName: guild.name,
+
+    async ensureCategory(name, opts = {}) {
+      const known = opts.knownId && guild.channels.cache.get(opts.knownId);
+      if (known && known.type === ChannelType.GuildCategory) return known.id;
+      const existing = find(
+        (c) => c.type === ChannelType.GuildCategory && c.name === name,
+      );
+      if (existing) return existing.id;
+      const created = await guild.channels.create({
+        name,
+        type: ChannelType.GuildCategory,
+        ...(opts.readOnly
+          ? {
+              permissionOverwrites: [
+                {
+                  id: guild.roles.everyone.id,
+                  deny: [PermissionFlagsBits.SendMessages],
+                },
+                {
+                  id: client.user!.id,
+                  allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ManageWebhooks,
+                  ],
+                },
+              ],
+            }
+          : {}),
+      });
+      return created.id;
+    },
+
+    async ensureTextChannel(name, categoryId, opts = {}) {
+      const known = opts.knownId && guild.channels.cache.get(opts.knownId);
+      if (known && known.type === ChannelType.GuildText) return known.id;
+      const existing = find(
+        (c) =>
+          c.type === ChannelType.GuildText &&
+          c.name === name &&
+          c.parentId === categoryId,
+      );
+      if (existing) return existing.id;
+      const created = await guild.channels.create({
+        name,
+        type: ChannelType.GuildText,
+        parent: categoryId,
+        ...(opts.topic ? { topic: opts.topic.slice(0, 1024) } : {}),
+      });
+      // Take the category's permissions (e.g. read-only Agent DMs).
+      await created.lockPermissions().catch(() => {});
+      return created.id;
+    },
+
+    async ensureRole(name, knownId) {
+      const known = knownId && guild.roles.cache.get(knownId);
+      if (known) return known.id;
+      const existing = guild.roles.cache.find((r) => r.name === name);
+      if (existing) return existing.id;
+      const created = await guild.roles.create({
+        name,
+        mentionable: true,
+        reason: "agent-office: lets you @mention this agent",
+      });
+      return created.id;
+    },
+
+    async createWebhook(channelId) {
+      const channel = guild.channels.cache.get(channelId);
+      if (!channel || channel.type !== ChannelType.GuildText)
+        throw new Error(`Discord channel ${channelId} not found`);
+      const hook = await channel.createWebhook({ name: "agent-office" });
+      if (!hook.token)
+        throw new Error("Discord returned a webhook without a token");
+      return { id: hook.id, token: hook.token };
+    },
+
+    async sendWebhook(hook: WebhookRef, msg: WebhookMessage) {
+      let wc = webhookClients.get(hook.id);
+      if (!wc) {
+        wc = new WebhookClient({ id: hook.id, token: hook.token });
+        webhookClients.set(hook.id, wc);
+      }
+      try {
+        await wc.send({
+          content: msg.content,
+          username: msg.username.slice(0, 80),
+          ...(msg.avatarUrl ? { avatarURL: msg.avatarUrl } : {}),
+          // Never let message text ping @everyone, roles or users.
+          allowedMentions: { parse: [] },
+        });
+      } catch (err) {
+        if (
+          err instanceof DiscordAPIError &&
+          err.code === RESTJSONErrorCodes.UnknownWebhook
+        ) {
+          wc.destroy();
+          webhookClients.delete(hook.id);
+          throw new UnknownWebhookError(err.message);
+        }
+        throw err;
+      }
+    },
+
+    onMessage(fn: (m: IncomingMessage) => void) {
+      client.on(Events.MessageCreate, (m) => {
+        if (m.guildId !== guildId) return;
+        fn({
+          channelId: m.channelId,
+          content: m.content,
+          roleIds: [...m.mentions.roles.keys()],
+          attachmentUrls: [...m.attachments.values()].map((a) => a.url),
+          fromBot: m.author.bot || !!m.webhookId,
+        });
+      });
+    },
+
+    async close() {
+      for (const wc of webhookClients.values()) wc.destroy();
+      await client.destroy();
+    },
+  };
+}

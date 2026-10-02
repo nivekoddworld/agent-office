@@ -1,16 +1,11 @@
-import {
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-  mkdirSync,
-} from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join, extname } from "node:path";
 import type { Attachment } from "../../types.js";
 import type { HandlerContext } from "../handler-context.js";
 import type { RouteDefinition } from "../router.js";
 import { json, readBody, requireMutation } from "../http-helpers.js";
-import { getBootstrapState, executeSend } from "../routes.js";
+import { getBootstrapState } from "../routes.js";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/png",
@@ -167,34 +162,13 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         }
 
         const messageText = parsed.message || "";
-        const result = executeSend(
-          workspace,
-          parsed.agent,
-          messageText,
-          parsed.priority,
-          parsed.requestId,
+        const result = workspace.sendUserDm(parsed.agent, messageText, {
+          priority: parsed.priority,
+          requestId: parsed.requestId,
           attachments,
-        );
+        });
         if (result.ok) {
           broadcast("state_changed", getBootstrapState(workspace, officeId));
-          if (workspace.store) {
-            try {
-              workspace.store.saveDm({
-                agent: parsed.agent!,
-                role: "user",
-                text: messageText,
-                ts_ms: Date.now(),
-                request_id: parsed.requestId ?? null,
-                correlation_id: null,
-                egress_id: null,
-                attachments: attachments
-                  ? JSON.stringify(attachments)
-                  : null,
-              });
-            } catch (err) {
-              console.error("[ui] Failed to persist user DM:", err);
-            }
-          }
         }
         return json(res, result.ok ? 200 : 400, result);
       },
@@ -279,7 +253,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       paramNames: ["id"],
       handler: (_req, res, _url, params) => {
         const id = params.id!;
-        if (!UPLOAD_ID_RE.test(id)) return json(res, 400, { error: "invalid_id" });
+        if (!UPLOAD_ID_RE.test(id))
+          return json(res, 400, { error: "invalid_id" });
         const filePath = join(uploadsDir(workspace.office.dir), id);
         const ext = extname(id).toLowerCase();
         const contentType =

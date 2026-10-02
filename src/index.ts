@@ -17,6 +17,7 @@ import {
 } from "./config/office-yaml.js";
 import { migrateCommand } from "./commands/migrate.js";
 import { startUiServer, stopUiServer } from "./ui/server.js";
+import { startDiscordBridge } from "./integrations/discord/index.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[error]", err instanceof Error ? err.message : err);
@@ -268,6 +269,9 @@ program
       // Apply office.yaml agents
       await applyOfficeYaml(workspace, opts.office);
 
+      // Discord bot bridge (only when DISCORD_BOT_TOKEN is set)
+      const discordBridge = startDiscordBridge(workspace);
+
       // Re-notify agents about tasks that lost their inbox message
       const recovered = workspace.recoverTasks();
       if (recovered > 0) {
@@ -304,6 +308,11 @@ program
         forceTimer.unref();
 
         let failed = false;
+        try {
+          await (await discordBridge)?.stop();
+        } catch {
+          failed = true;
+        }
         try {
           await stopUiServer();
         } catch {

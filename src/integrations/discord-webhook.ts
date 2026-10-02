@@ -66,7 +66,12 @@ export function messageFromTool(
 
 /** Discord message bodies: "**from → to**" then the text, split to fit. */
 export function formatForDiscord(m: MirroredMessage): string[] {
-  let rest = `**${m.from} → ${m.to}**\n${m.text}`;
+  return splitForDiscord(`**${m.from} → ${m.to}**\n${m.text}`);
+}
+
+/** Split text into Discord-sized messages, preferably at line breaks. */
+export function splitForDiscord(text: string): string[] {
+  let rest = text;
   const chunks: string[] = [];
   while (rest.length > DISCORD_MAX_CHARS) {
     const cut = rest.lastIndexOf("\n", DISCORD_MAX_CHARS);
@@ -78,6 +83,39 @@ export function formatForDiscord(m: MirroredMessage): string[] {
   return chunks;
 }
 
+/**
+ * Pairs send-tool starts (which carry the input) with their ends (which say
+ * whether they worked), reporting each successful send.
+ */
+export class SentMessageTracker {
+  private pending = new Map<string, { toolName: string; args: unknown }>();
+
+  constructor(
+    private readonly tools: ReadonlySet<string>,
+    private readonly onSent: (
+      agent: string,
+      toolName: string,
+      args: unknown,
+    ) => void,
+  ) {}
+
+  handleEvent(agent: string, event: Record<string, unknown>): void {
+    const id = event["toolCallId"];
+    const toolName = event["toolName"];
+    if (typeof id !== "string" || typeof toolName !== "string") return;
+    const key = `${agent}:${id}`;
+    if (event["type"] === "tool_execution_start") {
+      if (this.tools.has(toolName))
+        this.pending.set(key, { toolName, args: event["args"] });
+    } else if (event["type"] === "tool_execution_end") {
+      const start = this.pending.get(key);
+      this.pending.delete(key);
+      if (start && event["isError"] !== true)
+        this.onSent(agent, start.toolName, start.args);
+    }
+  }
+}
+
 type FetchFn = (url: string, init: RequestInit) => Promise<Response>;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -86,8 +124,15 @@ export class DiscordWebhookMirror {
   private url: string | undefined;
   private queue: Array<{ username: string; content: string }> = [];
   private draining = false;
-  /** Send-tool inputs by call id, until the call finishes. */
-  private pending = new Map<string, { toolName: string; args: unknown }>();
+  /** Off while the Discord bot bridge is connected (it posts instead). */
+  enabled = true;
+  private tracker = new SentMessageTracker(
+    MIRRORED_TOOLS,
+    (agent, tool, args) => {
+      const msg = messageFromTool(agent, tool, args);
+      if (msg) this.send(msg);
+    },
+  );
 
   constructor(
     url?: string,
@@ -106,24 +151,11 @@ export class DiscordWebhookMirror {
 
   /** Feed agent events; successful send tools are copied to Discord. */
   handleEvent(agent: string, event: Record<string, unknown>): void {
-    const id = event["toolCallId"];
-    const toolName = event["toolName"];
-    if (typeof id !== "string" || typeof toolName !== "string") return;
-    const key = `${agent}:${id}`;
-    if (event["type"] === "tool_execution_start") {
-      if (MIRRORED_TOOLS.has(toolName))
-        this.pending.set(key, { toolName, args: event["args"] });
-    } else if (event["type"] === "tool_execution_end") {
-      const start = this.pending.get(key);
-      this.pending.delete(key);
-      if (!start || event["isError"] === true) return;
-      const msg = messageFromTool(agent, start.toolName, start.args);
-      if (msg) this.send(msg);
-    }
+    this.tracker.handleEvent(agent, event);
   }
 
   send(m: MirroredMessage): void {
-    if (!this.url) return;
+    if (!this.url || !this.enabled) return;
     for (const content of formatForDiscord(m))
       this.queue.push({ username: m.from, content });
     void this.drain();
