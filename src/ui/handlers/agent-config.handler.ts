@@ -30,7 +30,11 @@ import {
 } from "../../config/office-yaml.js";
 import { Priority } from "../../types.js";
 import { getEnvApiKey } from "@earendil-works/pi-ai/compat";
-import { resolveModel, splitModelSpec } from "../../models/resolve-model.js";
+import {
+  resolveModel,
+  splitModelSpec,
+  withDetectedVision,
+} from "../../models/resolve-model.js";
 import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -357,7 +361,9 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         if (!handle) return json(res, 404, { error: "agent_not_found" });
         let model;
         try {
-          model = resolveModel(parsed.model, workspace.office.models);
+          model = await withDetectedVision(
+            resolveModel(parsed.model, workspace.office.models),
+          );
         } catch (err) {
           return json(res, 400, {
             error: err instanceof Error ? err.message : String(err),

@@ -143,6 +143,7 @@ class FakeDiscord implements DiscordApi {
 }
 
 function makeHost(): BridgeHost & {
+  importImage?: BridgeHost["importImage"];
   dms: unknown[];
   posts: unknown[];
 } {
@@ -157,8 +158,18 @@ function makeHost(): BridgeHost & {
     attachmentPath: (id: string) => `/uploads/${id}`,
     channels: () => channels,
     agentNames: () => ["lead", "coder", "artist"],
-    sendUserDm: (agent: string, text: string, origin: string) => {
-      host.dms.push({ agent, text, origin });
+    sendUserDm: (
+      agent: string,
+      text: string,
+      origin: string,
+      attachments?: unknown[],
+    ) => {
+      host.dms.push({
+        agent,
+        text,
+        origin,
+        ...(attachments?.length ? { attachments } : {}),
+      });
       return { ok: true };
     },
     postUserChannel: (
@@ -374,6 +385,48 @@ describe("DiscordBridge", () => {
     expect(discord.sent[0]!.content).toContain(
       "build.zip is 30.0 MB: over Discord's 10 MB upload limit, so download it from the dashboard.",
     );
+  });
+
+  it("hands images posted in Discord to the agent, in order", async () => {
+    const saved: string[] = [];
+    host.importImage = async (img) => {
+      await new Promise((r) => setTimeout(r, 20));
+      if (img.name === "broken.png") throw new Error("HTTP 404");
+      saved.push(img.url);
+      return {
+        id: `u-${img.name}`,
+        filename: img.name,
+        mimeType: img.contentType,
+      };
+    };
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const img = (name: string) => ({
+      url: `https://cdn/${name}`,
+      name,
+      contentType: "image/png",
+      size: 100,
+    });
+    discord.type("dm-lead", "what's this?", {
+      attachmentUrls: ["https://cdn/red.png", "https://cdn/broken.png"],
+      images: [img("red.png"), img("broken.png")],
+    });
+    discord.type("dm-lead", "and this text after it");
+    await bridge.idle();
+    expect(host.dms).toEqual([
+      {
+        agent: "lead",
+        text: "what's this?\n[attachment: https://cdn/red.png]\n[attachment: https://cdn/broken.png]",
+        origin: "discord",
+        attachments: [
+          { id: "u-red.png", filename: "red.png", mimeType: "image/png" },
+        ],
+      },
+      { agent: "lead", text: "and this text after it", origin: "discord" },
+    ]);
+    expect(err).toHaveBeenCalledWith(
+      "[discord] Couldn't download broken.png: HTTP 404",
+    );
+    err.mockRestore();
   });
 
   it("matches typed @names in any case", async () => {

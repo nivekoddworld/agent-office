@@ -1,4 +1,5 @@
 import type { Attachment } from "../../types.js";
+import type { DiscordImage } from "./types.js";
 
 /** Discord's upload limit without server boosts. */
 export const DEFAULT_MAX_UPLOAD = 10 * 1024 * 1024;
@@ -34,4 +35,26 @@ export function uploadFailed(
   console.error(`[discord] Couldn't upload ${names}: ${why}`);
   const note = `_(Couldn't upload ${names} to Discord: ${why.slice(0, 200)}. Download it from the dashboard.)_`;
   return text ? `${text}\n${note}` : note;
+}
+
+/** At most this many images per Discord message are passed to agents. */
+const MAX_IMAGES = 4;
+const MAX_IMAGE_BYTES = 20 * 1048576;
+
+/** Images posted in Discord, saved as uploads; any that fail stay links only. */
+export async function importImages(
+  images: DiscordImage[],
+  save: (img: DiscordImage) => Promise<Attachment>,
+): Promise<Attachment[]> {
+  const saved: Attachment[] = [];
+  for (const img of images.slice(0, MAX_IMAGES)) {
+    if (img.size > MAX_IMAGE_BYTES) continue;
+    try {
+      saved.push(await save(img));
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err);
+      console.error(`[discord] Couldn't download ${img.name}: ${why}`);
+    }
+  }
+  return saved;
 }

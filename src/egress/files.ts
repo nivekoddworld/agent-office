@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { copyFileSync, mkdirSync, realpathSync, statSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  realpathSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, extname, isAbsolute, join, relative, sep } from "node:path";
 import type { Attachment } from "../types.js";
 
@@ -120,13 +126,8 @@ export function importFiles(
         error: `${p}: larger than ${MAX_FILE_BYTES / 1024 / 1024} MB`,
       };
     const ext = extname(real).toLowerCase();
-    const safeExt = /^\.[a-z0-9]{1,8}$/.test(ext)
-      ? ext === ".jpeg"
-        ? ".jpg"
-        : ext
-      : ".bin";
     mkdirSync(dir, { recursive: true });
-    const id = `${randomUUID()}${safeExt}`;
+    const id = uploadId(ext);
     copyFileSync(real, join(dir, id));
     attachments.push({
       id,
@@ -136,6 +137,30 @@ export function importFiles(
     });
   }
   return { ok: true, attachments };
+}
+
+/** A new file name in the uploads folder, keeping a safe extension. */
+function uploadId(ext: string): string {
+  const safe = /^\.[a-z0-9]{1,8}$/.test(ext)
+    ? ext === ".jpeg"
+      ? ".jpg"
+      : ext
+    : ".bin";
+  return `${randomUUID()}${safe}`;
+}
+
+/** Store bytes from elsewhere (e.g. an image posted in Discord) as an upload. */
+export function saveUpload(
+  officeDir: string,
+  filename: string,
+  mimeType: string,
+  data: Buffer,
+): Attachment {
+  const dir = uploadsDir(officeDir);
+  mkdirSync(dir, { recursive: true });
+  const id = uploadId(extname(filename).toLowerCase());
+  writeFileSync(join(dir, id), data);
+  return { id, filename: basename(filename), mimeType, size: data.length };
 }
 
 /** Absolute path of an uploaded attachment. */

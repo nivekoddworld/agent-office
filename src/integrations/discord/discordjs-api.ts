@@ -13,6 +13,7 @@ import {
 } from "discord.js";
 import type { RESTOptions } from "discord.js";
 import { discordFetch } from "./discord-fetch.js";
+import { isImage } from "../../egress/files.js";
 import {
   UnknownMessageError,
   UnknownWebhookError,
@@ -266,6 +267,14 @@ export async function connectDiscord(
           content: m.content,
           roleIds: [...m.mentions.roles.keys()],
           attachmentUrls: [...m.attachments.values()].map((a) => a.url),
+          images: [...m.attachments.values()]
+            .filter((a) => isImage(a.contentType ?? ""))
+            .map((a) => ({
+              url: a.url,
+              name: a.name,
+              contentType: a.contentType!,
+              size: a.size,
+            })),
           fromBot: m.author.bot || !!m.webhookId,
         });
       });

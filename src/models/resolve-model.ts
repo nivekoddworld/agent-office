@@ -16,6 +16,8 @@ export interface LocalProviderConfig {
   api_key_ref?: string;
   context_window?: number;
   max_tokens?: number;
+  /** The model takes images. Unset: asked from llama.cpp's /props at start. */
+  vision?: boolean;
 }
 
 /** Office-level model settings (from office.yaml). */
@@ -52,6 +54,8 @@ const DEFAULT_MAX_TOKENS = 8192;
 /** Model built for a local server, tagged with where its API key comes from. */
 export type LocalModel = Model<"openai-completions"> & {
   localAuth: { apiKeyEnv: string; required: boolean };
+  /** `vision` from office.yaml, if set; otherwise it's detected. */
+  localVision?: boolean;
 };
 
 export interface ResolvedLocalProvider {
@@ -62,6 +66,7 @@ export interface ResolvedLocalProvider {
   apiKeyRequired: boolean;
   contextWindow: number;
   maxTokens: number;
+  vision?: boolean;
 }
 
 export function isLocalPreset(name: string): name is LocalProviderType {
@@ -112,6 +117,7 @@ export function resolveLocalProvider(
     apiKeyRequired: cfg?.api_key_ref !== undefined,
     contextWindow: cfg?.context_window ?? DEFAULT_CONTEXT_WINDOW,
     maxTokens: cfg?.max_tokens ?? DEFAULT_MAX_TOKENS,
+    ...(cfg?.vision !== undefined ? { vision: cfg.vision } : {}),
   };
 }
 
@@ -126,7 +132,7 @@ export function buildLocalModel(
     provider: provider.name,
     baseUrl: provider.baseUrl,
     reasoning: false,
-    input: ["text"],
+    input: provider.vision ? ["text", "image"] : ["text"],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: provider.contextWindow,
     maxTokens: provider.maxTokens,
@@ -141,6 +147,7 @@ export function buildLocalModel(
       apiKeyEnv: provider.apiKeyEnv,
       required: provider.apiKeyRequired,
     },
+    ...(provider.vision !== undefined ? { localVision: provider.vision } : {}),
   };
 }
 
@@ -245,4 +252,42 @@ export async function listServerModels(
   } catch {
     return [];
   }
+}
+
+/**
+ * A local model with image input turned on if its server says it takes
+ * images: llama.cpp's /props reports `modalities.vision` when it was started
+ * with a vision projector (--mmproj). An explicit `vision:` in office.yaml
+ * wins; servers that don't answer (e.g. vLLM) stay text-only.
+ */
+export async function withDetectedVision<T extends Model<any>>(
+  model: T,
+  env: NodeJS.ProcessEnv = process.env,
+  timeoutMs = 2000,
+): Promise<T> {
+  if (!isLocalModel(model) || model.localVision !== undefined) return model;
+  if (model.input.includes("image")) return model;
+  const key = env[model.localAuth.apiKeyEnv];
+  const root = model.baseUrl.replace(/\/v1\/?$/, "");
+  const id = encodeURIComponent(model.id);
+  // llama-server, then llama-swap's per-model route.
+  for (const url of [
+    `${root}/props?model=${id}`,
+    `${root}/upstream/${id}/props`,
+  ]) {
+    try {
+      const res = await fetch(url, {
+        headers: key ? { Authorization: `Bearer ${key}` } : {},
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) continue;
+      const props = (await res.json()) as { modalities?: { vision?: unknown } };
+      if (props.modalities?.vision !== true) return model;
+      console.log(`[models] ${model.provider}:${model.id} takes images`);
+      return { ...model, input: ["text", "image"] };
+    } catch {
+      return model;
+    }
+  }
+  return model;
 }

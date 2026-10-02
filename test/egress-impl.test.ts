@@ -215,6 +215,38 @@ describe("egress-impl", () => {
       expect(bus.peek("agent-c")).toBe(0);
     });
 
+    it("passes images posted with a message to the agents it wakes", () => {
+      const bus = new MessageBus();
+      for (const a of ["agent-a", "agent-b", "agent-c"]) bus.register(a);
+      const deps = makeDeps({ baseDir: dir, channels, bus });
+      const png = { id: "p.png", filename: "red.png", mimeType: "image/png" };
+      const zip = {
+        id: "b.zip",
+        filename: "b.zip",
+        mimeType: "application/zip",
+      };
+      const ctx = makeCtx({ agentName: "__user__" });
+      postChannel(
+        ctx,
+        deps,
+        "general",
+        "look",
+        ["agent-b"],
+        undefined,
+        [],
+        [png, zip],
+      );
+      expect(bus.peekMessages("agent-b")[0]!.attachments).toEqual([png]);
+      expect(bus.peek("agent-c")).toBe(0);
+      const entry = JSON.parse(
+        readFileSync(
+          join(dir, "agents", "agent-c", "sessions", "channel-general.jsonl"),
+          "utf-8",
+        ),
+      );
+      expect(entry.attachments).toEqual([png, zip]);
+    });
+
     it("user post without mentions broadcasts to all members", () => {
       const bus = new MessageBus();
       bus.register("agent-a");

@@ -732,6 +732,7 @@ export class Workspace {
     text: string,
     mentions: string[] = [],
     origin?: string,
+    attachments: import("./types.js").Attachment[] = [],
   ): { ok: boolean; error?: string } {
     const result = postChannel(
       { agentName: "__user__", hopCount: 0, ...(origin ? { origin } : {}) },
@@ -743,6 +744,9 @@ export class Workspace {
       channel,
       text,
       mentions.length ? mentions : undefined,
+      undefined,
+      [],
+      attachments,
     );
     return result.ok ? { ok: true } : { ok: false, error: result.reason };
   }
