@@ -1330,6 +1330,18 @@ Non-members get an error listing their channels. Can be denied like any tool via
 
 **Catch-up context:** when a channel message wakes an agent, the prompt also includes the channel messages just before it, so the agent can follow the discussion without calling `read_channel`. The number is set with `office.channel_context` (default `10`, `0` turns it off).
 
+### `read_dm`
+
+Read recent direct messages with the user (default) or with another agent, oldest first, from the agent's own session logs. An agent's working memory is lost when its container restarts and trimmed when the model's context window fills up; the logs keep the conversation, so the agent can look back at what was asked in a DM.
+
+```
+agent calls read_dm:
+  with: "user"       # optional: "user" (default) or an agent name
+  limit: 30          # optional, default 30, max 100
+```
+
+If there's nothing with that name yet, the reply lists who the agent does have DMs with. Can be denied via `permissions.tools.deny`.
+
 ### `read_agent_file`
 
 Read files directly from another agent's workspace without needing to ask them. Path traversal is blocked for security.

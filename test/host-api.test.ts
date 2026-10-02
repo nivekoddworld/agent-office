@@ -600,3 +600,42 @@ describe.skipIf(skipHostApi)("HostApi /api/read-channel", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe.skipIf(skipHostApi)("HostApi /api/read-dm", () => {
+  let api: HostApi;
+  let port: number;
+  let baseDir: string;
+
+  beforeEach(async () => {
+    baseDir = mkdtempSync(join(tmpdir(), "hostapi-dm-"));
+    const dir = join(baseDir, "agents", "agent-a", "sessions");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(
+      join(dir, "user-dm.jsonl"),
+      JSON.stringify({ from: "__user__", text: "build the menu" }) + "\n",
+    );
+    port = nextPort();
+    const bus = makeBus();
+    api = new HostApi(bus, makeListFn(), baseDir);
+    api.setEgressDeps({ baseDir, bus: bus as any, channels: new Map() });
+    api.registerAgent("agent-a", "tok-a");
+    api.registerAgent("agent-c", "tok-c", {}, { tools: { deny: ["read_dm"] } });
+    await api.start(port);
+  });
+
+  afterEach(async () => {
+    await api.stop();
+    rmSync(baseDir, { recursive: true, force: true });
+  });
+
+  it("returns the agent's own DM history", async () => {
+    const res = await postJson(port, "/api/read-dm", {}, "tok-a");
+    expect(res.status).toBe(200);
+    expect((await res.json()).result).toContain("user: build the menu");
+  });
+
+  it("respects the tool policy", async () => {
+    const res = await postJson(port, "/api/read-dm", {}, "tok-c");
+    expect(res.status).toBe(403);
+  });
+});

@@ -1,4 +1,5 @@
 import { readChannelForAgent } from "../channels/channel-history.js";
+import { readDmForAgent } from "../channels/dm-history.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import { loadSkills } from "@earendil-works/pi-coding-agent";
@@ -572,6 +573,35 @@ export async function handleReadChannel(
     typeof parsed.limit === "number" ? parsed.limit : undefined,
   );
   res.writeHead(result.ok ? 200 : 403, { "Content-Type": "application/json" });
+  res.end(
+    JSON.stringify(
+      result.ok ? { result: result.text } : { error: result.error },
+    ),
+  );
+}
+
+export async function handleReadDm(
+  req: IncomingMessage,
+  res: ServerResponse,
+  agentName: string,
+  deps: EgressDeps,
+): Promise<void> {
+  const body = await readBody(req);
+  let parsed: { with?: unknown; limit?: unknown } = {};
+  try {
+    parsed = JSON.parse(body || "{}");
+  } catch {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Invalid JSON" }));
+    return;
+  }
+  const result = readDmForAgent(
+    deps.baseDir,
+    agentName,
+    typeof parsed.with === "string" ? parsed.with : undefined,
+    typeof parsed.limit === "number" ? parsed.limit : undefined,
+  );
+  res.writeHead(result.ok ? 200 : 400, { "Content-Type": "application/json" });
   res.end(
     JSON.stringify(
       result.ok ? { result: result.text } : { error: result.error },

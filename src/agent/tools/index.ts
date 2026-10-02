@@ -18,4 +18,5 @@ export { createTaskDeleteTool } from "./task-delete.js";
 export { createMessageUserTool } from "./message-user.js";
 export { createPostChannelTool } from "./post-channel.js";
 export { createReadChannelTool } from "./read-channel.js";
+export { createReadDmTool } from "./read-dm.js";
 export { createSetAvatarTool } from "./set-avatar.js";
