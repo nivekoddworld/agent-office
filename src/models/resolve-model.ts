@@ -56,6 +56,8 @@ export type LocalModel = Model<"openai-completions"> & {
   localAuth: { apiKeyEnv: string; required: boolean };
   /** `vision` from office.yaml, if set; otherwise it's detected. */
   localVision?: boolean;
+  /** `context_window` / `max_tokens` from office.yaml, if set. */
+  localLimits?: { contextWindow?: number; maxTokens?: number };
 };
 
 export interface ResolvedLocalProvider {
@@ -67,6 +69,8 @@ export interface ResolvedLocalProvider {
   contextWindow: number;
   maxTokens: number;
   vision?: boolean;
+  /** Limits set in office.yaml (the others are defaults or detected). */
+  setLimits?: { contextWindow?: number; maxTokens?: number };
 }
 
 export function isLocalPreset(name: string): name is LocalProviderType {
@@ -118,6 +122,10 @@ export function resolveLocalProvider(
     contextWindow: cfg?.context_window ?? DEFAULT_CONTEXT_WINDOW,
     maxTokens: cfg?.max_tokens ?? DEFAULT_MAX_TOKENS,
     ...(cfg?.vision !== undefined ? { vision: cfg.vision } : {}),
+    setLimits: {
+      ...(cfg?.context_window ? { contextWindow: cfg.context_window } : {}),
+      ...(cfg?.max_tokens ? { maxTokens: cfg.max_tokens } : {}),
+    },
   };
 }
 
@@ -148,6 +156,7 @@ export function buildLocalModel(
       required: provider.apiKeyRequired,
     },
     ...(provider.vision !== undefined ? { localVision: provider.vision } : {}),
+    ...(provider.setLimits ? { localLimits: provider.setLimits } : {}),
   };
 }
 
@@ -254,40 +263,94 @@ export async function listServerModels(
   }
 }
 
+/** What a local server says about a model, or undefined if it won't say. */
+async function serverInfo(
+  model: LocalModel,
+  env: NodeJS.ProcessEnv,
+  timeoutMs: number,
+): Promise<{ vision?: boolean; contextWindow?: number } | undefined> {
+  const key = env[model.localAuth.apiKeyEnv];
+  const get = async (url: string) => {
+    const res = await fetch(url, {
+      headers: key ? { Authorization: `Bearer ${key}` } : {},
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.ok ? ((await res.json()) as Record<string, any>) : undefined;
+  };
+  const positive = (n: unknown) =>
+    typeof n === "number" && n > 0 ? n : undefined;
+  const root = model.baseUrl.replace(/\/v1\/?$/, "");
+  const id = encodeURIComponent(model.id);
+  try {
+    // llama-server, then llama-swap's per-model route.
+    for (const url of [
+      `${root}/props?model=${id}`,
+      `${root}/upstream/${id}/props`,
+    ]) {
+      const props = await get(url);
+      if (!props) continue;
+      return {
+        vision: props.modalities?.vision === true,
+        // Per request (one slot); what -c gives each of --parallel slots.
+        contextWindow:
+          positive(props.default_generation_settings?.n_ctx) ??
+          positive(props.n_ctx),
+      };
+    }
+    // vLLM lists each model's context length.
+    const models = await get(`${model.baseUrl}/models`);
+    const entry = (models?.data as any[] | undefined)?.find(
+      (m) => m?.id === model.id,
+    );
+    const len = positive(entry?.max_model_len);
+    return len ? { contextWindow: len } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
- * A local model with image input turned on if its server says it takes
- * images: llama.cpp's /props reports `modalities.vision` when it was started
- * with a vision projector (--mmproj). An explicit `vision:` in office.yaml
- * wins; servers that don't answer (e.g. vLLM) stay text-only.
+ * A local model updated with what its server says: image input when it has
+ * vision (llama.cpp's /props reports it when started with --mmproj), and
+ * its real context size (llama.cpp's -c per slot, vLLM's max_model_len).
+ * Settings in office.yaml win, except that a context_window bigger than the
+ * server's is lowered to it. Servers that don't answer are left as is.
  */
-export async function withDetectedVision<T extends Model<any>>(
+export async function withServerInfo<T extends Model<any>>(
   model: T,
   env: NodeJS.ProcessEnv = process.env,
   timeoutMs = 2000,
 ): Promise<T> {
-  if (!isLocalModel(model) || model.localVision !== undefined) return model;
-  if (model.input.includes("image")) return model;
-  const key = env[model.localAuth.apiKeyEnv];
-  const root = model.baseUrl.replace(/\/v1\/?$/, "");
-  const id = encodeURIComponent(model.id);
-  // llama-server, then llama-swap's per-model route.
-  for (const url of [
-    `${root}/props?model=${id}`,
-    `${root}/upstream/${id}/props`,
-  ]) {
-    try {
-      const res = await fetch(url, {
-        headers: key ? { Authorization: `Bearer ${key}` } : {},
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (!res.ok) continue;
-      const props = (await res.json()) as { modalities?: { vision?: unknown } };
-      if (props.modalities?.vision !== true) return model;
-      console.log(`[models] ${model.provider}:${model.id} takes images`);
-      return { ...model, input: ["text", "image"] };
-    } catch {
-      return model;
-    }
+  if (!isLocalModel(model)) return model;
+  const info = await serverInfo(model, env, timeoutMs);
+  if (!info) return model;
+  const name = `${model.provider}:${model.id}`;
+  let out: LocalModel = model;
+  if (
+    info.vision &&
+    model.localVision === undefined &&
+    !model.input.includes("image")
+  ) {
+    console.log(`[models] ${name} takes images`);
+    out = { ...out, input: ["text", "image"] };
   }
-  return model;
+  const server = info.contextWindow;
+  if (server) {
+    const set = model.localLimits?.contextWindow;
+    const contextWindow = set ? Math.min(set, server) : server;
+    if (set && set > server)
+      console.warn(
+        `[models] ${name}: office.yaml says context_window ${set}, but the server has ${server} per request; using ${server}`,
+      );
+    else if (!set && contextWindow !== model.contextWindow)
+      console.log(
+        `[models] ${name}: context ${contextWindow} tokens (from the server)`,
+      );
+    // Leave most of a small context for the conversation.
+    const maxTokens =
+      model.localLimits?.maxTokens ??
+      Math.min(model.maxTokens, Math.floor(contextWindow / 4));
+    out = { ...out, contextWindow, maxTokens };
+  }
+  return out as unknown as T;
 }

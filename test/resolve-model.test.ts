@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
@@ -14,7 +14,7 @@ import {
   resolveModel,
   splitModelSpec,
   toSandboxModel,
-  withDetectedVision,
+  withServerInfo,
   type OfficeModelSettings,
 } from "../src/models/resolve-model.js";
 import { validateOfficeModels } from "../src/config/yaml-validation.js";
@@ -337,14 +337,14 @@ describe("vision", () => {
 
   it("asks llama.cpp's /props whether the model takes images", async () => {
     const s = await llama(true);
-    const model = await withDetectedVision(local(s.url));
+    const model = await withServerInfo(local(s.url));
     expect(model.input).toEqual(["text", "image"]);
     expect(s.paths).toEqual(["/props?model=qwen-vl"]);
   });
 
   it("asks llama-swap's per-model route too", async () => {
     const s = await llama(true, "/upstream/qwen-vl/props");
-    const model = await withDetectedVision(local(s.url));
+    const model = await withServerInfo(local(s.url));
     expect(model.input).toEqual(["text", "image"]);
     expect(s.paths).toEqual([
       "/props?model=qwen-vl",
@@ -355,18 +355,17 @@ describe("vision", () => {
   it("stays text-only when the server has no vision or doesn't say", async () => {
     for (const v of [false, undefined]) {
       const s = await llama(v);
-      expect((await withDetectedVision(local(s.url))).input).toEqual(["text"]);
+      expect((await withServerInfo(local(s.url))).input).toEqual(["text"]);
       server!.close();
     }
-    const down = await withDetectedVision(local("http://127.0.0.1:1"));
+    const down = await withServerInfo(local("http://127.0.0.1:1"));
     expect(down.input).toEqual(["text"]);
   });
 
-  it("doesn't ask when office.yaml sets vision", async () => {
+  it("keeps vision as office.yaml sets it", async () => {
     const s = await llama(true);
-    const model = await withDetectedVision(local(s.url, false));
+    const model = await withServerInfo(local(s.url, false));
     expect(model.input).toEqual(["text"]);
-    expect(s.paths).toEqual([]);
   });
 
   it("must be true or false in office.yaml", () => {
@@ -376,5 +375,79 @@ describe("vision", () => {
         providers: { llamacpp: { vision: "yes" as never } },
       }),
     ).toEqual(["office.providers.llamacpp.vision must be true or false"]);
+  });
+});
+
+describe("context size from the server", () => {
+  let server: http.Server | undefined;
+  afterEach(() => server?.close());
+
+  async function serve(routes: Record<string, unknown>): Promise<string> {
+    server = http.createServer((req, res) => {
+      const path = (req.url ?? "").split("?")[0]!;
+      if (!(path in routes)) return res.writeHead(404).end();
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify(routes[path]));
+    });
+    await new Promise<void>((r) => server!.listen(0, "127.0.0.1", r));
+    return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  }
+  const model = (base_url: string, extra: Record<string, unknown> = {}) =>
+    resolveModel("llamacpp:qwen", {
+      providers: { llamacpp: { base_url, ...extra } },
+    });
+  const quiet = () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+  };
+
+  it("uses llama.cpp's per-request context when office.yaml doesn't set one", async () => {
+    quiet();
+    const url = await serve({
+      "/props": { default_generation_settings: { n_ctx: 131072 } },
+    });
+    const m = await withServerInfo(model(url));
+    expect(m.contextWindow).toBe(131072);
+    expect(m.maxTokens).toBe(8192);
+    vi.restoreAllMocks();
+  });
+
+  it("lowers a context_window bigger than the server's", async () => {
+    quiet();
+    const url = await serve({
+      "/props": { default_generation_settings: { n_ctx: 16384 } },
+    });
+    const m = await withServerInfo(model(url, { context_window: 131072 }));
+    expect(m.contextWindow).toBe(16384);
+    // Room left for the conversation in a small context.
+    expect(m.maxTokens).toBe(4096);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "office.yaml says context_window 131072, but the server has 16384",
+      ),
+    );
+    // A smaller setting, and max_tokens, stay as set.
+    const kept = await withServerInfo(
+      model(url, { context_window: 8192, max_tokens: 1000 }),
+    );
+    expect([kept.contextWindow, kept.maxTokens]).toEqual([8192, 1000]);
+    vi.restoreAllMocks();
+  });
+
+  it("reads vLLM's max_model_len", async () => {
+    quiet();
+    const url = await serve({
+      "/v1/models": {
+        data: [{ id: "other" }, { id: "qwen", max_model_len: 40960 }],
+      },
+    });
+    expect((await withServerInfo(model(url))).contextWindow).toBe(40960);
+    vi.restoreAllMocks();
+  });
+
+  it("leaves the model alone when the server doesn't say", async () => {
+    const url = await serve({});
+    const m = await withServerInfo(model(url));
+    expect([m.contextWindow, m.maxTokens]).toEqual([32768, 8192]);
   });
 });
