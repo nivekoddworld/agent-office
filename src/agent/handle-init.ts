@@ -54,7 +54,7 @@ import {
   isLocalModel,
   resolveLocalApiKey,
   toSandboxModel,
-  withDetectedVision,
+  withServerInfo,
 } from "../models/resolve-model.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
@@ -100,7 +100,7 @@ export async function initSandboxAgent(
 ): Promise<SandboxInitResult> {
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
 
-  ctx.config.model = await withDetectedVision(ctx.config.model);
+  ctx.config.model = await withServerInfo(ctx.config.model);
   const model = ctx.config.model;
   const skillPaths = resolveSkillPaths(ctx);
 
@@ -199,7 +199,7 @@ export async function initInProcessAgent(
   onStateChanged?: () => void,
 ): Promise<InProcessInitResult> {
   ensureAgentSkillLayout(ctx.baseDir, ctx.name);
-  ctx.config.model = await withDetectedVision(ctx.config.model);
+  ctx.config.model = await withServerInfo(ctx.config.model);
 
   let resolvedApiKey: string | undefined;
   let oauthGetApiKey:

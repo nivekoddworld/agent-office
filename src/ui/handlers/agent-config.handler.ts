@@ -33,7 +33,7 @@ import { getEnvApiKey } from "@earendil-works/pi-ai/compat";
 import {
   resolveModel,
   splitModelSpec,
-  withDetectedVision,
+  withServerInfo,
 } from "../../models/resolve-model.js";
 import { existsSync, readFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
@@ -361,7 +361,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
         if (!handle) return json(res, 404, { error: "agent_not_found" });
         let model;
         try {
-          model = await withDetectedVision(
+          model = await withServerInfo(
             resolveModel(parsed.model, workspace.office.models),
           );
         } catch (err) {

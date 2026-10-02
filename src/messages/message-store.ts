@@ -9,7 +9,10 @@ export interface MessageStore {
   deleteInbox(id: string): void;
   deleteAllInbox(agent: string): void;
   saveDm(
-    record: Omit<DmRecord, "id" | "correlation_id" | "egress_id" | "attachments"> & {
+    record: Omit<
+      DmRecord,
+      "id" | "correlation_id" | "egress_id" | "attachments"
+    > & {
       correlation_id?: string | null;
       egress_id?: string | null;
       attachments?: string | null;
