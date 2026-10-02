@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Facehash } from "facehash";
 import { Loader } from "@mantine/core";
 import { useAgentActivityFor } from "../../store/agent-activity-store.js";
+import { useChosenAvatar } from "../../api/use-state.js";
 
 function generateColors(count: number): string[] {
   const colors: string[] = [];
@@ -49,7 +51,91 @@ function LiveAvatar({
   );
 }
 
+/**
+ * The picture an agent chose, over its generated face until it has loaded,
+ * with a spinner in the corner while the agent works.
+ */
+function ChosenAvatar({
+  name,
+  url,
+  size,
+  agentName,
+  onError,
+}: {
+  name: string;
+  url: string;
+  size: number;
+  agentName?: string;
+  onError: () => void;
+}) {
+  const activity = useAgentActivityFor(agentName ?? "");
+  const [loaded, setLoaded] = useState(false);
+  const active =
+    !!agentName && (activity.kind === "thinking" || activity.kind === "tool");
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: size,
+        height: size,
+        flexShrink: 0,
+      }}
+    >
+      {!loaded && (
+        <Facehash
+          name={name}
+          size={size}
+          colors={COLORS}
+          style={{ borderRadius: "22%", position: "absolute", inset: 0 }}
+        />
+      )}
+      <img
+        src={url}
+        alt=""
+        width={size}
+        height={size}
+        onLoad={() => setLoaded(true)}
+        onError={onError}
+        style={{
+          borderRadius: "22%",
+          objectFit: "cover",
+          display: "block",
+          position: "relative",
+          opacity: loaded ? 1 : 0,
+        }}
+      />
+      {active && (
+        <div
+          style={{
+            position: "absolute",
+            right: -2,
+            bottom: -2,
+            borderRadius: "50%",
+            background: "var(--mantine-color-body)",
+            lineHeight: 0,
+          }}
+        >
+          <Loader size={Math.max(size * 0.35, 8)} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AgentAvatar({ name, size, agentName }: AgentAvatarProps) {
+  const chosen = useChosenAvatar(agentName ?? name);
+  const [broken, setBroken] = useState<string | undefined>();
+  if (chosen && broken !== chosen) {
+    return (
+      <ChosenAvatar
+        name={name}
+        url={chosen}
+        size={size}
+        agentName={agentName}
+        onError={() => setBroken(chosen)}
+      />
+    );
+  }
   if (agentName) {
     return <LiveAvatar name={name} size={size} agentName={agentName} />;
   }

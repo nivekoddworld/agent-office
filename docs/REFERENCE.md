@@ -744,7 +744,7 @@ waiting → todo → in_progress → done
 
 Tasks can be deleted from any state. Deleting a task cleans up dependency references and auto-unblocks dependent tasks.
 
-**Dependency behavior:** Tasks created with `dependsOn` start in `waiting` regardless of the requested status. When all dependencies reach `done`, the `TaskService` auto-transitions the blocked task to `todo` and sends a `[Task Ready]` notification to the assignee.
+**Dependency behavior:** Tasks created with `dependsOn` start in `waiting` regardless of the requested status. When all dependencies reach `done`, the `TaskService` auto-transitions the blocked task to `todo` and sends a `[Task Ready]` notification to the assignee. If a dependency **fails** instead, the waiting task's assignee and creator (agents only, and not the failed task's creator, who already gets `[Task Failed]`) get a `[Dependency Failed]` message saying which task failed and why, and how to move on: restart the failed task (`task_update` with `restart`), or delete it (`task_delete`), which drops the dependency and unblocks the waiting task.
 
 **Notifications:** New task assignments dispatch `[New Task]` messages. Dependency resolution dispatches `[Task Ready]` messages. Both are sent from `__task__` via the message bus.
 The message bus applies a dedicated higher limit for `__task__` notifications (`40` messages / `30s`) so task events are less likely to be dropped under bursty updates.
@@ -1321,7 +1321,7 @@ agent calls post_channel:
 
 ### `set_avatar`
 
-Choose the agent's picture in Discord: a [DiceBear](https://www.dicebear.com/styles) `style` (e.g. `pixel-art`, `adventurer`, `bottts`, `lorelei`, `notionists`, `fun-emoji`), a `seed` word (same style + seed = same picture) and optionally a `backgroundColor`. Saved as an `Avatar: <url>` line in `instructions/IDENTITY.md`, which the Discord bridge reads; any https image URL works there.
+Choose the agent's picture (shown in the dashboard and in Discord): a [DiceBear](https://www.dicebear.com/styles) `style` (e.g. `pixel-art`, `adventurer`, `bottts`, `lorelei`, `notionists`, `fun-emoji`), a `seed` word (same style + seed = same picture) and optionally a `backgroundColor`. Saved as an `Avatar: <url>` line in `instructions/IDENTITY.md`, which the dashboard and the Discord bridge read; any https image URL works there. Agents without one keep their generated face in the dashboard.
 
 ### `read_channel`
 

@@ -254,6 +254,9 @@ export class TaskService {
       this.resolveDependencies(task.id);
       this.doneHook?.(task);
     }
+    if (task.status === "failed" && oldStatus !== "failed") {
+      this.notifyDependents(task);
+    }
 
     return task;
   }
@@ -487,6 +490,44 @@ export class TaskService {
       });
     } catch {
       // Best-effort: creator agent might not be registered
+    }
+  }
+
+  /**
+   * A task failed: tasks waiting on it won't become ready by themselves, so
+   * tell their assignees and creators what they can do about it.
+   */
+  private notifyDependents(failed: Task): void {
+    for (const task of Object.values(this.tasks)) {
+      if (task.status !== "waiting" || !task.dependsOn.includes(failed.id))
+        continue;
+      const payload =
+        `[Dependency Failed] #${task.id}: ${task.title}\n` +
+        `It waits on #${failed.id} "${failed.title}" (${failed.assignee}), which failed` +
+        (failed.result ? `: ${failed.result}` : ".") +
+        `\nIt stays waiting until that task is done. To move on, restart #${failed.id} ` +
+        `(task_update with restart), or delete it with task_delete (which drops the dependency).`;
+      const to = new Set([task.assignee, task.createdBy]);
+      // The failed task's creator already hears about it.
+      to.delete(failed.createdBy);
+      for (const agent of to) {
+        if (agent.startsWith("__")) continue;
+        try {
+          this.bus.sendWithOutcome({
+            from: "__task__",
+            to: agent,
+            type: "prompt",
+            payload,
+            priority: task.priority,
+            sessionKey: sessionKey("internal", agent),
+            sourceKind: "internal",
+            correlationId: randomUUID(),
+            originTaskId: task.id,
+          });
+        } catch {
+          // Best-effort: the agent might not be registered
+        }
+      }
     }
   }
 

@@ -847,4 +847,49 @@ describe("TaskService", () => {
     expect(tasks[0]!.title).toBe("Persistent");
     service2.stop();
   });
+
+  it("tells the agents behind a waiting task when what it waits on fails", () => {
+    const build = service.create("pm", {
+      title: "Build",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    const review = service.create("reviewer", {
+      title: "Review the build",
+      assignee: "reviewer",
+      priority: P,
+      dependsOn: [build.id],
+    }) as Task;
+    for (const a of ["pm", "coder", "reviewer"]) bus.drain(a);
+
+    service.update("coder", build.id, { status: "in_progress" });
+    service.update("coder", build.id, {
+      status: "failed",
+      result: "tests broke",
+    });
+
+    const notice = bus
+      .peekMessages("reviewer")
+      .find((m) => m.payload.startsWith("[Dependency Failed]"));
+    expect(notice?.payload).toBe(
+      `[Dependency Failed] #${review.id}: Review the build\n` +
+        `It waits on #${build.id} "Build" (coder), which failed: tests broke\n` +
+        `It stays waiting until that task is done. To move on, restart #${build.id} ` +
+        `(task_update with restart), or delete it with task_delete (which drops the dependency).`,
+    );
+    expect(notice?.originTaskId).toBe(review.id);
+    // Only once, even though reviewer is both assignee and creator; pm, who
+    // made the failed task, gets the usual [Task Failed] instead.
+    expect(
+      bus
+        .peekMessages("reviewer")
+        .filter((m) => m.payload.startsWith("[Dependency Failed]")),
+    ).toHaveLength(1);
+    expect(
+      bus
+        .peekMessages("pm")
+        .some((m) => m.payload.startsWith("[Dependency Failed]")),
+    ).toBe(false);
+    expect(service.get(review.id)!.status).toBe("waiting");
+  });
 });
