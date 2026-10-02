@@ -24,6 +24,7 @@ import { PriorityBadge } from "../shared/PriorityBadge.js";
 import { StatusBadge } from "../shared/StatusBadge.js";
 import { MarkdownContent } from "../slack/MarkdownContent.js";
 import type { Task } from "../../api/types.js";
+import { TaskComments } from "./TaskComments.js";
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -222,6 +223,8 @@ export function TaskDetailModal({
             </Box>
           </Box>
         )}
+
+        <TaskComments taskId={task.id} />
 
         <Divider color="var(--ao-border)" />
 

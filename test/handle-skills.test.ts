@@ -106,6 +106,11 @@ vi.mock("../src/agent/tools/index.js", () => ({
     parameters: {},
     execute: vi.fn(),
   }),
+  createTaskCommentTool: () => ({
+    name: "task_comment",
+    parameters: {},
+    execute: vi.fn(),
+  }),
   createTaskDeleteTool: () => ({
     name: "task_delete",
     parameters: {},

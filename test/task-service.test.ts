@@ -892,4 +892,48 @@ describe("TaskService", () => {
     ).toBe(false);
     expect(service.get(review.id)!.status).toBe("waiting");
   });
+
+  it("keeps comments on a task and tells the other side", () => {
+    const t = service.create("pm", {
+      title: "Build",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+    for (const a of ["pm", "coder", "reviewer"]) bus.drain(a);
+
+    // The assignee asks: the creator hears about it, not the assignee.
+    const r = service.comment("coder", t.id, "  blue or green?  ");
+    expect(typeof r).not.toBe("string");
+    expect(service.get(t.id)!.comments).toEqual([
+      { from: "coder", text: "blue or green?", ts: expect.any(Number) },
+    ]);
+    const toPm = bus.peekMessages("pm");
+    expect(toPm).toHaveLength(1);
+    expect(toPm[0]!.payload).toBe(
+      `[Task Comment] #${t.id} "Build" from coder:\nblue or green?\n\n[To reply on the task, call task_comment with id="${t.id}"]`,
+    );
+    expect(toPm[0]!.from).toBe("__task__");
+    expect(bus.peek("coder")).toBe(0);
+
+    // You answer: the assignee gets it as one of your messages.
+    const mine = service.comment("__user__", t.id, "green", "discord");
+    expect(typeof mine === "object" && mine.sent).toContain(
+      "from the user:\ngreen",
+    );
+    const toCoder = bus.peekMessages("coder");
+    expect(toCoder[0]!.from).toBe("__user__");
+    expect(toCoder[0]!.priority).toBe(Priority.CRITICAL);
+    expect(toCoder[0]!.originTaskId).toBe(t.id);
+    expect(service.get(t.id)!.comments!.at(-1)).toMatchObject({
+      from: "__user__",
+      origin: "discord",
+    });
+
+    expect(service.comment("coder", t.id, "   ")).toBe(
+      "Error: the comment is empty",
+    );
+    expect(service.comment("coder", "nope", "x")).toBe(
+      'Error: task "nope" not found',
+    );
+  });
 });

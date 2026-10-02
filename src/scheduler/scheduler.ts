@@ -348,6 +348,8 @@ function formatMessagePayload(
   const before = earlier
     ? `[Earlier in this conversation, oldest first]\n${earlier}\n\n`
     : "";
+  // Your comment on a task: already says how to reply.
+  if (msg.from === "__user__" && msg.originTaskId) return msg.payload;
   if (msg.from === "__user__") {
     return (
       before +

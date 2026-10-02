@@ -29,6 +29,7 @@ import {
   taskUpdateImpl,
   taskListImpl,
   taskGetImpl,
+  taskCommentImpl,
   taskDeleteImpl,
   type TaskToolDeps,
 } from "../agent/tools/task-impl.js";
@@ -421,6 +422,22 @@ export async function handleTaskGet(
   const result = taskGetImpl(makeTaskDeps(parsed.deps), parsed.params as any);
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ result }));
+}
+
+export async function handleTaskComment(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: TaskHandlerDeps | null,
+): Promise<void> {
+  const parsed = await parseTaskBody(req, res, deps);
+  if (!parsed) return;
+  const result = taskCommentImpl(
+    makeTaskDeps(parsed.deps),
+    parsed.params as any,
+  );
+  const failed = result.startsWith("Error");
+  res.writeHead(failed ? 400 : 200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(failed ? { error: result } : { result }));
 }
 
 export async function handleTaskDelete(

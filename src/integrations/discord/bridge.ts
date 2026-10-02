@@ -72,8 +72,6 @@ export class DiscordBridge {
   private incoming: Incoming;
   /** The agent list slash commands were last registered with. */
   private commandsFor = "";
-  /** Agent → the task post whose reply it's answering right now. */
-  private answering = new Map<string, string>();
 
   constructor(
     private readonly api: DiscordApi,
@@ -121,8 +119,17 @@ export class DiscordBridge {
         },
         posts: () => (this.state.taskPosts ??= {}),
         save: () => this.save(),
-        postAs: (threadId, agent, text) =>
-          this.post("tasks", agent, text, [], [], threadId),
+        postAs: async (threadId, agent, text) => {
+          // "@user" in an agent's comment pings you.
+          const { content, ping } = await withRolePills(
+            text,
+            [],
+            agent !== "user",
+            (a) => this.role(a),
+            () => this.userRole(),
+          );
+          await this.post("tasks", agent, content, ping, [], threadId);
+        },
       });
     }
     this.incoming = new Incoming({
@@ -230,13 +237,9 @@ export class DiscordBridge {
     );
     e = { ...e, text: e.text + note };
     if (e.kind === "dm") {
-      // An answer to your reply in a task post goes back in that post.
-      const thread = this.answering.get(e.agent);
       // A 1:1 DM: the message itself is the notification, so no ping.
       this.enqueue(() =>
-        thread
-          ? this.post("tasks", e.agent, e.text, [], files, thread)
-          : this.post(`dm:${e.agent}`, e.agent, e.text, [], files),
+        this.post(`dm:${e.agent}`, e.agent, e.text, [], files),
       );
       return;
     }
@@ -266,11 +269,6 @@ export class DiscordBridge {
     this.relay?.handle(agent, entry);
     this.receipts.handle(agent, entry);
     this.alerts?.activity(agent, entry);
-    if (entry.type === "agent_end") this.answering.delete(agent);
-    const id = /^\[About task #(\w+) /.exec(entry.trigger?.text ?? "")?.[1];
-    const post = id && this.state.taskPosts?.[id];
-    if (entry.type === "agent_start" && post)
-      this.answering.set(agent, post.threadId);
   }
 
   /** One of your messages reached a busy agent in the middle of its turn. */

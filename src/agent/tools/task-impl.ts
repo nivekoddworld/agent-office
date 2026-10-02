@@ -201,8 +201,41 @@ export function taskGetImpl(deps: TaskToolDeps, params: TaskGetParams): string {
     lines.push(`Completed: ${new Date(task.completedAt).toISOString()}`);
   if (task.reportChannel) lines.push(`Report to: ${task.reportChannel}`);
   if (task.result) lines.push(`\nResult:\n${task.result}`);
+  const comments = task.comments ?? [];
+  if (comments.length) {
+    const shown = comments.slice(-10);
+    lines.push(
+      `\nComments (${comments.length}${comments.length > shown.length ? `, last ${shown.length}` : ""}, oldest first):`,
+      ...shown.map(
+        (c) =>
+          `[${new Date(c.ts).toISOString()}] ${c.from === "__user__" ? "user" : c.from}: ${c.text}`,
+      ),
+    );
+  }
 
   return lines.join("\n");
+}
+
+// --- task_comment ---
+
+interface TaskCommentParams {
+  id: string;
+  message: string;
+}
+
+export function taskCommentImpl(
+  deps: TaskToolDeps,
+  params: TaskCommentParams,
+): string {
+  if (!deps.taskService) return "Error: task service not initialized";
+  if (!params.id) return "Error: task id is required";
+  const r = deps.taskService.comment(
+    deps.agentName,
+    params.id,
+    params.message ?? "",
+  );
+  if (typeof r === "string") return r;
+  return `Commented on task #${r.task.id} "${r.task.title}".`;
 }
 
 // --- task_delete ---

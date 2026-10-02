@@ -35,6 +35,17 @@ export interface Task {
   completedAt?: number;
   result?: string;
   reportChannel?: string;
+  /** Notes on the task: progress, questions, answers. Oldest first. */
+  comments?: TaskComment[];
+}
+
+export interface TaskComment {
+  /** An agent's name, or "__user__". */
+  from: string;
+  text: string;
+  ts: number;
+  /** Where a comment from you was written (e.g. "discord"). */
+  origin?: string;
 }
 
 export interface TaskFilter {

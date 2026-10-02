@@ -11,6 +11,7 @@ import {
   taskListImpl,
   taskGetImpl,
   taskDeleteImpl,
+  taskCommentImpl,
   type TaskToolDeps,
 } from "../src/agent/tools/task-impl.js";
 
@@ -208,5 +209,25 @@ describe("Task tool implementations", () => {
     const nullDeps = { agentName: "pm", taskService: null };
     const result = taskDeleteImpl(nullDeps, { id: "T-xxx" });
     expect(result).toContain("Error");
+  });
+
+  it("task_comment comments on a task, and task_get shows the comments", () => {
+    service.create("pm", {
+      title: "Build API",
+      assignee: "coder",
+      priority: 2,
+    });
+    const id = service.list()[0]!.id;
+    const coder = { agentName: "coder", taskService: service };
+    expect(taskCommentImpl(coder, { id, message: "50% done" })).toBe(
+      `Commented on task #${id} "Build API".`,
+    );
+    expect(taskCommentImpl(coder, { id: "nope", message: "x" })).toBe(
+      'Error: task "nope" not found',
+    );
+    const shown = taskGetImpl(deps, { id });
+    expect(shown).toMatch(
+      /\nComments \(1, oldest first\):\n\[[^\]]+\] coder: 50% done$/,
+    );
   });
 });

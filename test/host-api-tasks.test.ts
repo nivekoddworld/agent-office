@@ -152,6 +152,36 @@ describe.skipIf(skipHostApi)("HostApi task endpoints", () => {
     expect(data.result).toBe("No tasks found.");
   });
 
+  // --- task-comment ---
+
+  it("task-comment adds a comment as the calling agent", async () => {
+    const createRes = await postJson(
+      port,
+      "/api/task-create",
+      { title: "Comment me", assignee: "bot" },
+      token,
+    );
+    const createBody = await createRes.json();
+    const taskId = createBody.result.match(/#(T-[a-z0-9]+)/)?.[1];
+    const res = await postJson(
+      port,
+      "/api/task-comment",
+      { id: taskId, message: "on it" },
+      token,
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).result).toBe(
+      `Commented on task #${taskId} "Comment me".`,
+    );
+    const bad = await postJson(
+      port,
+      "/api/task-comment",
+      { id: "T-nope", message: "x" },
+      token,
+    );
+    expect(bad.status).toBe(400);
+  });
+
   // --- task-get ---
 
   it("task-get returns task details", async () => {

@@ -54,7 +54,7 @@ export class Incoming {
 
   private deliver(m: IncomingMessage, attachments: Attachment[]): void {
     if (m.parentId && m.parentId === this.d.channelId("tasks"))
-      return this.forumMessage(m, attachments);
+      return this.forumMessage(m);
     const key = this.d.channelKey(m.channelId);
     if (!key) return;
     const byRole = this.d.agentByRole();
@@ -106,18 +106,20 @@ export class Incoming {
     if (m.id) this.d.receipts.track(m.channelId, m.id, text, agents);
   }
 
-  /** A message in the tasks forum: a reply to a task, or a new task. */
-  private forumMessage(m: IncomingMessage, attachments: Attachment[]): void {
+  /**
+   * A message in the tasks forum: a comment on a task, or a new task.
+   * (Attachments come through as links in the text.)
+   */
+  private forumMessage(m: IncomingMessage): void {
     const byRole = this.d.agentByRole();
     const text = officeText(m, byRole);
     if (!text || !this.d.forum) return;
     const task = this.d.forum.taskForThread(m.channelId);
     if (task) {
-      const msg = TaskForum.replyText(task, text);
-      const r = this.d.host.sendUserDm(task.assignee, msg, DISCORD_ORIGIN, [
-        ...attachments,
-      ]);
-      if (r.ok) this.receipt(m, msg, [task.assignee]);
+      // A comment on the task: the assignee gets it and answers on the task.
+      const r = this.d.host.commentTask?.(task.id, text);
+      if (r?.sent) this.receipt(m, r.sent, [task.assignee]);
+      else if (r?.error) this.d.say(m.channelId, r.error);
       return;
     }
     // A post you started: a task for the agent it mentions.

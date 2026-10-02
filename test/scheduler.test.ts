@@ -783,3 +783,30 @@ describe("your messages to a busy agent", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("your task comments", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("reach the agent as written, with how to reply on the task", async () => {
+    const bus = new MessageBus();
+    bus.register("coder");
+    const coder = mockHandle("coder", Priority.NORMAL);
+    const payload =
+      '[Task Comment] #T-1 "Build" from the user:\ngreen\n\n[To reply on the task, call task_comment with id="T-1"]';
+    bus.sendWithOutcome({
+      from: "__user__",
+      to: "coder",
+      type: "prompt",
+      payload,
+      priority: Priority.CRITICAL,
+      sourceKind: "internal",
+      originTaskId: "T-1",
+    });
+    const sched = new Scheduler(new Map([["coder", coder]]), bus, 100);
+    sched.start();
+    await vi.advanceTimersByTimeAsync(100);
+    sched.stop();
+    expect(coder.prompt).toHaveBeenCalledWith(payload, undefined);
+  });
+});

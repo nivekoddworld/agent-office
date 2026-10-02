@@ -301,6 +301,18 @@ export function useTaskDelete() {
   });
 }
 
+export function useTaskComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, text }: { taskId: string; text: string }) =>
+      apiFetch<Task>(`/api/tasks/${encodeURIComponent(taskId)}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      }),
+    onSuccess: () => invalidateState(queryClient),
+  });
+}
+
 export function useTaskRestart() {
   const queryClient = useQueryClient();
   return useMutation({
