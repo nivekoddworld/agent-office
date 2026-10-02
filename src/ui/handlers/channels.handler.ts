@@ -66,7 +66,8 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
           : { ok: true as const, value: Priority.NORMAL };
         if (!priorityResult.ok)
           return json(res, 400, { error: priorityResult.error });
-        const pri = priorityResult.value ?? Priority.NORMAL;
+        // Your posts are handled next, ahead of anything queued.
+        const pri = priorityResult.value ?? Priority.CRITICAL;
 
         const ctx: EgressContext = {
           agentName: "__user__",

@@ -9,12 +9,12 @@ import { HostApi } from "./sandbox/host-api.js";
 import { DockerProvider } from "./sandbox/docker-provider.js";
 import type { SandboxProvider } from "./sandbox/types.js";
 import { join } from "node:path";
-import type {
-  AgentConfig,
-  AgentInfo,
-  OfficeContext,
+import {
   Priority,
-  WorkspaceConfig,
+  type AgentConfig,
+  type AgentInfo,
+  type OfficeContext,
+  type WorkspaceConfig,
 } from "./types.js";
 import { sessionKey } from "./messages/session-key.js";
 import {
@@ -655,7 +655,8 @@ export class Workspace {
       to: agentName,
       type,
       payload: text,
-      priority: priority ?? handle.config.priority,
+      // Your messages are handled next, ahead of anything queued.
+      priority: priority ?? Priority.CRITICAL,
       requestId,
       sessionKey: sessionKey("dm", agentName),
       sourceKind: "dm",
@@ -744,7 +745,7 @@ export class Workspace {
       channel,
       text,
       mentions.length ? mentions : undefined,
-      undefined,
+      Priority.CRITICAL,
       [],
       attachments,
     );

@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Scheduler } from "../src/scheduler/scheduler.js";
 import { MessageBus } from "../src/transport/message-bus.js";
 import { Priority, type ChannelConfig } from "../src/types.js";
+import { createMessageStore } from "../src/messages/message-store.js";
 
 /** Minimal AgentHandle mock. */
 function mockHandle(
@@ -597,5 +598,113 @@ describe("Scheduler", () => {
         undefined,
       );
     });
+  });
+});
+
+describe("delivering your messages", () => {
+  let dir: string;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    dir = mkdtempSync(join(tmpdir(), "sched-dm-"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /** A handle that remembers what it was prompted with. */
+  function agent(name: string) {
+    const h = mockHandle(name, Priority.NORMAL);
+    const seen = new Set<string>();
+    h.takeFreshContext = (c: string) => !seen.has(c) && !!seen.add(c);
+    h.forget = () => seen.clear();
+    return h;
+  }
+
+  it("keeps a message saved until it's handled, and retries one that couldn't be delivered", async () => {
+    const store = createMessageStore(join(dir, "m.db"));
+    const bus = new MessageBus();
+    bus.setStore(store);
+    bus.register("coder");
+    const coder = agent("coder");
+    let fail = true;
+    coder.prompt = vi.fn(async () => {
+      if (fail) throw new Error("container restarting");
+    });
+    bus.send({
+      from: "__user__",
+      to: "coder",
+      type: "prompt",
+      payload: "hi",
+      priority: Priority.HIGH,
+    });
+    const sched = new Scheduler(new Map([["coder", coder]]), bus, 100);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    sched.start();
+    vi.advanceTimersByTime(100);
+    // Taken off the queue but still saved while being worked on.
+    expect(store.loadInbox("coder")).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(0);
+    // Delivery failed: back in the queue for one more try.
+    expect(bus.peek("coder")).toBe(1);
+    fail = false;
+    await vi.advanceTimersByTimeAsync(100);
+    sched.stop();
+    expect(coder.prompt).toHaveBeenCalledTimes(2);
+    expect(bus.peek("coder")).toBe(0);
+    expect(store.loadInbox("coder")).toHaveLength(0);
+    store.close?.();
+    vi.restoreAllMocks();
+  });
+
+  it("catches an agent up on the DM after a restart, once", async () => {
+    const sessions = join(dir, "agents", "coder", "sessions");
+    mkdirSync(sessions, { recursive: true });
+    const log = [
+      { from: "__user__", text: "make the menu blue" },
+      { from: "coder", text: "done, it's blue" },
+      { from: "__user__", text: "now add a logo" },
+      { from: "__user__", text: "and a title" },
+    ];
+    writeFileSync(
+      join(sessions, "user-dm.jsonl"),
+      log.map((l) => JSON.stringify(l)).join("\n") + "\n",
+    );
+    const bus = new MessageBus();
+    bus.register("coder");
+    const coder = agent("coder");
+    const sched = new Scheduler(
+      new Map([["coder", coder]]),
+      bus,
+      100,
+      new Map(),
+      dir,
+    );
+    for (const text of ["now add a logo", "and a title"])
+      bus.send({
+        from: "__user__",
+        to: "coder",
+        type: "prompt",
+        payload: text,
+        priority: Priority.HIGH,
+        sourceKind: "dm",
+        sessionKey: "dm:coder",
+      });
+
+    sched.start();
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(100);
+    sched.stop();
+    const prompts = coder.prompt.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(prompts[0]).toBe(
+      "[Earlier in this conversation, oldest first]\nuser: make the menu blue\ncoder: done, it's blue\n\n[Message from user]\nnow add a logo\n\n[To reply, call message_user]",
+    );
+    // Already caught up: the next one is just the message.
+    expect(prompts[1]).toBe(
+      "[Message from user]\nand a title\n\n[To reply, call message_user]",
+    );
   });
 });

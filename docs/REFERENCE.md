@@ -1727,6 +1727,10 @@ The scheduler runs a `setInterval` tick loop (default 2s). Each tick:
 4. Dispatches non-blocking — all agents run concurrently via async I/O
 5. Re-queues remaining messages for the next tick
 
+**Your messages go first.** DMs and channel posts from you (dashboard or Discord) are queued as `CRITICAL`, so a backlog of task notifications or agent chatter never delays them. A message stays saved in the inbox (`messages.sqlite`) until the agent has handled it: if the process stops mid-way it's delivered again on restart, and if it can't be delivered (e.g. the agent's container is restarting) it's tried once more.
+
+**Catching up after a restart.** An agent's memory of conversations is lost when it restarts. The first time a DM (from you or another agent) wakes it after that, the prompt includes the messages just before it in that DM (`office.channel_context`, default 10), as channel wake-ups always do. Older messages are available with `read_dm`.
+
 ```
 --tick-interval <ms>    Configure via CLI flag (default: 2000)
 ```
