@@ -210,6 +210,24 @@ describe("AgentHandle sandbox skills", () => {
     expect(opts).not.toHaveProperty("skillsPaths");
   });
 
+  it("clearing a sandboxed agent's conversation clears it in its container", async () => {
+    const hostApi = makeHostApi();
+    const clear = vi.fn(async () => {});
+    const handle = new AgentHandle(makeConfig(), {
+      bus,
+      listAgentsFn: () => [],
+      provider: { ...provider, clear },
+      hostApi,
+      sandboxToken: "tok-1",
+      baseDir: AGENT_OFFICE_DIR,
+      officeId: "test",
+      officeName: "Test",
+    });
+    await handle.init();
+    handle.clearConversation();
+    expect(clear).toHaveBeenCalledOnce();
+  });
+
   it("sandbox opts include systemPrompt with skills composed host-side", async () => {
     const config = makeConfig();
     const hostApi = makeHostApi();

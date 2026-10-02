@@ -33,5 +33,7 @@ export interface SandboxProvider {
   ): Promise<void>;
   steer(id: string, text: string): Promise<void>;
   abort(id: string): Promise<void>;
+  /** Forget the conversation (keeps the system prompt and tools). */
+  clear?(id: string): Promise<void>;
   health(id: string): Promise<{ ok: boolean; turns: number }>;
 }

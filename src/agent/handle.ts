@@ -490,6 +490,11 @@ export class AgentHandle {
         (m) => m.role === "system",
       );
     }
+    // A sandboxed agent's conversation lives in its container.
+    if (this.provider && this.sandboxInfo)
+      this.provider.clear?.(this.sandboxInfo.id).catch((e) =>
+        console.error(`[agent:${this.name}] Sandbox clear failed:`, e),
+      );
   }
 
   async destroy(): Promise<void> {

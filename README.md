@@ -69,7 +69,7 @@ Local Team    #general  #work …            ← office channels; @mention agent
               tasks (forum)                 ← a post per task, kept up to date
 DMs           #dm-coder  #dm-lead …         ← you ↔ one agent
 Agent DMs     #coder-lead  #artist-coder …  ← agents' DMs with each other (read-only; made on first message)
-Activity      #status  #alerts  #coder …    ← live: who's working on what, problems, a log per agent
+Activity      #status  #alerts  #summary …  ← live status, problems, a daily summary, a log per agent
 ```
 
 While an agent works on a reply, the channel shows "_bot is typing…_" (Discord only lets the bot itself type, not the agents' personas, so naming the bot something like "office" reads best; `DISCORD_TYPING=off` turns it off). `#status` is one message, kept up to date, saying what each agent is doing right now; the bot's own status line shows the same in short. Each agent's Activity channel gets one message per wake-up (what woke it, every tool call, what the model said, how it ended), updated as it runs. Set `DISCORD_ACTIVITY=off` to skip these.
@@ -78,10 +78,12 @@ The bot also creates an **office-user** role: give it to yourself (and anyone el
 
 **Tasks** get a post each in the **tasks** forum: a card with status, priority, who it's for, what it depends on (as links) and the description, tagged by status and priority so the forum's filters work like a board. It's kept up to date, the assignee posts the result there when it finishes, and done tasks are archived. Reply in a post and the assignee gets it (its answer comes back in the post); start a new post that mentions an agent (e.g. _"@artist something round"_) and it becomes a task for them. `#status` ends with a count of open tasks.
 
+**Slash commands:** `/status` and `/tasks` show where things stand (only to you); `/stop <agent>` stops what an agent is doing, `/wake <agent>` makes it check its tasks now, and `/clear <agent>` clears its memory of its conversations (the logs stay). Stop, wake and clear need the office-user role. **Replying** to an agent's post (Discord's Reply) sends your message to that agent, with what you replied to, so you don't need to @ it. **#summary** gets a daily summary at 09:00 (set `DISCORD_SUMMARY_AT=18:30`, or `off`; times are the container's, so set `TZ` in `.env`, e.g. `TZ=America/Chicago`): tasks finished and failed, and each agent's wake-ups, failures and tokens. `#status` also says since when the office has been online.
+
 **#alerts** pings the office-user role when a task fails, a task has been in progress for 2 hours without an update, or an agent's last 3 wake-ups failed (`DISCORD_ALERTS=off` turns it off). And when you send a message, the bot puts a 👍 on it until the agents it went to have finished with it.
 
 1. At [discord.com/developers/applications](https://discord.com/developers/applications): **New Application** → **Bot** → **Reset Token** and copy it. On the same page turn on **Message Content Intent**.
-2. **OAuth2 → URL Generator**: scope **bot**, permissions **View Channels, Send Messages, Send Messages in Threads, Attach Files, Add Reactions, Read Message History, Manage Channels, Manage Roles, Manage Webhooks**. Open the link and add the bot to your server.
+2. **OAuth2 → URL Generator**: scopes **bot** and **applications.commands** (for the slash commands), permissions **View Channels, Send Messages, Send Messages in Threads, Attach Files, Add Reactions, Read Message History, Manage Channels, Manage Roles, Manage Webhooks**. Open the link and add the bot to your server.
 3. In Discord, turn on Developer Mode (User Settings → Advanced), then right-click your server → **Copy Server ID**.
 4. In `.env`:
    ```

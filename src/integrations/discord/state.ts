@@ -16,6 +16,8 @@ export interface BridgeState {
   userRole?: string;
   /** The live message in #status. */
   statusMessageId?: string;
+  /** When the last daily summary was posted (or the bot first started). */
+  lastSummaryAt?: number;
   /** Task id → its post in the tasks forum. */
   taskPosts?: Record<string, TaskPost>;
 }

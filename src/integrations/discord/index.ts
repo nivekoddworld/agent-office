@@ -3,6 +3,11 @@ import { attachmentPath, saveUpload } from "../../egress/files.js";
 import { chosenAvatar } from "../../agent/avatar.js";
 import type { Workspace } from "../../workspace.js";
 import { Priority } from "../../types.js";
+import {
+  MAX_ACTIVITY_LIMIT,
+  readActivity,
+} from "../../activity/activity-log.js";
+import { DEFAULT_HEARTBEAT_PROMPT } from "../../scheduler/heartbeat.js";
 import { onEgress } from "../../egress/egress-impl.js";
 import { DiscordBridge } from "./bridge.js";
 import { connectDiscord } from "./discordjs-api.js";
@@ -34,6 +39,42 @@ export function avatarLookup(
 ): (name: string) => string | undefined {
   const fallback = avatarFor(template);
   return (name) => chosenAvatar(workspaceDirOf(name)) ?? fallback?.(name);
+}
+
+/** /stop, /wake and /clear. */
+function agentControls(workspace: Workspace) {
+  return {
+    stopAgent: (name: string) => {
+      const h = workspace.getAgent(name);
+      if (!h || h.status !== "running")
+        return `${name} isn't working on anything right now.`;
+      h.abort();
+      h.setStatus("idle");
+      return `Stopped ${name}.`;
+    },
+    wakeAgent: (name: string) => {
+      const h = workspace.getAgent(name);
+      if (!h) return `${name} isn't running.`;
+      workspace.bus.send({
+        from: "__heartbeat__",
+        to: name,
+        type: "prompt",
+        payload: h.config.heartbeat?.prompt ?? DEFAULT_HEARTBEAT_PROMPT,
+        priority: Priority.CRITICAL,
+        sourceKind: "internal",
+        sessionKey: `heartbeat:${name}`,
+      });
+      return h.status === "running"
+        ? `${name} will check its tasks as soon as it finishes what it's doing.`
+        : `Woke ${name}: it's checking its tasks now.`;
+    },
+    clearAgent: (name: string) => {
+      const h = workspace.getAgent(name);
+      if (!h) return `${name} isn't running.`;
+      h.clearConversation();
+      return `Cleared ${name}'s memory of its conversations. The history is still in the logs: it can look back with read_dm and read_channel.`;
+    },
+  };
 }
 
 /**
@@ -81,6 +122,9 @@ export async function startDiscordBridge(
           ),
         attachmentPath: (id) => attachmentPath(workspace.office.dir, id),
         tasks: () => workspace.tasks.list(),
+        ...agentControls(workspace),
+        activitySince: (agent) =>
+          readActivity(workspace.office.dir, agent, MAX_ACTIVITY_LIMIT),
         createTask: (t) =>
           workspace.tasks.create("__user__", {
             ...t,
@@ -109,6 +153,9 @@ export async function startDiscordBridge(
         ),
         activity: env["DISCORD_ACTIVITY"]?.trim().toLowerCase() !== "off",
         alerts: env["DISCORD_ALERTS"]?.trim().toLowerCase() !== "off",
+        ...(env["DISCORD_SUMMARY_AT"]?.trim()
+          ? { summaryAt: env["DISCORD_SUMMARY_AT"].trim().toLowerCase() }
+          : {}),
         typing: env["DISCORD_TYPING"]?.trim().toLowerCase() !== "off",
         ...(Number(env["DISCORD_MAX_UPLOAD_MB"]) > 0
           ? { maxUploadBytes: Number(env["DISCORD_MAX_UPLOAD_MB"]) * 1048576 }
