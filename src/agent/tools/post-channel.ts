@@ -8,6 +8,22 @@ const textResult = (text: string) => ({
   details: {},
 });
 
+/** What the agent is told after posting. */
+export function postedText(
+  channel: string,
+  result: { targets?: string[]; skippedMentions?: string[] },
+  images?: string[],
+): string {
+  const parts = [`Message posted to #${channel}`];
+  if (result.targets?.length)
+    parts.push(`(notified: ${result.targets.join(", ")})`);
+  if (images?.length) parts.push(`with ${images.length} image(s)`);
+  let text = parts.join(" ");
+  if (result.skippedMentions?.length)
+    text += `. Not notified (not in #${channel}): ${result.skippedMentions.join(", ")}`;
+  return text;
+}
+
 export interface PostChannelDeps extends EgressDeps {
   agentName: string;
   getActiveRequestId: () => string | undefined;
@@ -23,7 +39,12 @@ export function createPostChannelTool(
     ...POST_CHANNEL,
     execute: async (
       id,
-      params: { channel: string; message: string; mentions?: string[] },
+      params: {
+        channel: string;
+        message: string;
+        mentions?: string[];
+        images?: string[];
+      },
     ) => {
       const ctx: EgressContext = {
         agentName: deps.agentName,
@@ -39,12 +60,12 @@ export function createPostChannelTool(
         params.channel,
         params.message,
         params.mentions,
+        undefined,
+        params.images,
       );
-      if (!result.ok) return textResult(`Error: ${result.reason}`);
-      const targets = result.targets?.length
-        ? ` (notified: ${result.targets.join(", ")})`
-        : "";
-      return textResult(`Message posted to #${params.channel}${targets}`);
+      if (!result.ok)
+        return textResult(`Error: ${result.error ?? result.reason}`);
+      return textResult(postedText(params.channel, result, params.images));
     },
   };
 }

@@ -6,6 +6,7 @@ import type { HandlerContext } from "../handler-context.js";
 import type { RouteDefinition } from "../router.js";
 import { json, readBody, requireMutation } from "../http-helpers.js";
 import { getBootstrapState } from "../routes.js";
+import { uploadsDir } from "../../egress/images.js";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/png",
@@ -15,10 +16,6 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 const MAX_IMAGES = 4;
 const UPLOAD_ID_RE = /^[a-f0-9-]+\.\w+$/;
-
-function uploadsDir(officeDir: string): string {
-  return join(officeDir, "uploads");
-}
 
 function mimeToExt(mimeType: string): string {
   if (mimeType === "image/jpeg") return ".jpg";

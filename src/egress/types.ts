@@ -2,6 +2,8 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { ChannelConfig } from "../types.js";
 
+import type { AgentFileRoots } from "./images.js";
+
 export interface EgressContext {
   agentName: string;
   idempotencyKey?: string;
@@ -20,11 +22,19 @@ export interface EgressDeps {
   channels: Map<string, ChannelConfig>;
   onStateChanged?: () => void;
   now?: () => number;
+  /** Where an agent's files are, for attaching images (absent: no images). */
+  agentFiles?: (agent: string) => AgentFileRoots | undefined;
 }
 
 export type EgressResult =
-  | { ok: true; egressId: string; targets?: string[] }
-  | { ok: false; reason: string };
+  | {
+      ok: true;
+      egressId: string;
+      targets?: string[];
+      /** Mentioned agents who aren't in the channel, so weren't notified. */
+      skippedMentions?: string[];
+    }
+  | { ok: false; reason: string; error?: string };
 
 export const MAX_HOPS = 5;
 export const CHANNEL_RATE_LIMIT = 5;

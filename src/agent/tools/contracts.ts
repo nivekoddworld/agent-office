@@ -371,6 +371,13 @@ export const TASK_DELETE = {
 
 // --- Egress tools ---
 
+const IMAGES_PARAM = Type.Optional(
+  Type.Array(Type.String(), {
+    description:
+      "Image files to attach (png, jpg, gif or webp; up to 4, 8 MB each), as paths in your workspace or the shared folder",
+  }),
+);
+
 export const MESSAGE_USER = {
   name: "message_user" as const,
   label: "Message User",
@@ -380,6 +387,7 @@ export const MESSAGE_USER = {
     message: Type.String({
       description: "Message content to send to the user",
     }),
+    images: IMAGES_PARAM,
   }),
 };
 
@@ -394,9 +402,10 @@ export const POST_CHANNEL = {
     mentions: Type.Optional(
       Type.Array(Type.String(), {
         description:
-          "Agent names to wake up and notify. Without mentions the message is posted but nobody is notified; they can still see it with read_channel.",
+          "Agent names to wake up and notify (writing @name in the message works too). Without mentions the message is posted but nobody is notified; they can still see it with read_channel.",
       }),
     ),
+    images: IMAGES_PARAM,
   }),
 };
 

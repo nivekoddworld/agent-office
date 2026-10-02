@@ -293,6 +293,7 @@ export interface ChannelMessage {
   agentName?: string;
   kind?: string;
   jobName?: string;
+  attachments?: MessageAttachment[];
 }
 
 export interface ChannelHistoryResponse {

@@ -1,14 +1,14 @@
-import { readFileSync, renameSync, writeFileSync } from "node:fs";
+import { renameSync, writeFileSync } from "node:fs";
 import type { ChannelConfig } from "../../types.js";
-import type { EgressEvent } from "../../egress/egress-impl.js";
+import { mentionsInText, type EgressEvent } from "../../egress/egress-impl.js";
 import { SentMessageTracker, splitForDiscord } from "../discord-webhook.js";
 import type { ActivityEntry } from "../../activity/activity-log.js";
 import { ActivityRelay } from "./activity-relay.js";
+import { loadState, type BridgeState } from "./state.js";
 import {
   UnknownWebhookError,
   type DiscordApi,
   type IncomingMessage,
-  type WebhookRef,
 } from "./types.js";
 
 /**
@@ -43,6 +43,8 @@ export interface BridgeHost {
     mentions: string[],
     origin: string,
   ): { ok: boolean; error?: string };
+  /** File path of an uploaded image attachment. */
+  attachmentPath(id: string): string;
 }
 
 export interface BridgeOptions {
@@ -57,35 +59,6 @@ export interface BridgeOptions {
   activityIntervals?: { editIntervalMs?: number; presenceIntervalMs?: number };
 }
 
-export interface BridgeState {
-  guildId: string;
-  categories: Record<string, string>;
-  /** "ch:general", "dm:coder", "pair:coder|lead" → Discord channel id. */
-  channels: Record<string, string>;
-  /** Agent name → role id. */
-  roles: Record<string, string>;
-  /** Discord channel id → webhook. */
-  webhooks: Record<string, WebhookRef>;
-  /** The office-user role (humans who get pinged). */
-  userRole?: string;
-  /** The live message in #status. */
-  statusMessageId?: string;
-}
-
-export function emptyState(guildId: string): BridgeState {
-  return { guildId, categories: {}, channels: {}, roles: {}, webhooks: {} };
-}
-
-export function loadState(path: string, guildId: string): BridgeState {
-  try {
-    const s = JSON.parse(readFileSync(path, "utf-8")) as BridgeState;
-    if (s.guildId === guildId) return { ...emptyState(guildId), ...s };
-  } catch {
-    // first run, or unreadable: start fresh
-  }
-  return emptyState(guildId);
-}
-
 /** The channel shared by two agents, named in alphabetical order. */
 export function pairChannel(
   a: string,
@@ -96,6 +69,12 @@ export function pairChannel(
 }
 
 type CategoryKind = "office" | "dms" | "pairs" | "activity";
+
+/** Matches "@name" as a whole word, any case. */
+function atName(name: string): RegExp {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\w@])@${escaped}(?![\\w-])`, "gi");
+}
 
 function senderName(from: string): string {
   if (from === "__user__") return "user";
@@ -186,35 +165,51 @@ export class DiscordBridge {
 
   /** A message an agent sent you, or a channel post (from anyone). */
   handleEgress(e: EgressEvent): void {
+    const files = (e.attachments ?? []).map((a) => ({
+      path: this.host.attachmentPath(a.id),
+      name: a.filename,
+    }));
     if (e.kind === "dm") {
       // An agent reaching out to you: ping the humans.
       this.enqueue(async () => {
         const role = await this.userRole();
-        await this.post(`dm:${e.agent}`, e.agent, `<@&${role}> ${e.text}`, [
-          role,
-        ]);
+        await this.post(
+          `dm:${e.agent}`,
+          e.agent,
+          `<@&${role}> ${e.text}`,
+          [role],
+          files,
+        );
       });
       return;
     }
     if (e.origin === DISCORD_ORIGIN) return;
     const mentions = e.mentions ?? [];
     this.enqueue(async () => {
-      const roles = [];
-      for (const m of mentions) roles.push(`<@&${await this.role(m)}>`);
-      const prefix = roles.length ? `${roles.join(" ")} ` : "";
-      // An agent writing "@user" in a channel pings the humans too.
+      // Mentions show as role pills: in place where the text says @name,
+      // otherwise in front of the message.
       let text = e.text;
+      const prefix: string[] = [];
+      for (const m of mentions) {
+        const pill = `<@&${await this.role(m)}>`;
+        const inText = atName(m);
+        if (inText.test(text)) text = text.replace(atName(m), pill);
+        else prefix.push(pill);
+      }
+      // An agent writing "@user" in a channel pings the humans too.
       const ping: string[] = [];
-      if (e.from !== "__user__" && /@user\b/i.test(text)) {
+      if (e.from !== "__user__" && atName("user").test(text)) {
         const role = await this.userRole();
-        text = text.replace(/@user\b/gi, `<@&${role}>`);
+        text = text.replace(atName("user"), `<@&${role}>`);
         ping.push(role);
       }
+      const content = prefix.length ? `${prefix.join(" ")} ${text}` : text;
       await this.post(
         `ch:${e.channel}`,
         senderName(e.from),
-        prefix + text,
+        content,
         ping,
+        files,
       );
     });
   }
@@ -283,17 +278,15 @@ export class DiscordBridge {
     return new Map(Object.entries(this.state.roles).map(([a, id]) => [id, a]));
   }
 
-  /** Agents @mentioned by role, or by typing @name. */
+  /** Agents @mentioned by role, or by typing @name (any case). */
   private mentionedAgents(m: IncomingMessage, text: string): string[] {
     const byRole = this.agentByRole();
-    const agents = new Set(this.host.agentNames());
     const names = new Set<string>();
     for (const id of m.roleIds) {
       const a = byRole.get(id);
       if (a) names.add(a);
     }
-    for (const match of text.matchAll(/@([\w-]+)/g))
-      if (agents.has(match[1]!)) names.add(match[1]!);
+    for (const a of mentionsInText(text, this.host.agentNames())) names.add(a);
     return [...names];
   }
 
@@ -436,10 +429,13 @@ export class DiscordBridge {
     username: string,
     content: string,
     pingRoles: string[] = [],
+    files: Array<{ path: string; name: string }> = [],
   ): Promise<void> {
     const channelId = await this.channel(key);
     const avatarUrl = this.opts.avatarUrl?.(username);
-    for (const chunk of splitForDiscord(content)) {
+    const chunks = splitForDiscord(content);
+    for (const [i, chunk] of chunks.entries()) {
+      const last = i === chunks.length - 1;
       for (let attempt = 0; ; attempt++) {
         let hook = this.state.webhooks[channelId];
         if (!hook) {
@@ -453,6 +449,7 @@ export class DiscordBridge {
             content: chunk,
             ...(avatarUrl ? { avatarUrl } : {}),
             ...(pingRoles.length ? { pingRoles } : {}),
+            ...(last && files.length ? { files } : {}),
           });
           break;
         } catch (err) {

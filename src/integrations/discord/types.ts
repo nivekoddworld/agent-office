@@ -47,6 +47,8 @@ export interface WebhookMessage {
   avatarUrl?: string;
   /** Roles this message may ping; everything else is never pinged. */
   pingRoles?: string[];
+  /** Files to upload with the message. */
+  files?: Array<{ path: string; name: string }>;
 }
 
 /** A message someone typed in the Discord server. */

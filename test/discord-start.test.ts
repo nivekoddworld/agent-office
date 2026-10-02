@@ -38,6 +38,7 @@ function fakeWorkspace(dir: string) {
       channels: new Map([["general", { members: ["coder"] }]]),
     },
     list: () => [{ name: "coder" }],
+    getAgent: () => undefined,
     sendUserDm: vi.fn(() => ({ ok: true })),
     postUserChannel: vi.fn(() => ({ ok: true })),
     onUserDm: vi.fn(() => () => {}),

@@ -154,6 +154,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
                 text: string;
                 kind?: string;
                 jobName?: string;
+                attachments?: unknown;
               };
               return {
                 seq: idx + 1,
@@ -163,6 +164,9 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
                 agentName: entry.from,
                 kind: entry.kind,
                 jobName: entry.jobName,
+                ...(Array.isArray(entry.attachments)
+                  ? { attachments: entry.attachments }
+                  : {}),
               };
             } catch {
               return null;

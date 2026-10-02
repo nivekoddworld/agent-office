@@ -2,6 +2,7 @@
  * Standalone agent process that runs inside a Docker sandbox.
  * Provides Pi agent with local coding tools + proxy tools to communicate with the host.
  */
+import { createSetAvatarTool } from "../tools/set-avatar.js";
 import {
   createServer,
   type IncomingMessage,
@@ -156,6 +157,7 @@ const allTools: AgentTool<any>[] = [
   createMessageUserProxy(hostFetch),
   createPostChannelProxy(hostFetch),
   createReadChannelProxy(hostFetch),
+  createSetAvatarTool(WORKSPACE),
   ...(process.env["ON_DEMAND_SKILLS"] === "1"
     ? [createReadSkillProxy(hostFetch)]
     : []),

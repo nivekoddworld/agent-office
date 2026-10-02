@@ -34,6 +34,7 @@ import {
   createMessageUserTool,
   createPostChannelTool,
   createReadChannelTool,
+  createSetAvatarTool,
 } from "./tools/index.js";
 import { appendSession } from "../sessions/session-writer.js";
 import {
@@ -160,7 +161,7 @@ export async function initSandboxAgent(
     ctx.config.secrets &&
     Object.keys(ctx.config.secrets).some((k) => k !== "MODEL_API_KEY");
   let est =
-    23 + (hasSecrets ? 1 : 0) + (ctx.config.onDemandSkills !== false ? 1 : 0);
+    24 + (hasSecrets ? 1 : 0) + (ctx.config.onDemandSkills !== false ? 1 : 0);
   const policy = ctx.config.permissions?.tools;
   if (policy?.allow) est = Math.min(est, policy.allow.length);
   else if (policy?.deny) est = Math.max(0, est - policy.deny.length);
@@ -288,6 +289,7 @@ export async function initInProcessAgent(
       baseDir: ctx.baseDir,
       bus,
       channels: sessionDeps?.channels ?? new Map(),
+      agentFiles: () => ({ workspace: ctx.cwd, shared: ctx.sharedDir }),
       onStateChanged,
       getActiveRequestId: () => handle?.getActiveRequestId(),
       getActiveCorrelationId: () => handle?.getActiveCorrelationId(),
@@ -300,12 +302,14 @@ export async function initInProcessAgent(
       baseDir: ctx.baseDir,
       bus,
       channels: sessionDeps?.channels ?? new Map(),
+      agentFiles: () => ({ workspace: ctx.cwd, shared: ctx.sharedDir }),
       onStateChanged,
       getActiveRequestId: () => handle?.getActiveRequestId(),
       getActiveCorrelationId: () => handle?.getActiveCorrelationId(),
       getActiveSessionKey: () => handle?.getActiveSessionKey(),
       getActiveHopCount: () => handle?.getActiveHopCount() ?? 0,
     }),
+    createSetAvatarTool(ctx.cwd),
     createReadChannelTool({
       agentName: ctx.name,
       baseDir: ctx.baseDir,

@@ -12,21 +12,29 @@ export function createMessageUserProxy(
 ): AgentTool<typeof MESSAGE_USER.parameters> {
   return {
     ...MESSAGE_USER,
-    execute: async (_id, params: { message: string }) => {
+    execute: async (_id, params: { message: string; images?: string[] }) => {
       const res = await hostFetch("/api/message-user", {
         message: params.message,
+        images: params.images,
       });
       if (!res.ok) {
         let msg = res.statusText;
         try {
-          const body = (await res.json()) as { reason?: string };
-          if (body.reason) msg = body.reason;
+          const body = (await res.json()) as {
+            reason?: string;
+            error?: string;
+          };
+          msg = body.error ?? body.reason ?? msg;
         } catch {
           /* use statusText */
         }
         return textResult(`Error: ${msg}`);
       }
-      return textResult("Message delivered to user");
+      return textResult(
+        params.images?.length
+          ? `Message delivered to user with ${params.images.length} image(s)`
+          : "Message delivered to user",
+      );
     },
   };
 }

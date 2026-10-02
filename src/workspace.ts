@@ -261,6 +261,17 @@ export class Workspace {
             fn("__workspace__", { type: "state_changed" } as any);
           }
         },
+        // Sandboxed agents name files as their container sees them.
+        agentFiles: (agent) => {
+          const handle = this.agents.get(agent);
+          return handle
+            ? {
+                workspace: handle.cwd,
+                shared: this.office.sharedDir,
+                sandbox: true,
+              }
+            : undefined;
+        },
       });
       await this.hostApi.start(this.hostApiPort);
     }

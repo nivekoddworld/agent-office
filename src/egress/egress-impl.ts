@@ -1,7 +1,8 @@
 import { randomUUID, createHash } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { Priority } from "../types.js";
+import { Priority, type Attachment } from "../types.js";
+import { importImages } from "./images.js";
 import { sessionKey } from "../messages/session-key.js";
 import {
   CHANNEL_RATE_LIMIT,
@@ -19,7 +20,7 @@ const CHANNEL_NAME_RE = /^[a-zA-Z0-9_-]+$/;
 
 /** A delivered message, for integrations such as the Discord bridge. */
 export type EgressEvent =
-  | { kind: "dm"; agent: string; text: string }
+  | { kind: "dm"; agent: string; text: string; attachments?: Attachment[] }
   | {
       kind: "channel";
       from: string;
@@ -27,7 +28,19 @@ export type EgressEvent =
       text: string;
       mentions?: string[];
       origin?: string;
+      attachments?: Attachment[];
     };
+
+/** Channel members named with @name in the text (any case). */
+export function mentionsInText(text: string, members: string[]): string[] {
+  const byLower = new Map(members.map((m) => [m.toLowerCase(), m]));
+  const found = new Set<string>();
+  for (const match of text.matchAll(/(?<![\w@])@([\w-]+)/g)) {
+    const m = byLower.get(match[1]!.toLowerCase());
+    if (m) found.add(m);
+  }
+  return [...found];
+}
 
 const egressListeners = new Set<(e: EgressEvent) => void>();
 
@@ -118,15 +131,28 @@ export function messageUser(
   ctx: EgressContext,
   deps: EgressDeps,
   message: string,
+  images: string[] = [],
 ): EgressResult {
   const egressId = ctx.idempotencyKey
     ? deriveEgressId(ctx.idempotencyKey)
     : randomUUID();
 
   const trimmed = message.trim();
-  if (!trimmed) return { ok: false, reason: "validation" };
+  if (!trimmed && images.length === 0)
+    return { ok: false, reason: "validation" };
   if (trimmed.length > MAX_MESSAGE_LENGTH)
     return { ok: false, reason: "validation" };
+  if (recentIds.has(egressId)) images = []; // a retry: already copied
+  const imported = importImages(
+    deps.baseDir,
+    deps.agentFiles?.(ctx.agentName),
+    images,
+  );
+  if (!imported.ok)
+    return { ok: false, reason: "validation", error: imported.error };
+  const attachments = imported.attachments.length
+    ? imported.attachments
+    : undefined;
 
   try {
     // Persist to SQLite (returns false if duplicate egressId)
@@ -140,6 +166,7 @@ export function messageUser(
         request_id: ctx.requestId ?? null,
         egress_id: egressId,
         correlation_id: ctx.correlationId ?? null,
+        attachments: attachments ? JSON.stringify(attachments) : null,
       });
       sqliteDup = !inserted;
     }
@@ -158,6 +185,7 @@ export function messageUser(
         correlationId: ctx.correlationId,
         originSession: ctx.originSession,
         hopCount: ctx.hopCount,
+        ...(attachments ? { attachments } : {}),
       };
       appendFileSync(
         join(dir, "user-dm.jsonl"),
@@ -165,7 +193,12 @@ export function messageUser(
         "utf-8",
       );
       recentIds.add(egressId);
-      emitEgress({ kind: "dm", agent: ctx.agentName, text: trimmed });
+      emitEgress({
+        kind: "dm",
+        agent: ctx.agentName,
+        text: trimmed,
+        ...(attachments ? { attachments } : {}),
+      });
     }
 
     deps.onStateChanged?.();
@@ -183,13 +216,14 @@ export function postChannel(
   message: string,
   mentions?: string[],
   priority?: Priority,
+  images: string[] = [],
 ): EgressResult {
   const egressId = ctx.idempotencyKey
     ? deriveEgressId(ctx.idempotencyKey)
     : randomUUID();
 
   const trimmed = message.trim();
-  if (!trimmed || !CHANNEL_NAME_RE.test(channel))
+  if ((!trimmed && images.length === 0) || !CHANNEL_NAME_RE.test(channel))
     return { ok: false, reason: "validation" };
   if (trimmed.length > MAX_MESSAGE_LENGTH)
     return { ok: false, reason: "validation" };
@@ -204,14 +238,19 @@ export function postChannel(
     return { ok: false, reason: "not_member" };
   }
 
-  // Validate mentions are members
-  if (mentions?.length) {
-    for (const m of mentions) {
-      if (!channelConfig.members.includes(m)) {
-        return { ok: false, reason: "validation" };
-      }
-    }
-  }
+  // Mentions: the list given plus anyone written as @name. Agents who
+  // aren't in the channel are left out (and reported), not an error.
+  const named = [
+    ...new Set([
+      ...(mentions ?? []),
+      ...mentionsInText(trimmed, channelConfig.members),
+    ]),
+  ];
+  const skippedMentions = named.filter(
+    (m) => !channelConfig.members.includes(m),
+  );
+  mentions = named.filter((m) => channelConfig.members.includes(m));
+  if (mentions.length === 0) mentions = undefined;
 
   // Hop count check (skip for __user__)
   if (!isUser && ctx.hopCount >= MAX_HOPS) {
@@ -223,6 +262,18 @@ export function postChannel(
   if (!isUser && !checkRateLimit(ctx.agentName, channel, now)) {
     return { ok: false, reason: "rate_limited" };
   }
+
+  if (recentIds.has(egressId)) images = []; // a retry: already copied
+  const imported = importImages(
+    deps.baseDir,
+    deps.agentFiles?.(ctx.agentName),
+    images,
+  );
+  if (!imported.ok)
+    return { ok: false, reason: "validation", error: imported.error };
+  const attachments = imported.attachments.length
+    ? imported.attachments
+    : undefined;
 
   try {
     const envelope = {
@@ -237,6 +288,7 @@ export function postChannel(
       originSession: ctx.originSession,
       hopCount: ctx.hopCount,
       mentions,
+      ...(attachments ? { attachments } : {}),
     };
 
     // Write JSONL to all channel members
@@ -258,6 +310,7 @@ export function postChannel(
         text: trimmed,
         ...(mentions?.length ? { mentions } : {}),
         ...(ctx.origin ? { origin: ctx.origin } : {}),
+        ...(attachments ? { attachments } : {}),
       });
     }
 
@@ -286,7 +339,12 @@ export function postChannel(
     }
 
     deps.onStateChanged?.();
-    return { ok: true, egressId, targets: busTargets };
+    return {
+      ok: true,
+      egressId,
+      targets: busTargets,
+      ...(skippedMentions.length ? { skippedMentions } : {}),
+    };
   } catch (err) {
     console.error("[egress] postChannel failed:", err);
     return { ok: false, reason: "internal_error" };
