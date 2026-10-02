@@ -314,3 +314,12 @@ body,
 .hljs-meta {
   color: #6ec77a;
 }
+
+/* Activity tab: clickable lines that fold out */
+.ao-activity-line {
+  transition: background-color 0.15s ease;
+}
+
+.ao-activity-line:hover {
+  background-color: var(--ao-bg-surface-hover);
+}

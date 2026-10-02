@@ -28,6 +28,7 @@ function mockHandle(
     setActiveSessionKey: vi.fn(),
     setActiveConversationPeer: vi.fn(),
     setActiveOriginTaskId: vi.fn(),
+    setActiveTrigger: vi.fn(),
     setActiveHopCount: vi.fn(),
     setActiveCorrelationId: vi.fn(),
     setLastScheduledHeartbeatTs: vi.fn(),

@@ -34,6 +34,7 @@ import type { TaskService } from "../tasks/task-service.js";
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { SANDBOX_SHARED_PATH } from "../constants.js";
+import type { ActivityTrigger } from "../activity/activity-log.js";
 import {
   initSandboxAgent,
   initInProcessAgent,
@@ -84,6 +85,7 @@ export class AgentHandle {
   private _activeSessionKey: string | undefined;
   private _activeConversationPeer: string | undefined;
   private _activeOriginTaskId: string | undefined;
+  private _activeTrigger: ActivityTrigger | undefined;
   private _activeCorrelationId: string | undefined;
   private _activeHopCount = 0;
   private _onStateChanged?: () => void;
@@ -173,6 +175,15 @@ export class AgentHandle {
 
   getActiveOriginTaskId(): string | undefined {
     return this._activeOriginTaskId;
+  }
+
+  /** The message that woke the agent, for the Activity tab. */
+  setActiveTrigger(trigger: ActivityTrigger | undefined): void {
+    this._activeTrigger = trigger;
+  }
+
+  getActiveTrigger(): ActivityTrigger | undefined {
+    return this._activeTrigger;
   }
 
   setActiveCorrelationId(id: string | undefined): void {

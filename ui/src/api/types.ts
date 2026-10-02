@@ -331,8 +331,20 @@ export interface AgentActivityEntry {
   ts: number;
   type: string;
   toolName?: string;
+  toolCallId?: string;
   isError?: boolean;
   sessionKey?: string;
   sourceKind?: string;
   originTaskId?: string;
+  /** tool_execution_start: the tool's input. */
+  args?: unknown;
+  /** tool_execution_end: the tool's output text. */
+  result?: string;
+  /** turn_end: what the model said, and tokens used. */
+  text?: string;
+  tokens?: number;
+  stopReason?: string;
+  error?: string;
+  /** agent_start: the message that woke the agent. */
+  trigger?: { from: string; text: string; channel?: string };
 }
