@@ -423,3 +423,23 @@ export const READ_CHANNEL = {
     ),
   }),
 };
+
+export const READ_DM = {
+  name: "read_dm" as const,
+  label: "Read DMs",
+  description:
+    "Read your recent direct messages with the user, or with another agent, oldest first. Use it to recall what was asked or agreed in a DM, e.g. after a restart or when earlier messages have dropped out of your memory.",
+  parameters: Type.Object({
+    with: Type.Optional(
+      Type.String({
+        description:
+          'Who the conversation is with: "user" (default) or an agent name',
+      }),
+    ),
+    limit: Type.Optional(
+      Type.Number({
+        description: "How many recent messages to read (default 30, max 100)",
+      }),
+    ),
+  }),
+};

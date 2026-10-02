@@ -50,6 +50,8 @@ export function toolDetail(name: string, rawArgs: unknown): string {
         : "";
     case "read_channel":
       return str(a.channel) ? `#${String(a.channel).replace(/^#/, "")}` : "";
+    case "read_dm":
+      return `with ${str(a.with) ?? "user"}`;
     case "task_get":
     case "task_delete":
       return str(a.id) ? `#${a.id}` : "";

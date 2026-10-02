@@ -126,6 +126,11 @@ vi.mock("../src/agent/tools/index.js", () => ({
     parameters: {},
     execute: vi.fn(),
   }),
+  createReadDmTool: () => ({
+    name: "read_dm",
+    parameters: {},
+    execute: vi.fn(),
+  }),
   createSetAvatarTool: () => ({
     name: "set_avatar",
     parameters: {},

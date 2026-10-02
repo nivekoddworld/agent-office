@@ -37,6 +37,7 @@ import {
   handleMessageUser,
   handlePostChannel,
   handleReadChannel,
+  handleReadDm,
   type CronHandlerDeps,
   type TaskHandlerDeps,
 } from "./host-api-ext-handlers.js";
@@ -377,6 +378,15 @@ export class HostApi {
             res.end(JSON.stringify({ error: "Egress not configured" }));
           }
         }
+      } else if (req.method === "POST" && path === "/api/read-dm") {
+        if (this.checkToolPolicy(path, agentName, res)) {
+          if (this.egressDeps)
+            await handleReadDm(req, res, agentName, this.egressDeps);
+          else {
+            res.writeHead(503, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Egress not configured" }));
+          }
+        }
       } else if (req.method === "POST" && path === "/api/tool-count") {
         await handleToolCount(req, res, agentName, this.agentToolCounts);
       } else if (req.method === "POST" && path === "/api/heartbeat") {
@@ -410,6 +420,7 @@ export class HostApi {
     "/api/task-delete": "task_delete",
     "/api/post-channel": "post_channel",
     "/api/read-channel": "read_channel",
+    "/api/read-dm": "read_dm",
   };
 
   private checkToolPolicy(

@@ -27,13 +27,16 @@ export function readChannelLog(
   agentName: string,
   channel: string,
 ): ChannelLogEntry[] {
-  const file = join(
-    baseDir,
-    "agents",
-    agentName,
-    "sessions",
-    `channel-${channel}.jsonl`,
-  );
+  return readSessionLog(baseDir, agentName, `channel-${channel}.jsonl`);
+}
+
+/** Messages in one of an agent's session logs (channel, DM with you or with an agent). */
+export function readSessionLog(
+  baseDir: string,
+  agentName: string,
+  filename: string,
+): ChannelLogEntry[] {
+  const file = join(baseDir, "agents", agentName, "sessions", filename);
   let content: string;
   try {
     content = readFileSync(file, "utf-8");

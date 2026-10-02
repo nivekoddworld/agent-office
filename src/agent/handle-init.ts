@@ -34,6 +34,7 @@ import {
   createMessageUserTool,
   createPostChannelTool,
   createReadChannelTool,
+  createReadDmTool,
   createSetAvatarTool,
 } from "./tools/index.js";
 import { appendSession } from "../sessions/session-writer.js";
@@ -315,6 +316,7 @@ export async function initInProcessAgent(
       baseDir: ctx.baseDir,
       channels: sessionDeps?.channels ?? new Map(),
     }),
+    createReadDmTool({ agentName: ctx.name, baseDir: ctx.baseDir }),
     ...(ctx.config.tools ?? []),
   ];
 
