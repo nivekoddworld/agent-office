@@ -55,6 +55,8 @@ export function toolDetail(name: string, rawArgs: unknown): string {
     case "task_get":
     case "task_delete":
       return str(a.id) ? `#${a.id}` : "";
+    case "task_comment":
+      return str(a.id) ? `#${a.id}: ${quote(a.message)}` : "";
     case "task_update":
       return str(a.id)
         ? `#${a.id}${a.restart ? " restart" : str(a.status) ? ` → ${a.status}` : ""}`

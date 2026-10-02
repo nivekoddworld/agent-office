@@ -72,6 +72,14 @@ export interface Task {
   completedAt?: number;
   result?: string;
   reportChannel?: string;
+  comments?: TaskComment[];
+}
+
+export interface TaskComment {
+  from: string;
+  text: string;
+  ts: number;
+  origin?: string;
 }
 
 export interface TaskCreateBody {

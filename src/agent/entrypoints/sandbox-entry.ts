@@ -40,6 +40,7 @@ import {
   createTaskUpdateProxy,
   createTaskListProxy,
   createTaskGetProxy,
+  createTaskCommentProxy,
   createTaskDeleteProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
@@ -156,6 +157,7 @@ const allTools: AgentTool<any>[] = [
   createTaskUpdateProxy(hostFetch),
   createTaskListProxy(hostFetch),
   createTaskGetProxy(hostFetch),
+  createTaskCommentProxy(hostFetch),
   createTaskDeleteProxy(hostFetch),
   createSkillSearchProxy(hostFetch),
   createSkillInstallProxy(hostFetch),

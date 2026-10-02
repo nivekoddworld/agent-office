@@ -41,6 +41,10 @@ export interface UpdateTaskParams {
   priority?: Priority;
 }
 
+/** Comments kept per task, and their length limit. */
+const MAX_COMMENTS = 200;
+const MAX_COMMENT_CHARS = 4000;
+
 export class TaskService {
   private tasks: Record<string, Task> = {};
   private store: TaskStore;
@@ -259,6 +263,72 @@ export class TaskService {
     }
 
     return task;
+  }
+
+  /**
+   * Comment on a task. Its assignee and creator hear about it (except the
+   * commenter; agents only); a comment from you goes to the assignee as one
+   * of your messages. Returns what the assignee was sent, if anything.
+   */
+  comment(
+    by: string,
+    taskId: string,
+    text: string,
+    origin?: string,
+  ): { task: Task; sent?: string } | string {
+    const task = this.tasks[taskId];
+    if (!task) return `Error: task "${taskId}" not found`;
+    const body = text.trim();
+    if (!body) return "Error: the comment is empty";
+    if (body.length > MAX_COMMENT_CHARS)
+      return `Error: comments are limited to ${MAX_COMMENT_CHARS} characters`;
+    const now = Date.now();
+    task.comments = [
+      ...(task.comments ?? []),
+      { from: by, text: body, ts: now, ...(origin ? { origin } : {}) },
+    ].slice(-MAX_COMMENTS);
+    task.updatedAt = now;
+    this.persist();
+    this.changed();
+    auditTaskAction(this.officeDir, {
+      ts: new Date(now).toISOString(),
+      agent: by,
+      action: "comment",
+      taskId: task.id,
+      result: "ok",
+      details: { length: body.length },
+    });
+
+    const fromUser = by === "__user__";
+    const payload =
+      `[Task Comment] #${task.id} "${task.title}" from ${fromUser ? "the user" : by}:\n${body}\n\n` +
+      `[To reply on the task, call task_comment with id="${task.id}"]`;
+    const to = new Set(
+      fromUser ? [task.assignee] : [task.assignee, task.createdBy],
+    );
+    to.delete(by);
+    let sent: string | undefined;
+    for (const agent of to) {
+      if (agent.startsWith("__")) continue;
+      try {
+        this.bus.sendWithOutcome({
+          // Yours count as your messages: handled first, even mid-turn.
+          from: fromUser ? "__user__" : "__task__",
+          to: agent,
+          type: "prompt",
+          payload,
+          priority: fromUser ? Priority.CRITICAL : task.priority,
+          sessionKey: sessionKey("internal", agent),
+          sourceKind: "internal",
+          correlationId: randomUUID(),
+          originTaskId: task.id,
+        });
+        sent = payload;
+      } catch {
+        // Best-effort: the agent might not be registered
+      }
+    }
+    return { task, ...(sent ? { sent } : {}) };
   }
 
   /** Restart a done or failed task — resets to "todo", clears completion data. */

@@ -33,6 +33,7 @@ import {
   handleTaskUpdate,
   handleTaskList,
   handleTaskGet,
+  handleTaskComment,
   handleTaskDelete,
   handleMessageUser,
   handlePostChannel,
@@ -339,6 +340,9 @@ export class HostApi {
       } else if (req.method === "POST" && path === "/api/task-get") {
         if (this.checkToolPolicy(path, agentName, res))
           await handleTaskGet(req, res, this.buildTaskDeps(agentName));
+      } else if (req.method === "POST" && path === "/api/task-comment") {
+        if (this.checkToolPolicy(path, agentName, res))
+          await handleTaskComment(req, res, this.buildTaskDeps(agentName));
       } else if (req.method === "POST" && path === "/api/task-delete") {
         if (this.checkToolPolicy(path, agentName, res))
           await handleTaskDelete(req, res, this.buildTaskDeps(agentName));
@@ -418,6 +422,7 @@ export class HostApi {
     "/api/task-list": "task_list",
     "/api/task-get": "task_get",
     "/api/task-delete": "task_delete",
+    "/api/task-comment": "task_comment",
     "/api/post-channel": "post_channel",
     "/api/read-channel": "read_channel",
     "/api/read-dm": "read_dm",

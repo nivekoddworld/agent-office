@@ -87,6 +87,31 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       },
     },
     {
+      method: "POST",
+      pattern: /^\/api\/tasks\/([^/]+)\/comments$/,
+      paramNames: ["id"],
+      handler: async (req, res, _url, params) => {
+        if (requireMutation(req, res, getPort())) return;
+        let parsed: { text?: unknown };
+        try {
+          parsed = JSON.parse(await readBody(req));
+        } catch {
+          return json(res, 400, { error: "invalid_body" });
+        }
+        if (typeof parsed.text !== "string")
+          return json(res, 400, { ok: false, error: "text is required" });
+        const result = workspace.tasks.comment(
+          "__user__",
+          params.id!,
+          parsed.text,
+        );
+        if (typeof result === "string")
+          return json(res, 400, { ok: false, error: result });
+        broadcast("state_changed", getBootstrapState(workspace, officeId));
+        return json(res, 201, result.task);
+      },
+    },
+    {
       method: "DELETE",
       pattern: /^\/api\/tasks\/([^/]+)$/,
       paramNames: ["id"],

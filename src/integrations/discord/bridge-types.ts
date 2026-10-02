@@ -32,6 +32,8 @@ export interface BridgeHost {
   clearAgent?(name: string): string;
   /** An agent's activity log since a time, for the daily summary. */
   activitySince?(agent: string, since: number): ActivityEntry[];
+  /** Your comment on a task (typed in its post); `sent` is what the assignee got. */
+  commentTask?(taskId: string, text: string): { sent?: string; error?: string };
   /** A task you started as a forum post; an error message if it failed. */
   createTask?(t: {
     title: string;

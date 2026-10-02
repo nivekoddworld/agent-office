@@ -359,6 +359,17 @@ export const TASK_GET = {
   }),
 };
 
+export const TASK_COMMENT = {
+  name: "task_comment" as const,
+  label: "Task Comment",
+  description:
+    "Leave a comment on a task: a progress update, a question, a note or an answer. The task's assignee and creator are told, and the user sees it on the task (dashboard and Discord). Write @user in it to ask the user something. Use this to reply to [Task Comment] messages.",
+  parameters: Type.Object({
+    id: Type.String({ description: "Task ID (e.g. T-abc12345)" }),
+    message: Type.String({ description: "The comment" }),
+  }),
+};
+
 export const TASK_DELETE = {
   name: "task_delete" as const,
   label: "Task Delete",

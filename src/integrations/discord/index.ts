@@ -128,6 +128,14 @@ export async function startDiscordBridge(
           ),
         attachmentPath: (id) => attachmentPath(workspace.office.dir, id),
         tasks: () => workspace.tasks.list(),
+        commentTask: (id, text) => {
+          const r = workspace.tasks.comment("__user__", id, text, "discord");
+          return typeof r === "string"
+            ? { error: r }
+            : r.sent
+              ? { sent: r.sent }
+              : {};
+        },
         ...agentControls(workspace),
         activitySince: (agent) =>
           readActivity(workspace.office.dir, agent, MAX_ACTIVITY_LIMIT),

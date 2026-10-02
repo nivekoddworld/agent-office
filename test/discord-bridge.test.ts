@@ -968,6 +968,7 @@ describe("Discord tasks forum, receipts and alerts", () => {
   let host: ReturnType<typeof makeHost> & {
     tasks(): Task[];
     createTask: BridgeHost["createTask"];
+    commentTask?: BridgeHost["commentTask"];
   };
   let tasks: Task[];
   let bridge: DiscordBridge;
@@ -1089,32 +1090,57 @@ describe("Discord tasks forum, receipts and alerts", () => {
     expect(discord.threads.get(bId)!.archived).toBe(true);
   });
 
-  it("sends your reply in a post to the assignee, and its answer back to the post", async () => {
+  it("turns what you write in a post into a comment for the assignee", async () => {
     const [aId] = post("Task a1");
+    host.commentTask = vi.fn((id: string, text: string) => {
+      tasks[0] = {
+        ...tasks[0]!,
+        comments: [{ from: "__user__", text, ts: T, origin: "discord" }],
+      };
+      return {
+        sent: `[Task Comment] #${id} "Task a1" from the user:\n${text}`,
+      };
+    });
     say({ id: "m1", channelId: aId, parentId: forumId(), content: "use blue" });
     await bridge.idle();
-    const text = '[About task #a1 "Task a1"]\nuse blue';
-    expect(host.dms).toEqual([{ agent: "coder", text, origin: "discord" }]);
+    expect(host.commentTask).toHaveBeenCalledWith("a1", "use blue");
     expect(discord.reactions).toEqual(["+👍 m1"]);
-
+    // Yours isn't echoed back into the thread.
+    bridge.handleTasksChanged();
+    await bridge.idle();
+    expect(discord.sent.filter((x) => x.threadId === aId)).toEqual([]);
+    // The 👍 comes off when the assignee's wake-up for it ends.
     bridge.handleActivity("coder", {
       ts: T,
       type: "agent_start",
-      trigger: { from: "__user__", text },
+      trigger: {
+        from: "__user__",
+        text: '[Task Comment] #a1 "Task a1" from the user:\nuse blue',
+      },
     });
-    bridge.handleEgress({ kind: "dm", agent: "coder", text: "Will do" });
     bridge.handleActivity("coder", { ts: T + 1, type: "agent_end" });
     await bridge.idle();
-    expect(discord.sent.at(-1)).toMatchObject({
-      threadId: aId,
-      username: "coder",
-      content: "Will do",
-    });
     expect(discord.reactions).toEqual(["+👍 m1", "-👍 m1"]);
-    // Later DMs go to the DM channel as usual.
-    bridge.handleEgress({ kind: "dm", agent: "coder", text: "Hi" });
+  });
+
+  it("posts agents' comments in the task's thread, pinging you for @user", async () => {
+    const [aId] = post("Task a1");
+    tasks[0] = {
+      ...tasks[0]!,
+      comments: [
+        { from: "coder", text: "halfway there", ts: T },
+        { from: "coder", text: "@user blue or green?", ts: T + 1 },
+      ],
+    };
+    bridge.handleTasksChanged();
+    bridge.handleTasksChanged();
     await bridge.idle();
-    expect(discord.posts("dm-coder")).toEqual(["coder: Hi"]);
+    const inThread = discord.sent.filter((x) => x.threadId === aId);
+    const userRole = discord.roleId("office-user");
+    expect(inThread.map((x) => [x.username, x.content, x.pingRoles])).toEqual([
+      ["coder", "halfway there", []],
+      ["coder", `<@&${userRole}> blue or green?`, [userRole]],
+    ]);
   });
 
   it("turns a post you start into a task for the agent it mentions", async () => {

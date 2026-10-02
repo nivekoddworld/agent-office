@@ -13,6 +13,8 @@ export interface TaskPost {
   archived?: boolean;
   /** The result last posted in the thread. */
   result?: string;
+  /** How many of the task's comments are in the thread. */
+  comments?: number;
 }
 
 export interface TaskForumHost {
@@ -39,6 +41,8 @@ export const PRIORITY_TAGS = ["idle", "low", "normal", "high", "critical"];
 export const TASK_TAGS = [...Object.values(STATUS_TAGS), ...PRIORITY_TAGS];
 
 const MAX_CARD = 1900;
+/** The origin of comments typed in Discord. */
+const DISCORD = "discord";
 /** Tasks done longer ago than this don't get a post (e.g. on first sync). */
 const OLD_DONE_MS = 24 * 60 * 60_000;
 
@@ -148,6 +152,19 @@ export class TaskForum {
         post.card = card;
         this.host.save();
       }
+      // New comments, under their writer's name (yours from Discord are
+      // already there).
+      const comments = task.comments ?? [];
+      for (const c of comments.slice(post.comments ?? 0)) {
+        if (c.origin !== DISCORD)
+          await this.host.postAs(
+            post.threadId,
+            c.from === "__user__" ? "user" : c.from,
+            c.text,
+          );
+        post.comments = (post.comments ?? 0) + 1;
+        this.host.save();
+      }
       const result =
         (task.status === "done" || task.status === "failed") && task.result
           ? task.result
@@ -214,11 +231,6 @@ export class TaskForum {
   static ref(task: Task, posts: Record<string, TaskPost> = {}): string {
     const post = posts[task.id];
     return `**${task.title}** (${post ? `<#${post.threadId}>` : `\`#${task.id}\``})`;
-  }
-
-  /** "[About task #id "title"]" + your text, as sent to the assignee. */
-  static replyText(task: Task, text: string): string {
-    return `[About task #${task.id} "${task.title}"]\n${text}`;
   }
 
   /** One line for #status, e.g. "2 in progress · 3 todo · 1 failed". */
