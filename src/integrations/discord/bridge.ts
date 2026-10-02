@@ -1,5 +1,4 @@
 import { renameSync, writeFileSync } from "node:fs";
-import type { Attachment, ChannelConfig } from "../../types.js";
 import type { EgressEvent } from "../../egress/egress-impl.js";
 import { SentMessageTracker } from "../discord-webhook.js";
 import type { ActivityEntry } from "../../activity/activity-log.js";
@@ -7,7 +6,6 @@ import { ActivityRelay } from "./activity-relay.js";
 import { DEFAULT_MAX_UPLOAD, uploadsFor } from "./uploads.js";
 import { loadState, type BridgeState } from "./state.js";
 import {
-  atName,
   channelSpec,
   type CategoryKind,
   pairChannel,
@@ -19,8 +17,10 @@ import { Incoming } from "./incoming.js";
 import { TaskForum } from "./task-forum.js";
 import { RECEIPT, Receipts } from "./receipts.js";
 import { Alerts } from "./alerts.js";
-import type { Task } from "../../tasks/types.js";
-import type { DiscordApi, DiscordImage, IncomingMessage } from "./types.js";
+import { COMMANDS, commandHost, runCommand } from "./commands.js";
+import { summaryIfDue } from "./summary.js";
+import { withRolePills } from "./outgoing.js";
+import type { DiscordApi, IncomingMessage } from "./types.js";
 
 /**
  * Two-way bridge between an office and a Discord server. The bot keeps one
@@ -42,56 +42,8 @@ const ACTIVITY_CATEGORY = "Activity";
 /** Role for the humans running the office; agents' messages to you ping it. */
 export const USER_ROLE = "office-user";
 
-export interface BridgeHost {
-  officeName(): string;
-  channels(): Map<string, ChannelConfig>;
-  agentNames(): string[];
-  sendUserDm(
-    agent: string,
-    text: string,
-    origin: string,
-    attachments?: Attachment[],
-  ): { ok: boolean; error?: string };
-  postUserChannel(
-    channel: string,
-    text: string,
-    mentions: string[],
-    origin: string,
-    attachments?: Attachment[],
-  ): { ok: boolean; error?: string };
-  /** File path of an uploaded image attachment. */
-  attachmentPath(id: string): string;
-  /** Save an image posted in Discord as an upload, so agents can see it. */
-  importImage?(img: DiscordImage): Promise<Attachment>;
-  /** The office's tasks, for the tasks forum, #status and alerts. */
-  tasks?(): Task[];
-  /** A task you started as a forum post; an error message if it failed. */
-  createTask?(t: {
-    title: string;
-    description: string;
-    assignee: string;
-  }): Task | string;
-}
-
-export interface BridgeOptions {
-  guildId: string;
-  /** Where channel, role and webhook ids are remembered between restarts. */
-  statePath: string;
-  /** Avatar image for a sender name, if any. */
-  avatarUrl?: (name: string) => string | undefined;
-  /** Activity channels, #status and the bot's status line (default on). */
-  activity?: boolean;
-  /** Largest file to upload (default 10 MB, Discord's limit without boosts). */
-  maxUploadBytes?: number;
-  /** Relay throttling, for tests. */
-  activityIntervals?: { editIntervalMs?: number; presenceIntervalMs?: number };
-  /** Typing indicator while an agent works on a reply (default on). */
-  typing?: boolean;
-  /** How often typing is refreshed, for tests. */
-  typingRefreshMs?: number;
-  /** #alerts: failed or stuck tasks, failing agents (default on). */
-  alerts?: boolean;
-}
+export type { BridgeHost, BridgeOptions } from "./bridge-types.js";
+import type { BridgeHost, BridgeOptions } from "./bridge-types.js";
 
 /** Wait this long after a task change for more before updating the forum. */
 const FORUM_DELAY_MS = 1500;
@@ -118,6 +70,8 @@ export class DiscordBridge {
   private alerts: Alerts | undefined;
   private receipts: Receipts;
   private incoming: Incoming;
+  /** The agent list slash commands were last registered with. */
+  private commandsFor = "";
   /** Agent → the task post whose reply it's answering right now. */
   private answering = new Map<string, string>();
 
@@ -212,6 +166,16 @@ export class DiscordBridge {
   async start(): Promise<void> {
     // What has already failed isn't news.
     this.alerts?.tasks(this.host.tasks?.() ?? []);
+    if (this.state.lastSummaryAt === undefined) {
+      this.state.lastSummaryAt = Date.now();
+      this.save();
+    }
+    this.api.onCommand((c) => {
+      runCommand(c, commandHost(this.host, this.relay, this.state)).catch(
+        (err) =>
+          console.error(`[discord] /${c.name} failed: ${errorText(err)}`),
+      );
+    });
     await this.run(() => this.syncNow());
     await this.relay?.start();
     this.api.onMessage((m) => {
@@ -223,6 +187,7 @@ export class DiscordBridge {
     });
     this.timer = setInterval(() => {
       this.alerts?.tasks(this.host.tasks?.() ?? []);
+      this.maybeSummary();
       this.run(() => this.syncNow()).catch((err) =>
         console.error(`[discord] Sync failed: ${errorText(err)}`),
       );
@@ -276,24 +241,13 @@ export class DiscordBridge {
     if (e.origin === DISCORD_ORIGIN) return;
     const mentions = e.mentions ?? [];
     this.enqueue(async () => {
-      // Mentions show as role pills: in place where the text says @name,
-      // otherwise in front of the message.
-      let text = e.text;
-      const prefix: string[] = [];
-      for (const m of mentions) {
-        const pill = `<@&${await this.role(m)}>`;
-        const inText = atName(m);
-        if (inText.test(text)) text = text.replace(atName(m), pill);
-        else prefix.push(pill);
-      }
-      // An agent writing "@user" in a channel pings the humans too.
-      const ping: string[] = [];
-      if (e.from !== "__user__" && atName("user").test(text)) {
-        const role = await this.userRole();
-        text = text.replace(atName("user"), `<@&${role}>`);
-        ping.push(role);
-      }
-      const content = prefix.length ? `${prefix.join(" ")} ${text}` : text;
+      const { content, ping } = await withRolePills(
+        e.text,
+        mentions,
+        e.from !== "__user__",
+        (a) => this.role(a),
+        () => this.userRole(),
+      );
       await this.post(
         `ch:${e.channel}`,
         senderName(e.from),
@@ -346,6 +300,16 @@ export class DiscordBridge {
     this.incoming.handle(m);
   }
 
+  /** Post the daily summary once its time has come today. */
+  maybeSummary(now = Date.now()): void {
+    const text = this.host.activitySince
+      ? summaryIfDue(this.state, this.opts.summaryAt, this.host, now)
+      : undefined;
+    if (!text) return;
+    this.save();
+    this.enqueue(() => this.post("summary", "agent-office", text));
+  }
+
   private agentByRole(): Map<string, string> {
     return new Map(Object.entries(this.state.roles).map(([a, id]) => [id, a]));
   }
@@ -394,6 +358,19 @@ export class DiscordBridge {
     for (const key of Object.keys(this.state.channels))
       if (key.startsWith("pair:")) await this.channel(key);
     if (this.alerts) await this.channel("alerts");
+    if (this.host.activitySince && this.opts.summaryAt !== "off")
+      await this.channel("summary");
+    const agents = this.host.agentNames();
+    if (JSON.stringify(agents) !== this.commandsFor) {
+      this.commandsFor = JSON.stringify(agents);
+      await this.api
+        .setCommands(COMMANDS, agents)
+        .catch((err) =>
+          console.warn(
+            `[discord] Couldn't register slash commands (${errorText(err)}). Re-invite the bot with the "applications.commands" scope to use them.`,
+          ),
+        );
+    }
     await this.forum?.sync();
     this.save();
   }

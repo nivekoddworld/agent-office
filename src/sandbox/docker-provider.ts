@@ -258,6 +258,10 @@ export class DockerProvider implements SandboxProvider {
     await this.sandboxFetch(id, "/abort", {});
   }
 
+  async clear(id: string): Promise<void> {
+    await this.sandboxFetch(id, "/clear", {});
+  }
+
   async health(id: string): Promise<{ ok: boolean; turns: number }> {
     const entry = this.containers.get(id);
     if (!entry) return { ok: false, turns: 0 };

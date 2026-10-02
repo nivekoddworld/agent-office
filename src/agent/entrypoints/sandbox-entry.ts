@@ -309,6 +309,16 @@ async function handleRequest(
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/clear") {
+    // Forget the conversation; the system prompt and tools stay.
+    agent.state.messages = agent.state.messages.filter(
+      (m) => m.role === "system",
+    );
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/abort") {
     agent.abort();
     res.writeHead(200, { "Content-Type": "application/json" });

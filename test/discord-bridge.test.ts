@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -10,7 +10,9 @@ import {
 import {
   UnknownMessageError,
   UnknownWebhookError,
+  type CommandDef,
   type DiscordApi,
+  type IncomingCommand,
   type IncomingMessage,
   type WebhookMessage,
 } from "../src/integrations/discord/types.js";
@@ -205,6 +207,26 @@ class FakeDiscord implements DiscordApi {
   }
   roleId(name: string) {
     return [...this.roles].find(([, n]) => n === name)![0];
+  }
+  commands: Array<{ defs: CommandDef[]; agents: string[] }> = [];
+  commandListener: ((c: IncomingCommand) => void) | undefined;
+  async setCommands(defs: CommandDef[], agents: string[]) {
+    this.commands.push({ defs, agents });
+  }
+  onCommand(fn: (c: IncomingCommand) => void) {
+    this.commandListener = fn;
+  }
+  /** Use a slash command; resolves with the (private) answer. */
+  command(name: string, agent?: string, roleIds: string[] = []) {
+    return new Promise<string>((resolve) =>
+      this.commandListener!({
+        name,
+        ...(agent ? { agent } : {}),
+        roleIds,
+        isManager: false,
+        reply: async (text) => resolve(text),
+      }),
+    );
   }
 }
 
@@ -1195,5 +1217,151 @@ describe("Discord tasks forum, receipts and alerts", () => {
     expect(discord.botPosts("status").at(-1)).toContain(
       "**Tasks** · 1 todo · 1 waiting",
     );
+  });
+});
+
+describe("Discord slash commands, replies and the daily summary", () => {
+  let dir: string;
+  let discord: FakeDiscord;
+  let bridge: DiscordBridge;
+  let host: ReturnType<typeof makeHost> & Record<string, any>;
+  const T = new Date(2026, 9, 2, 8, 0).getTime(); // 08:00 local
+
+  const task = (id: string, over: Partial<Task> = {}): Task => ({
+    id,
+    title: `Task ${id}`,
+    description: "",
+    status: "todo",
+    priority: 2,
+    assignee: "coder",
+    createdBy: "lead",
+    dependsOn: [],
+    createdAt: T,
+    updatedAt: T,
+    ...over,
+  });
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), "discord-cmds-"));
+    discord = new FakeDiscord();
+    const tasks = [
+      task("a1", { status: "in_progress" }),
+      task("b2"),
+      task("c3", { status: "done", completedAt: T + 3_600_000, result: "ok" }),
+      task("d4", { status: "failed", completedAt: T + 3_600_000 }),
+    ];
+    host = Object.assign(makeHost(), {
+      tasks: () => tasks,
+      stopAgent: vi.fn((a: string) => `Stopped ${a}.`),
+      wakeAgent: vi.fn((a: string) => `Woke ${a}.`),
+      clearAgent: vi.fn((a: string) => `Cleared ${a}.`),
+      activitySince: (agent: string) =>
+        agent === "coder"
+          ? [
+              { ts: T - 1, type: "agent_start" }, // before the window
+              { ts: T + 10, type: "agent_start" },
+              { ts: T + 20, type: "turn_end", tokens: 1500 },
+              { ts: T + 30, type: "agent_end" },
+              { ts: T + 40, type: "agent_start" },
+              { ts: T + 50, type: "turn_end", tokens: 700 },
+              { ts: T + 60, type: "agent_end", error: "400" },
+            ]
+          : [],
+    });
+    writeFileSync(
+      join(dir, "discord.json"),
+      JSON.stringify({ guildId: "g1", lastSummaryAt: T }),
+    );
+    bridge = new DiscordBridge(discord, host, {
+      guildId: "g1",
+      statePath: join(dir, "discord.json"),
+      activityIntervals: { editIntervalMs: 0, presenceIntervalMs: 0 },
+    });
+    await bridge.start();
+  });
+  afterEach(async () => {
+    await bridge.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("registers the commands with the agents to choose from", () => {
+    expect(discord.commands).toHaveLength(1);
+    expect(discord.commands[0]!.agents).toEqual(["lead", "coder", "artist"]);
+    expect(discord.commands[0]!.defs.map((d) => d.name)).toEqual([
+      "status",
+      "tasks",
+      "stop",
+      "wake",
+      "clear",
+    ]);
+  });
+
+  it("answers /status and /tasks", async () => {
+    expect(await discord.command("status")).toMatch(
+      /^\*\*Office status\*\* · online since <t:\d+:R> · updated/,
+    );
+    const tasks = await discord.command("tasks");
+    expect(tasks.split("\n")).toEqual([
+      "**3 open tasks**",
+      expect.stringMatching(/^\*\*Task a1\*\* · in progress · coder <#\d+>$/),
+      expect.stringMatching(/^\*\*Task b2\*\* · todo · coder <#\d+>$/),
+      expect.stringMatching(/^\*\*Task d4\*\* · failed · coder <#\d+>$/),
+    ]);
+  });
+
+  it("lets only office-users stop, wake or clear agents", async () => {
+    expect(await discord.command("stop", "coder")).toBe(
+      "Only people with the office-user role can do that.",
+    );
+    expect(host.stopAgent).not.toHaveBeenCalled();
+    const role = [discord.roleId("office-user")];
+    expect(await discord.command("stop", "coder", role)).toBe("Stopped coder.");
+    expect(await discord.command("wake", "lead", role)).toBe("Woke lead.");
+    expect(await discord.command("clear", "artist", role)).toBe(
+      "Cleared artist.",
+    );
+    expect(await discord.command("wake", "nobody", role)).toBe(
+      'There\'s no agent called "nobody".',
+    );
+  });
+
+  it("sends a reply to an agent's post to that agent, with what it answers", async () => {
+    discord.type("work", "yes, ship it", {
+      replyTo: {
+        name: "coder",
+        text: "Ready to ship? @lead said so",
+        fromBot: true,
+      },
+    });
+    await bridge.idle();
+    expect(host.posts).toEqual([
+      {
+        channel: "work",
+        text: '[Replying to coder: "Ready to ship? @\u200blead said so"]\nyes, ship it',
+        mentions: ["coder"],
+        origin: "discord",
+      },
+    ]);
+  });
+
+  it("posts the daily summary once, when its time comes", async () => {
+    bridge.maybeSummary(T + 30 * 60_000); // 08:30: not yet
+    await bridge.idle();
+    expect(discord.posts("summary")).toEqual([]);
+    const nine = new Date(2026, 9, 2, 9, 0).getTime();
+    bridge.maybeSummary(nine + 60_000);
+    bridge.maybeSummary(nine + 120_000);
+    await bridge.idle();
+    const posts = discord.posts("summary");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]!.split("\n")).toEqual([
+      `agent-office: **Daily summary** · since <t:${T / 1000}:R>`,
+      "**Tasks** · 1 done · 1 failed · 2 still open",
+      expect.stringMatching(/^Done: \*\*Task c3\*\* <#\d+> \(coder\)$/),
+      expect.stringMatching(/^Failed: \*\*Task d4\*\* <#\d+> \(coder\)$/),
+      "**lead** · idle",
+      "**coder** · 2 wake-ups · 1 failed · 2.2k tokens",
+      "**artist** · idle",
+    ]);
   });
 });

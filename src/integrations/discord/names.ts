@@ -41,6 +41,9 @@ export function mentionedAgents(
     if (a) names.add(a);
   }
   for (const a of mentionsInText(text, agentNames)) names.add(a);
+  // Replying to an agent's post is talking to that agent.
+  const to = m.replyTo;
+  if (to?.fromBot && agentNames.includes(to.name)) names.add(to.name);
   return [...names];
 }
 
@@ -55,7 +58,18 @@ export function officeText(
   });
   if (m.attachmentUrls.length)
     text += `\n${m.attachmentUrls.map((u) => `[attachment: ${u}]`).join("\n")}`;
-  return text.trim();
+  text = text.trim();
+  // A Discord reply: say what it answers, so the agent has the context.
+  if (text && m.replyTo) {
+    // "@" + zero-width space: mentions quoted from it don't wake anyone.
+    const quoted = m.replyTo.text
+      .replace(/\s+/g, " ")
+      .replace(/@/g, "@\u200b")
+      .trim();
+    const q = quoted.length > 200 ? `${quoted.slice(0, 199)}…` : quoted;
+    text = `[Replying to ${m.replyTo.name}: "${q}"]\n${text}`;
+  }
+  return text;
 }
 
 export type CategoryKind = "office" | "dms" | "pairs" | "activity";
@@ -79,6 +93,13 @@ export function channelSpec(
       kind: "activity",
       topic:
         "Things that need you: failed tasks, tasks stuck in progress, agents whose wake-ups keep failing.",
+    };
+  if (key === "summary")
+    return {
+      name: "summary",
+      kind: "activity",
+      topic:
+        "A daily summary: tasks finished and failed, and what each agent did.",
     };
   if (key.startsWith("act:"))
     return {

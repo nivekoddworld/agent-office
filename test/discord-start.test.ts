@@ -23,6 +23,8 @@ const fakeApi: DiscordApi = {
   createPost: async () => ({ threadId: "t1", messageId: "t1" }),
   updatePost: async () => {},
   react: async () => {},
+  setCommands: async () => {},
+  onCommand: () => {},
   onMessage: () => {},
   close: async () => {},
 };

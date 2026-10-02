@@ -7,14 +7,15 @@ import {
   GatewayIntentBits,
   PermissionFlagsBits,
   RESTJSONErrorCodes,
-  Routes,
   WebhookClient,
+  type Message,
   type Guild,
   type GuildBasedChannel,
 } from "discord.js";
 import type { RESTOptions } from "discord.js";
 import { discordFetch } from "./discord-fetch.js";
 import { isImage } from "../../egress/files.js";
+import { extraApi } from "./discordjs-extras.js";
 import {
   UnknownMessageError,
   UnknownWebhookError,
@@ -94,24 +95,9 @@ export async function connectDiscord(
       (await client.channels.fetch(id).catch(() => null));
     return c && c.isSendable() && "guildId" in c ? c : undefined;
   };
-  const gone = (err: unknown) =>
-    err instanceof DiscordAPIError &&
-    (err.code === RESTJSONErrorCodes.UnknownMessage ||
-      err.code === RESTJSONErrorCodes.UnknownChannel);
-  /** Missing permissions etc.: log once per kind and carry on. */
-  const warned = new Set<string>();
-  const bestEffort = (what: string) => (err: unknown) => {
-    if (gone(err)) throw err;
-    if (!warned.has(what)) {
-      warned.add(what);
-      console.warn(
-        `[discord] Couldn't ${what}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  };
   const find = (pred: (c: GuildBasedChannel) => boolean) =>
     guild.channels.cache.find(pred);
-
+  const extras = extraApi(client, guild, guildId);
   return {
     botName: client.user?.username ?? "bot",
     guildName: guild.name,
@@ -274,90 +260,7 @@ export async function connectDiscord(
       }
     },
 
-    async ensureForum(name, categoryId, opts) {
-      const known = opts.knownId && guild.channels.cache.get(opts.knownId);
-      let forum =
-        known && known.type === ChannelType.GuildForum
-          ? known
-          : guild.channels.cache.find(
-              (c) =>
-                c.type === ChannelType.GuildForum &&
-                c.name === name &&
-                c.parentId === categoryId,
-            );
-      if (!forum || forum.type !== ChannelType.GuildForum) {
-        forum = await guild.channels.create({
-          name,
-          type: ChannelType.GuildForum,
-          parent: categoryId,
-          ...(opts.topic ? { topic: opts.topic.slice(0, 1024) } : {}),
-          availableTags: opts.tags.map((t) => ({ name: t })),
-        });
-      }
-      const have = new Set(forum.availableTags.map((t) => t.name));
-      const missing = opts.tags.filter((t) => !have.has(t));
-      if (missing.length)
-        forum = await forum.setAvailableTags([
-          ...forum.availableTags,
-          ...missing.map((t) => ({ name: t })),
-        ]);
-      const tags = Object.fromEntries(
-        forum.availableTags.map((t) => [t.name, t.id]),
-      );
-      return { id: forum.id, tags };
-    },
-
-    async createPost(forumId, title, content, tagIds) {
-      const forum = guild.channels.cache.get(forumId);
-      if (!forum || forum.type !== ChannelType.GuildForum)
-        throw new Error(`Discord forum ${forumId} not found`);
-      const thread = await forum.threads.create({
-        name: title.slice(0, 100),
-        message: { content, allowedMentions: { parse: [] } },
-        appliedTags: tagIds.slice(0, 5),
-      });
-      // A forum post's first message has the thread's id.
-      return { threadId: thread.id, messageId: thread.id };
-    },
-
-    async updatePost(threadId, messageId, change) {
-      try {
-        const thread = await client.channels.fetch(threadId);
-        if (!thread?.isThread()) throw new UnknownMessageError("not a thread");
-        if (thread.archived && change.archived !== true)
-          await thread
-            .setArchived(false)
-            .catch(bestEffort("reopen a task post"));
-        if (change.content !== undefined)
-          await thread.messages.edit(messageId, {
-            content: change.content,
-            allowedMentions: { parse: [] },
-          });
-        if (change.tagIds)
-          await thread
-            .setAppliedTags(change.tagIds.slice(0, 5))
-            .catch(bestEffort("set a task post's tags"));
-        if (
-          change.archived !== undefined &&
-          change.archived !== thread.archived
-        )
-          await thread
-            .setArchived(change.archived)
-            .catch(bestEffort("archive a task post"));
-      } catch (err) {
-        if (gone(err)) throw new UnknownMessageError(String(err));
-        throw err;
-      }
-    },
-
-    async react(channelId, messageId, emoji, on) {
-      const route = Routes.channelMessageOwnReaction(
-        channelId,
-        messageId,
-        encodeURIComponent(emoji),
-      );
-      await (on ? client.rest.put(route) : client.rest.delete(route));
-    },
+    ...extras,
 
     async sendTyping(channelId) {
       const channel = guild.channels.cache.get(channelId);
@@ -374,10 +277,36 @@ export async function connectDiscord(
     },
 
     onMessage(fn: (m: IncomingMessage) => void) {
+      // In order, though a reply waits for the message it answers.
+      let inOrder: Promise<void> = Promise.resolve();
       client.on(Events.MessageCreate, (m) => {
         if (m.guildId !== guildId) return;
+        const fromBot = m.author.bot || !!m.webhookId;
+        inOrder = inOrder.then(async () => {
+          const ref =
+            m.reference?.messageId && !fromBot
+              ? await m.fetchReference().catch(() => undefined)
+              : undefined;
+          deliver(m, fromBot, ref);
+        });
+      });
+      const deliver = (
+        m: Message,
+        fromBot: boolean,
+        ref: Message | undefined,
+      ) => {
         const thread = m.channel.isThread() ? m.channel : undefined;
         fn({
+          ...(ref
+            ? {
+                replyTo: {
+                  // A webhook post's author is the name it was posted as.
+                  name: ref.author.username,
+                  text: ref.content,
+                  fromBot: ref.author.bot || !!ref.webhookId,
+                },
+              }
+            : {}),
           id: m.id,
           channelId: m.channelId,
           ...(thread
@@ -397,9 +326,9 @@ export async function connectDiscord(
               contentType: a.contentType!,
               size: a.size,
             })),
-          fromBot: m.author.bot || !!m.webhookId,
+          fromBot,
         });
-      });
+      };
     },
 
     async close() {

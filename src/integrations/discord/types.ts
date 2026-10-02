@@ -65,6 +65,9 @@ export interface DiscordApi {
   /** The bot's status line under its name, e.g. "coder: bash · lead: thinking". */
   setPresence(text: string, busy: boolean): void;
   onMessage(fn: (m: IncomingMessage) => void): void;
+  /** Register the bot's slash commands in the server (agent choices included). */
+  setCommands(defs: CommandDef[], agentNames: string[]): Promise<void>;
+  onCommand(fn: (c: IncomingCommand) => void): void;
   close(): Promise<void>;
 }
 
@@ -90,6 +93,8 @@ export interface IncomingMessage {
   /** The message's id (for reactions). */
   id?: string;
   channelId: string;
+  /** The message this one replies to: who posted it (an agent's name for its posts) and what it said. */
+  replyTo?: { name: string; text: string; fromBot: boolean };
   /** For a message in a thread (e.g. a forum post): the thread's parent channel and name. */
   parentId?: string;
   threadName?: string;
@@ -102,6 +107,24 @@ export interface IncomingMessage {
   images?: DiscordImage[];
   /** Posted by a bot or webhook (including our own), so ignored. */
   fromBot: boolean;
+}
+
+export interface CommandDef {
+  name: string;
+  description: string;
+  /** Takes an agent (chosen from the office's agents). */
+  agentOption?: boolean;
+}
+
+/** A slash command someone used. */
+export interface IncomingCommand {
+  name: string;
+  agent?: string;
+  /** The user's roles, and whether they can manage the server. */
+  roleIds: string[];
+  isManager: boolean;
+  /** Answer, visible only to them. */
+  reply(text: string): Promise<void>;
 }
 
 export interface DiscordImage {

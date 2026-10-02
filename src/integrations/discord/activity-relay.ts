@@ -138,6 +138,7 @@ export class ActivityRelay {
   private lastPresence = "";
   private lastStatus = "";
   private stopped = false;
+  private readonly startedAt: number;
 
   constructor(
     private readonly api: DiscordApi,
@@ -147,7 +148,9 @@ export class ActivityRelay {
       presenceIntervalMs?: number;
       clock?: () => number;
     } = {},
-  ) {}
+  ) {
+    this.startedAt = this.time;
+  }
 
   private get time(): number {
     return (this.opts.clock ?? Date.now)();
@@ -240,7 +243,9 @@ export class ActivityRelay {
   // --- rendering ---
 
   statusText(): string {
-    const lines = [`**Office status** · updated ${at(this.time, "T")}`];
+    const lines = [
+      `**Office status** · online since ${at(this.startedAt, "R")} · updated ${at(this.time, "T")}`,
+    ];
     for (const agent of this.hooks.agentNames()) {
       const n = this.now.get(agent);
       if (!n || !n.busy) {
