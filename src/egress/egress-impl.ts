@@ -2,7 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Priority, type Attachment } from "../types.js";
-import { importFiles } from "./files.js";
+import { importFiles, isImage } from "./files.js";
 import { sessionKey } from "../messages/session-key.js";
 import {
   CHANNEL_RATE_LIMIT,
@@ -217,13 +217,16 @@ export function postChannel(
   mentions?: string[],
   priority?: Priority,
   files: string[] = [],
+  /** Files already in the uploads folder (e.g. images posted in Discord). */
+  uploaded: Attachment[] = [],
 ): EgressResult {
   const egressId = ctx.idempotencyKey
     ? deriveEgressId(ctx.idempotencyKey)
     : randomUUID();
 
   const trimmed = message.trim();
-  if ((!trimmed && files.length === 0) || !CHANNEL_NAME_RE.test(channel))
+  const noFiles = files.length === 0 && uploaded.length === 0;
+  if ((!trimmed && noFiles) || !CHANNEL_NAME_RE.test(channel))
     return { ok: false, reason: "validation" };
   if (trimmed.length > MAX_MESSAGE_LENGTH)
     return { ok: false, reason: "validation" };
@@ -271,9 +274,10 @@ export function postChannel(
   );
   if (!imported.ok)
     return { ok: false, reason: "validation", error: imported.error };
-  const attachments = imported.attachments.length
-    ? imported.attachments
-    : undefined;
+  const all = [...uploaded, ...imported.attachments];
+  const attachments = all.length ? all : undefined;
+  // Images go to the agents woken up, so they can look at them.
+  const images = all.filter((a) => isImage(a.mimeType));
 
   try {
     const envelope = {
@@ -335,6 +339,7 @@ export function postChannel(
         sourceKind: "channel",
         channel,
         hopCount: ctx.hopCount + 1,
+        ...(images.length ? { attachments: images } : {}),
       });
     }
 

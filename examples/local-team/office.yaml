@@ -12,6 +12,7 @@ office:
   #   llamacpp:
   #     base_url: http://127.0.0.1:8080
   #     context_window: 32768 # match llama-server -c
+  #     vision: true # model takes images (detected from llama-server --mmproj if unset)
   #   gpu-box: # a vLLM server on another machine
   #     type: vllm
   #     base_url: http://gpu-box:8000

@@ -1,19 +1,21 @@
 import { renameSync, writeFileSync } from "node:fs";
-import type { ChannelConfig } from "../../types.js";
-import { mentionsInText, type EgressEvent } from "../../egress/egress-impl.js";
-import { SentMessageTracker, splitForDiscord } from "../discord-webhook.js";
+import type { Attachment, ChannelConfig } from "../../types.js";
+import type { EgressEvent } from "../../egress/egress-impl.js";
+import { SentMessageTracker } from "../discord-webhook.js";
 import type { ActivityEntry } from "../../activity/activity-log.js";
 import { ActivityRelay } from "./activity-relay.js";
-import { DEFAULT_MAX_UPLOAD, uploadFailed, uploadsFor } from "./uploads.js";
+import { DEFAULT_MAX_UPLOAD, importImages, uploadsFor } from "./uploads.js";
 import { loadState, type BridgeState } from "./state.js";
-import { atName, pairChannel, senderName } from "./names.js";
-import { TypingIndicator } from "./typing.js";
 import {
-  UnknownWebhookError,
-  type DiscordApi,
-  type IncomingMessage,
-  type WebhookMessage,
-} from "./types.js";
+  atName,
+  mentionedAgents,
+  officeText,
+  pairChannel,
+  senderName,
+} from "./names.js";
+import { TypingIndicator } from "./typing.js";
+import { WebhookPoster } from "./webhooks.js";
+import type { DiscordApi, DiscordImage, IncomingMessage } from "./types.js";
 
 /**
  * Two-way bridge between an office and a Discord server. The bot keeps one
@@ -42,15 +44,19 @@ export interface BridgeHost {
     agent: string,
     text: string,
     origin: string,
+    attachments?: Attachment[],
   ): { ok: boolean; error?: string };
   postUserChannel(
     channel: string,
     text: string,
     mentions: string[],
     origin: string,
+    attachments?: Attachment[],
   ): { ok: boolean; error?: string };
   /** File path of an uploaded image attachment. */
   attachmentPath(id: string): string;
+  /** Save an image posted in Discord as an upload, so agents can see it. */
+  importImage?(img: DiscordImage): Promise<Attachment>;
 }
 
 export interface BridgeOptions {
@@ -76,6 +82,9 @@ type CategoryKind = "office" | "dms" | "pairs" | "activity";
 export class DiscordBridge {
   private state: BridgeState;
   private chain: Promise<unknown> = Promise.resolve();
+  /** Incoming messages waiting on image downloads. */
+  private inbound: Promise<void> | undefined;
+  private webhooks: WebhookPoster;
   private timer: ReturnType<typeof setInterval> | undefined;
   private tracker = new SentMessageTracker(
     new Set(["message_agent"]),
@@ -96,6 +105,11 @@ export class DiscordBridge {
     private readonly opts: BridgeOptions,
   ) {
     this.state = loadState(opts.statePath, opts.guildId);
+    this.webhooks = new WebhookPoster(
+      api,
+      () => this.state.webhooks,
+      () => this.save(),
+    );
     if (opts.typing !== false) {
       this.typing = new TypingIndicator(async (key) => {
         // Only in channels that already exist: never create one just to type.
@@ -158,6 +172,7 @@ export class DiscordBridge {
 
   /** Wait until queued Discord work is done (for tests and shutdown). */
   async idle(): Promise<void> {
+    await this.inbound;
     await this.relay?.idle();
     await this.chain.catch(() => {});
   }
@@ -231,16 +246,33 @@ export class DiscordBridge {
 
   handleIncoming(m: IncomingMessage): void {
     if (m.fromBot) return;
+    const images = this.host.importImage ? (m.images ?? []) : [];
+    if (!images.length && !this.inbound) return this.deliver(m, []);
+    // Download the images first, keeping messages in order.
+    const save = (img: DiscordImage) => this.host.importImage!(img);
+    const p = (this.inbound ?? Promise.resolve())
+      .then(async () => this.deliver(m, await importImages(images, save)))
+      .catch((err) =>
+        console.error("[discord] Failed to handle a message:", err),
+      );
+    this.inbound = p;
+    void p.then(() => {
+      if (this.inbound === p) this.inbound = undefined;
+    });
+  }
+
+  private deliver(m: IncomingMessage, attachments: Attachment[]): void {
     const key = Object.entries(this.state.channels).find(
       ([, id]) => id === m.channelId,
     )?.[0];
     if (!key) return;
-    const text = this.officeText(m);
+    const byRole = this.agentByRole();
+    const text = officeText(m, byRole);
     if (!text) return;
 
     if (key.startsWith("dm:")) {
       const agent = key.slice(3);
-      const r = this.host.sendUserDm(agent, text, DISCORD_ORIGIN);
+      const r = this.host.sendUserDm(agent, text, DISCORD_ORIGIN, attachments);
       if (!r.ok)
         this.notice(key, `Couldn't deliver that to ${agent}: ${r.error}`);
       return;
@@ -249,7 +281,7 @@ export class DiscordBridge {
       const channel = key.slice(3);
       const cfg = this.host.channels().get(channel);
       if (!cfg) return;
-      const named = this.mentionedAgents(m, text);
+      const named = mentionedAgents(m, text, byRole, this.host.agentNames());
       const members = named.filter((a) => cfg.members.includes(a));
       const outsiders = named.filter((a) => !cfg.members.includes(a));
       const r = this.host.postUserChannel(
@@ -257,6 +289,7 @@ export class DiscordBridge {
         text,
         members,
         DISCORD_ORIGIN,
+        attachments,
       );
       if (!r.ok) {
         this.notice(key, `Couldn't post that to #${channel}: ${r.error}`);
@@ -273,30 +306,6 @@ export class DiscordBridge {
 
   private agentByRole(): Map<string, string> {
     return new Map(Object.entries(this.state.roles).map(([a, id]) => [id, a]));
-  }
-
-  /** Agents @mentioned by role, or by typing @name (any case). */
-  private mentionedAgents(m: IncomingMessage, text: string): string[] {
-    const byRole = this.agentByRole();
-    const names = new Set<string>();
-    for (const id of m.roleIds) {
-      const a = byRole.get(id);
-      if (a) names.add(a);
-    }
-    for (const a of mentionsInText(text, this.host.agentNames())) names.add(a);
-    return [...names];
-  }
-
-  /** Message text with role mentions as @name and attachments as links. */
-  private officeText(m: IncomingMessage): string {
-    const byRole = this.agentByRole();
-    let text = m.content.replace(/<@&(\d+)>/g, (raw, id: string) => {
-      const a = byRole.get(id);
-      return a ? `@${a}` : raw;
-    });
-    if (m.attachmentUrls.length)
-      text += `\n${m.attachmentUrls.map((u) => `[attachment: ${u}]`).join("\n")}`;
-    return text.trim();
   }
 
   // --- Discord structure ---
@@ -431,42 +440,7 @@ export class DiscordBridge {
     const channelId = await this.channel(key);
     const avatarUrl = this.opts.avatarUrl?.(username);
     const base = { username, pingRoles, ...(avatarUrl ? { avatarUrl } : {}) };
-    const chunks = splitForDiscord(content);
-    for (const [i, chunk] of chunks.entries()) {
-      if (i < chunks.length - 1 || !files.length) {
-        await this.send(channelId, { ...base, content: chunk });
-        continue;
-      }
-      try {
-        await this.send(channelId, { ...base, content: chunk, files });
-      } catch (err) {
-        // Don't lose the message over its files: post it without them.
-        for (const part of splitForDiscord(uploadFailed(chunk, files, err)))
-          await this.send(channelId, { ...base, content: part });
-      }
-    }
-  }
-
-  /** Send through the channel's webhook, remaking it if someone deleted it. */
-  private async send(channelId: string, msg: WebhookMessage): Promise<void> {
-    for (let attempt = 0; ; attempt++) {
-      let hook = this.state.webhooks[channelId];
-      if (!hook) {
-        hook = await this.api.createWebhook(channelId);
-        this.state.webhooks[channelId] = hook;
-        this.save();
-      }
-      try {
-        await this.api.sendWebhook(hook, msg);
-        return;
-      } catch (err) {
-        if (err instanceof UnknownWebhookError && attempt === 0) {
-          delete this.state.webhooks[channelId];
-          continue;
-        }
-        throw err;
-      }
-    }
+    await this.webhooks.post(channelId, base, content, files);
   }
 }
 

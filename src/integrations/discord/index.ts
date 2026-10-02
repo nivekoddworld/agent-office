@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { attachmentPath } from "../../egress/files.js";
+import { attachmentPath, saveUpload } from "../../egress/files.js";
 import { avatarFromIdentity } from "../../agent/tools/set-avatar.js";
 import type { Workspace } from "../../workspace.js";
 import { onEgress } from "../../egress/egress-impl.js";
@@ -87,11 +87,33 @@ export async function startDiscordBridge(
         officeName: () => workspace.office.name,
         channels: () => workspace.office.channels,
         agentNames: () => workspace.list().map((a) => a.name),
-        sendUserDm: (agent, text, origin) =>
-          workspace.sendUserDm(agent, text, { origin }),
-        postUserChannel: (channel, text, mentions, origin) =>
-          workspace.postUserChannel(channel, text, mentions, origin),
+        sendUserDm: (agent, text, origin, attachments) =>
+          workspace.sendUserDm(agent, text, {
+            origin,
+            ...(attachments?.length ? { attachments } : {}),
+          }),
+        postUserChannel: (channel, text, mentions, origin, attachments) =>
+          workspace.postUserChannel(
+            channel,
+            text,
+            mentions,
+            origin,
+            attachments,
+          ),
         attachmentPath: (id) => attachmentPath(workspace.office.dir, id),
+        importImage: async (img) => {
+          const res = await fetch(img.url, {
+            signal: AbortSignal.timeout(30_000),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = Buffer.from(await res.arrayBuffer());
+          return saveUpload(
+            workspace.office.dir,
+            img.name,
+            img.contentType,
+            data,
+          );
+        },
       },
       {
         guildId,

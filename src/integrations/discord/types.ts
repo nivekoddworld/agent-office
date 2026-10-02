@@ -61,8 +61,17 @@ export interface IncomingMessage {
   roleIds: string[];
   /** Links to attached files. */
   attachmentUrls: string[];
+  /** The attachments that are images, for agents that can see them. */
+  images?: DiscordImage[];
   /** Posted by a bot or webhook (including our own), so ignored. */
   fromBot: boolean;
+}
+
+export interface DiscordImage {
+  url: string;
+  name: string;
+  contentType: string;
+  size: number;
 }
 
 export class UnknownWebhookError extends Error {}

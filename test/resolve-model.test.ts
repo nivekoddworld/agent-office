@@ -1,4 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 import {
@@ -12,6 +14,7 @@ import {
   resolveModel,
   splitModelSpec,
   toSandboxModel,
+  withDetectedVision,
   type OfficeModelSettings,
 } from "../src/models/resolve-model.js";
 import { validateOfficeModels } from "../src/config/yaml-validation.js";
@@ -289,5 +292,89 @@ describe("validateOfficeModels", () => {
     expect(
       resolveModel(yaml.office.default_model!, undefined, NO_ENV).provider,
     ).toBe("llamacpp");
+  });
+});
+
+describe("vision", () => {
+  let server: http.Server | undefined;
+  afterEach(() => server?.close());
+
+  /** A llama.cpp-like server whose /props reports `vision`. */
+  async function llama(
+    vision: boolean | undefined,
+    route = "/props",
+  ): Promise<{
+    url: string;
+    paths: string[];
+  }> {
+    const paths: string[] = [];
+    server = http.createServer((req, res) => {
+      paths.push(req.url ?? "");
+      if (!req.url?.startsWith(route)) return res.writeHead(404).end();
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify(
+          vision === undefined ? {} : { modalities: { vision, audio: false } },
+        ),
+      );
+    });
+    await new Promise<void>((r) => server!.listen(0, "127.0.0.1", r));
+    const { port } = server.address() as AddressInfo;
+    return { url: `http://127.0.0.1:${port}`, paths };
+  }
+
+  const local = (base_url: string, vision?: boolean) =>
+    resolveModel("llamacpp:qwen-vl", {
+      providers: {
+        llamacpp: { base_url, ...(vision !== undefined ? { vision } : {}) },
+      },
+    });
+
+  it("is off for local models unless set", () => {
+    expect(local("http://h:8080").input).toEqual(["text"]);
+    expect(local("http://h:8080", true).input).toEqual(["text", "image"]);
+  });
+
+  it("asks llama.cpp's /props whether the model takes images", async () => {
+    const s = await llama(true);
+    const model = await withDetectedVision(local(s.url));
+    expect(model.input).toEqual(["text", "image"]);
+    expect(s.paths).toEqual(["/props?model=qwen-vl"]);
+  });
+
+  it("asks llama-swap's per-model route too", async () => {
+    const s = await llama(true, "/upstream/qwen-vl/props");
+    const model = await withDetectedVision(local(s.url));
+    expect(model.input).toEqual(["text", "image"]);
+    expect(s.paths).toEqual([
+      "/props?model=qwen-vl",
+      "/upstream/qwen-vl/props",
+    ]);
+  });
+
+  it("stays text-only when the server has no vision or doesn't say", async () => {
+    for (const v of [false, undefined]) {
+      const s = await llama(v);
+      expect((await withDetectedVision(local(s.url))).input).toEqual(["text"]);
+      server!.close();
+    }
+    const down = await withDetectedVision(local("http://127.0.0.1:1"));
+    expect(down.input).toEqual(["text"]);
+  });
+
+  it("doesn't ask when office.yaml sets vision", async () => {
+    const s = await llama(true);
+    const model = await withDetectedVision(local(s.url, false));
+    expect(model.input).toEqual(["text"]);
+    expect(s.paths).toEqual([]);
+  });
+
+  it("must be true or false in office.yaml", () => {
+    expect(
+      validateOfficeModels({
+        name: "T",
+        providers: { llamacpp: { vision: "yes" as never } },
+      }),
+    ).toEqual(["office.providers.llamacpp.vision must be true or false"]);
   });
 });

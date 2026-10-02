@@ -492,6 +492,9 @@ export function validateOfficeModels(office: OfficeYaml["office"]): string[] {
         `${at}.api_key_ref must be an env var name (e.g. LLAMA_API_KEY)`,
       );
     }
+    if (cfg.vision !== undefined && typeof cfg.vision !== "boolean") {
+      errors.push(`${at}.vision must be true or false`);
+    }
     for (const field of ["context_window", "max_tokens"] as const) {
       const v = cfg[field];
       if (v !== undefined && !(Number.isInteger(v) && v > 0)) {

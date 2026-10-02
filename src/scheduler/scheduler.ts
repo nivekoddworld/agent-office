@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isImage } from "../egress/files.js";
 import type { ImageContent } from "@earendil-works/pi-ai";
 import type { AgentHandle } from "../agent/handle.js";
 import type { MessageBus } from "../transport/message-bus.js";
@@ -218,6 +219,7 @@ function resolveAttachments(
   if (!msg.attachments?.length || !baseDir) return [];
   const dir = join(baseDir, "uploads");
   return msg.attachments
+    .filter((att) => isImage(att.mimeType))
     .map((att) => {
       try {
         const data = readFileSync(join(dir, att.id)).toString("base64");
