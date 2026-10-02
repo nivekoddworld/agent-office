@@ -1,3 +1,4 @@
+import { chosenAvatar } from "../agent/avatar.js";
 import {
   readdir,
   stat,
@@ -166,6 +167,12 @@ export function getBootstrapState(
         agentStatus: handle ? handle.info().status : ("not_running" as const),
       };
     }),
+    avatars: Object.fromEntries(
+      workspace
+        .list()
+        .map((a) => [a.name, chosenAvatar(workspace.getAgent(a.name)?.cwd)])
+        .filter(([, url]) => url),
+    ) as Record<string, string>,
   };
 }
 

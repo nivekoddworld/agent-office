@@ -106,6 +106,8 @@ export interface BootstrapState {
   channels?: Record<string, ChannelConfig>;
   defaultConversationChannel?: string;
   heartbeats: HeartbeatEntry[];
+  /** Agent → the picture it chose (set_avatar), for those that did. */
+  avatars?: Record<string, string>;
 }
 
 export interface BlockMeta {

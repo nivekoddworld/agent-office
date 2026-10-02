@@ -1,7 +1,6 @@
-import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { attachmentPath, saveUpload } from "../../egress/files.js";
-import { avatarFromIdentity } from "../../agent/tools/set-avatar.js";
+import { chosenAvatar } from "../../agent/avatar.js";
 import type { Workspace } from "../../workspace.js";
 import { onEgress } from "../../egress/egress-impl.js";
 import { DiscordBridge } from "./bridge.js";
@@ -33,28 +32,7 @@ export function avatarLookup(
   template: string | undefined,
 ): (name: string) => string | undefined {
   const fallback = avatarFor(template);
-  const cache = new Map<string, { mtime: number; url?: string }>();
-  return (name) => {
-    const dir = workspaceDirOf(name);
-    if (dir) {
-      const file = join(dir, "instructions", "IDENTITY.md");
-      try {
-        const mtime = statSync(file).mtimeMs;
-        let cached = cache.get(name);
-        if (!cached || cached.mtime !== mtime) {
-          cached = {
-            mtime,
-            url: avatarFromIdentity(readFileSync(file, "utf-8")),
-          };
-          cache.set(name, cached);
-        }
-        if (cached.url) return cached.url;
-      } catch {
-        // no IDENTITY.md
-      }
-    }
-    return fallback?.(name);
-  };
+  return (name) => chosenAvatar(workspaceDirOf(name)) ?? fallback?.(name);
 }
 
 /**
