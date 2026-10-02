@@ -430,3 +430,72 @@ describe("overflow recovery", () => {
     vi.restoreAllMocks();
   });
 });
+
+describe("calibrating from real prompt sizes", () => {
+  /** A reply carrying the real token count of the request it answered. */
+  const reply = (input: number, cacheRead = 0) =>
+    ({
+      role: "assistant",
+      content: [{ type: "text", text: "ok" }],
+      stopReason: input ? "stop" : "error",
+      usage: { input, output: 5, cacheRead, cacheWrite: 0 },
+      timestamp: 1,
+    }) as any;
+
+  it("estimates higher when the server counts more, before anything overflows", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    // budget = 10000 - 1000 - 0 - 1000 = 8000 estimated tokens
+    const pruner = createContextPruner(fakeModel(10_000, 1000), 0);
+    const msgs: AgentMessage[] = Array.from({ length: 10 }, (_, i) =>
+      userMsg(`${i}`.repeat(3000)),
+    ); // ~760 each, ~7600 in all: fits
+    expect(await pruner(msgs)).toHaveLength(10);
+    // The server says that request was 30% bigger (part of it cached).
+    msgs.push(reply(7000, 2900));
+    msgs.push(userMsg("next"));
+    const kept = await pruner(msgs);
+    expect(kept.length).toBeLessThan(12);
+    // What's kept fits the budget at the real rate.
+    const est = kept.reduce((n, m) => n + estimateMessageTokens(m), 0);
+    expect(est * 1.3).toBeLessThan(8000);
+    vi.restoreAllMocks();
+  });
+
+  it("lets more in when the server counts less, and ignores errors", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const pruner = createContextPruner(fakeModel(10_000, 1000), 0);
+    const msgs: AgentMessage[] = Array.from({ length: 10 }, (_, i) =>
+      userMsg(`${i}`.repeat(3000)),
+    );
+    await pruner(msgs);
+    // An error reply has no usage: nothing learned.
+    msgs.push(reply(0), userMsg("x".repeat(3000)));
+    expect(await pruner(msgs)).toHaveLength(11);
+    // Real size ~11% under the estimate: more than 8000 estimated fits.
+    msgs.push(
+      reply(6700),
+      userMsg("y".repeat(3000)),
+      userMsg("z".repeat(3000)),
+    );
+    const kept = await pruner(msgs);
+    const est = kept.reduce((n, m) => n + estimateMessageTokens(m), 0);
+    expect(est).toBeGreaterThan(8000);
+    expect(est * 0.89).toBeLessThan(8000);
+    vi.restoreAllMocks();
+  });
+
+  it("learns from each reply once", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const pruner = createContextPruner(fakeModel(10_000, 1000), 0);
+    const msgs: AgentMessage[] = Array.from({ length: 6 }, (_, i) =>
+      userMsg(`${i}`.repeat(3000)),
+    );
+    await pruner(msgs);
+    msgs.push(reply(5928)); // 1.3× the ~4560 estimated
+    const first = await pruner(msgs);
+    // Asked again without a new reply: no further change.
+    expect(await pruner(msgs)).toEqual(first);
+    expect(first).toHaveLength(7);
+    vi.restoreAllMocks();
+  });
+});

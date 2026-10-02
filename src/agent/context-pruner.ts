@@ -223,7 +223,31 @@ export function createContextPruner(
   let lastEstimate = 0;
   let warned = false;
 
+  /** The reply whose real prompt size we last calibrated against. */
+  let calibratedFrom: AgentMessage | undefined;
+
+  /**
+   * Every reply says how many tokens its request really was. Compare that
+   * with what we estimated for it, so estimates follow this agent's actual
+   * content (code and JSON take more tokens per character than prose).
+   */
+  const calibrate = (messages: AgentMessage[]) => {
+    let latest: any;
+    for (let i = messages.length - 1; i >= 0 && !latest; i--) {
+      const msg = messages[i] as any;
+      if (msg.role === "assistant") latest = msg;
+    }
+    if (!latest || latest === calibratedFrom || lastEstimate <= 0) return;
+    calibratedFrom = latest;
+    const u = latest.usage;
+    const real = (u?.input ?? 0) + (u?.cacheRead ?? 0) + (u?.cacheWrite ?? 0);
+    // Errors and aborted replies carry no usage.
+    if (real <= 0) return;
+    scale = Math.min(4, Math.max(0.7, scale * (real / lastEstimate)));
+  };
+
   const pruner = async (messages: AgentMessage[]): Promise<AgentMessage[]> => {
+    calibrate(messages);
     const m = currentModel();
     const window = Math.min(m.contextWindow, serverLimit ?? Infinity);
     const safetyMargin = Math.floor(window * cfg.safetyMarginRatio);
