@@ -8,6 +8,7 @@ import {
   type BridgeHost,
 } from "../src/integrations/discord/bridge.js";
 import {
+  UnknownMessageError,
   UnknownWebhookError,
   type DiscordApi,
   type IncomingMessage,
@@ -80,6 +81,30 @@ class FakeDiscord implements DiscordApi {
     this.listener = fn;
   }
   async close() {}
+  botMessages = new Map<string, { channelId: string; content: string }>();
+  edits = 0;
+  presence: Array<{ text: string; busy: boolean }> = [];
+  async sendMessage(channelId: string, content: string) {
+    const id = this.id();
+    this.botMessages.set(id, { channelId, content });
+    return id;
+  }
+  async editMessage(_channelId: string, messageId: string, content: string) {
+    const m = this.botMessages.get(messageId);
+    if (!m) throw new UnknownMessageError("gone");
+    m.content = content;
+    this.edits++;
+  }
+  setPresence(text: string, busy: boolean) {
+    this.presence.push({ text, busy });
+  }
+  /** Bot-posted messages in a channel, oldest first. */
+  botPosts(name: string) {
+    const id = this.channelId(name);
+    return [...this.botMessages.values()]
+      .filter((m) => m.channelId === id)
+      .map((m) => m.content);
+  }
 
   channelId(name: string) {
     return [...this.channels].find(([, c]) => c.name === name)?.[0];
@@ -151,6 +176,7 @@ describe("DiscordBridge", () => {
       guildId: "g1",
       statePath: join(dir, "discord.json"),
       avatarUrl: (n) => `https://avatars/${n}.png`,
+      activityIntervals: { editIntervalMs: 0, presenceIntervalMs: 0 },
     });
 
   beforeEach(async () => {
@@ -213,7 +239,13 @@ describe("DiscordBridge", () => {
       origin: "discord",
     });
     await bridge.idle();
-    expect(discord.posts("dm-coder")).toEqual(["coder: Done!", "user: thanks"]);
+    const ping = `<@&${discord.roleId("office-user")}>`;
+    expect(discord.posts("dm-coder")).toEqual([
+      `coder: ${ping} Done!`,
+      "user: thanks",
+    ]);
+    // Only the human role is pinged.
+    expect(discord.sent[0]!.pingRoles).toEqual([discord.roleId("office-user")]);
   });
 
   it("creates a read-only pair channel when two agents first message each other", async () => {
@@ -333,7 +365,7 @@ describe("DiscordBridge", () => {
     bridge.handleEgress({ kind: "dm", agent: "lead", text: long });
     await bridge.idle();
     const posts = discord.posts("dm-lead");
-    expect(posts[0]).toBe("lead: first");
+    expect(posts[0]).toBe(`lead: <@&${discord.roleId("office-user")}> first`);
     expect(posts.length).toBeGreaterThan(2);
     for (const p of discord.sent)
       expect(p.content.length).toBeLessThanOrEqual(2000);
@@ -350,6 +382,180 @@ describe("DiscordBridge", () => {
       expect.stringContaining("Discord is down"),
     );
     err.mockRestore();
+  });
+});
+
+describe("Discord activity", () => {
+  let dir: string;
+  let discord: FakeDiscord;
+  let bridge: DiscordBridge;
+  const T = 1_700_000_000_000;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), "discord-activity-"));
+    discord = new FakeDiscord();
+    bridge = new DiscordBridge(discord, makeHost(), {
+      guildId: "g1",
+      statePath: join(dir, "discord.json"),
+      activityIntervals: { editIntervalMs: 0, presenceIntervalMs: 0 },
+    });
+    await bridge.start();
+  });
+  afterEach(async () => {
+    await bridge.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const startRun = () => {
+    bridge.handleActivity("coder", {
+      ts: T,
+      type: "agent_start",
+      trigger: { from: "lead", text: "please build the game", channel: "work" },
+    });
+    bridge.handleActivity("coder", {
+      ts: T + 1000,
+      type: "tool_execution_start",
+      toolCallId: "c1",
+      toolName: "bash",
+      args: { command: "npm run build" },
+    });
+  };
+  const finishRun = () => {
+    bridge.handleActivity("coder", {
+      ts: T + 3100,
+      type: "tool_execution_end",
+      toolCallId: "c1",
+      toolName: "bash",
+    });
+    bridge.handleActivity("coder", {
+      ts: T + 3200,
+      type: "tool_execution_start",
+      toolCallId: "c2",
+      toolName: "read",
+      args: { path: "notes.md" },
+    });
+    bridge.handleActivity("coder", {
+      ts: T + 3300,
+      type: "tool_execution_end",
+      toolCallId: "c2",
+      toolName: "read",
+      isError: true,
+      result: "ENOENT: no such file",
+    });
+    bridge.handleActivity("coder", {
+      ts: T + 4000,
+      type: "turn_end",
+      text: "Build done; notes are missing.",
+      tokens: 1500,
+    });
+    bridge.handleActivity("coder", { ts: T + 5000, type: "agent_end" });
+  };
+
+  it("creates the Activity category with #status and a channel per agent", () => {
+    expect(discord.categoryOf("status")).toEqual({
+      name: "Activity",
+      readOnly: true,
+    });
+    for (const a of ["lead", "coder", "artist"])
+      expect(discord.categoryOf(a)?.name).toBe("Activity");
+    expect([...discord.roles.values()]).toContain("office-user");
+  });
+
+  it("keeps one message per wake-up, edited as it runs", async () => {
+    startRun();
+    await bridge.idle();
+    let posts = discord.botPosts("coder");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toContain("**coder** · #work message from lead");
+    expect(posts[0]).toContain("> please build the game");
+    expect(posts[0]).toContain("**bash** `npm run build` · running…");
+    expect(posts[0]).toContain("working…");
+
+    finishRun();
+    await bridge.idle();
+    posts = discord.botPosts("coder");
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toContain("**bash** `npm run build` · done in 2s");
+    expect(posts[0]).toContain(
+      "**read** `notes.md` · **failed**: ENOENT: no such file",
+    );
+    expect(posts[0]).toContain("*Build done; notes are missing.*");
+    expect(posts[0]).toContain(
+      "**finished** · 2 tools · 1 failed · 1,500 tokens · 5s",
+    );
+    expect(discord.edits).toBeGreaterThan(0);
+  });
+
+  it("shows who is doing what in #status and the bot's status line", async () => {
+    startRun();
+    await bridge.idle();
+    const board = () => discord.botPosts("status");
+    expect(board()).toHaveLength(1);
+    expect(board()[0]).toContain(
+      "**coder** · running **bash** `npm run build`",
+    );
+    expect(board()[0]).toContain("for #work message from lead");
+    expect(board()[0]).toContain("**lead** · idle");
+    expect(discord.presence.at(-1)).toEqual({
+      text: "coder: bash",
+      busy: true,
+    });
+
+    finishRun();
+    await bridge.idle();
+    expect(board()).toHaveLength(1);
+    expect(board()[0]).toContain("**coder** · idle · last active");
+    expect(discord.presence.at(-1)).toEqual({
+      text: "All agents idle",
+      busy: false,
+    });
+  });
+
+  it("continues a long wake-up in a new message", async () => {
+    bridge.handleActivity("coder", { ts: T, type: "agent_start" });
+    for (let i = 0; i < 40; i++) {
+      bridge.handleActivity("coder", {
+        ts: T + i * 10,
+        type: "tool_execution_start",
+        toolCallId: `t${i}`,
+        toolName: "bash",
+        args: { command: `step ${i} ${"z".repeat(40)}` },
+      });
+    }
+    await bridge.idle();
+    const posts = discord.botPosts("coder");
+    expect(posts.length).toBeGreaterThan(1);
+    for (const p of posts) expect(p.length).toBeLessThanOrEqual(2000);
+  });
+
+  it("pings the human role when an agent writes @user in a channel", async () => {
+    bridge.handleEgress({
+      kind: "channel",
+      from: "lead",
+      channel: "general",
+      text: "@user can you approve the logo?",
+    });
+    await bridge.idle();
+    const role = discord.roleId("office-user");
+    expect(discord.posts("general")).toEqual([
+      `lead: <@&${role}> can you approve the logo?`,
+    ]);
+    expect(discord.sent[0]!.pingRoles).toEqual([role]);
+  });
+
+  it("can be turned off", async () => {
+    const other = new FakeDiscord();
+    const quiet = new DiscordBridge(other, makeHost(), {
+      guildId: "g1",
+      statePath: join(dir, "quiet.json"),
+      activity: false,
+    });
+    await quiet.start();
+    quiet.handleActivity("coder", { ts: T, type: "agent_start" });
+    await quiet.idle();
+    expect(other.channelId("status")).toBeUndefined();
+    expect(other.botMessages.size).toBe(0);
+    await quiet.stop();
   });
 });
 

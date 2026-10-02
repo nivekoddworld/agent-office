@@ -68,7 +68,12 @@ Talk to the office from your own Discord server. A bot sets up the channels, and
 Local Team    #general  #work …            ← office channels; @mention agents by their role
 DMs           #dm-coder  #dm-lead …         ← you ↔ one agent
 Agent DMs     #coder-lead  #artist-coder …  ← agents' DMs with each other (read-only; made on first message)
+Activity      #status  #coder  #lead …      ← live: who's working on what, and a log per agent
 ```
+
+`#status` is one message, kept up to date, saying what each agent is doing right now; the bot's own status line shows the same in short. Each agent's Activity channel gets one message per wake-up (what woke it, every tool call, what the model said, how it ended), updated as it runs. Set `DISCORD_ACTIVITY=off` to skip these.
+
+The bot also creates an **office-user** role: give it to yourself (and anyone else running the office) and you'll be pinged when an agent DMs you or writes `@user` in a channel.
 
 1. At [discord.com/developers/applications](https://discord.com/developers/applications): **New Application** → **Bot** → **Reset Token** and copy it. On the same page turn on **Message Content Intent**.
 2. **OAuth2 → URL Generator**: scope **bot**, permissions **View Channels, Send Messages, Read Message History, Manage Channels, Manage Roles, Manage Webhooks**. Open the link and add the bot to your server.

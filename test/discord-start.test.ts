@@ -15,6 +15,9 @@ const fakeApi: DiscordApi = {
   sendWebhook: async (_hook, msg) => {
     sent.push({ username: msg.username, content: msg.content });
   },
+  sendMessage: async () => "m1",
+  editMessage: async () => {},
+  setPresence: () => {},
   onMessage: () => {},
   close: async () => {},
 };
@@ -39,6 +42,7 @@ function fakeWorkspace(dir: string) {
     postUserChannel: vi.fn(() => ({ ok: true })),
     onUserDm: vi.fn(() => () => {}),
     onAgentEvent: vi.fn(() => () => {}),
+    onActivity: vi.fn(() => () => {}),
     discord: { enabled: true },
     discordBridgeStatus: { state: "off" },
   } as any;
@@ -93,7 +97,10 @@ describe("startDiscordBridge", () => {
     };
     messageUser({ agentName: "coder", hopCount: 0 }, deps, "hello from coder");
     await new Promise((r) => setTimeout(r, 20));
-    expect(sent).toEqual([{ username: "coder", content: "hello from coder" }]);
+    expect(sent).toEqual([
+      { username: "coder", content: "<@&role-office-user> hello from coder" },
+    ]);
+    expect(ws.onActivity).toHaveBeenCalled();
 
     await running!.stop();
     messageUser({ agentName: "coder", hopCount: 0 }, deps, "after stop");
