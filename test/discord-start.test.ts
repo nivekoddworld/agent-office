@@ -18,6 +18,7 @@ const fakeApi: DiscordApi = {
   sendMessage: async () => "m1",
   editMessage: async () => {},
   setPresence: () => {},
+  sendTyping: async () => {},
   onMessage: () => {},
   close: async () => {},
 };
@@ -98,9 +99,7 @@ describe("startDiscordBridge", () => {
     };
     messageUser({ agentName: "coder", hopCount: 0 }, deps, "hello from coder");
     await new Promise((r) => setTimeout(r, 20));
-    expect(sent).toEqual([
-      { username: "coder", content: "<@&role-office-user> hello from coder" },
-    ]);
+    expect(sent).toEqual([{ username: "coder", content: "hello from coder" }]);
     expect(ws.onActivity).toHaveBeenCalled();
 
     await running!.stop();

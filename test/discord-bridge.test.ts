@@ -98,6 +98,14 @@ class FakeDiscord implements DiscordApi {
   setPresence(text: string, busy: boolean) {
     this.presence.push({ text, busy });
   }
+  typed: string[] = [];
+  async sendTyping(channelId: string) {
+    this.typed.push(channelId);
+  }
+  typedIn(name: string) {
+    const id = this.channelId(name);
+    return this.typed.filter((t) => t === id).length;
+  }
   /** Bot-posted messages in a channel, oldest first. */
   botPosts(name: string) {
     const id = this.channelId(name);
@@ -240,13 +248,9 @@ describe("DiscordBridge", () => {
       origin: "discord",
     });
     await bridge.idle();
-    const ping = `<@&${discord.roleId("office-user")}>`;
-    expect(discord.posts("dm-coder")).toEqual([
-      `coder: ${ping} Done!`,
-      "user: thanks",
-    ]);
-    // Only the human role is pinged.
-    expect(discord.sent[0]!.pingRoles).toEqual([discord.roleId("office-user")]);
+    expect(discord.posts("dm-coder")).toEqual(["coder: Done!", "user: thanks"]);
+    // A 1:1 DM pings nobody.
+    expect(discord.sent[0]!.pingRoles).toBeUndefined();
   });
 
   it("creates a read-only pair channel when two agents first message each other", async () => {
@@ -440,7 +444,7 @@ describe("DiscordBridge", () => {
     bridge.handleEgress({ kind: "dm", agent: "lead", text: long });
     await bridge.idle();
     const posts = discord.posts("dm-lead");
-    expect(posts[0]).toBe(`lead: <@&${discord.roleId("office-user")}> first`);
+    expect(posts[0]).toBe("lead: first");
     expect(posts.length).toBeGreaterThan(2);
     for (const p of discord.sent)
       expect(p.content.length).toBeLessThanOrEqual(2000);
@@ -630,6 +634,115 @@ describe("Discord activity", () => {
     await quiet.idle();
     expect(other.channelId("status")).toBeUndefined();
     expect(other.botMessages.size).toBe(0);
+    await quiet.stop();
+  });
+});
+
+describe("Discord typing indicator", () => {
+  let dir: string;
+  let discord: FakeDiscord;
+  let bridge: DiscordBridge;
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), "discord-typing-"));
+    discord = new FakeDiscord();
+    bridge = new DiscordBridge(discord, makeHost(), {
+      guildId: "g1",
+      statePath: join(dir, "discord.json"),
+      activity: false,
+      typingRefreshMs: 20,
+    });
+    await bridge.start();
+  });
+  afterEach(async () => {
+    await bridge.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("types in the DM channel while the agent works on your DM, then stops", async () => {
+    bridge.handleActivity("coder", {
+      ts: 1,
+      type: "agent_start",
+      sessionKey: "dm:coder",
+      trigger: { from: "__user__", text: "hi" },
+    });
+    await wait(70);
+    const during = discord.typedIn("dm-coder");
+    expect(during).toBeGreaterThanOrEqual(3);
+    bridge.handleActivity("coder", {
+      ts: 2,
+      type: "agent_end",
+      sessionKey: "dm:coder",
+    });
+    await wait(60);
+    expect(discord.typedIn("dm-coder")).toBe(during);
+  });
+
+  it("types in the channel or agent pair it was woken from, not for background work", async () => {
+    bridge.handleActivity("coder", {
+      ts: 1,
+      type: "agent_start",
+      sessionKey: "ch:work",
+      trigger: { from: "lead", text: "@coder build", channel: "work" },
+    });
+    bridge.handleActivity("artist", {
+      ts: 1,
+      type: "agent_start",
+      sessionKey: "internal:artist",
+      trigger: { from: "__task__", text: "[New Task] #T-1" },
+    });
+    bridge.handleActivity("lead", {
+      ts: 1,
+      type: "agent_start",
+      sessionKey: "heartbeat:lead",
+      trigger: { from: "__heartbeat__", text: "check" },
+    });
+    await wait(10);
+    expect(discord.typedIn("work")).toBeGreaterThanOrEqual(1);
+    expect(discord.typed).toHaveLength(discord.typedIn("work"));
+  });
+
+  it("types in an agent pair's channel once it exists", async () => {
+    bridge.handleAgentEvent("lead", {
+      type: "tool_execution_start",
+      toolCallId: "1",
+      toolName: "message_agent",
+      args: { to: "coder", message: "build it" },
+    });
+    bridge.handleAgentEvent("lead", {
+      type: "tool_execution_end",
+      toolCallId: "1",
+      toolName: "message_agent",
+      isError: false,
+    });
+    await bridge.idle();
+    bridge.handleActivity("coder", {
+      ts: 1,
+      type: "agent_start",
+      sessionKey: "internal:coder",
+      trigger: { from: "lead", text: "build it" },
+    });
+    await wait(10);
+    expect(discord.typedIn("coder-lead")).toBeGreaterThanOrEqual(1);
+  });
+
+  it("can be turned off", async () => {
+    const other = new FakeDiscord();
+    const quiet = new DiscordBridge(other, makeHost(), {
+      guildId: "g1",
+      statePath: join(dir, "quiet.json"),
+      activity: false,
+      typing: false,
+    });
+    await quiet.start();
+    quiet.handleActivity("coder", {
+      ts: 1,
+      type: "agent_start",
+      sessionKey: "dm:coder",
+    });
+    await wait(10);
+    expect(other.typed).toEqual([]);
     await quiet.stop();
   });
 });

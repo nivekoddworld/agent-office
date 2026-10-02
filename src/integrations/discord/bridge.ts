@@ -6,6 +6,8 @@ import type { ActivityEntry } from "../../activity/activity-log.js";
 import { ActivityRelay } from "./activity-relay.js";
 import { DEFAULT_MAX_UPLOAD, uploadsFor } from "./uploads.js";
 import { loadState, type BridgeState } from "./state.js";
+import { atName, pairChannel, senderName } from "./names.js";
+import { TypingIndicator } from "./typing.js";
 import {
   UnknownWebhookError,
   type DiscordApi,
@@ -19,6 +21,8 @@ import {
  * you, from the web UI) post through per-channel webhooks under their own
  * names; what you type in Discord is delivered like a message from the web UI.
  */
+
+export { pairChannel } from "./names.js";
 
 /** Marks messages typed in Discord, so they aren't echoed back. */
 export const DISCORD_ORIGIN = "discord";
@@ -60,29 +64,13 @@ export interface BridgeOptions {
   maxUploadBytes?: number;
   /** Relay throttling, for tests. */
   activityIntervals?: { editIntervalMs?: number; presenceIntervalMs?: number };
-}
-
-/** The channel shared by two agents, named in alphabetical order. */
-export function pairChannel(
-  a: string,
-  b: string,
-): { key: string; name: string } {
-  const [x, y] = [a, b].sort() as [string, string];
-  return { key: `pair:${x}|${y}`, name: `${x}-${y}` };
+  /** Typing indicator while an agent works on a reply (default on). */
+  typing?: boolean;
+  /** How often typing is refreshed, for tests. */
+  typingRefreshMs?: number;
 }
 
 type CategoryKind = "office" | "dms" | "pairs" | "activity";
-
-/** Matches "@name" as a whole word, any case. */
-function atName(name: string): RegExp {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?<![\\w@])@${escaped}(?![\\w-])`, "gi");
-}
-
-function senderName(from: string): string {
-  if (from === "__user__") return "user";
-  return from.replace(/^__|__$/g, "");
-}
 
 export class DiscordBridge {
   private state: BridgeState;
@@ -99,6 +87,7 @@ export class DiscordBridge {
   );
 
   private relay: ActivityRelay | undefined;
+  private typing: TypingIndicator | undefined;
 
   constructor(
     private readonly api: DiscordApi,
@@ -106,6 +95,13 @@ export class DiscordBridge {
     private readonly opts: BridgeOptions,
   ) {
     this.state = loadState(opts.statePath, opts.guildId);
+    if (opts.typing !== false) {
+      this.typing = new TypingIndicator(async (key) => {
+        // Only in channels that already exist: never create one just to type.
+        const id = this.state.channels[key];
+        if (id) await api.sendTyping(id);
+      }, opts.typingRefreshMs);
+    }
     if (opts.activity !== false) {
       this.relay = new ActivityRelay(
         api,
@@ -154,6 +150,7 @@ export class DiscordBridge {
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.relay?.stop();
+    this.typing?.stop();
     await this.chain.catch(() => {});
     await this.api.close();
   }
@@ -175,17 +172,10 @@ export class DiscordBridge {
     );
     e = { ...e, text: e.text + note };
     if (e.kind === "dm") {
-      // An agent reaching out to you: ping the humans.
-      this.enqueue(async () => {
-        const role = await this.userRole();
-        await this.post(
-          `dm:${e.agent}`,
-          e.agent,
-          `<@&${role}> ${e.text}`,
-          [role],
-          files,
-        );
-      });
+      // A 1:1 DM: the message itself is the notification, so no ping.
+      this.enqueue(() =>
+        this.post(`dm:${e.agent}`, e.agent, e.text, [], files),
+      );
       return;
     }
     if (e.origin === DISCORD_ORIGIN) return;
@@ -221,6 +211,7 @@ export class DiscordBridge {
 
   /** Activity log entries: shown in the Activity channels and #status. */
   handleActivity(agent: string, entry: ActivityEntry): void {
+    this.typing?.handle(agent, entry);
     this.relay?.handle(agent, entry);
   }
 

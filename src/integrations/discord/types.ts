@@ -30,6 +30,8 @@ export interface DiscordApi {
     messageId: string,
     content: string,
   ): Promise<void>;
+  /** Show "<bot> is typing…" in a channel for about 10 seconds. */
+  sendTyping(channelId: string): Promise<void>;
   /** The bot's status line under its name, e.g. "coder: bash · lead: thinking". */
   setPresence(text: string, busy: boolean): void;
   onMessage(fn: (m: IncomingMessage) => void): void;
