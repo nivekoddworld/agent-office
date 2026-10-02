@@ -42,7 +42,11 @@ import {
   createTaskDeleteProxy,
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
-import { createContextPruner } from "../context-pruner.js";
+import {
+  createContextPruner,
+  retryAfterOverflow,
+  toolChars,
+} from "../context-pruner.js";
 import { PROMPT_VERSION } from "../prompts/base-v1.js";
 
 import { createRedactor } from "../../security/redact.js";
@@ -185,6 +189,10 @@ console.log(
   `[agent-entry] Prompt ${PROMPT_VERSION} (${hashPrompt(SYSTEM_PROMPT)})`,
 );
 
+const pruner = createContextPruner(
+  model,
+  SYSTEM_PROMPT.length + toolChars(tools),
+);
 const agent = new Agent({
   initialState: {
     systemPrompt: SYSTEM_PROMPT,
@@ -194,7 +202,7 @@ const agent = new Agent({
   },
   streamFn: streamSimple,
   getApiKey: () => MODEL_API_KEY,
-  transformContext: createContextPruner(model, SYSTEM_PROMPT.length),
+  transformContext: pruner,
 });
 
 let turns = 0;
@@ -278,6 +286,8 @@ async function handleRequest(
       } else {
         await agent.prompt(text);
       }
+      if (await retryAfterOverflow(agent, pruner))
+        console.log(`[agent-entry] Retried a prompt that was too long`);
       console.log(`[agent-entry] Prompt completed (${promptId})`);
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);

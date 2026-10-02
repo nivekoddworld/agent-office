@@ -319,6 +319,8 @@ office:
 
 Then use `gpu-box:<model-id>` as the model. The web UI lists the models each reachable server currently serves.
 
+**Context size.** Before each request, older messages are dropped so the conversation fits `context_window` (minus `max_tokens` for the reply and a 10% margin); the system prompt and tool declarations count too. The size is estimated, so if the server still rejects a request as too long (llama.cpp: `request (… tokens) exceeds the available context size`), the agent learns from the numbers in the error (estimating higher, and using the server's size if it's smaller than `context_window`), trims, and retries once, so the wake-up still goes through. A single tool result too big to fit on its own (e.g. a huge file) is shortened for the model. Agents can look back at what was dropped with `read_channel` and `read_dm`.
+
 **Images (vision).** Images you send (dashboard DMs, or posted in Discord) and images in channel posts that wake an agent are given to the model as images only when it takes them; otherwise the model sees "(image omitted: model does not support images)". For llama.cpp this is detected when an agent starts: its `/props` reports vision when `llama-server` was started with a vision projector (`--mmproj mmproj-….gguf`, or `-hf` with a vision model). Set `vision: true` (or `false`) on the provider to decide yourself, e.g. for vLLM, which isn't asked.
 
 **Starting the servers.** Tool calling must be enabled, since agents work through tools:

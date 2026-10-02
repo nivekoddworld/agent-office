@@ -40,6 +40,7 @@ import {
   initInProcessAgent,
   type InitContext,
 } from "./handle-init.js";
+import { retryAfterOverflow, type ContextPruner } from "./context-pruner.js";
 
 export interface PromptReport {
   mode: string;
@@ -70,6 +71,7 @@ export interface AgentHandleDeps {
 export class AgentHandle {
   readonly config: AgentConfig;
   private agent: Agent | null = null;
+  private pruner: ContextPruner | null = null;
   private bus: MessageBus;
   private listAgentsFn: () => AgentInfo[];
   private provider?: SandboxProvider;
@@ -326,6 +328,7 @@ export class AgentHandle {
       this._onStateChanged,
     );
     this.agent = result.agent;
+    this.pruner = result.pruner;
     this._toolCount = result.toolCount;
 
     this.agent.subscribe((e) => {
@@ -370,6 +373,8 @@ export class AgentHandle {
     } else {
       await this.agent.prompt(text);
     }
+    if (this.pruner && (await retryAfterOverflow(this.agent, this.pruner)))
+      console.log(`[agent:${this.name}] Retried a prompt that was too long`);
   }
 
   async steer(text: string): Promise<void> {
