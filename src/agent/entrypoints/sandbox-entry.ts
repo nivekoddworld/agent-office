@@ -16,6 +16,7 @@ import {
   createLsTool,
 } from "@earendil-works/pi-coding-agent";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
+import type { ImageContent } from "@earendil-works/pi-ai";
 import { getBuiltinModel as getModel } from "@earendil-works/pi-ai/providers/all";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import {
@@ -43,6 +44,7 @@ import {
 } from "../tools/proxy/index.js";
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import {
+  answerQueued,
   createContextPruner,
   retryAfterOverflow,
   toolChars,
@@ -288,6 +290,7 @@ async function handleRequest(
       }
       if (await retryAfterOverflow(agent, pruner))
         console.log(`[agent-entry] Retried a prompt that was too long`);
+      await answerQueued(agent);
       console.log(`[agent-entry] Prompt completed (${promptId})`);
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
@@ -302,8 +305,15 @@ async function handleRequest(
 
   if (req.method === "POST" && url.pathname === "/steer") {
     const body = await readBody(req);
-    const { text } = JSON.parse(body);
-    agent.steer({ role: "user", content: text, timestamp: Date.now() });
+    const { text, images } = JSON.parse(body) as {
+      text: string;
+      images?: ImageContent[];
+    };
+    agent.steer({
+      role: "user",
+      content: images?.length ? [{ type: "text", text }, ...images] : text,
+      timestamp: Date.now(),
+    });
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
     return;

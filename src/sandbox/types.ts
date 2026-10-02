@@ -31,7 +31,11 @@ export interface SandboxProvider {
     text: string,
     images?: import("@earendil-works/pi-ai").ImageContent[],
   ): Promise<void>;
-  steer(id: string, text: string): Promise<void>;
+  steer(
+    id: string,
+    text: string,
+    images?: import("@earendil-works/pi-ai").ImageContent[],
+  ): Promise<void>;
   abort(id: string): Promise<void>;
   /** Forget the conversation (keeps the system prompt and tools). */
   clear?(id: string): Promise<void>;

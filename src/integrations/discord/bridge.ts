@@ -144,6 +144,8 @@ export class DiscordBridge {
       this.alerts = new Alerts(
         (text) =>
           this.enqueue(async () => {
+            if (opts.alerts === "quiet")
+              return this.post("alerts", "agent-office", text);
             const role = await this.userRole();
             await this.post("alerts", "agent-office", `<@&${role}> ${text}`, [
               role,
@@ -269,6 +271,11 @@ export class DiscordBridge {
     const post = id && this.state.taskPosts?.[id];
     if (entry.type === "agent_start" && post)
       this.answering.set(agent, post.threadId);
+  }
+
+  /** One of your messages reached a busy agent in the middle of its turn. */
+  handleSteered(agent: string, text: string): void {
+    this.receipts.steered(agent, text);
   }
 
   /** Tasks changed: update their forum posts, #status and alerts. */

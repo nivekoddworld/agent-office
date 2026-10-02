@@ -38,7 +38,8 @@ export class Alerts {
             `Task ${this.taskRef(t)} failed (${t.assignee})${t.result ? `: ${preview(t.result)}` : "."}`,
           );
       } else if (t.status === "in_progress" && now - t.updatedAt > STUCK_MS) {
-        if (this.once(`stuck:${t.id}:${t.updatedAt}`))
+        // Already stuck when we started: reported before the restart.
+        if (this.once(`stuck:${t.id}:${t.updatedAt}`) && this.primed)
           this.alert(
             `Task ${this.taskRef(t)} has been in progress for ${Math.round((now - t.updatedAt) / 3_600_000)} h without an update (${t.assignee}).`,
           );

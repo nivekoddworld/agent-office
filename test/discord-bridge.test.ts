@@ -6,6 +6,7 @@ import {
   DiscordBridge,
   pairChannel,
   type BridgeHost,
+  type BridgeOptions,
 } from "../src/integrations/discord/bridge.js";
 import {
   UnknownMessageError,
@@ -18,6 +19,7 @@ import {
 } from "../src/integrations/discord/types.js";
 import type { ChannelConfig } from "../src/types.js";
 import type { Task } from "../src/tasks/types.js";
+import { MAX_TEXT_CHARS, truncate } from "../src/activity/activity-log.js";
 
 /** In-memory Discord server. */
 class FakeDiscord implements DiscordApi {
@@ -1363,5 +1365,102 @@ describe("Discord slash commands, replies and the daily summary", () => {
       "**coder** · 2 wake-ups · 1 failed · 2.2k tokens",
       "**artist** · idle",
     ]);
+  });
+});
+
+describe("Discord receipts for mid-turn messages, and quiet alerts", () => {
+  let dir: string;
+  let discord: FakeDiscord;
+  let bridge: DiscordBridge;
+  const T = 1_700_000_000_000;
+  const H = 3_600_000;
+  let tasks: Task[];
+
+  const start = async (opts: Partial<BridgeOptions> = {}) => {
+    bridge = new DiscordBridge(
+      discord,
+      Object.assign(makeHost(), { tasks: () => tasks }),
+      {
+        guildId: "g1",
+        statePath: join(dir, "discord.json"),
+        activityIntervals: { editIntervalMs: 0, presenceIntervalMs: 0 },
+        ...opts,
+      },
+    );
+    await bridge.start();
+  };
+  const stuck: Task = {
+    id: "s1",
+    title: "Long job",
+    description: "",
+    status: "in_progress",
+    priority: 2,
+    assignee: "coder",
+    createdBy: "lead",
+    dependsOn: [],
+    createdAt: Date.now() - 5 * H,
+    updatedAt: Date.now() - 3 * H,
+  };
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "discord-steer-"));
+    discord = new FakeDiscord();
+    tasks = [];
+  });
+  afterEach(async () => {
+    await bridge.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("takes the 👍 off a message an agent got mid-turn when that turn ends", async () => {
+    await start();
+    bridge.handleActivity("lead", {
+      ts: T,
+      type: "agent_start",
+      trigger: { from: "__user__", text: "build it" },
+    });
+    discord.type("dm-lead", "and make it blue", { id: "m2" });
+    bridge.handleSteered("lead", "and make it blue");
+    await bridge.idle();
+    expect(discord.reactions).toEqual(["+👍 m2"]);
+    bridge.handleActivity("lead", { ts: T + 5, type: "agent_end" });
+    await bridge.idle();
+    expect(discord.reactions).toEqual(["+👍 m2", "-👍 m2"]);
+  });
+
+  it("matches long messages, which the activity log shortens", async () => {
+    await start();
+    const long = "x".repeat(5000);
+    discord.type("dm-lead", long, { id: "m3" });
+    bridge.handleActivity("lead", {
+      ts: T,
+      type: "agent_start",
+      trigger: { from: "__user__", text: truncate(long, MAX_TEXT_CHARS) },
+    });
+    bridge.handleActivity("lead", { ts: T + 1, type: "agent_end" });
+    await bridge.idle();
+    expect(discord.reactions).toEqual(["+👍 m3", "-👍 m3"]);
+  });
+
+  it("doesn't re-announce tasks already stuck when it starts", async () => {
+    tasks = [stuck];
+    await start();
+    bridge.handleTasksChanged();
+    await bridge.idle();
+    expect(discord.posts("alerts")).toEqual([]);
+  });
+
+  it("posts alerts without the ping when quiet", async () => {
+    await start({ alerts: "quiet" });
+    tasks = [stuck];
+    bridge.handleTasksChanged();
+    await bridge.idle();
+    expect(discord.posts("alerts")).toEqual([
+      "agent-office: Task **Long job** (`#s1`) has been in progress for 3 h without an update (coder).",
+    ]);
+    const sent = discord.sent.find(
+      (s) => s.channelId === discord.channelId("alerts"),
+    )!;
+    expect(sent.pingRoles ?? []).toEqual([]);
   });
 });

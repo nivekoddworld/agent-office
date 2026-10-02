@@ -342,6 +342,18 @@ export function createContextPruner(
 }
 
 /**
+ * Messages given to the agent mid-turn (steer) that arrived just as the
+ * turn ended: answer them now instead of leaving them for the next wake-up.
+ */
+export async function answerQueued(agent: {
+  hasQueuedMessages(): boolean;
+  continue(): Promise<void>;
+}): Promise<void> {
+  for (let i = 0; i < 5 && agent.hasQueuedMessages(); i++)
+    await agent.continue();
+}
+
+/**
  * If the last run stopped because the request didn't fit the model's
  * context, trim harder and try once more. Returns whether it retried.
  */

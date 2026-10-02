@@ -63,6 +63,18 @@ export class LocalTransport {
     return queue.splice(bestIdx, 1)[0];
   }
 
+  /** Remove and return the messages matching `pred`, oldest first. */
+  takeWhere(name: string, pred: (m: InboxMessage) => boolean): InboxMessage[] {
+    const queue = this.inboxes.get(name);
+    if (!queue) return [];
+    const taken = queue.filter(pred);
+    this.inboxes.set(
+      name,
+      queue.filter((m) => !taken.includes(m)),
+    );
+    return taken;
+  }
+
   drain(name: string): InboxMessage[] {
     const queue = this.inboxes.get(name);
     if (!queue) return [];

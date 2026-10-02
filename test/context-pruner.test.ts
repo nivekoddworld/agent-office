@@ -3,6 +3,7 @@ import {
   estimateMessageTokens,
   groupMessages,
   createContextPruner,
+  answerQueued,
   parseOverflow,
   retryAfterOverflow,
   toolChars,
@@ -497,5 +498,21 @@ describe("calibrating from real prompt sizes", () => {
     expect(await pruner(msgs)).toEqual(first);
     expect(first).toHaveLength(7);
     vi.restoreAllMocks();
+  });
+});
+
+describe("answerQueued", () => {
+  it("answers messages that arrived as the turn ended", async () => {
+    let queued = 2;
+    const agent = {
+      hasQueuedMessages: () => queued > 0,
+      continue: vi.fn(async () => {
+        queued--;
+      }),
+    };
+    await answerQueued(agent);
+    expect(agent.continue).toHaveBeenCalledTimes(2);
+    await answerQueued(agent);
+    expect(agent.continue).toHaveBeenCalledTimes(2);
   });
 });

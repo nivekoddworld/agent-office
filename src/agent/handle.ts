@@ -40,7 +40,11 @@ import {
   initInProcessAgent,
   type InitContext,
 } from "./handle-init.js";
-import { retryAfterOverflow, type ContextPruner } from "./context-pruner.js";
+import {
+  answerQueued,
+  retryAfterOverflow,
+  type ContextPruner,
+} from "./context-pruner.js";
 
 export interface PromptReport {
   mode: string;
@@ -378,15 +382,24 @@ export class AgentHandle {
     }
     if (this.pruner && (await retryAfterOverflow(this.agent, this.pruner)))
       console.log(`[agent:${this.name}] Retried a prompt that was too long`);
+    await answerQueued(this.agent);
   }
 
-  async steer(text: string): Promise<void> {
+  /** Give a message to the agent in the middle of its turn. */
+  async steer(
+    text: string,
+    images?: import("@earendil-works/pi-ai").ImageContent[],
+  ): Promise<void> {
     if (this.provider && this.sandboxInfo) {
-      await this.provider.steer(this.sandboxInfo.id, text);
+      await this.provider.steer(this.sandboxInfo.id, text, images);
       return;
     }
     if (!this.agent) throw new Error(`Agent "${this.name}" not initialized`);
-    this.agent.steer({ role: "user", content: text, timestamp: Date.now() });
+    this.agent.steer({
+      role: "user",
+      content: images?.length ? [{ type: "text", text }, ...images] : text,
+      timestamp: Date.now(),
+    });
   }
 
   abort(): void {
@@ -492,9 +505,11 @@ export class AgentHandle {
     }
     // A sandboxed agent's conversation lives in its container.
     if (this.provider && this.sandboxInfo)
-      this.provider.clear?.(this.sandboxInfo.id).catch((e) =>
-        console.error(`[agent:${this.name}] Sandbox clear failed:`, e),
-      );
+      this.provider
+        .clear?.(this.sandboxInfo.id)
+        .catch((e) =>
+          console.error(`[agent:${this.name}] Sandbox clear failed:`, e),
+        );
   }
 
   async destroy(): Promise<void> {
