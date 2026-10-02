@@ -4,17 +4,22 @@ import type { EgressEvent } from "../../egress/egress-impl.js";
 import { SentMessageTracker } from "../discord-webhook.js";
 import type { ActivityEntry } from "../../activity/activity-log.js";
 import { ActivityRelay } from "./activity-relay.js";
-import { DEFAULT_MAX_UPLOAD, importImages, uploadsFor } from "./uploads.js";
+import { DEFAULT_MAX_UPLOAD, uploadsFor } from "./uploads.js";
 import { loadState, type BridgeState } from "./state.js";
 import {
   atName,
-  mentionedAgents,
-  officeText,
+  channelSpec,
+  type CategoryKind,
   pairChannel,
   senderName,
 } from "./names.js";
 import { TypingIndicator } from "./typing.js";
 import { WebhookPoster } from "./webhooks.js";
+import { Incoming } from "./incoming.js";
+import { TaskForum } from "./task-forum.js";
+import { RECEIPT, Receipts } from "./receipts.js";
+import { Alerts } from "./alerts.js";
+import type { Task } from "../../tasks/types.js";
 import type { DiscordApi, DiscordImage, IncomingMessage } from "./types.js";
 
 /**
@@ -28,7 +33,8 @@ import type { DiscordApi, DiscordImage, IncomingMessage } from "./types.js";
 export { pairChannel } from "./names.js";
 
 /** Marks messages typed in Discord, so they aren't echoed back. */
-export const DISCORD_ORIGIN = "discord";
+export { DISCORD_ORIGIN } from "./names.js";
+import { DISCORD_ORIGIN } from "./names.js";
 const SYNC_INTERVAL_MS = 60_000;
 const DM_CATEGORY = "DMs";
 const PAIR_CATEGORY = "Agent DMs";
@@ -57,6 +63,14 @@ export interface BridgeHost {
   attachmentPath(id: string): string;
   /** Save an image posted in Discord as an upload, so agents can see it. */
   importImage?(img: DiscordImage): Promise<Attachment>;
+  /** The office's tasks, for the tasks forum, #status and alerts. */
+  tasks?(): Task[];
+  /** A task you started as a forum post; an error message if it failed. */
+  createTask?(t: {
+    title: string;
+    description: string;
+    assignee: string;
+  }): Task | string;
 }
 
 export interface BridgeOptions {
@@ -75,15 +89,16 @@ export interface BridgeOptions {
   typing?: boolean;
   /** How often typing is refreshed, for tests. */
   typingRefreshMs?: number;
+  /** #alerts: failed or stuck tasks, failing agents (default on). */
+  alerts?: boolean;
 }
 
-type CategoryKind = "office" | "dms" | "pairs" | "activity";
+/** Wait this long after a task change for more before updating the forum. */
+const FORUM_DELAY_MS = 1500;
 
 export class DiscordBridge {
   private state: BridgeState;
   private chain: Promise<unknown> = Promise.resolve();
-  /** Incoming messages waiting on image downloads. */
-  private inbound: Promise<void> | undefined;
   private webhooks: WebhookPoster;
   private timer: ReturnType<typeof setInterval> | undefined;
   private tracker = new SentMessageTracker(
@@ -98,6 +113,13 @@ export class DiscordBridge {
 
   private relay: ActivityRelay | undefined;
   private typing: TypingIndicator | undefined;
+  private forum: TaskForum | undefined;
+  private forumTimer: ReturnType<typeof setTimeout> | undefined;
+  private alerts: Alerts | undefined;
+  private receipts: Receipts;
+  private incoming: Incoming;
+  /** Agent → the task post whose reply it's answering right now. */
+  private answering = new Map<string, string>();
 
   constructor(
     private readonly api: DiscordApi,
@@ -129,8 +151,51 @@ export class DiscordBridge {
             this.save();
           },
           agentNames: () => host.agentNames(),
+          taskSummary: () => host.tasks && TaskForum.summary(host.tasks()),
         },
         opts.activityIntervals,
+      );
+    }
+    this.receipts = new Receipts((c, m, on) => api.react(c, m, RECEIPT, on));
+    if (host.tasks) {
+      this.forum = new TaskForum(api, {
+        tasks: () => host.tasks!(),
+        category: () => this.category("office"),
+        forumId: () => this.state.channels["tasks"],
+        setForumId: (id) => {
+          this.state.channels["tasks"] = id;
+        },
+        posts: () => (this.state.taskPosts ??= {}),
+        save: () => this.save(),
+        postAs: (threadId, agent, text) =>
+          this.post("tasks", agent, text, [], [], threadId),
+      });
+    }
+    this.incoming = new Incoming({
+      host,
+      channelKey: (id) =>
+        Object.entries(this.state.channels).find(([, c]) => c === id)?.[0],
+      channelId: (key) => this.state.channels[key],
+      agentByRole: () => this.agentByRole(),
+      forum: this.forum,
+      receipts: this.receipts,
+      notice: (key, text) => this.notice(key, text),
+      say: (channelId, text) =>
+        this.enqueue(async () => {
+          await this.api.sendMessage(channelId, text);
+        }),
+      tasksChanged: () => this.handleTasksChanged(),
+    });
+    if (opts.alerts !== false) {
+      this.alerts = new Alerts(
+        (text) =>
+          this.enqueue(async () => {
+            const role = await this.userRole();
+            await this.post("alerts", "agent-office", `<@&${role}> ${text}`, [
+              role,
+            ]);
+          }),
+        (t) => TaskForum.ref(t, this.state.taskPosts),
       );
     }
   }
@@ -145,6 +210,8 @@ export class DiscordBridge {
 
   /** Create missing categories, channels and roles, then start listening. */
   async start(): Promise<void> {
+    // What has already failed isn't news.
+    this.alerts?.tasks(this.host.tasks?.() ?? []);
     await this.run(() => this.syncNow());
     await this.relay?.start();
     this.api.onMessage((m) => {
@@ -155,6 +222,7 @@ export class DiscordBridge {
       }
     });
     this.timer = setInterval(() => {
+      this.alerts?.tasks(this.host.tasks?.() ?? []);
       this.run(() => this.syncNow()).catch((err) =>
         console.error(`[discord] Sync failed: ${errorText(err)}`),
       );
@@ -164,6 +232,7 @@ export class DiscordBridge {
 
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
+    if (this.forumTimer) clearTimeout(this.forumTimer);
     this.relay?.stop();
     this.typing?.stop();
     await this.chain.catch(() => {});
@@ -172,7 +241,13 @@ export class DiscordBridge {
 
   /** Wait until queued Discord work is done (for tests and shutdown). */
   async idle(): Promise<void> {
-    await this.inbound;
+    if (this.forumTimer) {
+      clearTimeout(this.forumTimer);
+      this.forumTimer = undefined;
+      this.enqueue(() => this.forum!.sync());
+    }
+    await this.incoming.idle();
+    await this.receipts.idle();
     await this.relay?.idle();
     await this.chain.catch(() => {});
   }
@@ -188,9 +263,13 @@ export class DiscordBridge {
     );
     e = { ...e, text: e.text + note };
     if (e.kind === "dm") {
+      // An answer to your reply in a task post goes back in that post.
+      const thread = this.answering.get(e.agent);
       // A 1:1 DM: the message itself is the notification, so no ping.
       this.enqueue(() =>
-        this.post(`dm:${e.agent}`, e.agent, e.text, [], files),
+        thread
+          ? this.post("tasks", e.agent, e.text, [], files, thread)
+          : this.post(`dm:${e.agent}`, e.agent, e.text, [], files),
       );
       return;
     }
@@ -229,6 +308,24 @@ export class DiscordBridge {
   handleActivity(agent: string, entry: ActivityEntry): void {
     this.typing?.handle(agent, entry);
     this.relay?.handle(agent, entry);
+    this.receipts.handle(agent, entry);
+    this.alerts?.activity(agent, entry);
+    if (entry.type === "agent_end") this.answering.delete(agent);
+    const id = /^\[About task #(\w+) /.exec(entry.trigger?.text ?? "")?.[1];
+    const post = id && this.state.taskPosts?.[id];
+    if (entry.type === "agent_start" && post)
+      this.answering.set(agent, post.threadId);
+  }
+
+  /** Tasks changed: update their forum posts, #status and alerts. */
+  handleTasksChanged(): void {
+    this.relay?.refreshStatus();
+    this.alerts?.tasks(this.host.tasks?.() ?? []);
+    if (!this.forum || this.forumTimer) return;
+    this.forumTimer = setTimeout(() => {
+      this.forumTimer = undefined;
+      this.enqueue(() => this.forum!.sync());
+    }, FORUM_DELAY_MS);
   }
 
   /** A DM you sent an agent. */
@@ -244,64 +341,9 @@ export class DiscordBridge {
 
   // --- Discord → office ---
 
+  /** A message someone typed in the Discord server. */
   handleIncoming(m: IncomingMessage): void {
-    if (m.fromBot) return;
-    const images = this.host.importImage ? (m.images ?? []) : [];
-    if (!images.length && !this.inbound) return this.deliver(m, []);
-    // Download the images first, keeping messages in order.
-    const save = (img: DiscordImage) => this.host.importImage!(img);
-    const p = (this.inbound ?? Promise.resolve())
-      .then(async () => this.deliver(m, await importImages(images, save)))
-      .catch((err) =>
-        console.error("[discord] Failed to handle a message:", err),
-      );
-    this.inbound = p;
-    void p.then(() => {
-      if (this.inbound === p) this.inbound = undefined;
-    });
-  }
-
-  private deliver(m: IncomingMessage, attachments: Attachment[]): void {
-    const key = Object.entries(this.state.channels).find(
-      ([, id]) => id === m.channelId,
-    )?.[0];
-    if (!key) return;
-    const byRole = this.agentByRole();
-    const text = officeText(m, byRole);
-    if (!text) return;
-
-    if (key.startsWith("dm:")) {
-      const agent = key.slice(3);
-      const r = this.host.sendUserDm(agent, text, DISCORD_ORIGIN, attachments);
-      if (!r.ok)
-        this.notice(key, `Couldn't deliver that to ${agent}: ${r.error}`);
-      return;
-    }
-    if (key.startsWith("ch:")) {
-      const channel = key.slice(3);
-      const cfg = this.host.channels().get(channel);
-      if (!cfg) return;
-      const named = mentionedAgents(m, text, byRole, this.host.agentNames());
-      const members = named.filter((a) => cfg.members.includes(a));
-      const outsiders = named.filter((a) => !cfg.members.includes(a));
-      const r = this.host.postUserChannel(
-        channel,
-        text,
-        members,
-        DISCORD_ORIGIN,
-        attachments,
-      );
-      if (!r.ok) {
-        this.notice(key, `Couldn't post that to #${channel}: ${r.error}`);
-      } else if (outsiders.length) {
-        const one = outsiders.length === 1;
-        this.notice(
-          key,
-          `${outsiders.join(", ")} ${one ? "isn't" : "aren't"} in #${channel}, so ${one ? "wasn't" : "weren't"} notified.`,
-        );
-      }
-    }
-    // Agent DM channels are read-only: what you type there isn't delivered.
+    this.incoming.handle(m);
   }
 
   private agentByRole(): Map<string, string> {
@@ -351,6 +393,8 @@ export class DiscordBridge {
     }
     for (const key of Object.keys(this.state.channels))
       if (key.startsWith("pair:")) await this.channel(key);
+    if (this.alerts) await this.channel("alerts");
+    await this.forum?.sync();
     this.save();
   }
 
@@ -391,33 +435,7 @@ export class DiscordBridge {
 
   /** The Discord channel for a key, created if missing. */
   private async channel(key: string): Promise<string> {
-    const rest = key.slice(key.indexOf(":") + 1);
-    let name: string;
-    let kind: CategoryKind;
-    let topic: string | undefined;
-    if (key === "status") {
-      name = "status";
-      kind = "activity";
-      topic =
-        "What every agent is doing right now (one message, kept up to date).";
-    } else if (key.startsWith("act:")) {
-      name = rest;
-      kind = "activity";
-      topic = `What ${rest} is doing: one message per wake-up, updated as it runs.`;
-    } else if (key.startsWith("ch:")) {
-      name = rest;
-      kind = "office";
-      topic = this.host.channels().get(rest)?.description;
-    } else if (key.startsWith("dm:")) {
-      name = `dm-${rest}`;
-      kind = "dms";
-      topic = `Your DMs with ${rest}. Messages you type here go to ${rest}.`;
-    } else {
-      const [a, b] = rest.split("|") as [string, string];
-      name = pairChannel(a, b).name;
-      kind = "pairs";
-      topic = `Messages between ${a} and ${b}. Read-only: messages typed here aren't delivered.`;
-    }
+    const { name, kind, topic } = channelSpec(key, this.host.channels());
     const id = await this.api.ensureTextChannel(
       name,
       await this.category(kind),
@@ -436,10 +454,19 @@ export class DiscordBridge {
     content: string,
     pingRoles: string[] = [],
     files: Array<{ path: string; name: string }> = [],
+    threadId?: string,
   ): Promise<void> {
-    const channelId = await this.channel(key);
+    const channelId =
+      key === "tasks"
+        ? (await this.forum!.forum()).id
+        : await this.channel(key);
     const avatarUrl = this.opts.avatarUrl?.(username);
-    const base = { username, pingRoles, ...(avatarUrl ? { avatarUrl } : {}) };
+    const base = {
+      username,
+      pingRoles,
+      ...(avatarUrl ? { avatarUrl } : {}),
+      ...(threadId ? { threadId } : {}),
+    };
     await this.webhooks.post(channelId, base, content, files);
   }
 }

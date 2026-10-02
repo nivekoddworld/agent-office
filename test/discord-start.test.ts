@@ -19,6 +19,10 @@ const fakeApi: DiscordApi = {
   editMessage: async () => {},
   setPresence: () => {},
   sendTyping: async () => {},
+  ensureForum: async (name) => ({ id: `forum-${name}`, tags: {} }),
+  createPost: async () => ({ threadId: "t1", messageId: "t1" }),
+  updatePost: async () => {},
+  react: async () => {},
   onMessage: () => {},
   close: async () => {},
 };
@@ -45,6 +49,7 @@ function fakeWorkspace(dir: string) {
     onUserDm: vi.fn(() => () => {}),
     onAgentEvent: vi.fn(() => () => {}),
     onActivity: vi.fn(() => () => {}),
+    tasks: { list: () => [], onChange: vi.fn(() => () => {}) },
     discord: { enabled: true },
     discordBridgeStatus: { state: "off" },
   } as any;
