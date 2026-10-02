@@ -250,8 +250,15 @@ export class DockerProvider implements SandboxProvider {
     });
   }
 
-  async steer(id: string, text: string): Promise<void> {
-    await this.sandboxFetch(id, "/steer", { text });
+  async steer(
+    id: string,
+    text: string,
+    images?: import("@earendil-works/pi-ai").ImageContent[],
+  ): Promise<void> {
+    await this.sandboxFetch(id, "/steer", {
+      text,
+      ...(images?.length ? { images } : {}),
+    });
   }
 
   async abort(id: string): Promise<void> {

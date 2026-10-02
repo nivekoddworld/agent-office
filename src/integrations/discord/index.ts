@@ -41,6 +41,12 @@ export function avatarLookup(
   return (name) => chosenAvatar(workspaceDirOf(name)) ?? fallback?.(name);
 }
 
+/** DISCORD_ALERTS: "off", "quiet" (no ping), or on (default). */
+function alertsSetting(v: string | undefined): boolean | "quiet" {
+  const s = v?.trim().toLowerCase();
+  return s === "off" ? false : s === "quiet" ? "quiet" : true;
+}
+
 /** /stop, /wake and /clear. */
 function agentControls(workspace: Workspace) {
   return {
@@ -152,7 +158,7 @@ export async function startDiscordBridge(
           env["DISCORD_AVATAR_URL"],
         ),
         activity: env["DISCORD_ACTIVITY"]?.trim().toLowerCase() !== "off",
-        alerts: env["DISCORD_ALERTS"]?.trim().toLowerCase() !== "off",
+        alerts: alertsSetting(env["DISCORD_ALERTS"]),
         ...(env["DISCORD_SUMMARY_AT"]?.trim()
           ? { summaryAt: env["DISCORD_SUMMARY_AT"].trim().toLowerCase() }
           : {}),
@@ -168,6 +174,7 @@ export async function startDiscordBridge(
       workspace.onUserDm((e) => bridge.handleUserDm(e)),
       workspace.onActivity((name, entry) => bridge.handleActivity(name, entry)),
       workspace.tasks.onChange(() => bridge.handleTasksChanged()),
+      workspace.onSteered((agent, text) => bridge.handleSteered(agent, text)),
       workspace.onAgentEvent((name, event) =>
         bridge.handleAgentEvent(
           name,

@@ -56,8 +56,9 @@ export interface BridgeOptions {
   typing?: boolean;
   /** How often typing is refreshed, for tests. */
   typingRefreshMs?: number;
-  /** #alerts: failed or stuck tasks, failing agents (default on). */
-  alerts?: boolean;
+  /** #alerts: failed or stuck tasks, failing agents (default on, pinging
+   *  office-user; "quiet" posts without the ping). */
+  alerts?: boolean | "quiet";
   /** When to post the daily summary ("HH:MM", local time), or "off". */
   summaryAt?: string;
 }

@@ -773,6 +773,11 @@ export class Workspace {
   // --- Events ---
 
   /** Called with each entry saved to an agent's activity log. */
+  /** Called when one of your messages reaches an agent in the middle of its turn. */
+  onSteered(fn: (agent: string, text: string) => void): () => void {
+    return this.scheduler.onSteer((agent, msg) => fn(agent, msg.payload));
+  }
+
   onActivity(fn: (name: string, entry: ActivityEntry) => void): () => void {
     this.activityListeners.push(fn);
     return () => {

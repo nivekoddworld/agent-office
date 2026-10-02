@@ -708,3 +708,78 @@ describe("delivering your messages", () => {
     );
   });
 });
+
+describe("your messages to a busy agent", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("go into its current turn instead of waiting for it to end", async () => {
+    const bus = new MessageBus();
+    bus.register("coder");
+    const coder = mockHandle("coder", Priority.NORMAL, "running");
+    const sched = new Scheduler(new Map([["coder", coder]]), bus, 100);
+    const steered: string[] = [];
+    sched.onSteer((agent, msg) => steered.push(`${agent}: ${msg.payload}`));
+    bus.send({
+      from: "__user__",
+      to: "coder",
+      type: "prompt",
+      payload: "also make it blue",
+      priority: Priority.CRITICAL,
+      sourceKind: "dm",
+      sessionKey: "dm:coder",
+    });
+    bus.send({
+      from: "__task__",
+      to: "coder",
+      type: "prompt",
+      payload: "[New Task] #1",
+      priority: Priority.HIGH,
+    });
+    sched.start();
+    await vi.advanceTimersByTimeAsync(100);
+    sched.stop();
+    expect(coder.steer).toHaveBeenCalledWith(
+      "[New message while you were working: handle it along with what you're doing]\n[Message from user]\nalso make it blue\n\n[To reply, call message_user]",
+      undefined,
+    );
+    expect(steered).toEqual(["coder: also make it blue"]);
+    // Other messages wait for the turn to end, as before.
+    expect(bus.peekMessages("coder").map((m) => m.payload)).toEqual([
+      "[New Task] #1",
+    ]);
+    expect(coder.prompt).not.toHaveBeenCalled();
+  });
+
+  it("wait for a wake-up of their own when steering fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const bus = new MessageBus();
+    bus.register("coder");
+    const coder = mockHandle("coder", Priority.NORMAL, "running");
+    coder.steer = vi.fn(async () => {
+      throw new Error("container restarting");
+    });
+    const sched = new Scheduler(new Map([["coder", coder]]), bus, 100);
+    bus.send({
+      from: "__user__",
+      to: "coder",
+      type: "prompt",
+      payload: "hi",
+      priority: Priority.CRITICAL,
+      sourceKind: "dm",
+    });
+    sched.start();
+    await vi.advanceTimersByTimeAsync(500);
+    // Tried once, not every tick; still queued.
+    expect(coder.steer).toHaveBeenCalledTimes(1);
+    expect(bus.peek("coder")).toBe(1);
+    coder.status = "idle";
+    await vi.advanceTimersByTimeAsync(100);
+    sched.stop();
+    expect(coder.prompt).toHaveBeenCalledWith(
+      "[Message from user]\nhi\n\n[To reply, call message_user]",
+      undefined,
+    );
+    vi.restoreAllMocks();
+  });
+});

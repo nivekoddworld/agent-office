@@ -51,6 +51,7 @@ function fakeWorkspace(dir: string) {
     onUserDm: vi.fn(() => () => {}),
     onAgentEvent: vi.fn(() => () => {}),
     onActivity: vi.fn(() => () => {}),
+    onSteered: vi.fn(() => () => {}),
     tasks: { list: () => [], onChange: vi.fn(() => () => {}) },
     discord: { enabled: true },
     discordBridgeStatus: { state: "off" },

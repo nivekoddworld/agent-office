@@ -155,6 +155,11 @@ export class MessageBus {
     return this.transport.pop(name);
   }
 
+  /** Take the queued messages matching `pred` (kept saved until done()). */
+  takeWhere(name: string, pred: (m: InboxMessage) => boolean): InboxMessage[] {
+    return this.transport.takeWhere(name, pred);
+  }
+
   /** A taken message has been handled: forget it. */
   done(msg: InboxMessage): void {
     this.store?.deleteInbox(msg.id);

@@ -28,6 +28,10 @@ export class Scheduler {
   private _channels: Map<string, ChannelConfig>;
   private _baseDir: string;
   private _channelContext: number;
+  private steerListeners: Array<(agent: string, msg: InboxMessage) => void> =
+    [];
+  /** Messages that failed to steer: they wait for a wake-up instead. */
+  private unsteerable = new Set<string>();
   /** Messages already given a second try after a failed delivery. */
   private retried = new Set<string>();
   private listeners: Array<(state: SchedulerState) => void> = [];
@@ -104,7 +108,10 @@ export class Scheduler {
     );
 
     for (const handle of sorted) {
-      if (handle.status === "running") continue;
+      if (handle.status === "running") {
+        this.steerUserMessages(handle);
+        continue;
+      }
 
       const msg = this.bus.take(handle.name);
       if (!msg) continue;
@@ -194,6 +201,47 @@ export class Scheduler {
     const state = this.state();
     for (const fn of this.listeners) fn(state);
   }
+  /**
+   * Your messages to an agent that's busy go into its current turn (pi's
+   * steering: seen after its current step), instead of waiting until it
+   * finishes, which can take many minutes.
+   */
+  private steerUserMessages(handle: AgentHandle): void {
+    const mine = this.bus.takeWhere(
+      handle.name,
+      (m) =>
+        m.from === "__user__" &&
+        m.type === "prompt" &&
+        !this.unsteerable.has(m.id),
+    );
+    for (const msg of mine) {
+      const payload =
+        "[New message while you were working: handle it along with what you're doing]\n" +
+        formatMessagePayload(msg, this._channels);
+      const images = resolveAttachments(msg, this._baseDir);
+      handle
+        .steer(payload, images.length > 0 ? images : undefined)
+        .then(() => {
+          this.bus.done(msg);
+          for (const fn of this.steerListeners) fn(handle.name, msg);
+        })
+        .catch((err) => {
+          // Couldn't reach it: deliver it as a wake-up of its own later.
+          console.error(`[scheduler] Steering "${handle.name}" failed:`, err);
+          this.unsteerable.add(msg.id);
+          this.bus.requeue(handle.name, msg);
+        });
+    }
+  }
+
+  /** Called when one of your messages is given to an agent mid-turn. */
+  onSteer(fn: (agent: string, msg: InboxMessage) => void): () => void {
+    this.steerListeners.push(fn);
+    return () => {
+      this.steerListeners = this.steerListeners.filter((l) => l !== fn);
+    };
+  }
+
   /**
    * DM messages before the one waking an agent, when its memory of them is
    * gone (first wake-up since it started or was cleared), so a restart
