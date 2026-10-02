@@ -371,6 +371,13 @@ export const TASK_DELETE = {
 
 // --- Egress tools ---
 
+const FILES_PARAM = Type.Optional(
+  Type.Array(Type.String(), {
+    description:
+      "Files to attach, as paths in your workspace or the shared folder: images (png, jpg, gif, webp) show inline, anything else (e.g. a .zip of a game build) is a download. Up to 10 files, 25 MB each. To send a folder, zip it first with bash (zip -r build.zip build/).",
+  }),
+);
+
 export const MESSAGE_USER = {
   name: "message_user" as const,
   label: "Message User",
@@ -380,6 +387,7 @@ export const MESSAGE_USER = {
     message: Type.String({
       description: "Message content to send to the user",
     }),
+    files: FILES_PARAM,
   }),
 };
 
@@ -394,9 +402,10 @@ export const POST_CHANNEL = {
     mentions: Type.Optional(
       Type.Array(Type.String(), {
         description:
-          "Agent names to wake up and notify. Without mentions the message is posted but nobody is notified; they can still see it with read_channel.",
+          "Agent names to wake up and notify (writing @name in the message works too). Without mentions the message is posted but nobody is notified; they can still see it with read_channel.",
       }),
     ),
+    files: FILES_PARAM,
   }),
 };
 

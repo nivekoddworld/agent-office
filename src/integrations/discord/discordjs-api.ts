@@ -176,6 +176,14 @@ export async function connectDiscord(
           ...(msg.avatarUrl ? { avatarURL: msg.avatarUrl } : {}),
           // Only the roles we mean to ping; never @everyone or users.
           allowedMentions: { parse: [], roles: msg.pingRoles ?? [] },
+          ...(msg.files?.length
+            ? {
+                files: msg.files.map((f) => ({
+                  attachment: f.path,
+                  name: f.name,
+                })),
+              }
+            : {}),
         });
       } catch (err) {
         if (

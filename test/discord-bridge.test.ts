@@ -146,6 +146,7 @@ function makeHost(): BridgeHost & {
     dms: [] as unknown[],
     posts: [] as unknown[],
     officeName: () => "Local Team",
+    attachmentPath: (id: string) => `/uploads/${id}`,
     channels: () => channels,
     agentNames: () => ["lead", "coder", "artist"],
     sendUserDm: (agent: string, text: string, origin: string) => {
@@ -304,6 +305,80 @@ describe("DiscordBridge", () => {
       {
         agent: "lead",
         text: "how's it going?\n[attachment: https://cdn/x.png]",
+        origin: "discord",
+      },
+    ]);
+  });
+
+  it("uploads attached images and shows @names as role pills", async () => {
+    bridge.handleEgress({
+      kind: "channel",
+      from: "lead",
+      channel: "work",
+      text: "@Coder please use this logo",
+      mentions: ["coder", "artist"],
+      attachments: [
+        { id: "a1.png", filename: "logo.png", mimeType: "image/png" },
+      ],
+    });
+    bridge.handleEgress({
+      kind: "dm",
+      agent: "artist",
+      text: "draft",
+      attachments: [
+        { id: "a2.png", filename: "draft.png", mimeType: "image/png" },
+      ],
+    });
+    await bridge.idle();
+    const coder = discord.roleId("coder");
+    const artist = discord.roleId("artist");
+    expect(discord.posts("work")).toEqual([
+      `lead: <@&${artist}> <@&${coder}> please use this logo`,
+    ]);
+    expect(discord.sent[0]!.files).toEqual([
+      { path: "/uploads/a1.png", name: "logo.png" },
+    ]);
+    expect(discord.sent[1]!.files).toEqual([
+      { path: "/uploads/a2.png", name: "draft.png" },
+    ]);
+  });
+
+  it("leaves files over Discord's upload limit in the dashboard, with a note", async () => {
+    bridge.handleEgress({
+      kind: "dm",
+      agent: "coder",
+      text: "Here's the build",
+      attachments: [
+        {
+          id: "b.zip",
+          filename: "build.zip",
+          mimeType: "application/zip",
+          size: 30 * 1048576,
+        },
+        {
+          id: "r.txt",
+          filename: "readme.txt",
+          mimeType: "text/plain",
+          size: 10,
+        },
+      ],
+    });
+    await bridge.idle();
+    expect(discord.sent[0]!.files).toEqual([
+      { path: "/uploads/r.txt", name: "readme.txt" },
+    ]);
+    expect(discord.sent[0]!.content).toContain(
+      "build.zip is 30.0 MB: over Discord's 10 MB upload limit, so download it from the dashboard.",
+    );
+  });
+
+  it("matches typed @names in any case", async () => {
+    discord.type("work", "@CODER build it");
+    expect(host.posts).toEqual([
+      {
+        channel: "work",
+        text: "@CODER build it",
+        mentions: ["coder"],
         origin: "discord",
       },
     ]);

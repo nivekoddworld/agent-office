@@ -151,6 +151,7 @@ export function ChannelView({
         requestId: m.requestId ?? undefined,
         kind: m.kind,
         jobName: m.jobName,
+        attachments: m.attachments,
       }));
     }
     return [];

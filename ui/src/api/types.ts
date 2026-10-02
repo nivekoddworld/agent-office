@@ -249,6 +249,7 @@ export interface MessageAttachment {
   id: string;
   filename: string;
   mimeType: string;
+  size?: number;
 }
 
 export interface DmMessage {
@@ -293,6 +294,7 @@ export interface ChannelMessage {
   agentName?: string;
   kind?: string;
   jobName?: string;
+  attachments?: MessageAttachment[];
 }
 
 export interface ChannelHistoryResponse {

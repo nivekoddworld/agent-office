@@ -2,9 +2,10 @@ FROM node:22-slim
 
 # node:22-slim already provides user "node" with uid=1000 gid=1000
 
-# Build toolchain for npm native modules (node-gyp)
+# Build toolchain for npm native modules (node-gyp), and zip so agents can
+# package files (e.g. a game build) to send
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ \
+    && apt-get install -y --no-install-recommends python3 make g++ zip unzip \
     && rm -rf /var/lib/apt/lists/*
 ENV PYTHON=/usr/bin/python3
 
@@ -16,7 +17,7 @@ RUN npm install
 COPY agent/entrypoints/sandbox-entry.ts ./agent/entrypoints/
 COPY agent/context-pruner.ts ./agent/
 COPY agent/prompts/ ./agent/prompts/
-COPY agent/tools/contracts.ts agent/tools/policy.ts ./agent/tools/
+COPY agent/tools/contracts.ts agent/tools/policy.ts agent/tools/set-avatar.ts ./agent/tools/
 COPY agent/tools/proxy/ ./agent/tools/proxy/
 COPY security/ ./security/
 

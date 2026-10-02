@@ -453,6 +453,12 @@ const EGRESS_STATUS_MAP: Record<string, number> = {
   internal_error: 500,
 };
 
+function stringList(v: unknown): string[] {
+  return Array.isArray(v)
+    ? v.filter((x): x is string => typeof x === "string")
+    : [];
+}
+
 export async function handleMessageUser(
   req: IncomingMessage,
   res: ServerResponse,
@@ -465,7 +471,7 @@ export async function handleMessageUser(
     res.end();
     return;
   }
-  let parsed: { message?: string };
+  let parsed: { message?: string; files?: unknown };
   try {
     parsed = JSON.parse(body);
   } catch {
@@ -478,7 +484,12 @@ export async function handleMessageUser(
     res.end(JSON.stringify({ error: "Missing message" }));
     return;
   }
-  const result = messageUser(ctx, deps, parsed.message);
+  const result = messageUser(
+    ctx,
+    deps,
+    parsed.message,
+    stringList(parsed.files),
+  );
   const status = result.ok ? 200 : (EGRESS_STATUS_MAP[result.reason] ?? 500);
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(result));
@@ -496,7 +507,12 @@ export async function handlePostChannel(
     res.end();
     return;
   }
-  let parsed: { channel?: string; message?: string; mentions?: string[] };
+  let parsed: {
+    channel?: string;
+    message?: string;
+    mentions?: string[];
+    files?: unknown;
+  };
   try {
     parsed = JSON.parse(body);
   } catch {
@@ -520,6 +536,8 @@ export async function handlePostChannel(
     parsed.channel,
     parsed.message,
     parsed.mentions,
+    undefined,
+    stringList(parsed.files),
   );
   const status = result.ok ? 200 : (EGRESS_STATUS_MAP[result.reason] ?? 500);
   res.writeHead(status, { "Content-Type": "application/json" });

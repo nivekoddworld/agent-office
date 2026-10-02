@@ -1,4 +1,7 @@
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { attachmentPath } from "../../egress/files.js";
+import { avatarFromIdentity } from "../../agent/tools/set-avatar.js";
 import type { Workspace } from "../../workspace.js";
 import { onEgress } from "../../egress/egress-impl.js";
 import { DiscordBridge } from "./bridge.js";
@@ -19,6 +22,39 @@ function avatarFor(template: string | undefined) {
   const t = template?.trim() || DEFAULT_AVATAR;
   if (t === "none") return undefined;
   return (name: string) => t.replace("{name}", encodeURIComponent(name));
+}
+
+/**
+ * An agent's avatar: the "Avatar:" URL in its instructions/IDENTITY.md
+ * (set with the set_avatar tool, or by hand), else the default template.
+ */
+export function avatarLookup(
+  workspaceDirOf: (name: string) => string | undefined,
+  template: string | undefined,
+): (name: string) => string | undefined {
+  const fallback = avatarFor(template);
+  const cache = new Map<string, { mtime: number; url?: string }>();
+  return (name) => {
+    const dir = workspaceDirOf(name);
+    if (dir) {
+      const file = join(dir, "instructions", "IDENTITY.md");
+      try {
+        const mtime = statSync(file).mtimeMs;
+        let cached = cache.get(name);
+        if (!cached || cached.mtime !== mtime) {
+          cached = {
+            mtime,
+            url: avatarFromIdentity(readFileSync(file, "utf-8")),
+          };
+          cache.set(name, cached);
+        }
+        if (cached.url) return cached.url;
+      } catch {
+        // no IDENTITY.md
+      }
+    }
+    return fallback?.(name);
+  };
 }
 
 /**
@@ -55,12 +91,19 @@ export async function startDiscordBridge(
           workspace.sendUserDm(agent, text, { origin }),
         postUserChannel: (channel, text, mentions, origin) =>
           workspace.postUserChannel(channel, text, mentions, origin),
+        attachmentPath: (id) => attachmentPath(workspace.office.dir, id),
       },
       {
         guildId,
         statePath: join(workspace.office.dir, "discord.json"),
-        avatarUrl: avatarFor(env["DISCORD_AVATAR_URL"]),
+        avatarUrl: avatarLookup(
+          (name) => workspace.getAgent(name)?.cwd,
+          env["DISCORD_AVATAR_URL"],
+        ),
         activity: env["DISCORD_ACTIVITY"]?.trim().toLowerCase() !== "off",
+        ...(Number(env["DISCORD_MAX_UPLOAD_MB"]) > 0
+          ? { maxUploadBytes: Number(env["DISCORD_MAX_UPLOAD_MB"]) * 1048576 }
+          : {}),
       },
     );
     await bridge.start();

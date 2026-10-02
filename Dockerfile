@@ -22,7 +22,7 @@ FROM node:22-slim
 # Tools the agents' coding tools shell out to (Pi finds fd as "fdfind").
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       git ripgrep fd-find curl ca-certificates tini \
+       git ripgrep fd-find curl ca-certificates tini zip unzip \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker
