@@ -107,41 +107,150 @@ export function groupMessages(messages: AgentMessage[]): AgentMessage[][] {
   return groups;
 }
 
+/** A transformContext function that can also learn from "too long" errors. */
+export interface ContextPruner {
+  (messages: AgentMessage[], signal?: AbortSignal): Promise<AgentMessage[]>;
+  /**
+   * Learn from a server error saying the request didn't fit (e.g. llama.cpp's
+   * "request (132542 tokens) exceeds the available context size (131072
+   * tokens)"): estimate higher and cap at the server's real size from now on.
+   * Returns whether it was such an error.
+   */
+  noteOverflow(errorMessage: string): boolean;
+}
+
+/** Requested and available tokens from a "context too long" error, if it is one. */
+export function parseOverflow(
+  errorMessage: string,
+): { requested?: number; limit?: number } | undefined {
+  // llama.cpp
+  let m =
+    /request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)/i.exec(
+      errorMessage,
+    );
+  if (m) return { requested: Number(m[1]), limit: Number(m[2]) };
+  // vLLM / OpenAI-style
+  m =
+    /maximum context length is (\d+) tokens.*?(?:requested|resulted in) (\d+) tokens/is.exec(
+      errorMessage,
+    );
+  if (m) return { requested: Number(m[2]), limit: Number(m[1]) };
+  if (
+    /exceed_context_size|context[_ ]length[_ ]exceeded|exceeds? (?:the )?(?:available |maximum )?context|prompt is too long|too many tokens/i.test(
+      errorMessage,
+    )
+  )
+    return {};
+  return undefined;
+}
+
+/** Characters of the tool declarations sent with every request. */
+export function toolChars(
+  tools: Array<{ name: string; description?: string; parameters?: unknown }>,
+): number {
+  return tools.reduce(
+    (n, t) =>
+      n +
+      t.name.length +
+      (t.description?.length ?? 0) +
+      JSON.stringify(t.parameters ?? {}).length,
+    0,
+  );
+}
+
+/** Shorten the text of large tool results in a group so it fits `tokens`. */
+function shrinkToolResults(
+  group: AgentMessage[],
+  tokens: number,
+  cfg: ContextPrunerConfig,
+  scale: number,
+): AgentMessage[] {
+  const cost = (m: AgentMessage) => estimateMessageTokens(m, cfg) * scale;
+  const total = group.reduce((n, m) => n + cost(m), 0);
+  const big = group.filter(
+    (m) =>
+      (m as any).role === "toolResult" &&
+      ((m as any).content ?? []).some(
+        (p: any) => p.type === "text" && p.text.length > 2000,
+      ),
+  );
+  if (total <= tokens || big.length === 0) return group;
+  // Each big result gets an equal share of what's left after the rest.
+  const rest = total - big.reduce((n, m) => n + cost(m), 0);
+  const share = Math.max(
+    500,
+    Math.floor(((tokens - rest) / big.length / scale) * cfg.charsPerToken),
+  );
+  return group.map((m) => {
+    if (!big.includes(m)) return m;
+    const msg = m as any;
+    return {
+      ...msg,
+      content: msg.content.map((p: any) =>
+        p.type === "text" && p.text.length > share
+          ? {
+              ...p,
+              text:
+                p.text.slice(0, share) +
+                `\n[…${p.text.length - share} more characters cut to fit the model's context window]`,
+            }
+          : p,
+      ),
+    } as AgentMessage;
+  });
+}
+
 /**
  * Create a transformContext function for use with Pi's Agent constructor.
  * Prunes old messages to fit within the model's context window using a
- * sliding window that keeps the most recent turn-groups.
+ * sliding window that keeps the most recent turn-groups. `fixedChars` is
+ * what every request carries besides the messages: the system prompt and
+ * the tool declarations.
  */
 export function createContextPruner(
-  model: Model<any>,
-  systemPromptChars: number,
+  model: Model<any> | (() => Model<any>),
+  fixedChars: number,
   config?: Partial<ContextPrunerConfig>,
-): (messages: AgentMessage[], signal?: AbortSignal) => Promise<AgentMessage[]> {
+): ContextPruner {
   const cfg = { ...DEFAULT_CONFIG, ...config };
+  const currentModel = typeof model === "function" ? model : () => model;
+  const fixedEstimate = Math.ceil(fixedChars / cfg.charsPerToken);
+  /** Real tokens per estimated token, learned from overflow errors. */
+  let scale = 1;
+  /** The context size the server reported, if smaller than configured. */
+  let serverLimit: number | undefined;
+  /** Estimated size of the last request we let through. */
+  let lastEstimate = 0;
+  let warned = false;
 
-  const systemPromptTokens = Math.ceil(systemPromptChars / cfg.charsPerToken);
-  const safetyMargin = Math.floor(model.contextWindow * cfg.safetyMarginRatio);
-  const budget =
-    model.contextWindow - model.maxTokens - systemPromptTokens - safetyMargin;
-
-  if (budget <= 0) {
-    console.warn(
-      `[context-pruner] Non-positive token budget (${budget}). ` +
-        `contextWindow=${model.contextWindow}, maxTokens=${model.maxTokens}, ` +
-        `systemPrompt=~${systemPromptTokens}t, safety=${safetyMargin}t`,
-    );
-  }
-
-  return async (messages: AgentMessage[]): Promise<AgentMessage[]> => {
-    if (budget <= 0 || messages.length === 0) return messages;
+  const pruner = async (messages: AgentMessage[]): Promise<AgentMessage[]> => {
+    const m = currentModel();
+    const window = Math.min(m.contextWindow, serverLimit ?? Infinity);
+    const safetyMargin = Math.floor(window * cfg.safetyMarginRatio);
+    const fixed = Math.ceil(fixedEstimate * scale);
+    const budget = window - m.maxTokens - fixed - safetyMargin;
+    if (budget <= 0) {
+      if (!warned)
+        console.warn(
+          `[context-pruner] Non-positive token budget (${budget}). ` +
+            `contextWindow=${window}, maxTokens=${m.maxTokens}, ` +
+            `systemPrompt+tools=~${fixed}t, safety=${safetyMargin}t`,
+        );
+      warned = true;
+      return messages;
+    }
+    if (messages.length === 0) return messages;
 
     const groups = groupMessages(messages);
     const groupTokens = groups.map((g) =>
-      g.reduce((sum, msg) => sum + estimateMessageTokens(msg, cfg), 0),
+      g.reduce((sum, msg) => sum + estimateMessageTokens(msg, cfg) * scale, 0),
     );
 
-    const totalTokens = groupTokens.reduce((a, b) => a + b, 0);
-    if (totalTokens <= budget) return messages;
+    const totalTokens = Math.ceil(groupTokens.reduce((a, b) => a + b, 0));
+    if (totalTokens <= budget) {
+      lastEstimate = totalTokens + fixed;
+      return messages;
+    }
 
     // Keep groups from the end until budget is exhausted
     let remaining = budget;
@@ -154,17 +263,29 @@ export function createContextPruner(
       keepFromIndex = i;
     }
 
-    // Always keep at least the most recent group to prevent deadlocks
+    // Always keep at least the most recent group to prevent deadlocks,
+    // shortening big tool results in it if it doesn't fit on its own.
     if (keepFromIndex >= groups.length) {
       keepFromIndex = groups.length - 1;
+      groups[keepFromIndex] = shrinkToolResults(
+        groups[keepFromIndex]!,
+        budget,
+        cfg,
+        scale,
+      );
     }
 
     // System messages carry the prompt and tool declarations (already counted
-    // in the budget via systemPromptChars), so never prune them.
-    const kept = groups
-      .filter((g, i) => i >= keepFromIndex || (g[0] as any).role === "system")
-      .flat();
+    // in the budget via fixedChars), so never prune them.
+    const keptGroups = groups.filter(
+      (g, i) => i >= keepFromIndex || (g[0] as any).role === "system",
+    );
+    const kept = keptGroups.flat();
     const prunedCount = messages.length - kept.length;
+    lastEstimate =
+      Math.ceil(
+        kept.reduce((n, msg) => n + estimateMessageTokens(msg, cfg) * scale, 0),
+      ) + fixed;
 
     if (prunedCount > 0) {
       console.log(
@@ -175,4 +296,42 @@ export function createContextPruner(
 
     return kept;
   };
+
+  pruner.noteOverflow = (errorMessage: string): boolean => {
+    const o = parseOverflow(errorMessage);
+    if (!o) return false;
+    if (o.limit && o.limit < currentModel().contextWindow)
+      serverLimit = o.limit;
+    const factor =
+      o.requested && lastEstimate > 0 ? o.requested / lastEstimate : 1.25;
+    // At least 10% more each time, so repeated overflows always converge.
+    scale *= Math.max(1.1, factor * 1.05);
+    console.warn(
+      `[context-pruner] The model's context was exceeded` +
+        (o.requested ? ` (${o.requested}/${o.limit} tokens)` : "") +
+        `; estimating ×${scale.toFixed(2)} from now on`,
+    );
+    return true;
+  };
+
+  return pruner;
+}
+
+/**
+ * If the last run stopped because the request didn't fit the model's
+ * context, trim harder and try once more. Returns whether it retried.
+ */
+export async function retryAfterOverflow(
+  agent: {
+    state: { messages: AgentMessage[] };
+    continue(): Promise<void>;
+  },
+  pruner: ContextPruner,
+): Promise<boolean> {
+  const last = agent.state.messages.at(-1) as any;
+  if (last?.role !== "assistant" || last.stopReason !== "error") return false;
+  if (!pruner.noteOverflow(String(last.errorMessage ?? ""))) return false;
+  agent.state.messages = agent.state.messages.slice(0, -1);
+  await agent.continue();
+  return true;
 }

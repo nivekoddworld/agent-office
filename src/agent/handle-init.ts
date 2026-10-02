@@ -59,7 +59,11 @@ import {
 import { getCronSummaries } from "../config/office-yaml.js";
 import { ensureAgentSkillLayout } from "../skills/registry.js";
 import { applyToolPolicy } from "./tools/policy.js";
-import { createContextPruner } from "./context-pruner.js";
+import {
+  createContextPruner,
+  toolChars,
+  type ContextPruner,
+} from "./context-pruner.js";
 import { SANDBOX_SHARED_PATH } from "../constants.js";
 
 export interface InitContext {
@@ -174,6 +178,7 @@ export async function initSandboxAgent(
 
 export interface InProcessInitResult {
   agent: Agent;
+  pruner: ContextPruner;
   toolCount: number;
   redact: { deep: (obj: unknown) => unknown };
 }
@@ -380,6 +385,11 @@ export async function initInProcessAgent(
     `[agent:${ctx.name}] Prompt ${composed.version} (${composed.hash})`,
   );
 
+  // Follows live model switches; counts the tool declarations sent each time.
+  const pruner = createContextPruner(
+    () => agent.state.model,
+    composed.text.length + toolChars(tools),
+  );
   const agent: Agent = new Agent({
     initialState: {
       systemPrompt: composed.text,
@@ -392,10 +402,7 @@ export async function initInProcessAgent(
     getApiKey:
       oauthGetApiKey ??
       (() => resolvedApiKey ?? resolveLocalApiKey(agent.state.model)),
-    transformContext: createContextPruner(
-      ctx.config.model,
-      composed.text.length,
-    ),
+    transformContext: pruner,
   });
 
   const secretValues: Record<string, string> = {};
@@ -405,5 +412,5 @@ export async function initInProcessAgent(
   Object.assign(secretValues, resolvedSecrets);
   const redact = createRedactor(secretValues);
 
-  return { agent, toolCount: tools.length, redact };
+  return { agent, pruner, toolCount: tools.length, redact };
 }
