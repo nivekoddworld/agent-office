@@ -121,6 +121,7 @@ function createMockWorkspace() {
     },
     updateChannels: vi.fn(),
     getAgent: vi.fn(() => undefined),
+    onActivity: vi.fn(() => vi.fn()),
     onAgentEvent: vi.fn((fn: (name: string, event: any) => void) => {
       agentEventListener = fn;
       return vi.fn();

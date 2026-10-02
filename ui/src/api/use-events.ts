@@ -87,6 +87,7 @@ export function useSSE(
         void queryClient.invalidateQueries({ queryKey: ["agent"] });
         void queryClient.invalidateQueries({ queryKey: ["channel-messages"] });
         void queryClient.invalidateQueries({ queryKey: ["agent-messages"] });
+        void queryClient.invalidateQueries({ queryKey: ["agent-activity"] });
       }
       invalidateForEvent(type, data, queryClient);
       // state_changed is silent — don't push to event feed
@@ -117,6 +118,7 @@ export function useSSE(
 
       listen("scheduler_tick");
       listen("agent_event");
+      listen("activity");
       listen("heartbeat");
       listen("snapshot");
       listen("state_changed");

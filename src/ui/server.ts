@@ -115,6 +115,9 @@ export async function startUiServer(
   const unsubAgent = workspace.onAgentEvent((name, event) =>
     broadcast("agent_event", { agent: name, ...event }),
   );
+  const unsubActivity = workspace.onActivity((name, entry) =>
+    broadcast("activity", { agent: name, ...entry }),
+  );
   const heartbeat = setInterval(() => broadcast("heartbeat", {}), HEARTBEAT_MS);
 
   workspace.setTaskStateChangedCallback(() =>
@@ -217,6 +220,7 @@ export async function startUiServer(
     flushSSE();
     unsubTick();
     unsubAgent();
+    unsubActivity();
     clearAuthState();
     instance = null;
   };

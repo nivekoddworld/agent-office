@@ -29,7 +29,11 @@ import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
-import { appendActivity, toActivityEntry } from "./activity/activity-log.js";
+import {
+  appendActivity,
+  toActivityEntry,
+  type ActivityEntry,
+} from "./activity/activity-log.js";
 import {
   CronService,
   type CronChannelFanout,
@@ -58,6 +62,9 @@ export class Workspace {
   readonly tasks: TaskService;
   readonly office: OfficeContext;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
+  private activityListeners: Array<
+    (name: string, entry: ActivityEntry) => void
+  > = [];
   private hostApi: HostApi | null = null;
   private sandboxProvider: SandboxProvider | null = null;
   private sandboxMode: string;
@@ -393,6 +400,8 @@ export class Workspace {
 
       const activity = toActivityEntry(
         event as unknown as Record<string, unknown>,
+        Date.now(),
+        event.type === "agent_start" ? handle.getActiveTrigger() : undefined,
       );
       if (activity) {
         try {
@@ -400,6 +409,7 @@ export class Workspace {
         } catch {
           // Best-effort: never fail agent flow
         }
+        for (const fn of this.activityListeners) fn(config.name, activity);
       }
 
       if (event.type === "message_start") {
@@ -412,7 +422,7 @@ export class Workspace {
       } else if (event.type === "tool_execution_start") {
         const e = event as unknown as Record<string, unknown>;
         const toolName = (e["toolName"] as string) ?? "?";
-        const input = e["input"] as Record<string, unknown> | undefined;
+        const input = e["args"] as Record<string, unknown> | undefined;
         const inputStr = input ? JSON.stringify(input).slice(0, 120) : "";
         console.log(
           `[event] ${config.name}: tool_execution_start tool=${toolName}` +
@@ -421,7 +431,7 @@ export class Workspace {
       } else if (event.type === "tool_execution_end") {
         const e = event as unknown as Record<string, unknown>;
         const toolName = (e["toolName"] as string) ?? "?";
-        const output = e["output"] as Record<string, unknown> | undefined;
+        const output = e["result"] as Record<string, unknown> | undefined;
         const outputStr = output ? JSON.stringify(output).slice(0, 120) : "";
         console.log(
           `[event] ${config.name}: tool_execution_end tool=${toolName}` +
@@ -646,6 +656,14 @@ export class Workspace {
   }
 
   // --- Events ---
+
+  /** Called with each entry saved to an agent's activity log. */
+  onActivity(fn: (name: string, entry: ActivityEntry) => void): () => void {
+    this.activityListeners.push(fn);
+    return () => {
+      this.activityListeners = this.activityListeners.filter((l) => l !== fn);
+    };
+  }
 
   onAgentEvent(fn: (name: string, event: AgentEvent) => void): () => void {
     this.listeners.push(fn);

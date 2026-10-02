@@ -112,6 +112,11 @@ export class Scheduler {
         msg.sourceKind === "internal" ? msg.from : undefined,
       );
       handle.setActiveOriginTaskId(msg.originTaskId);
+      handle.setActiveTrigger({
+        from: msg.from,
+        text: msg.payload,
+        ...(msg.channel ? { channel: msg.channel } : {}),
+      });
       handle.setActiveHopCount(msg.hopCount ?? 0);
       handle.setActiveCorrelationId(msg.correlationId);
 
@@ -141,6 +146,7 @@ export class Scheduler {
           handle.setActiveConversationPeer(undefined);
           handle.setActiveHopCount(0);
           handle.setActiveCorrelationId(undefined);
+          handle.setActiveTrigger(undefined);
         });
     }
 

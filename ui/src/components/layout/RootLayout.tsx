@@ -5,6 +5,10 @@ import { authenticate } from "../../api/client.js";
 import { useBootstrapState } from "../../api/use-state.js";
 import { useSSE } from "../../api/use-events.js";
 import { pushEvent } from "../../store/event-store.js";
+import {
+  activityStore,
+  type LiveActivity,
+} from "../../store/activity-store.js";
 import { agentActivityStore } from "../../store/agent-activity-store.js";
 import { unreadStore } from "../../store/unread-store.js";
 import { debugCaptureStore } from "../../store/debug-capture-store.js";
@@ -31,6 +35,10 @@ export function RootLayout() {
   const authed = auth === "authenticated";
 
   const handleSSE = useCallback((type: string, data: unknown) => {
+    if (type === "activity") {
+      activityStore.push(data as LiveActivity);
+      return;
+    }
     debugCaptureStore.ingestEvent(type, data);
     if (isChatRelevantSSE(type)) {
       pushEvent(type, data);

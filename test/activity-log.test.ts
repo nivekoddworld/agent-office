@@ -10,38 +10,132 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   appendActivity,
+  MAX_ARG_CHARS,
   readActivity,
   toActivityEntry,
 } from "../src/activity/activity-log.js";
 import { systemEventText } from "../ui/src/components/slack/channel-helpers.js";
 
 describe("toActivityEntry", () => {
-  it("keeps turn and tool events with their context", () => {
+  it("keeps tool calls with their context, input and output", () => {
     expect(
       toActivityEntry(
         {
-          type: "tool_execution_end",
+          type: "tool_execution_start",
+          toolCallId: "c1",
           toolName: "bash",
-          isError: true,
+          args: { command: "npm test" },
           sessionKey: "internal:coder",
           sourceKind: "internal",
           originTaskId: "T-1",
-          result: { big: "output not stored" },
         },
         5,
       ),
     ).toEqual({
       ts: 5,
-      type: "tool_execution_end",
+      type: "tool_execution_start",
+      toolCallId: "c1",
       toolName: "bash",
-      isError: true,
+      args: { command: "npm test" },
       sessionKey: "internal:coder",
       sourceKind: "internal",
       originTaskId: "T-1",
     });
-    expect(toActivityEntry({ type: "turn_start" }, 1)).toEqual({
+    expect(
+      toActivityEntry(
+        {
+          type: "tool_execution_end",
+          toolCallId: "c1",
+          toolName: "bash",
+          isError: true,
+          result: { content: [{ type: "text", text: "exit 1" }] },
+        },
+        6,
+      ),
+    ).toEqual({
+      ts: 6,
+      type: "tool_execution_end",
+      toolCallId: "c1",
+      toolName: "bash",
+      isError: true,
+      result: "exit 1",
+    });
+  });
+
+  it("shortens long tool input and output", () => {
+    const long = "x".repeat(MAX_ARG_CHARS + 10);
+    const start = toActivityEntry({
+      type: "tool_execution_start",
+      toolName: "write",
+      args: { path: "a.txt", content: long },
+    });
+    const content = (start!.args as { content: string }).content;
+    expect(content.startsWith("x".repeat(MAX_ARG_CHARS))).toBe(true);
+    expect(content).toContain("[10 more characters]");
+    const end = toActivityEntry({
+      type: "tool_execution_end",
+      toolName: "read",
+      result: { content: [{ type: "text", text: "y".repeat(5000) }] },
+    });
+    expect(end!.result!.length).toBeLessThan(5000);
+  });
+
+  it("records what woke the agent, what the model said and why it stopped", () => {
+    expect(
+      toActivityEntry({ type: "agent_start" }, 1, {
+        from: "lead",
+        text: "please build it",
+        channel: "work",
+      }),
+    ).toEqual({
       ts: 1,
-      type: "turn_start",
+      type: "agent_start",
+      trigger: { from: "lead", text: "please build it", channel: "work" },
+    });
+    expect(
+      toActivityEntry(
+        {
+          type: "turn_end",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: "hmm" },
+              { type: "text", text: "Building now." },
+            ],
+            usage: { totalTokens: 1234 },
+            stopReason: "toolUse",
+          },
+        },
+        2,
+      ),
+    ).toEqual({
+      ts: 2,
+      type: "turn_end",
+      text: "Building now.",
+      tokens: 1234,
+      stopReason: "toolUse",
+    });
+    expect(
+      toActivityEntry(
+        {
+          type: "agent_end",
+          messages: [
+            { role: "user", content: "hi" },
+            {
+              role: "assistant",
+              content: [],
+              stopReason: "error",
+              errorMessage: "connection refused",
+            },
+          ],
+        },
+        3,
+      ),
+    ).toEqual({
+      ts: 3,
+      type: "agent_end",
+      stopReason: "error",
+      error: "connection refused",
     });
   });
 
