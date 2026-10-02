@@ -12,10 +12,10 @@ export function createMessageUserProxy(
 ): AgentTool<typeof MESSAGE_USER.parameters> {
   return {
     ...MESSAGE_USER,
-    execute: async (_id, params: { message: string; images?: string[] }) => {
+    execute: async (_id, params: { message: string; files?: string[] }) => {
       const res = await hostFetch("/api/message-user", {
         message: params.message,
-        images: params.images,
+        files: params.files,
       });
       if (!res.ok) {
         let msg = res.statusText;
@@ -31,8 +31,8 @@ export function createMessageUserProxy(
         return textResult(`Error: ${msg}`);
       }
       return textResult(
-        params.images?.length
-          ? `Message delivered to user with ${params.images.length} image(s)`
+        params.files?.length
+          ? `Message delivered to user with ${params.files.length} file(s)`
           : "Message delivered to user",
       );
     },

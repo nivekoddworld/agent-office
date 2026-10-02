@@ -12,12 +12,12 @@ const textResult = (text: string) => ({
 export function postedText(
   channel: string,
   result: { targets?: string[]; skippedMentions?: string[] },
-  images?: string[],
+  files?: string[],
 ): string {
   const parts = [`Message posted to #${channel}`];
   if (result.targets?.length)
     parts.push(`(notified: ${result.targets.join(", ")})`);
-  if (images?.length) parts.push(`with ${images.length} image(s)`);
+  if (files?.length) parts.push(`with ${files.length} file(s)`);
   let text = parts.join(" ");
   if (result.skippedMentions?.length)
     text += `. Not notified (not in #${channel}): ${result.skippedMentions.join(", ")}`;
@@ -43,7 +43,7 @@ export function createPostChannelTool(
         channel: string;
         message: string;
         mentions?: string[];
-        images?: string[];
+        files?: string[];
       },
     ) => {
       const ctx: EgressContext = {
@@ -61,11 +61,11 @@ export function createPostChannelTool(
         params.message,
         params.mentions,
         undefined,
-        params.images,
+        params.files,
       );
       if (!result.ok)
         return textResult(`Error: ${result.error ?? result.reason}`);
-      return textResult(postedText(params.channel, result, params.images));
+      return textResult(postedText(params.channel, result, params.files));
     },
   };
 }

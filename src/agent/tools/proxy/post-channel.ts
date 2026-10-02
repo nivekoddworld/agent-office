@@ -18,14 +18,14 @@ export function createPostChannelProxy(
         channel: string;
         message: string;
         mentions?: string[];
-        images?: string[];
+        files?: string[];
       },
     ) => {
       const res = await hostFetch("/api/post-channel", {
         channel: params.channel,
         message: params.message,
         mentions: params.mentions,
-        images: params.images,
+        files: params.files,
       });
       if (!res.ok) {
         let msg = res.statusText;
@@ -47,8 +47,7 @@ export function createPostChannelProxy(
       let text = `Message posted to #${params.channel}`;
       if (body.targets?.length)
         text += ` (notified: ${body.targets.join(", ")})`;
-      if (params.images?.length)
-        text += ` with ${params.images.length} image(s)`;
+      if (params.files?.length) text += ` with ${params.files.length} file(s)`;
       if (body.skippedMentions?.length)
         text += `. Not notified (not in #${params.channel}): ${body.skippedMentions.join(", ")}`;
       return textResult(text);

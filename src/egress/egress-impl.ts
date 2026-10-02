@@ -2,7 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { Priority, type Attachment } from "../types.js";
-import { importImages } from "./images.js";
+import { importFiles } from "./files.js";
 import { sessionKey } from "../messages/session-key.js";
 import {
   CHANNEL_RATE_LIMIT,
@@ -131,22 +131,22 @@ export function messageUser(
   ctx: EgressContext,
   deps: EgressDeps,
   message: string,
-  images: string[] = [],
+  files: string[] = [],
 ): EgressResult {
   const egressId = ctx.idempotencyKey
     ? deriveEgressId(ctx.idempotencyKey)
     : randomUUID();
 
   const trimmed = message.trim();
-  if (!trimmed && images.length === 0)
+  if (!trimmed && files.length === 0)
     return { ok: false, reason: "validation" };
   if (trimmed.length > MAX_MESSAGE_LENGTH)
     return { ok: false, reason: "validation" };
-  if (recentIds.has(egressId)) images = []; // a retry: already copied
-  const imported = importImages(
+  if (recentIds.has(egressId)) files = []; // a retry: already copied
+  const imported = importFiles(
     deps.baseDir,
     deps.agentFiles?.(ctx.agentName),
-    images,
+    files,
   );
   if (!imported.ok)
     return { ok: false, reason: "validation", error: imported.error };
@@ -216,14 +216,14 @@ export function postChannel(
   message: string,
   mentions?: string[],
   priority?: Priority,
-  images: string[] = [],
+  files: string[] = [],
 ): EgressResult {
   const egressId = ctx.idempotencyKey
     ? deriveEgressId(ctx.idempotencyKey)
     : randomUUID();
 
   const trimmed = message.trim();
-  if ((!trimmed && images.length === 0) || !CHANNEL_NAME_RE.test(channel))
+  if ((!trimmed && files.length === 0) || !CHANNEL_NAME_RE.test(channel))
     return { ok: false, reason: "validation" };
   if (trimmed.length > MAX_MESSAGE_LENGTH)
     return { ok: false, reason: "validation" };
@@ -263,11 +263,11 @@ export function postChannel(
     return { ok: false, reason: "rate_limited" };
   }
 
-  if (recentIds.has(egressId)) images = []; // a retry: already copied
-  const imported = importImages(
+  if (recentIds.has(egressId)) files = []; // a retry: already copied
+  const imported = importFiles(
     deps.baseDir,
     deps.agentFiles?.(ctx.agentName),
-    images,
+    files,
   );
   if (!imported.ok)
     return { ok: false, reason: "validation", error: imported.error };

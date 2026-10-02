@@ -6,7 +6,7 @@ import type { HandlerContext } from "../handler-context.js";
 import type { RouteDefinition } from "../router.js";
 import { json, readBody, requireMutation } from "../http-helpers.js";
 import { getBootstrapState } from "../routes.js";
-import { uploadsDir } from "../../egress/images.js";
+import { uploadsDir } from "../../egress/files.js";
 
 const ALLOWED_MIME_TYPES = new Set([
   "image/png",
@@ -248,13 +248,13 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       method: "GET",
       pattern: /^\/api\/uploads\/([^/]+)$/,
       paramNames: ["id"],
-      handler: (_req, res, _url, params) => {
+      handler: (_req, res, url, params) => {
         const id = params.id!;
         if (!UPLOAD_ID_RE.test(id))
           return json(res, 400, { error: "invalid_id" });
         const filePath = join(uploadsDir(workspace.office.dir), id);
         const ext = extname(id).toLowerCase();
-        const contentType =
+        const image =
           ext === ".png"
             ? "image/png"
             : ext === ".jpg" || ext === ".jpeg"
@@ -263,11 +263,21 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
                 ? "image/gif"
                 : ext === ".webp"
                   ? "image/webp"
-                  : "application/octet-stream";
+                  : undefined;
+        // Anything but an image is a download, never shown in the page
+        // (an agent's .html file must not run as the dashboard).
+        const name = (url.searchParams.get("name") ?? id).replace(
+          /[^\w.-]+/g,
+          "_",
+        );
         try {
           const data = readFileSync(filePath);
           res.writeHead(200, {
-            "Content-Type": contentType,
+            "Content-Type": image ?? "application/octet-stream",
+            ...(image
+              ? {}
+              : { "Content-Disposition": `attachment; filename="${name}"` }),
+            "X-Content-Type-Options": "nosniff",
             "Cache-Control": "public, max-age=31536000, immutable",
           });
           res.end(data);

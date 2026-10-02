@@ -21,7 +21,7 @@ export function createMessageUserTool(
 ): AgentTool<typeof MESSAGE_USER.parameters> {
   return {
     ...MESSAGE_USER,
-    execute: async (id, params: { message: string; images?: string[] }) => {
+    execute: async (id, params: { message: string; files?: string[] }) => {
       const ctx: EgressContext = {
         agentName: deps.agentName,
         idempotencyKey: id,
@@ -30,12 +30,12 @@ export function createMessageUserTool(
         originSession: deps.getActiveSessionKey(),
         hopCount: deps.getActiveHopCount(),
       };
-      const result = messageUser(ctx, deps, params.message, params.images);
+      const result = messageUser(ctx, deps, params.message, params.files);
       if (!result.ok)
         return textResult(`Error: ${result.error ?? result.reason}`);
       return textResult(
-        params.images?.length
-          ? `Message delivered to user with ${params.images.length} image(s)`
+        params.files?.length
+          ? `Message delivered to user with ${params.files.length} file(s)`
           : "Message delivered to user",
       );
     },

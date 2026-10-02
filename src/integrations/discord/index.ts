@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { attachmentPath } from "../../egress/images.js";
+import { attachmentPath } from "../../egress/files.js";
 import { avatarFromIdentity } from "../../agent/tools/set-avatar.js";
 import type { Workspace } from "../../workspace.js";
 import { onEgress } from "../../egress/egress-impl.js";
@@ -101,6 +101,9 @@ export async function startDiscordBridge(
           env["DISCORD_AVATAR_URL"],
         ),
         activity: env["DISCORD_ACTIVITY"]?.trim().toLowerCase() !== "off",
+        ...(Number(env["DISCORD_MAX_UPLOAD_MB"]) > 0
+          ? { maxUploadBytes: Number(env["DISCORD_MAX_UPLOAD_MB"]) * 1048576 }
+          : {}),
       },
     );
     await bridge.start();

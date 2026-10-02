@@ -2,7 +2,7 @@ import type { MessageBus } from "../transport/message-bus.js";
 import type { MessageStore } from "../messages/message-store.js";
 import type { ChannelConfig } from "../types.js";
 
-import type { AgentFileRoots } from "./images.js";
+import type { AgentFileRoots } from "./files.js";
 
 export interface EgressContext {
   agentName: string;

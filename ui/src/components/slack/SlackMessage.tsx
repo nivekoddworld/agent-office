@@ -13,6 +13,8 @@ import {
   IconUser,
   IconBolt,
   IconCircleCheck,
+  IconFileZip,
+  IconFile,
 } from "@tabler/icons-react";
 
 import { MarkdownContent } from "./MarkdownContent.js";
@@ -117,6 +119,59 @@ function HoverActions({
         </Tooltip>
       )}
     </Group>
+  );
+}
+
+function isInlineImage(mimeType: string): boolean {
+  return /^image\/(png|jpeg|gif|webp)$/.test(mimeType);
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** A non-image attachment: a card that downloads the file. */
+function FileCard({
+  att,
+}: {
+  att: { id: string; filename: string; mimeType: string; size?: number };
+}) {
+  const archive = /zip|gzip|tar/.test(att.mimeType);
+  const Icon = archive ? IconFileZip : IconFile;
+  return (
+    <Box
+      component="a"
+      href={`/api/uploads/${att.id}?name=${encodeURIComponent(att.filename)}`}
+      download={att.filename}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 12px",
+        borderRadius: 8,
+        border: "1px solid var(--ao-border)",
+        background: "var(--ao-bg-surface)",
+        textDecoration: "none",
+        maxWidth: 320,
+      }}
+    >
+      <Icon size={24} color="var(--ao-accent-blue)" style={{ flexShrink: 0 }} />
+      <Box style={{ minWidth: 0 }}>
+        <Text
+          size="sm"
+          fw={500}
+          truncate
+          style={{ color: "var(--ao-text-bright)" }}
+        >
+          {att.filename}
+        </Text>
+        <Text size="xs" style={{ color: "var(--ao-text-muted)" }}>
+          {att.size !== undefined ? formatBytes(att.size) : "File"} · download
+        </Text>
+      </Box>
+    </Box>
   );
 }
 
@@ -272,27 +327,31 @@ export const SlackMessage = memo(function SlackMessage({
 
           {message.attachments && message.attachments.length > 0 && (
             <Group gap={8} mt={4}>
-              {message.attachments.map((att) => (
-                <Box
-                  key={att.id}
-                  style={{
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    border: "1px solid var(--ao-border)",
-                    maxWidth: 300,
-                  }}
-                >
-                  <img
-                    src={`/api/uploads/${att.id}`}
-                    alt={att.filename}
+              {message.attachments.map((att) =>
+                !isInlineImage(att.mimeType) ? (
+                  <FileCard key={att.id} att={att} />
+                ) : (
+                  <Box
+                    key={att.id}
                     style={{
-                      maxWidth: "100%",
-                      display: "block",
                       borderRadius: 8,
+                      overflow: "hidden",
+                      border: "1px solid var(--ao-border)",
+                      maxWidth: 300,
                     }}
-                  />
-                </Box>
-              ))}
+                  >
+                    <img
+                      src={`/api/uploads/${att.id}`}
+                      alt={att.filename}
+                      style={{
+                        maxWidth: "100%",
+                        display: "block",
+                        borderRadius: 8,
+                      }}
+                    />
+                  </Box>
+                ),
+              )}
             </Group>
           )}
         </Box>

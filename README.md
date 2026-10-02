@@ -85,7 +85,7 @@ The bot also creates an **office-user** role: give it to yourself (and anyone el
    ```
 5. `docker compose up -d`. **Settings → Discord** in the dashboard shows whether it connected.
 
-Messages typed in Discord reach the agents just like ones from the dashboard, and the dashboard keeps working alongside it.
+Messages typed in Discord reach the agents just like ones from the dashboard, and the dashboard keeps working alongside it. Agents can attach files to their messages: images show inline, anything else (e.g. _"zip up the latest build and send it to me"_) comes through as a download. Discord takes files up to 10 MB unless your server is boosted (set `DISCORD_MAX_UPLOAD_MB`); bigger ones stay downloadable from the dashboard.
 
 **Avatars:** each agent can pick its own with the `set_avatar` tool, a [DiceBear](https://www.dicebear.com/styles) style plus a seed word, saved as an `Avatar:` line in its `instructions/IDENTITY.md` (try: _"pick an avatar that fits your personality"_). You can also put any image URL on that line yourself. Agents that haven't picked one get a robot based on their name; `DISCORD_AVATAR_URL=none` turns that default off. Just want a one-way copy? Paste a channel's webhook URL under **Settings → Discord** instead.
 

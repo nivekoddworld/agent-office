@@ -4,6 +4,7 @@ import { mentionsInText, type EgressEvent } from "../../egress/egress-impl.js";
 import { SentMessageTracker, splitForDiscord } from "../discord-webhook.js";
 import type { ActivityEntry } from "../../activity/activity-log.js";
 import { ActivityRelay } from "./activity-relay.js";
+import { DEFAULT_MAX_UPLOAD, uploadsFor } from "./uploads.js";
 import { loadState, type BridgeState } from "./state.js";
 import {
   UnknownWebhookError,
@@ -55,6 +56,8 @@ export interface BridgeOptions {
   avatarUrl?: (name: string) => string | undefined;
   /** Activity channels, #status and the bot's status line (default on). */
   activity?: boolean;
+  /** Largest file to upload (default 10 MB, Discord's limit without boosts). */
+  maxUploadBytes?: number;
   /** Relay throttling, for tests. */
   activityIntervals?: { editIntervalMs?: number; presenceIntervalMs?: number };
 }
@@ -165,10 +168,12 @@ export class DiscordBridge {
 
   /** A message an agent sent you, or a channel post (from anyone). */
   handleEgress(e: EgressEvent): void {
-    const files = (e.attachments ?? []).map((a) => ({
-      path: this.host.attachmentPath(a.id),
-      name: a.filename,
-    }));
+    const { files, note } = uploadsFor(
+      e.attachments ?? [],
+      this.opts.maxUploadBytes ?? DEFAULT_MAX_UPLOAD,
+      (id) => this.host.attachmentPath(id),
+    );
+    e = { ...e, text: e.text + note };
     if (e.kind === "dm") {
       // An agent reaching out to you: ping the humans.
       this.enqueue(async () => {

@@ -471,7 +471,7 @@ export async function handleMessageUser(
     res.end();
     return;
   }
-  let parsed: { message?: string; images?: unknown };
+  let parsed: { message?: string; files?: unknown };
   try {
     parsed = JSON.parse(body);
   } catch {
@@ -488,7 +488,7 @@ export async function handleMessageUser(
     ctx,
     deps,
     parsed.message,
-    stringList(parsed.images),
+    stringList(parsed.files),
   );
   const status = result.ok ? 200 : (EGRESS_STATUS_MAP[result.reason] ?? 500);
   res.writeHead(status, { "Content-Type": "application/json" });
@@ -511,7 +511,7 @@ export async function handlePostChannel(
     channel?: string;
     message?: string;
     mentions?: string[];
-    images?: unknown;
+    files?: unknown;
   };
   try {
     parsed = JSON.parse(body);
@@ -537,7 +537,7 @@ export async function handlePostChannel(
     parsed.message,
     parsed.mentions,
     undefined,
-    stringList(parsed.images),
+    stringList(parsed.files),
   );
   const status = result.ok ? 200 : (EGRESS_STATUS_MAP[result.reason] ?? 500);
   res.writeHead(status, { "Content-Type": "application/json" });

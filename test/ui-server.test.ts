@@ -8,7 +8,7 @@ import {
   afterAll,
 } from "vitest";
 import http from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendActivity } from "../src/activity/activity-log.js";
@@ -817,6 +817,34 @@ describe("UI server", () => {
         headers: { Cookie: sessionCookie },
       });
       expect(missing.status).toBe(404);
+    } finally {
+      mockWs.office.dir = originalDir;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("serves uploaded images inline but other files only as downloads", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "ui-uploads-"));
+    const originalDir = mockWs.office.dir;
+    mockWs.office.dir = dir;
+    try {
+      mkdirSync(join(dir, "uploads"));
+      writeFileSync(join(dir, "uploads", "aaaa-1.png"), "png");
+      writeFileSync(join(dir, "uploads", "aaaa-2.html"), "<script>x</script>");
+      const img = await fetch(`${origin}/api/uploads/aaaa-1.png`, {
+        headers: { Cookie: sessionCookie },
+      });
+      expect(img.headers.get("content-type")).toBe("image/png");
+      expect(img.headers.get("content-disposition")).toBeNull();
+      const html = await fetch(
+        `${origin}/api/uploads/aaaa-2.html?name=game page.html`,
+        { headers: { Cookie: sessionCookie } },
+      );
+      expect(html.headers.get("content-type")).toBe("application/octet-stream");
+      expect(html.headers.get("content-disposition")).toBe(
+        'attachment; filename="game_page.html"',
+      );
+      expect(html.headers.get("x-content-type-options")).toBe("nosniff");
     } finally {
       mockWs.office.dir = originalDir;
       rmSync(dir, { recursive: true, force: true });

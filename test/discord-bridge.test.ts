@@ -343,6 +343,35 @@ describe("DiscordBridge", () => {
     ]);
   });
 
+  it("leaves files over Discord's upload limit in the dashboard, with a note", async () => {
+    bridge.handleEgress({
+      kind: "dm",
+      agent: "coder",
+      text: "Here's the build",
+      attachments: [
+        {
+          id: "b.zip",
+          filename: "build.zip",
+          mimeType: "application/zip",
+          size: 30 * 1048576,
+        },
+        {
+          id: "r.txt",
+          filename: "readme.txt",
+          mimeType: "text/plain",
+          size: 10,
+        },
+      ],
+    });
+    await bridge.idle();
+    expect(discord.sent[0]!.files).toEqual([
+      { path: "/uploads/r.txt", name: "readme.txt" },
+    ]);
+    expect(discord.sent[0]!.content).toContain(
+      "build.zip is 30.0 MB: over Discord's 10 MB upload limit, so download it from the dashboard.",
+    );
+  });
+
   it("matches typed @names in any case", async () => {
     discord.type("work", "@CODER build it");
     expect(host.posts).toEqual([
