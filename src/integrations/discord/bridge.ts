@@ -172,17 +172,10 @@ export class DiscordBridge {
     );
     e = { ...e, text: e.text + note };
     if (e.kind === "dm") {
-      // An agent reaching out to you: ping the humans.
-      this.enqueue(async () => {
-        const role = await this.userRole();
-        await this.post(
-          `dm:${e.agent}`,
-          e.agent,
-          `<@&${role}> ${e.text}`,
-          [role],
-          files,
-        );
-      });
+      // A 1:1 DM: the message itself is the notification, so no ping.
+      this.enqueue(() =>
+        this.post(`dm:${e.agent}`, e.agent, e.text, [], files),
+      );
       return;
     }
     if (e.origin === DISCORD_ORIGIN) return;
