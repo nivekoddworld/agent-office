@@ -72,6 +72,8 @@ export class AgentHandle {
   readonly config: AgentConfig;
   private agent: Agent | null = null;
   private pruner: ContextPruner | null = null;
+  /** Conversations it has been caught up on since it started. */
+  private caughtUp = new Set<string>();
   private bus: MessageBus;
   private listAgentsFn: () => AgentInfo[];
   private provider?: SandboxProvider;
@@ -282,6 +284,7 @@ export class AgentHandle {
   }
 
   async init(): Promise<void> {
+    this.caughtUp.clear();
     await mkdir(this.cwd, { recursive: true });
     await mkdir(join(this.agentDir, "skills"), { recursive: true });
     ensureAgentSkillLayout(this.baseDir, this.name);
@@ -468,7 +471,18 @@ export class AgentHandle {
     };
   }
 
+  /**
+   * True the first time it's asked about a conversation (a DM log) since
+   * the agent started or its memory was cleared: it may need catching up.
+   */
+  takeFreshContext(conversation: string): boolean {
+    if (this.caughtUp.has(conversation)) return false;
+    this.caughtUp.add(conversation);
+    return true;
+  }
+
   clearConversation(): void {
+    this.caughtUp.clear();
     // The system prompt and tool declarations live in the transcript as system
     // messages, so keep those. reset() would also do this but throws mid-run.
     if (this.agent) {

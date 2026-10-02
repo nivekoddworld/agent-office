@@ -10,6 +10,7 @@ import {
   formatChannelLog,
   messagesBefore,
   readChannelLog,
+  readSessionLog,
 } from "../channels/channel-history.js";
 import { DEFAULT_HEARTBEAT_PROMPT, isWithinActiveHours } from "./heartbeat.js";
 
@@ -27,6 +28,8 @@ export class Scheduler {
   private _channels: Map<string, ChannelConfig>;
   private _baseDir: string;
   private _channelContext: number;
+  /** Messages already given a second try after a failed delivery. */
+  private retried = new Set<string>();
   private listeners: Array<(state: SchedulerState) => void> = [];
   private lastHeartbeatTs = new Map<string, number>();
 
@@ -103,7 +106,7 @@ export class Scheduler {
     for (const handle of sorted) {
       if (handle.status === "running") continue;
 
-      const msg = this.bus.pop(handle.name);
+      const msg = this.bus.take(handle.name);
       if (!msg) continue;
 
       handle.setStatus("running");
@@ -124,7 +127,9 @@ export class Scheduler {
       const payload = formatMessagePayload(
         msg,
         this._channels,
-        this.earlierInChannel(handle.name, msg),
+        msg.sourceKind === "channel"
+          ? this.earlierInChannel(handle.name, msg)
+          : this.earlierInDm(handle, msg),
       );
       const images = resolveAttachments(msg, this._baseDir);
       const dispatch =
@@ -135,10 +140,20 @@ export class Scheduler {
       // Non-blocking — agent runs concurrently
       dispatch
         .then(() => {
+          this.bus.done(msg);
           if (handle.status !== "dead") handle.setStatus("idle");
         })
         .catch((err) => {
           console.error(`[scheduler] Agent "${handle.name}" error:`, err);
+          // Couldn't reach the agent (e.g. its container was restarting):
+          // try the message once more rather than lose it.
+          if (!this.retried.has(msg.id)) {
+            this.retried.add(msg.id);
+            this.bus.requeue(handle.name, msg);
+          } else {
+            this.retried.delete(msg.id);
+            this.bus.done(msg);
+          }
           if (handle.status !== "dead") handle.setStatus("idle");
         })
         .finally(() => {
@@ -179,6 +194,28 @@ export class Scheduler {
     const state = this.state();
     for (const fn of this.listeners) fn(state);
   }
+  /**
+   * DM messages before the one waking an agent, when its memory of them is
+   * gone (first wake-up since it started or was cleared), so a restart
+   * doesn't leave it without the conversation so far.
+   */
+  private earlierInDm(handle: AgentHandle, msg: InboxMessage): string {
+    if (!this._baseDir || this._channelContext <= 0) return "";
+    const file =
+      msg.from === "__user__" && msg.sourceKind === "dm"
+        ? "user-dm.jsonl"
+        : msg.sourceKind === "internal" && !msg.from.startsWith("__")
+          ? `agent-${msg.from}.jsonl`
+          : undefined;
+    if (!file || !handle.takeFreshContext(file)) return "";
+    const earlier = messagesBefore(
+      readSessionLog(this._baseDir, handle.name, file),
+      { from: msg.from, text: msg.payload },
+      this._channelContext,
+    );
+    return earlier.length > 0 ? formatChannelLog(earlier) : "";
+  }
+
   /**
    * Channel messages before the one waking `agentName`, so it can follow a
    * discussion it wasn't mentioned in (e.g. collecting votes).
@@ -259,8 +296,13 @@ function formatMessagePayload(
     );
   }
 
+  // Earlier DM messages, after a restart (see earlierInDm).
+  const before = earlier
+    ? `[Earlier in this conversation, oldest first]\n${earlier}\n\n`
+    : "";
   if (msg.from === "__user__") {
     return (
+      before +
       `[Message from user]\n${msg.payload}\n\n` +
       `[To reply, call message_user]`
     );
@@ -268,6 +310,7 @@ function formatMessagePayload(
   if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
   if (msg.from === "__heartbeat__") return `[Heartbeat]\n${msg.payload}`;
   return (
+    before +
     `[Message from ${msg.from}]\n${msg.payload}\n\n` +
     `[To reply, call message_agent with to="${msg.from}"]`
   );

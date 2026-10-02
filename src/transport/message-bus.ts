@@ -1,5 +1,10 @@
 import { LocalTransport } from "./local.js";
-import type { Attachment, InboxMessage, Priority, SourceKind } from "../types.js";
+import type {
+  Attachment,
+  InboxMessage,
+  Priority,
+  SourceKind,
+} from "../types.js";
 import type { MessageStore } from "../messages/message-store.js";
 
 /**
@@ -46,9 +51,7 @@ export class MessageBus {
         channel: msg.channel ?? null,
         correlation_id: msg.correlationId ?? null,
         origin_task_id: msg.originTaskId ?? null,
-        attachments: msg.attachments
-          ? JSON.stringify(msg.attachments)
-          : null,
+        attachments: msg.attachments ? JSON.stringify(msg.attachments) : null,
       });
     };
   }
@@ -141,6 +144,20 @@ export class MessageBus {
     this.transport.send(opts);
 
     return { queued: true };
+  }
+
+  /**
+   * Take the highest-priority message off the queue but keep it saved until
+   * done() — so a message being worked on when the process stops is
+   * delivered again on restart instead of lost.
+   */
+  take(name: string): InboxMessage | undefined {
+    return this.transport.pop(name);
+  }
+
+  /** A taken message has been handled: forget it. */
+  done(msg: InboxMessage): void {
+    this.store?.deleteInbox(msg.id);
   }
 
   /** Pop the highest-priority message, removing it from inbox and store. */
