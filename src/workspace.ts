@@ -29,6 +29,7 @@ import { mergeEnvAndSecrets } from "./config/office-yaml.js";
 import { ensureWorkspaceScaffold } from "./agent/workspace-scaffold.js";
 import { recordUsage, type UsageRecord } from "./metrics/usage-tracker.js";
 import { accumulateSession } from "./commands/cost.js";
+import { DiscordWebhookMirror } from "./integrations/discord-webhook.js";
 import {
   appendActivity,
   toActivityEntry,
@@ -62,6 +63,8 @@ export class Workspace {
   readonly tasks: TaskService;
   readonly office: OfficeContext;
   private listeners: Array<(name: string, event: AgentEvent) => void> = [];
+  /** Copies agents' messages to a Discord webhook (office.discord_webhook). */
+  readonly discord: DiscordWebhookMirror;
   private activityListeners: Array<
     (name: string, entry: ActivityEntry) => void
   > = [];
@@ -78,6 +81,7 @@ export class Workspace {
 
   constructor(config: WorkspaceConfig) {
     this.office = config.office;
+    this.discord = new DiscordWebhookMirror(config.office.discordWebhook);
     this.sandboxMode = config.sandbox?.mode ?? "none";
     this.hostApiPort = config.sandbox?.hostPort ?? DEFAULT_HOST_PORT;
     this.scheduler = new Scheduler(
@@ -597,6 +601,10 @@ export class Workspace {
         this._dmEgressTracker.delete(config.name);
       }
 
+      this.discord.handleEvent(
+        config.name,
+        event as unknown as Record<string, unknown>,
+      );
       for (const fn of this.listeners) fn(config.name, event);
     });
 

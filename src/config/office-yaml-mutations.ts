@@ -640,3 +640,18 @@ export async function setAgentThinking(
     atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
   });
 }
+
+// --- Office settings ---
+
+/** Set or clear office.discord_webhook. */
+export async function setOfficeDiscordWebhook(
+  officeId: string,
+  url: string | undefined,
+): Promise<void> {
+  return withOfficeLock(officeId, async () => {
+    const { path, doc } = requireOfficeDoc(officeId);
+    if (url) doc.setIn(["office", "discord_webhook"], url);
+    else doc.deleteIn(["office", "discord_webhook"]);
+    atomicWriteYaml(path, doc.toString({ lineWidth: 0 }));
+  });
+}

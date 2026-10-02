@@ -139,6 +139,7 @@ export interface OfficeYaml {
     name: string;
     description?: string;
     shared_dir?: boolean;
+    discord_webhook?: string;
     env?: Record<string, string>;
     secrets?: Record<string, string>;
     cron?: Record<string, OfficeCronYamlEntry>;
@@ -159,6 +160,8 @@ export interface OfficeContext {
   description?: string;
   /** Team folder every agent can read and write (office.shared_dir). */
   sharedDir?: string;
+  /** Discord webhook agents' messages are copied to (office.discord_webhook). */
+  discordWebhook?: string;
   env: Record<string, string>;
   secrets: Record<string, string>;
   dir: string;
