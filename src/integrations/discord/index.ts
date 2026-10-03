@@ -11,6 +11,7 @@ import { DEFAULT_HEARTBEAT_PROMPT } from "../../scheduler/heartbeat.js";
 import { onEgress } from "../../egress/egress-impl.js";
 import { DiscordBridge } from "./bridge.js";
 import { connectDiscord } from "./discordjs-api.js";
+import { startDiscordVoice } from "./voice-setup.js";
 
 export interface DiscordBridgeStatus {
   state: "off" | "connecting" | "connected" | "error";
@@ -190,6 +191,20 @@ export async function startDiscordBridge(
         ),
       ),
     ];
+    const voiceUrl = env["VOICE_URL"]?.trim();
+    const voice = voiceUrl
+      ? await startDiscordVoice(
+          workspace,
+          api.raw,
+          voiceUrl,
+          (agent, heard, reply) => bridge.handleVoiceTurn(agent, heard, reply),
+        ).catch((err) => {
+          console.error(
+            `[voice] Voice calls not started: ${err instanceof Error ? err.message : err}`,
+          );
+          return undefined;
+        })
+      : undefined;
     // The bot posts everything now; the simple webhook copy would duplicate it.
     workspace.discord.enabled = false;
     workspace.discordBridgeStatus = {
@@ -202,6 +217,7 @@ export async function startDiscordBridge(
     );
     return {
       stop: async () => {
+        await voice?.stop();
         for (const u of unsubs) u();
         await bridge.stop();
       },

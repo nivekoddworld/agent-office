@@ -42,12 +42,14 @@ const REQUIRED = {
 export async function connectDiscord(
   token: string,
   guildId: string,
-): Promise<DiscordApi> {
+): Promise<DiscordApi & { raw: { client: Client; guild: Guild } }> {
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
+      // Voice calls (VOICE_URL): who joins which voice channel.
+      GatewayIntentBits.GuildVoiceStates,
     ],
   });
   const ready = new Promise<void>((resolve) =>
@@ -99,6 +101,7 @@ export async function connectDiscord(
     guild.channels.cache.find(pred);
   const extras = extraApi(client, guild, guildId);
   return {
+    raw: { client, guild },
     botName: client.user?.username ?? "bot",
     guildName: guild.name,
 
