@@ -2,6 +2,8 @@ import { Upsampler } from "./audio.js";
 import type { SpeechService } from "./speech-service.js";
 import type { VoiceChat } from "./voice-chat.js";
 
+const SLOW_MS = 8000;
+
 /** Where the call's audio goes (Discord, in practice): 48 kHz stereo 16-bit. */
 export interface CallOutput {
   /** Start playing a new reply; write its audio as it arrives. */
@@ -76,8 +78,23 @@ export class VoiceCall {
       speaking.catch(() => {}); // handled where the turn awaits it
     };
 
+    // Say so in the logs when the model keeps the call waiting.
+    let answered = false;
+    const slow = setTimeout(() => {
+      if (!answered && !signal.aborted)
+        console.warn(
+          `[voice] ${this.o.agent}: no answer from the model after ${SLOW_MS / 1000} s; it may be busy with the agents' work`,
+        );
+    }, SLOW_MS);
     try {
-      const reply = await this.o.chat.reply(said, say, signal);
+      const reply = await this.o.chat.reply(
+        said,
+        (s) => {
+          answered = true;
+          say(s);
+        },
+        signal,
+      );
       this.unanswered = "";
       await speaking;
       out?.end();
@@ -101,6 +118,7 @@ export class VoiceCall {
       this.unanswered = "";
       out?.end();
     } finally {
+      clearTimeout(slow);
       if (this.turn === turn) this.turn = undefined;
     }
   }

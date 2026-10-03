@@ -77,7 +77,21 @@ Stock voices:
 
 ## Tuning
 
-| Setting             | Default | What it does                   |
-| ------------------- | ------- | ------------------------------ |
-| `VOICE_STT_THREADS` | 4       | CPU threads for speech-to-text |
-| `VOICE_TTS_THREADS` | 4       | CPU threads for text-to-speech |
+| Setting             | Default | What it does                               |
+| ------------------- | ------- | ------------------------------------------ |
+| `VOICE_STT_THREADS` | 4       | CPU threads for speech-to-text             |
+| `VOICE_TTS_THREADS` | 4       | CPU threads for text-to-speech             |
+| `VOICE_DEBUG`       | off     | `on` logs Discord voice connection details |
+
+## When nothing happens
+
+`docker compose logs agent-office | grep "\[voice\]"` shows each step of a call:
+
+- `Joined …`: the bot is in the channel.
+- `Listening to …`: it's getting your audio.
+- `Heard … : "…"`: what it understood.
+- `… first words …`: the agent answered.
+
+The voice container's own log (`docker compose logs voice`) shows each stretch
+of speech it transcribed and each reply it spoke. Wherever the steps stop is
+where it's stuck.

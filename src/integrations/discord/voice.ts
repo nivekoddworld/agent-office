@@ -183,6 +183,14 @@ export class DiscordVoice {
       );
     }
     connection.subscribe(player);
+    let decryptWarned = false;
+    connection.on("debug", (m: string) => {
+      if (process.env["VOICE_DEBUG"]) console.log(`[voice] debug: ${m}`);
+      else if (!decryptWarned && /decrypt/i.test(m)) {
+        decryptWarned = true;
+        console.warn(`[voice] ${m}`);
+      }
+    });
     const active: ActiveCall = {
       agent,
       channelId,
@@ -212,8 +220,11 @@ export class DiscordVoice {
 
   private listen(active: ActiveCall, userId: string): void {
     if (active.listening.has(userId)) return;
-    if (this.guild.members.cache.get(userId)?.user.bot) return;
+    const member = this.guild.members.cache.get(userId);
+    if (member?.user.bot) return;
+    const who = member?.displayName ?? userId;
     active.listening.add(userId);
+    console.log(`[voice] Listening to ${who}…`);
     if (active.player.state.status !== AudioPlayerStatus.Idle)
       active.call.interrupt();
 
@@ -228,6 +239,8 @@ export class DiscordVoice {
     const down = new Downsampler();
     const stt = this.o.speech.listen();
     let ms = 0;
+    let packets = 0;
+    opus.on("data", () => packets++);
     decoder.on("data", (pcm: Buffer) => {
       ms += pcm.length / 192; // 48 kHz × 2 channels × 2 bytes = 192 bytes/ms
       stt.write(down.push(pcm));
@@ -239,11 +252,22 @@ export class DiscordVoice {
       active.listening.delete(userId);
       if (ms < MIN_SPEECH_MS) {
         stt.cancel();
+        console.log(
+          packets && !ms
+            ? `[voice] Got ${packets} audio packets from ${who} but couldn't decode any (encryption?)`
+            : `[voice] Ignored ${Math.round(ms)} ms from ${who}: too short to be speech`,
+        );
         return;
       }
+      const t0 = Date.now();
       stt
         .finish()
-        .then((text) => active.call.heard(text))
+        .then((text) => {
+          console.log(
+            `[voice] Heard ${who} (${(ms / 1000).toFixed(1)} s, words ${Date.now() - t0} ms after): ${text ? `"${text}"` : "no words"}`,
+          );
+          return active.call.heard(text);
+        })
         .catch((err) =>
           console.error(
             `[voice] Couldn't hear you: ${err instanceof Error ? err.message : err}`,
