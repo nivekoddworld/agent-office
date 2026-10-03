@@ -45,7 +45,8 @@ export interface VoiceCallOptions {
 }
 
 /** "add Jim", "bring artist in", "get lead on the call", "invite coder". */
-const ASK_YOU = /\b(add|bring|invite|get|grab|pull|loop|patch|call)\b/i;
+const ASK_YOU =
+  /\b(add|bring|invite|get|grab|pull|loop|patch|call|join|hop on|on here|in here)\b/i;
 /** "I'll make that task", "on it": a promise to do work. */
 const PROMISE =
   /\b(on it|I'll|I will|I'm going to|let me|I can do that)\b[^.?!]*\b(make|create|add|send|update|fix|change|check|write|put|set|move|rename|delete|remove|build|draw|post|assign|look into|look up|pull up|find|review|go through|read|get|finish|start)\b/i;
@@ -55,9 +56,11 @@ const ASK_AGENT =
   /\b(add|bring|bringing|invite|inviting|grab|grabbing|pull|pulling|loop|looping)\b/i;
 
 interface Line {
-  /** "user", an agent's name, or "call" for things like joins. */
+  /** A person's name, an agent's name, or "call" for things like joins. */
   speaker: string;
   text: string;
+  /** Said by a person (not an agent). */
+  human?: boolean;
 }
 
 interface Member extends Participant {
@@ -84,6 +87,8 @@ export class VoiceCall {
   };
   /** Bumped when you speak, so a chain of agents answering each other stops. */
   private generation = 0;
+  /** The people (not agents) who've spoken on the call. */
+  private humans = new Set<string>();
 
   constructor(private o: VoiceCallOptions) {
     this.people.set(o.host.name, { ...o.host, seen: 0 });
@@ -110,12 +115,13 @@ export class VoiceCall {
   }
 
   /** What you said (one stretch of speech). */
-  async heard(text: string): Promise<void> {
+  async heard(text: string, speaker = "user"): Promise<void> {
     text = text.trim();
     if (!/\w/.test(text)) return;
     this.generation++;
-    this.interrupt(`you said more: "${text}"`);
-    this.add({ speaker: "user", text });
+    this.interrupt(`${speaker} said more: "${text}"`);
+    this.humans.add(speaker);
+    this.add({ speaker, text, human: true });
     // "Add Jim to the call": bring them in; they answer what they're here for.
     const wanted = this.wanted(text, ASK_YOU);
     if (wanted.length) {
@@ -193,28 +199,51 @@ export class VoiceCall {
     this.log.push(line);
     for (const p of this.people.values()) {
       if (line.speaker === p.name) p.record("assistant", line.text);
-      else if (line.speaker === "user") p.record("user", line.text);
+      else if (line.human && this.humans.size <= 1) p.record("user", line.text);
       else p.record("user", `${line.speaker}: ${line.text}`);
     }
   }
 
-  /** The agent a line speaks to: by name (or alias); agents need to address them. */
-  private namedIn(text: string, addressing: boolean): string | undefined {
+  /**
+   * The agent a line speaks to. From a person: any mention of a name or
+   * alias. From an agent: "Coder, …", "…, coder?", "hey coder", a capitalized
+   * name ("ask Jim"), or a question that names them; not "lead with the logo".
+   */
+  private namedIn(
+    text: string,
+    fromAgent: boolean,
+    except?: string,
+  ): string | undefined {
     let best: { name: string; at: number } | undefined;
+    const sentences = text.split(/(?<=[.!?])\s+/);
     for (const p of this.people.values()) {
+      if (p.name === except) continue;
       for (const n of [p.name, ...(p.aliases ?? [])]) {
         const word = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        // An agent hands over the floor with "Artist, …", "…, artist?" or
-        // "hey artist", not by mentioning someone in passing.
-        const re = addressing
-          ? new RegExp(
+        let at = -1;
+        if (!fromAgent) at = text.search(new RegExp(`\\b${word}\\b`, "i"));
+        else {
+          const cap = word.charAt(0).toUpperCase() + word.slice(1);
+          const tries = [
+            new RegExp(
               `(?:^|[.!?]\\s+|,\\s*|\\b(?:hey|hi|ask|over to)\\s+)${word}(?=\\s*[,?!]|\\s*$)`,
               "i",
-            )
-          : new RegExp(`\\b${word}\\b`, "i");
-        const m = re.exec(text);
-        if (m && (!best || m.index < best.at))
-          best = { name: p.name, at: m.index };
+            ),
+            new RegExp(`\\b${cap}\\b`),
+          ];
+          for (const re of tries) {
+            const m = re.exec(text);
+            if (m && (at < 0 || m.index < at)) at = m.index;
+          }
+          if (at < 0) {
+            const q = sentences.find(
+              (s) =>
+                s.endsWith("?") && new RegExp(`\\b${word}\\b`, "i").test(s),
+            );
+            if (q) at = text.indexOf(q);
+          }
+        }
+        if (at >= 0 && (!best || at < best.at)) best = { name: p.name, at };
       }
     }
     return best?.name;
@@ -224,13 +253,24 @@ export class VoiceCall {
   private unheard(p: Member): string {
     const lines = this.log.slice(p.seen).filter((l) => l.speaker !== p.name);
     // Just you and one agent: plain words, as before.
-    if (this.people.size === 1 && lines.every((l) => l.speaker === "user"))
+    if (
+      this.people.size === 1 &&
+      this.humans.size <= 1 &&
+      lines.every((l) => l.human)
+    )
       return lines.map((l) => l.text).join(" ");
-    return lines
-      .map((l) =>
-        l.speaker === "call" ? `(${l.text})` : `${l.speaker}: ${l.text}`,
-      )
-      .join("\n");
+    if (!lines.length) return "";
+    const said = lines.map((l) =>
+      l.speaker === "call" ? `(${l.text})` : `${l.speaker}: ${l.text}`,
+    );
+    if (this.people.size === 1 && this.humans.size <= 1) return said.join("\n");
+    // A group call: who's here, then who said what.
+    const agents = [...this.people.values()].map((m) =>
+      m.aliases?.length ? `${m.name} (${m.aliases[0]})` : m.name,
+    );
+    const people = this.humans.size ? [...this.humans].join(", ") : "the user";
+    const header = `(Group call. People: ${people}. Agents: ${agents.join(", ")}. You are ${p.name}.)`;
+    return [header, ...said].join("\n");
   }
 
   private async respond(
@@ -320,7 +360,7 @@ export class VoiceCall {
             : ""),
       );
 
-      const addressed = this.namedIn(reply.text, true);
+      const addressed = this.namedIn(reply.text, true, name);
       if (invited.length)
         next = async () => {
           for (const n of invited) await this.invite(n, name);

@@ -266,7 +266,7 @@ describe("VoiceCall", () => {
     expect(
       (console.log as any).mock.calls.map((c: unknown[]) => c[0]),
     ).toContain(
-      '[voice] artist: interrupted (you said more: "and the frog green"), stopped before saying anything',
+      '[voice] artist: interrupted (user said more: "and the frog green"), stopped before saying anything',
     );
   });
 
@@ -294,13 +294,15 @@ describe("VoiceCall", () => {
     expect(people).toEqual([["lead", "artist"]]);
     // The newcomer heard what it was brought in for.
     expect(artist.heard[0]).toBe(
-      "user: can we ask the artist about the logo colour?\n" +
+      "(Group call. People: user. Agents: lead, artist. You are artist.)\n" +
+        "user: can we ask the artist about the logo colour?\n" +
         "lead: Good idea, let me grab her.\n" +
         "(artist joined the call, brought in by lead)",
     );
     // Artist named lead, so lead answered next, hearing artist's line.
     expect(lead.heard[1]).toBe(
-      "(artist joined the call, brought in by lead)\n" +
+      "(Group call. People: user. Agents: lead, artist. You are lead.)\n" +
+        "(artist joined the call, brought in by lead)\n" +
         "artist: Hi! Blue would pop. Lead, does that fit the theme?",
     );
     expect(speech.spoken).toEqual([
@@ -313,7 +315,8 @@ describe("VoiceCall", () => {
     // You name who you're talking to; otherwise whoever spoke last answers.
     await call.heard("artist, thanks");
     expect(artist.heard.at(-1)).toBe(
-      "lead: Sounds right to me.\nuser: artist, thanks",
+      "(Group call. People: user. Agents: lead, artist. You are artist.)\n" +
+        "lead: Sounds right to me.\nuser: artist, thanks",
     );
   });
 
@@ -798,5 +801,87 @@ describe("voice tools", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("group conversation", () => {
+  const output = () => ({
+    start: () => ({ write: () => {}, end: () => {} }),
+    stop: () => {},
+  });
+  beforeEach(() => vi.spyOn(console, "log").mockImplementation(() => {}));
+  afterEach(() => vi.restoreAllMocks());
+  const agentSaying = (name: string, replies: string[], aliases?: string[]) => {
+    const heard: string[] = [];
+    const stream = ((_m: unknown, context: any) =>
+      (async function* () {
+        heard.push(context.messages.at(-1).content);
+        const t = replies.shift() ?? "Okay.";
+        yield { type: "text_delta", delta: t };
+        yield {
+          type: "done",
+          message: { role: "assistant", content: [{ type: "text", text: t }] },
+        };
+      })()) as never;
+    const p: Participant = {
+      name,
+      ...(aliases ? { aliases } : {}),
+      voice: "alba",
+      chat: new VoiceChat({ ...agent, name }, stream),
+      record: () => {},
+      handoff: () => {},
+    };
+    return { p, heard };
+  };
+
+  it("tells everyone who's on the call, and who said what", async () => {
+    const lead = agentSaying("lead", ["Hi both!"], ["Jim"]);
+    const call = new VoiceCall({
+      host: lead.p,
+      speech: fakeSpeech(),
+      output: output(),
+    });
+    await call.heard("hey Jim", "Mazladore");
+    await call.heard("Jim, are you there", "Chromium");
+    expect(lead.heard.at(-1)).toBe(
+      "(Group call. People: Mazladore, Chromium. Agents: lead (Jim). You are lead.)\n" +
+        "Chromium: Jim, are you there",
+    );
+  });
+
+  it("hands the floor over by capitalized name or a question, not a passing word", async () => {
+    const lead = agentSaying("lead", [
+      "Good question, I think Coder has the numbers.",
+      "We could lead with the logo.",
+    ]);
+    const coder = agentSaying("coder", ["Sixteen so far."]);
+    const call = new VoiceCall({
+      host: lead.p,
+      speech: fakeSpeech(),
+      output: output(),
+      join: () => coder.p,
+    });
+    await call.invite("coder");
+    await vi.waitFor(() => expect(coder.heard).toHaveLength(1));
+    await call.heard("lead, how many characters?");
+    await vi.waitFor(() => expect(coder.heard).toHaveLength(2));
+    await call.heard("lead, what about the banner?");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(coder.heard).toHaveLength(2);
+  });
+
+  it("brings someone in when asked to tell them to join", async () => {
+    const lead = agentSaying("lead", []);
+    const coder = agentSaying("coder", ["Hey, coder here."]);
+    const call = new VoiceCall({
+      host: lead.p,
+      speech: fakeSpeech(),
+      output: output(),
+      join: () => coder.p,
+      roster: () => [{ name: "lead" }, { name: "coder" }],
+    });
+    await call.heard("Jim, tell the coder to join us", "Mazladore");
+    await vi.waitFor(() => expect(coder.heard).toHaveLength(1));
+    expect(lead.heard).toHaveLength(0);
   });
 });

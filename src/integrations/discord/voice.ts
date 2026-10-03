@@ -258,7 +258,7 @@ export class DiscordVoice {
           console.log(
             `[voice] Heard ${who} (${(ms / 1000).toFixed(1)} s): "${text}"`,
           );
-          void active.call.heard(text);
+          void active.call.heard(text, who);
         },
         onError: (err) =>
           console.error(
