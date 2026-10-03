@@ -18,9 +18,9 @@ import {
   type AudioPlayer,
   type VoiceConnection,
 } from "@discordjs/voice";
-import OpusScript from "opusscript";
 import { PassThrough } from "node:stream";
 import { SpeechTurn } from "../../voice/speech-turn.js";
+import { OpusDecoders } from "../../voice/opus-decoder.js";
 import type { SpeechService } from "../../voice/speech-service.js";
 import type { CallOutput, VoiceCall } from "../../voice/voice-call.js";
 
@@ -72,6 +72,7 @@ export class DiscordVoice {
   private channels = new Map<string, string>(); // channel id → agent
   private active?: ActiveCall;
   private switching: Promise<void> = Promise.resolve();
+  private opus = new OpusDecoders();
   private onState = (before: VoiceState, after: VoiceState) =>
     this.voiceStateChanged(before, after);
 
@@ -98,6 +99,7 @@ export class DiscordVoice {
     this.client.off(Events.VoiceStateUpdate, this.onState);
     await this.switching;
     await this.leave();
+    await this.opus.stop();
   }
 
   private async ensureChannels(): Promise<void> {
@@ -258,7 +260,7 @@ export class DiscordVoice {
           console.log(
             `[voice] Heard ${who} (${(ms / 1000).toFixed(1)} s): "${text}"`,
           );
-          void active.call.heard(text);
+          void active.call.heard(text, who);
         },
         onError: (err) =>
           console.error(
@@ -274,35 +276,39 @@ export class DiscordVoice {
     const opus = active.connection.receiver.subscribe(userId, {
       end: { behavior: EndBehaviorType.AfterSilence, duration: SILENCE_MS },
     });
-    // One packet at a time, so a bad one is skipped instead of ending the stretch.
-    const decoder = new OpusScript(48000, 2, OpusScript.Application.VOIP);
+    // Decoded off the main thread, where a bad packet can't take the office down.
     let packets = 0;
     let decoded = 0;
-    let bad = 0;
+    let dropped = 0;
+    const decoder = this.opus.open(
+      (pcm) => {
+        decoded++;
+        current.audio(pcm);
+      },
+      () => dropped++,
+    );
     opus.on("data", (packet: Buffer) => {
       packets++;
-      let pcm: Buffer;
-      try {
-        pcm = decoder.decode(packet);
-      } catch {
-        bad++;
-        return;
-      }
-      decoded++;
-      current.audio(pcm);
+      if (!decoder.decode(packet)) dropped++;
     });
     let ended = false;
     const end = () => {
       if (ended) return;
       ended = true;
       active.streams.delete(userId);
-      decoder.delete();
-      if (packets > 5 && !decoded)
+      try {
+        decoder.close();
+      } catch {
+        // already gone with the decoder worker
+      }
+      if (packets > 5 && !decoded && dropped >= packets)
         console.log(
-          `[voice] Got ${packets} audio packets from ${who} but couldn't decode any (encryption?)`,
+          `[voice] Got ${packets} audio packets from ${who} but couldn't decode any (still encrypted?)`,
         );
-      else if (bad && process.env["VOICE_DEBUG"])
-        console.log(`[voice] Skipped ${bad} bad audio packet(s) from ${who}`);
+      else if (dropped && process.env["VOICE_DEBUG"])
+        console.log(
+          `[voice] Dropped ${dropped} bad audio packet(s) from ${who}`,
+        );
       current.pause();
     };
     opus.once("end", end);
