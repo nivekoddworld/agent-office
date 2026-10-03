@@ -36,6 +36,9 @@ export class Scheduler {
   private retried = new Set<string>();
   private listeners: Array<(state: SchedulerState) => void> = [];
   private runningListeners: Array<(running: boolean) => void> = [];
+  /** Paused: nothing starts but what `passesPause` lets through; no heartbeats. */
+  private paused = false;
+  private passesPause: (msg: InboxMessage) => boolean = () => false;
   private lastHeartbeatTs = new Map<string, number>();
 
   constructor(
@@ -60,22 +63,51 @@ export class Scheduler {
   get intervalMs(): number {
     return this._intervalMs;
   }
+  /** Ticking and not paused. */
   get running(): boolean {
-    return this.tickTimer !== null;
+    return this.tickTimer !== null && !this.paused;
   }
 
   start(): void {
     if (this.tickTimer) return;
     this.tickTimer = setInterval(() => this.tick(), this._intervalMs);
-    for (const fn of this.runningListeners) fn(true);
+    if (this.running) for (const fn of this.runningListeners) fn(true);
   }
 
   stop(): void {
     if (this.tickTimer) {
+      const was = this.running;
       clearInterval(this.tickTimer);
       this.tickTimer = null;
-      for (const fn of this.runningListeners) fn(false);
+      if (was) for (const fn of this.runningListeners) fn(false);
     }
+  }
+
+  /** While paused: the first waiting message that may go through, if any. */
+  private takeOnePassing(name: string): InboxMessage | undefined {
+    let found = false;
+    return this.bus.takeWhere(
+      name,
+      (m) => !found && this.passesPause(m) && (found = true),
+    )[0];
+  }
+
+  /**
+   * Hold all work except the messages `passes` lets through (e.g. what you
+   * asked for in a voice call), and stop heartbeats, until resume().
+   */
+  pause(passes: (msg: InboxMessage) => boolean = () => false): void {
+    this.passesPause = passes;
+    if (this.paused) return;
+    const was = this.running;
+    this.paused = true;
+    if (was) for (const fn of this.runningListeners) fn(false);
+  }
+
+  resume(): void {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this.running) for (const fn of this.runningListeners) fn(true);
   }
 
   /** Called when the scheduler starts or stops (e.g. paused from Discord). */
@@ -124,8 +156,14 @@ export class Scheduler {
         continue;
       }
 
-      const msg = this.bus.take(handle.name);
+      const msg = this.paused
+        ? this.takeOnePassing(handle.name)
+        : this.bus.take(handle.name);
       if (!msg) continue;
+      if (this.paused)
+        console.log(
+          `[scheduler] Paused, but letting ${handle.name} do what you asked for in a voice call`,
+        );
 
       handle.setStatus("running");
       handle.setActiveRequestId(msg.requestId);
@@ -186,7 +224,7 @@ export class Scheduler {
 
     // Heartbeat injection for idle agents
     const now = Date.now();
-    for (const handle of sorted) {
+    for (const handle of this.paused ? [] : sorted) {
       if (handle.status !== "idle") continue;
       const hb = handle.config.heartbeat;
       if (!hb) continue;

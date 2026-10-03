@@ -238,6 +238,11 @@ describe("VoiceCall", () => {
     ]);
     expect(out.log).toContain("stop");
     expect(speech.spoken).toEqual(["Got it, both things."]);
+    expect(
+      (console.log as any).mock.calls.map((c: unknown[]) => c[0]),
+    ).toContain(
+      '[voice] artist: interrupted (you said more: "and the frog green"), stopped before saying anything',
+    );
     vi.restoreAllMocks();
   });
 });

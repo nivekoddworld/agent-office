@@ -836,3 +836,55 @@ describe("your task comments", () => {
     expect(coder.prompt).toHaveBeenCalledWith(payload, undefined);
   });
 });
+
+describe("pausing", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("holds everything but what the pause lets through, with no heartbeats", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const bus = new MessageBus();
+    bus.register("lead");
+    const lead = mockHandle("lead", Priority.NORMAL);
+    (lead.config as any).heartbeat = { intervalMs: 1000 };
+    lead.setLastScheduledHeartbeatTs = vi.fn();
+    const sched = new Scheduler(new Map([["lead", lead]]), bus, 100);
+    const changes: boolean[] = [];
+    sched.onRunningChange((r) => changes.push(r));
+    sched.start();
+    sched.pause((m) => m.requestId?.startsWith("voice:") ?? false);
+    expect(sched.running).toBe(false);
+
+    const send = (payload: string, requestId?: string) =>
+      bus.send({
+        from: "__user__",
+        to: "lead",
+        type: "prompt",
+        payload,
+        priority: Priority.CRITICAL,
+        ...(requestId ? { requestId } : {}),
+      });
+    send("a DM");
+    send("[From our voice call] make a task", "voice:1");
+    send("[From our voice call] and another", "voice:2");
+    await vi.advanceTimersByTimeAsync(2000);
+
+    // Only the call's requests ran, one at a time; the DM and heartbeats wait.
+    const prompts = lead.prompt.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(prompts).toHaveLength(2);
+    expect(
+      prompts.every((p: string) => p.includes("From our voice call")),
+    ).toBe(true);
+    expect(bus.peekMessages("lead").map((m) => m.payload)).toEqual(["a DM"]);
+
+    sched.resume();
+    expect(sched.running).toBe(true);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(lead.prompt.mock.calls.at(-1)![0]).toContain("a DM");
+    expect(changes).toEqual([true, false, true]);
+    sched.stop();
+    vi.restoreAllMocks();
+  });
+});
