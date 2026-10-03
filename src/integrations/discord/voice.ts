@@ -18,7 +18,7 @@ import {
   type AudioPlayer,
   type VoiceConnection,
 } from "@discordjs/voice";
-import prism from "prism-media";
+import OpusScript from "opusscript";
 import { PassThrough } from "node:stream";
 import { SpeechTurn } from "../../voice/speech-turn.js";
 import type { SpeechService } from "../../voice/speech-service.js";
@@ -274,16 +274,21 @@ export class DiscordVoice {
     const opus = active.connection.receiver.subscribe(userId, {
       end: { behavior: EndBehaviorType.AfterSilence, duration: SILENCE_MS },
     });
-    const decoder = new prism.opus.Decoder({
-      rate: 48000,
-      channels: 2,
-      frameSize: 960,
-    });
+    // One packet at a time, so a bad one is skipped instead of ending the stretch.
+    const decoder = new OpusScript(48000, 2, OpusScript.Application.VOIP);
     let packets = 0;
-    let decoded = false;
-    opus.on("data", () => packets++);
-    decoder.on("data", (pcm: Buffer) => {
-      decoded = true;
+    let decoded = 0;
+    let bad = 0;
+    opus.on("data", (packet: Buffer) => {
+      packets++;
+      let pcm: Buffer;
+      try {
+        pcm = decoder.decode(packet);
+      } catch {
+        bad++;
+        return;
+      }
+      decoded++;
       current.audio(pcm);
     });
     let ended = false;
@@ -291,22 +296,26 @@ export class DiscordVoice {
       if (ended) return;
       ended = true;
       active.streams.delete(userId);
+      decoder.delete();
       if (packets > 5 && !decoded)
         console.log(
           `[voice] Got ${packets} audio packets from ${who} but couldn't decode any (encryption?)`,
         );
+      else if (bad && process.env["VOICE_DEBUG"])
+        console.log(`[voice] Skipped ${bad} bad audio packet(s) from ${who}`);
       current.pause();
     };
-    opus.pipe(decoder);
-    decoder.once("end", end);
-    // A broken stream still ends the stretch, so the bot keeps listening.
-    const failed = (err: Error) => {
+    opus.once("end", end);
+    opus.once("error", (err: Error) => {
       console.error(`[voice] Bad audio from Discord: ${err.message}`);
       end();
-    };
-    decoder.on("error", failed);
-    opus.once("error", failed);
+    });
     opus.once("close", () => setTimeout(end, 1000));
+  }
+
+  /** An agent on the call messaged you while working: tell the call. */
+  note(agent: string, text: string): void {
+    this.active?.call.note(agent, text);
   }
 
   /** /invite: bring an agent into the call you're in. */

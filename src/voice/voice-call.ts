@@ -40,7 +40,19 @@ export interface VoiceCallOptions {
   join?(name: string): Participant | string;
   /** Who's on the call changed. */
   onPeople?(names: string[]): void;
+  /** Every agent that could join, with the other names they go by. */
+  roster?(): Array<{ name: string; aliases?: string[] }>;
 }
+
+/** "add Jim", "bring artist in", "get lead on the call", "invite coder". */
+const ASK_YOU = /\b(add|bring|invite|get|grab|pull|loop|patch|call)\b/i;
+/** "I'll make that task", "on it": a promise to do work. */
+const PROMISE =
+  /\b(on it|I'll|I will|I'm going to|let me|I can do that)\b[^.?!]*\b(make|create|add|send|update|fix|change|check|write|put|set|move|rename|delete|remove|build|draw|post|assign|look into|look up|pull up|find|review|go through|read|get|finish|start)\b/i;
+
+/** An agent saying it'll do it ("I'll grab Jim", "inviting artist now"). */
+const ASK_AGENT =
+  /\b(add|bring|bringing|invite|inviting|grab|grabbing|pull|pulling|loop|looping)\b/i;
 
 interface Line {
   /** "user", an agent's name, or "call" for things like joins. */
@@ -104,9 +116,32 @@ export class VoiceCall {
     this.generation++;
     this.interrupt(`you said more: "${text}"`);
     this.add({ speaker: "user", text });
+    // "Add Jim to the call": bring them in; they answer what they're here for.
+    const wanted = this.wanted(text, ASK_YOU);
+    if (wanted.length) {
+      for (const n of wanted) await this.invite(n, "user");
+      return;
+    }
     const named = this.namedIn(text, false);
     if (named) this.current = named;
     await this.respond(this.current, 0, this.generation);
+  }
+
+  /** Agents someone asked to bring into the call (by name or alias). */
+  private wanted(text: string, asking: RegExp): string[] {
+    if (!asking.test(text)) return [];
+    const names: string[] = [];
+    for (const a of this.o.roster?.() ?? []) {
+      if (this.people.has(a.name)) continue;
+      const said = [a.name, ...(a.aliases ?? [])].some((n) =>
+        new RegExp(
+          `\\b${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+          "i",
+        ).test(text),
+      );
+      if (said) names.push(a.name);
+    }
+    return names;
   }
 
   /**
@@ -137,6 +172,21 @@ export class VoiceCall {
     const generation = this.generation;
     if (!this.turn) void this.respond(name, 1, generation);
     return `${name} joined the call.`;
+  }
+
+  /**
+   * An agent's full self, working outside the call, messaged you (e.g. "done,
+   * here's the picture"): everyone on the call hears it, and if nobody's
+   * talking, that agent tells you.
+   */
+  note(agent: string, text: string): void {
+    if (!this.people.has(agent)) return;
+    this.log.push({
+      speaker: "call",
+      text: `${agent}, working outside the call, messaged the user: ${text.slice(0, 1500)}`,
+    });
+    console.log(`[voice] ${agent} messaged you while working: the call knows`);
+    if (!this.turn) void this.respond(agent, 1, this.generation);
   }
 
   private add(line: Line): void {
@@ -248,13 +298,28 @@ export class VoiceCall {
       p.seen = this.log.length;
       if (reply.text) this.add({ speaker: name, text: reply.text });
       p.turnDone?.(heard, reply.text);
-      if (reply.todo) p.handoff(reply.todo);
+      // The INVITE line, or "I'll grab Jim" when it forgot to write one.
+      const invited = (
+        reply.invite?.length ? reply.invite : this.wanted(reply.text, ASK_AGENT)
+      ).filter((n) => !this.people.has(n));
+      // A promise without the TODO line ("I'll make that task"): pass on
+      // what was asked, so it still gets done (unless it's bringing someone in).
+      const todo =
+        reply.todo ??
+        (!invited.length && PROMISE.test(reply.text)
+          ? `${heard}\n(On the call you said: "${reply.text}")`
+          : undefined);
+      if (todo) p.handoff(todo);
       console.log(
         `[voice] ${name}: first words ${reply.firstTextMs ?? "-"} ms, ` +
           `first audio ${firstAudioMs ?? "-"} ms after hearing you` +
-          (reply.todo ? "; passed on a to-do" : ""),
+          (todo
+            ? reply.todo
+              ? "; passed on a to-do"
+              : "; passed on what you asked (it promised without a TODO line)"
+            : ""),
       );
-      const invited = (reply.invite ?? []).filter((n) => !this.people.has(n));
+
       const addressed = this.namedIn(reply.text, true);
       if (invited.length)
         next = async () => {
