@@ -1,0 +1,149 @@
+import type {
+  AssistantMessage,
+  Context,
+  Message,
+  Model,
+} from "@earendil-works/pi-ai";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
+import { SentenceSplitter, forSpeech } from "./sentences.js";
+
+/** What the agent knows going into the call. */
+export interface VoiceAgent {
+  name: string;
+  model: Model<any>;
+  apiKey?: string;
+  /** Its instruction files (IDENTITY, SOUL, CONTEXT), if any. */
+  identity?: string;
+  /** Fresh context each turn: recent DMs, open tasks, what it's doing. */
+  context(): string;
+}
+
+export interface VoiceReply {
+  /** What it said. */
+  text: string;
+  /** Work it promised to do, for the agent to pick up after the turn. */
+  todo?: string;
+  /** Time to the first word of the reply. */
+  firstTextMs?: number;
+}
+
+const HANDOFF = "TODO:";
+/** Turns kept from this call: enough to follow along, small enough to be quick. */
+const MAX_TURNS = 24;
+
+function systemPrompt(agent: VoiceAgent): string {
+  return [
+    `You are ${agent.name}, on a live voice call with the user in Discord.`,
+    agent.identity ? `\n# Who you are\n\n${agent.identity}\n` : "",
+    "# How to talk",
+    "Talk like on a phone call: one to three short sentences, plain spoken words.",
+    "No lists, markdown, emoji, code or links: everything you write is read aloud.",
+    "If you don't know something, say so briefly rather than guessing.",
+    "",
+    "# Getting things done",
+    "You can't use your tools during the call. When the user asks for real work",
+    "(files, tasks, messages, checking something), say you'll do it, then end your",
+    `reply with one line: ${HANDOFF} <what to do, with every detail you'll need>.`,
+    "That line isn't spoken: it's sent to you as a message, and you do it right away.",
+    "",
+    "# Right now",
+    agent.context(),
+  ].join("\n");
+}
+
+/**
+ * The text before any TODO line that is safe to speak. A line that could
+ * still turn into "TODO:" is held back until more text arrives.
+ */
+export function speakable(raw: string): string {
+  const m = /(^|\n)[ \t]*TODO:/.exec(raw);
+  if (m) return raw.slice(0, m.index + m[1]!.length);
+  const lineStart = raw.lastIndexOf("\n") + 1;
+  const last = raw.slice(lineStart).trimStart();
+  return last && HANDOFF.startsWith(last) ? raw.slice(0, lineStart) : raw;
+}
+
+export function handoff(raw: string): string | undefined {
+  const m = /(^|\n)[ \t]*TODO:([\s\S]*)$/.exec(raw);
+  const todo = m?.[2]?.trim();
+  return todo || undefined;
+}
+
+/** One agent's side of a voice call. */
+export class VoiceChat {
+  private history: Message[] = [];
+
+  constructor(
+    private agent: VoiceAgent,
+    private stream: typeof streamSimple = streamSimple,
+  ) {}
+
+  /**
+   * Answer what the person said. Each finished sentence goes to `say` as
+   * soon as it's written, so speaking starts before the reply is done.
+   */
+  async reply(
+    heard: string,
+    say: (sentence: string) => void,
+    signal: AbortSignal,
+  ): Promise<VoiceReply> {
+    const started = Date.now();
+    const user: Message = { role: "user", content: heard, timestamp: started };
+    const context: Context = {
+      systemPrompt: systemPrompt(this.agent),
+      messages: [...this.history, user],
+    };
+    const local = "localAuth" in this.agent.model;
+    const events = this.stream(this.agent.model, context, {
+      ...(this.agent.apiKey ? { apiKey: this.agent.apiKey } : {}),
+      maxTokens: 400,
+      signal,
+      // Thinking would delay every answer by its whole length.
+      ...(local
+        ? {
+            samplingParams: {
+              chat_template_kwargs: { enable_thinking: false },
+            },
+          }
+        : {}),
+    });
+
+    const splitter = new SentenceSplitter();
+    let raw = "";
+    let spoken = 0;
+    let firstTextMs: number | undefined;
+    let final: AssistantMessage | undefined;
+    const speakUpTo = (text: string) => {
+      for (const s of splitter.push(text.slice(spoken))) {
+        const clean = forSpeech(s);
+        if (clean) say(clean);
+      }
+      spoken = text.length;
+    };
+    for await (const e of events) {
+      if (e.type === "text_delta") {
+        firstTextMs ??= Date.now() - started;
+        raw += e.delta;
+        speakUpTo(speakable(raw));
+      } else if (e.type === "done") final = e.message;
+      else if (e.type === "error")
+        throw new Error(e.error.errorMessage ?? e.reason);
+    }
+    const before = speakable(raw.endsWith("\n") ? raw : raw + "\n");
+    speakUpTo(before);
+    for (const s of splitter.flush()) {
+      const clean = forSpeech(s);
+      if (clean) say(clean);
+    }
+
+    if (final) this.history.push(user, final);
+    if (this.history.length > MAX_TURNS)
+      this.history = this.history.slice(-MAX_TURNS);
+    const todo = handoff(raw);
+    return {
+      text: forSpeech(before),
+      ...(todo ? { todo } : {}),
+      ...(firstTextMs !== undefined ? { firstTextMs } : {}),
+    };
+  }
+}

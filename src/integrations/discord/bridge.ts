@@ -430,6 +430,16 @@ export class DiscordBridge {
     return id;
   }
 
+  /** An exchange from a voice call, kept in the agent's DM channel. */
+  handleVoiceTurn(agent: string, heard: string, reply: string): void {
+    const quoted = heard
+      .split("\n")
+      .map((l) => `> ${l}`)
+      .join("\n");
+    const text = `${quoted}\n${reply || "_(no answer)_"}`;
+    this.enqueue(() => this.post(`dm:${agent}`, agent, text));
+  }
+
   private async post(
     key: string,
     username: string,

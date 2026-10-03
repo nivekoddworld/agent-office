@@ -27,3 +27,15 @@ services:
       # Lets agents reach llama.cpp / vLLM running on this machine.
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+
+  # Voice calls with agents in Discord: speech-to-text and text-to-speech on
+  # the CPU (no GPU memory). Off unless .env has COMPOSE_PROFILES=voice and
+  # VOICE_URL=http://voice:8000. See docs/voice.md.
+  voice:
+    profiles: ["voice"]
+    build: ./voice
+    image: agent-office-voice
+    environment:
+      STT_THREADS: "${VOICE_STT_THREADS:-4}"
+      TTS_THREADS: "${VOICE_TTS_THREADS:-4}"
+    restart: unless-stopped

@@ -11,3 +11,4 @@ CLAUDE.md
 offices/*
 !offices/.gitkeep
 docker-compose.override.yml
+__pycache__/

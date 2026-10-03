@@ -96,6 +96,8 @@ Messages typed in Discord reach the agents just like ones from the dashboard, an
 
 **Avatars:** each agent can pick its own with the `set_avatar` tool (shown in the dashboard too), a [DiceBear](https://www.dicebear.com/styles) style plus a seed word, saved as an `Avatar:` line in its `instructions/IDENTITY.md` (try: _"pick an avatar that fits your personality"_). You can also put any image URL on that line yourself. Agents that haven't picked one get a robot based on their name; `DISCORD_AVATAR_URL=none` turns that default off. Just want a one-way copy? Paste a channel's webhook URL under **Settings → Discord** instead.
 
+**Voice calls (experimental):** talk to an agent out loud. Each agent gets a voice channel under **Agent Voice**; join one and the bot joins you as that agent, hears you, and answers in its own voice. Speech-to-text and text-to-speech run on the CPU in a separate `voice` container, so the GPU stays free for your model. See [docs/voice.md](docs/voice.md).
+
 ## Everyday commands
 
 | What                        | Command                                              |
