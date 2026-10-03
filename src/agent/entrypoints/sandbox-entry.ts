@@ -46,6 +46,7 @@ import {
 import { hashPrompt } from "../prompts/prompt-manager.js";
 import {
   answerQueued,
+  continueAfterCutoff,
   createContextPruner,
   retryAfterOverflow,
   toolChars,
@@ -228,6 +229,44 @@ setInterval(() => {
   }
 }, DEDUP_SWEEP_MS);
 
+// --- Prompts ---
+
+let lastPrompt: Promise<void> = Promise.resolve();
+
+/** Run a prompt and always tell the host when it's done. */
+async function runPrompt(
+  promptId: string,
+  text: string,
+  images?: ImageContent[],
+): Promise<void> {
+  console.log(
+    `[agent-entry] Prompt received (${promptId}): ${text.slice(0, 100)}`,
+  );
+  let error: string | undefined;
+  try {
+    if (images?.length) {
+      await agent.prompt(text, images);
+    } else {
+      await agent.prompt(text);
+    }
+    if (await retryAfterOverflow(agent, pruner))
+      console.log(`[agent-entry] Retried a prompt that was too long`);
+    if (await continueAfterCutoff(agent))
+      console.log(
+        `[agent-entry] Reply was cut off at the output limit; continued`,
+      );
+    await answerQueued(agent);
+    console.log(`[agent-entry] Prompt completed (${promptId})`);
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+    console.error(`[agent-entry] Prompt failed (${promptId}):`, error);
+  } finally {
+    await hostFetch("/api/prompt-done", { promptId, error }).catch((e) =>
+      console.error("[agent-entry] Failed to notify prompt-done:", e),
+    );
+  }
+}
+
 // --- HTTP server ---
 
 const server = createServer((req, res) =>
@@ -279,29 +318,9 @@ async function handleRequest(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
 
-    // Run prompt and always notify host
-    console.log(
-      `[agent-entry] Prompt received (${promptId}): ${text.slice(0, 100)}`,
-    );
-    let error: string | undefined;
-    try {
-      if (images?.length) {
-        await agent.prompt(text, images);
-      } else {
-        await agent.prompt(text);
-      }
-      if (await retryAfterOverflow(agent, pruner))
-        console.log(`[agent-entry] Retried a prompt that was too long`);
-      await answerQueued(agent);
-      console.log(`[agent-entry] Prompt completed (${promptId})`);
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      console.error(`[agent-entry] Prompt failed (${promptId}):`, error);
-    } finally {
-      await hostFetch("/api/prompt-done", { promptId, error }).catch((e) =>
-        console.error("[agent-entry] Failed to notify prompt-done:", e),
-      );
-    }
+    // One at a time: a prompt that arrives mid-turn waits for the turn to
+    // end instead of failing with "already processing a prompt".
+    lastPrompt = lastPrompt.then(() => runPrompt(promptId, text, images));
     return;
   }
 

@@ -223,6 +223,32 @@ describe("Scheduler", () => {
     );
   });
 
+  it("formats task notices without a reply footer", () => {
+    const agents = new Map<string, any>();
+    const bus = new MessageBus();
+    const target = mockHandle("target", Priority.NORMAL);
+    agents.set("target", target);
+    bus.register("target");
+    bus.send({
+      from: "__task__",
+      to: "target",
+      type: "prompt",
+      payload: "[Task Completed] #T-1: Build it",
+      priority: Priority.NORMAL,
+    });
+
+    const sched = new Scheduler(agents, bus, 100);
+    sched.start();
+    vi.advanceTimersByTime(100);
+    sched.stop();
+
+    const text = target.prompt.mock.calls[0][0] as string;
+    expect(text).toMatch(
+      /^\[Task Completed\] #T-1: Build it\n\n\[Automatic task notice/,
+    );
+    expect(text).not.toContain("__task__");
+  });
+
   it("dispatches steer messages via steer()", () => {
     const agents = new Map<string, any>();
     const bus = new MessageBus();

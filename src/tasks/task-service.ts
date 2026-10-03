@@ -530,8 +530,9 @@ export class TaskService {
     if (task.createdBy.startsWith("__")) return;
     if (task.createdBy === task.assignee) return;
 
+    // Not when it starts: waking the creator for that costs a whole turn
+    // (and its context) to learn nothing it needs to act on.
     const labels: Partial<Record<TaskStatus, string>> = {
-      in_progress: "[Task Started]",
       done: "[Task Completed]",
       failed: "[Task Failed]",
     };

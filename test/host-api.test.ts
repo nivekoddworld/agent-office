@@ -335,6 +335,49 @@ describe.skipIf(skipHostApi)("HostApi", () => {
     await expect(wait1).resolves.toBeUndefined();
   });
 
+  it("waits out a long turn while the sandbox is alive, not a fixed time", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    try {
+      const beats = (api as any).heartbeats as Map<string, number>;
+      const events = (api as any).lastEvents as Map<string, number>;
+      let settled: unknown = "pending";
+      api.waitForPromptDone(agentName, "long").then(
+        () => (settled = "done"),
+        (e: Error) => (settled = e.message),
+      );
+      // 20 minutes of a busy, beating sandbox.
+      for (let i = 0; i < 80; i++) {
+        beats.set(agentName, Date.now());
+        events.set(agentName, Date.now());
+        await vi.advanceTimersByTimeAsync(15_000);
+      }
+      expect(settled).toBe("pending");
+      // Then it stops beating.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(settled).toMatch(/gave up: the sandbox stopped responding/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up on a turn that makes no progress for 30 minutes", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    try {
+      const beats = (api as any).heartbeats as Map<string, number>;
+      let settled: unknown = "pending";
+      api
+        .waitForPromptDone(agentName, "stuck")
+        .catch((e: Error) => (settled = e.message));
+      for (let i = 0; i < 125; i++) {
+        beats.set(agentName, Date.now());
+        await vi.advanceTimersByTimeAsync(15_000);
+      }
+      expect(settled).toMatch(/gave up: no progress for 30 minutes/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // --- clearPendingPrompts ---
 
   it("clearPendingPrompts rejects pending waits", async () => {

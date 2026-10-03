@@ -115,7 +115,8 @@ describe("Task tool implementations", () => {
     const id = createResult.match(/#(T-\w+)/)?.[1] ?? "";
 
     const coderDeps = { agentName: "coder", taskService: service };
-    const result = taskUpdateImpl(coderDeps, { id, status: "done" });
+    taskUpdateImpl(coderDeps, { id, status: "done" });
+    const result = taskUpdateImpl(coderDeps, { id, status: "failed" });
     expect(result).toContain("Error");
     expect(result).toContain("cannot transition");
   });

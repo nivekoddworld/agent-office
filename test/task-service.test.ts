@@ -182,10 +182,23 @@ describe("TaskService", () => {
       assignee: "coder",
       priority: P,
     }) as Task;
+    service.update("coder", t.id, { status: "done" });
 
-    const result = service.update("coder", t.id, { status: "done" });
+    const result = service.update("coder", t.id, { status: "failed" });
     expect(typeof result).toBe("string");
     expect(result).toContain("cannot transition");
+  });
+
+  it("finishes a todo task without starting it first", () => {
+    const t = service.create("pm", {
+      title: "Quick",
+      assignee: "coder",
+      priority: P,
+    }) as Task;
+
+    const result = service.update("coder", t.id, { status: "done" }) as Task;
+    expect(result.status).toBe("done");
+    expect(result.completedAt).toBeDefined();
   });
 
   it("rejects update on unknown task", () => {
@@ -287,7 +300,7 @@ describe("TaskService", () => {
     expect(messages.some((m) => m.payload.includes("Done"))).toBe(true);
   });
 
-  it("notifies creator when task transitions to in_progress", () => {
+  it("doesn't wake the creator when the task starts", () => {
     const t = service.create("pm", {
       title: "Start me",
       assignee: "coder",
@@ -297,10 +310,7 @@ describe("TaskService", () => {
 
     service.update("coder", t.id, { status: "in_progress" });
 
-    const messages = bus.peekMessages("pm");
-    expect(messages.some((m) => m.payload.includes("[Task Started]"))).toBe(
-      true,
-    );
+    expect(bus.peekMessages("pm")).toHaveLength(0);
   });
 
   it("does NOT notify system-address creators (__user__)", () => {
@@ -358,7 +368,7 @@ describe("TaskService", () => {
     expect(failed.completedAt).toBeDefined();
   });
 
-  it("rejects todo → failed (must go through in_progress first)", () => {
+  it("allows todo → failed (giving up without starting)", () => {
     const t = service.create("pm", {
       title: "Skip",
       assignee: "coder",
@@ -366,8 +376,7 @@ describe("TaskService", () => {
     }) as Task;
 
     const result = service.update("coder", t.id, { status: "failed" });
-    expect(typeof result).toBe("string");
-    expect(result).toContain("cannot transition");
+    expect((result as Task).status).toBe("failed");
   });
 
   it("failed cannot transition directly to in_progress", () => {
@@ -641,10 +650,11 @@ describe("TaskService", () => {
     bus.drain("pm");
 
     service.update("coder", t.id, { status: "in_progress" });
+    service.update("coder", t.id, { status: "done" });
 
     const messages = bus.peekMessages("pm");
     const notification = messages.find((m) =>
-      m.payload.includes("[Task Started]"),
+      m.payload.includes("[Task Completed]"),
     );
     expect(notification).toBeDefined();
     expect(notification!.priority).toBe(Priority.CRITICAL);

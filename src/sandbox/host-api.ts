@@ -44,7 +44,11 @@ import {
 } from "./host-api-ext-handlers.js";
 import type { EgressContext, EgressDeps } from "../egress/types.js";
 
-const PROMPT_TIMEOUT_MS = 5 * 60_000; // 5 min
+// A turn on a local model can run far past 5 minutes, so a prompt only
+// fails when the sandbox goes quiet, not after a fixed time.
+const SANDBOX_SILENT_MS = 90_000; // no heartbeat (it beats every 5 s)
+const PROMPT_STALLED_MS = 30 * 60_000; // no agent events at all
+const PROMPT_CHECK_MS = 15_000;
 const DEDUP_TTL_MS = 5 * 60_000;
 const DEDUP_SWEEP_MS = 60_000;
 
@@ -58,12 +62,13 @@ export class HostApi {
     {
       resolve: () => void;
       reject: (e: Error) => void;
-      timer: ReturnType<typeof setTimeout>;
+      timer: ReturnType<typeof setInterval>;
     }
   >();
   private seenMessages = new Map<string, number>();
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeats = new Map<string, number>();
+  private lastEvents = new Map<string, number>();
   private eventListeners = new Map<string, (event: unknown) => void>();
   private agentPermissions = new Map<string, AgentPermissions>();
   private skillResolvers = new Map<string, () => Map<string, string>>();
@@ -151,6 +156,7 @@ export class HostApi {
       this.agentToolCounts.delete(name);
       this.dispatchContextGetters.delete(name);
       this.heartbeats.delete(name);
+      this.lastEvents.delete(name);
       this.eventListeners.delete(name);
     }
   }
@@ -184,15 +190,24 @@ export class HostApi {
 
   waitForPromptDone(agentName: string, promptId: string): Promise<void> {
     const key = `${agentName}:${promptId}`;
+    const started = Date.now();
     return new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
+      const timer = setInterval(() => {
+        const now = Date.now();
+        const beat = Math.max(this.heartbeats.get(agentName) ?? 0, started);
+        const event = Math.max(this.lastEvents.get(agentName) ?? 0, started);
+        const why =
+          now - beat > SANDBOX_SILENT_MS
+            ? "the sandbox stopped responding"
+            : now - event > PROMPT_STALLED_MS
+              ? `no progress for ${PROMPT_STALLED_MS / 60_000} minutes`
+              : undefined;
+        if (!why) return;
+        clearInterval(timer);
         this.pendingPrompts.delete(key);
-        reject(
-          new Error(
-            `Prompt ${promptId} timed out after ${PROMPT_TIMEOUT_MS}ms`,
-          ),
-        );
-      }, PROMPT_TIMEOUT_MS);
+        reject(new Error(`Prompt ${promptId} gave up: ${why}`));
+      }, PROMPT_CHECK_MS);
+      timer.unref?.();
       this.pendingPrompts.set(key, { resolve, reject, timer });
     });
   }
@@ -201,7 +216,7 @@ export class HostApi {
     const key = `${agentName}:${promptId}`;
     const entry = this.pendingPrompts.get(key);
     if (entry) {
-      clearTimeout(entry.timer);
+      clearInterval(entry.timer);
       this.pendingPrompts.delete(key);
     }
   }
@@ -209,7 +224,7 @@ export class HostApi {
   clearPendingPrompts(agentName: string): void {
     for (const [key, entry] of this.pendingPrompts) {
       if (key.startsWith(`${agentName}:`)) {
-        clearTimeout(entry.timer);
+        clearInterval(entry.timer);
         entry.reject(new Error(`Agent "${agentName}" destroyed`));
         this.pendingPrompts.delete(key);
       }
@@ -232,7 +247,7 @@ export class HostApi {
   async stop(): Promise<void> {
     if (this.sweepTimer) clearInterval(this.sweepTimer);
     for (const [key, entry] of this.pendingPrompts) {
-      clearTimeout(entry.timer);
+      clearInterval(entry.timer);
       entry.reject(new Error("Host API shutting down"));
       this.pendingPrompts.delete(key);
     }
@@ -288,6 +303,7 @@ export class HostApi {
       } else if (req.method === "POST" && path === "/api/prompt-done") {
         await handlePromptDone(req, res, agentName, this.pendingPrompts);
       } else if (req.method === "POST" && path === "/api/agent-event") {
+        this.lastEvents.set(agentName, Date.now());
         await handleAgentEvent(
           req,
           res,
