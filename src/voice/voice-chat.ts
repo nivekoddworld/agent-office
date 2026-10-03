@@ -14,7 +14,9 @@ export interface VoiceAgent {
   apiKey?: string;
   /** Its instruction files (IDENTITY, SOUL, CONTEXT), if any. */
   identity?: string;
-  /** Recent DMs, open tasks, what it's doing: read once, when the call starts. */
+  /** The other agents it can bring into the call. */
+  teammates?: string[];
+  /** Recent DMs, open tasks, what it's doing: read once, when it joins. */
   context(): string;
 }
 
@@ -23,15 +25,29 @@ export interface VoiceReply {
   text: string;
   /** Work it promised to do, for the agent to pick up after the turn. */
   todo?: string;
+  /** Teammates it asked to join the call. */
+  invite?: string[];
   /** Time to the first word of the reply. */
   firstTextMs?: number;
 }
 
-const HANDOFF = "TODO:";
+/** Lines that aren't spoken: they ask for something to happen. */
+const CONTROLS = ["TODO:", "INVITE:"];
+const CONTROL_LINE = /(^|\n)[ \t]*(TODO|INVITE):/;
 /** Turns kept from this call: enough to follow along, small enough to be quick. */
 const MAX_TURNS = 24;
 
 function systemPrompt(agent: VoiceAgent): string {
+  const team = agent.teammates?.length
+    ? [
+        "",
+        "# Teammates",
+        `Your teammates: ${agent.teammates.join(", ")}. To bring one into the call, say so and`,
+        "end your reply with a line: INVITE: <name>. Others on the call speak too:",
+        'their lines come to you as "name: what they said". To ask one of them',
+        "something, say their name; they answer after you. Answer only what's yours.",
+      ]
+    : [];
   return [
     `You are ${agent.name}, on a live voice call with the user in Discord.`,
     agent.identity ? `\n# Who you are\n\n${agent.identity}\n` : "",
@@ -43,8 +59,9 @@ function systemPrompt(agent: VoiceAgent): string {
     "# Getting things done",
     "You can't use your tools during the call. When the user asks for real work",
     "(files, tasks, messages, checking something), say you'll do it, then end your",
-    `reply with one line: ${HANDOFF} <what to do, with every detail you'll need>.`,
+    "reply with one line: TODO: <what to do, with every detail you'll need>.",
     "That line isn't spoken: it's sent to you as a message, and you do it right away.",
+    ...team,
     "",
     "# Right now",
     agent.context(),
@@ -52,21 +69,37 @@ function systemPrompt(agent: VoiceAgent): string {
 }
 
 /**
- * The text before any TODO line that is safe to speak. A line that could
- * still turn into "TODO:" is held back until more text arrives.
+ * The text before any TODO or INVITE line, which is safe to speak. A line
+ * that could still turn into one is held back until more text arrives.
  */
 export function speakable(raw: string): string {
-  const m = /(^|\n)[ \t]*TODO:/.exec(raw);
+  const m = CONTROL_LINE.exec(raw);
   if (m) return raw.slice(0, m.index + m[1]!.length);
   const lineStart = raw.lastIndexOf("\n") + 1;
   const last = raw.slice(lineStart).trimStart();
-  return last && HANDOFF.startsWith(last) ? raw.slice(0, lineStart) : raw;
+  return last && CONTROLS.some((c) => c.startsWith(last))
+    ? raw.slice(0, lineStart)
+    : raw;
+}
+
+/** The text of a control line (to the end, or the next control line). */
+function control(raw: string, name: string): string | undefined {
+  const m = new RegExp(
+    `(^|\\n)[ \\t]*${name}:([\\s\\S]*?)(?=\\n[ \\t]*(?:TODO|INVITE):|$)`,
+  ).exec(raw);
+  const text = m?.[2]?.trim();
+  return text || undefined;
 }
 
 export function handoff(raw: string): string | undefined {
-  const m = /(^|\n)[ \t]*TODO:([\s\S]*)$/.exec(raw);
-  const todo = m?.[2]?.trim();
-  return todo || undefined;
+  return control(raw, "TODO");
+}
+
+export function invites(raw: string): string[] {
+  return (control(raw, "INVITE") ?? "")
+    .split(/[,\s]+(?:and\s+)?/)
+    .map((n) => n.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 /** One agent's side of a voice call. */
@@ -146,10 +179,43 @@ export class VoiceChat {
     if (this.history.length > MAX_TURNS)
       this.history = this.history.slice(-MAX_TURNS / 2);
     const todo = handoff(raw);
+    const invite = invites(raw);
     return {
       text: forSpeech(before),
       ...(todo ? { todo } : {}),
+      ...(invite.length ? { invite } : {}),
       ...(firstTextMs !== undefined ? { firstTextMs } : {}),
     };
+  }
+
+  /**
+   * A reply that was cut off: keep what it heard and what it got to say, so
+   * it doesn't lose the thread (or repeat itself) next turn.
+   */
+  remember(heard: string, said: string): void {
+    const m = this.agent.model;
+    const now = Date.now();
+    this.history.push(
+      { role: "user", content: heard, timestamp: now },
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: `${said} (cut off: they started talking)` },
+        ],
+        api: m.api,
+        provider: m.provider,
+        model: m.id,
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop",
+        timestamp: now,
+      },
+    );
   }
 }

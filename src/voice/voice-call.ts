@@ -3,6 +3,10 @@ import type { SpeechService } from "./speech-service.js";
 import type { VoiceChat } from "./voice-chat.js";
 
 const SLOW_MS = 8000;
+/** Agents answering each other before the call waits for you again. */
+const MAX_HOPS = 3;
+/** Lines from before they joined that a newcomer hears. */
+const CATCH_UP = 6;
 
 /** Where the call's audio goes (Discord, in practice): 48 kHz stereo 16-bit. */
 export interface CallOutput {
@@ -12,55 +16,185 @@ export interface CallOutput {
   stop(): void;
 }
 
-export interface VoiceCallOptions {
-  agent: string;
+/** One agent on the call. */
+export interface Participant {
+  name: string;
+  /** Other names it answers to (e.g. "Jim" from its IDENTITY.md). */
+  aliases?: string[];
   voice: string;
   chat: VoiceChat;
-  speech: SpeechService;
-  output: CallOutput;
-  /** Save a line of the call to the agent's DM history. */
+  /** Save a line of the call to this agent's DM history. */
   record(role: "user" | "assistant", text: string): void;
-  /** Work the agent promised during the call: sent to it as a message. */
+  /** Work it promised during the call: sent to it as a message. */
   handoff(todo: string): void;
   /** A finished exchange (e.g. to show in a text channel). */
   turnDone?(heard: string, reply: string): void;
 }
 
+export interface VoiceCallOptions {
+  /** The agent whose channel this is. */
+  host: Participant;
+  speech: SpeechService;
+  output: CallOutput;
+  /** Another agent, to bring into the call; or why it can't come. */
+  join?(name: string): Participant | string;
+  /** Who's on the call changed. */
+  onPeople?(names: string[]): void;
+}
+
+interface Line {
+  /** "user", an agent's name, or "call" for things like joins. */
+  speaker: string;
+  text: string;
+}
+
+interface Member extends Participant {
+  /** How much of the call's log it has heard. */
+  seen: number;
+}
+
 /**
- * Turn-taking for one voice call: what the person said → the agent's reply,
- * spoken a sentence at a time. Talking over it stops it.
+ * A voice call with one or more agents. What you say goes to the agent you
+ * name (or whoever spoke last); an agent that names another hands it the
+ * floor. Everyone hears everything; one speaks at a time; talking over them
+ * stops them.
  */
 export class VoiceCall {
-  private turn?: { abort: AbortController; spoke: boolean; said: string[] };
-  /** Words from a turn that was cut off before it answered. */
-  private unanswered = "";
+  private people = new Map<string, Member>();
+  private log: Line[] = [];
+  /** Who answers when you don't say a name. */
+  private current: string;
+  private turn?: {
+    agent: string;
+    abort: AbortController;
+    spoke: boolean;
+    said: string[];
+  };
+  /** Bumped when you speak, so a chain of agents answering each other stops. */
+  private generation = 0;
 
-  constructor(private o: VoiceCallOptions) {}
+  constructor(private o: VoiceCallOptions) {
+    this.people.set(o.host.name, { ...o.host, seen: 0 });
+    this.current = o.host.name;
+  }
 
-  /** The person started talking: stop talking over them. */
+  get names(): string[] {
+    return [...this.people.keys()];
+  }
+
+  /** Someone started talking: stop talking over them. */
   interrupt(why = "you started talking"): void {
-    if (!this.turn || this.turn.abort.signal.aborted) return;
-    const last = this.turn.said.at(-1);
+    const turn = this.turn;
+    if (!turn || turn.abort.signal.aborted) return;
+    const last = turn.said.at(-1);
     console.log(
-      `[voice] ${this.o.agent}: interrupted (${why}), ` +
-        (this.turn.spoke && last
-          ? `stopped talking after ${this.turn.said.length} sentence(s), last: "${last}"`
+      `[voice] ${turn.agent}: interrupted (${why}), ` +
+        (turn.spoke && last
+          ? `stopped talking after ${turn.said.length} sentence(s), last: "${last}"`
           : "stopped before saying anything"),
     );
-    this.turn.abort.abort();
+    turn.abort.abort();
     this.o.output.stop();
   }
 
-  /** What the person said (one stretch of speech). */
+  /** What you said (one stretch of speech). */
   async heard(text: string): Promise<void> {
     text = text.trim();
     if (!/\w/.test(text)) return;
+    this.generation++;
     this.interrupt(`you said more: "${text}"`);
-    const said = this.unanswered ? `${this.unanswered} ${text}` : text;
-    this.unanswered = said;
-    this.o.record("user", text);
+    this.add({ speaker: "user", text });
+    const named = this.namedIn(text, false);
+    if (named) this.current = named;
+    await this.respond(this.current, 0, this.generation);
+  }
 
+  /**
+   * Bring an agent into the call (from /invite, or an agent's INVITE line).
+   * Returns what to tell whoever asked.
+   */
+  async invite(name: string, by = "user"): Promise<string> {
+    name = name.toLowerCase();
+    if (this.people.has(name)) return `${name} is already on the call.`;
+    const joined = this.o.join?.(name) ?? `${name} can't join calls here.`;
+    if (typeof joined === "string") {
+      console.log(`[voice] Couldn't bring ${name} in: ${joined}`);
+      return joined;
+    }
+    this.people.set(name, {
+      ...joined,
+      seen: Math.max(0, this.log.length - CATCH_UP),
+    });
+    console.log(
+      `[voice] ${name} joined the call (${by === "user" ? "you invited them" : `${by} brought them in`})`,
+    );
+    this.add({
+      speaker: "call",
+      text: `${name} joined the call${by === "user" ? "" : `, brought in by ${by}`}`,
+    });
+    this.o.onPeople?.(this.names);
+    // They say hello, and answer whatever they were brought in for.
+    const generation = this.generation;
+    if (!this.turn) void this.respond(name, 1, generation);
+    return `${name} joined the call.`;
+  }
+
+  private add(line: Line): void {
+    this.log.push(line);
+    for (const p of this.people.values()) {
+      if (line.speaker === p.name) p.record("assistant", line.text);
+      else if (line.speaker === "user") p.record("user", line.text);
+      else p.record("user", `${line.speaker}: ${line.text}`);
+    }
+  }
+
+  /** The agent a line speaks to: by name (or alias); agents need to address them. */
+  private namedIn(text: string, addressing: boolean): string | undefined {
+    let best: { name: string; at: number } | undefined;
+    for (const p of this.people.values()) {
+      for (const n of [p.name, ...(p.aliases ?? [])]) {
+        const word = n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        // An agent hands over the floor with "Artist, …", "…, artist?" or
+        // "hey artist", not by mentioning someone in passing.
+        const re = addressing
+          ? new RegExp(
+              `(?:^|[.!?]\\s+|,\\s*|\\b(?:hey|hi|ask|over to)\\s+)${word}(?=\\s*[,?!]|\\s*$)`,
+              "i",
+            )
+          : new RegExp(`\\b${word}\\b`, "i");
+        const m = re.exec(text);
+        if (m && (!best || m.index < best.at))
+          best = { name: p.name, at: m.index };
+      }
+    }
+    return best?.name;
+  }
+
+  /** What `p` hasn't heard yet, as it should read it. */
+  private unheard(p: Member): string {
+    const lines = this.log.slice(p.seen).filter((l) => l.speaker !== p.name);
+    // Just you and one agent: plain words, as before.
+    if (this.people.size === 1 && lines.every((l) => l.speaker === "user"))
+      return lines.map((l) => l.text).join(" ");
+    return lines
+      .map((l) =>
+        l.speaker === "call" ? `(${l.text})` : `${l.speaker}: ${l.text}`,
+      )
+      .join("\n");
+  }
+
+  private async respond(
+    name: string,
+    hops: number,
+    generation: number,
+  ): Promise<void> {
+    const p = this.people.get(name);
+    if (!p || generation !== this.generation) return;
+    const heard = this.unheard(p);
+    if (!heard) return;
+    this.current = name;
     const turn = {
+      agent: name,
       abort: new AbortController(),
       spoke: false,
       said: [] as string[],
@@ -75,12 +209,12 @@ export class VoiceCall {
     const say = (sentence: string) => {
       speaking = speaking.then(async () => {
         if (signal.aborted) return;
-        console.log(`[voice] ${this.o.agent} says: "${sentence}"`);
+        console.log(`[voice] ${name} says: "${sentence}"`);
         turn.said.push(sentence);
         out ??= this.o.output.start();
         for await (const pcm of this.o.speech.speak(
           sentence,
-          this.o.voice,
+          p.voice,
           signal,
         )) {
           firstAudioMs ??= Date.now() - t0;
@@ -96,43 +230,64 @@ export class VoiceCall {
     const slow = setTimeout(() => {
       if (!answered && !signal.aborted)
         console.warn(
-          `[voice] ${this.o.agent}: no answer from the model after ${SLOW_MS / 1000} s; it may be busy with the agents' work`,
+          `[voice] ${name}: no answer from the model after ${SLOW_MS / 1000} s; it may be busy with the agents' work`,
         );
     }, SLOW_MS);
+    let next: (() => Promise<unknown>) | undefined;
     try {
-      const reply = await this.o.chat.reply(
-        said,
+      const reply = await p.chat.reply(
+        heard,
         (s) => {
           answered = true;
           say(s);
         },
         signal,
       );
-      this.unanswered = "";
       await speaking;
       out?.end();
-      if (reply.text) this.o.record("assistant", reply.text);
-      this.o.turnDone?.(said, reply.text);
-      if (reply.todo) this.o.handoff(reply.todo);
+      p.seen = this.log.length;
+      if (reply.text) this.add({ speaker: name, text: reply.text });
+      p.turnDone?.(heard, reply.text);
+      if (reply.todo) p.handoff(reply.todo);
       console.log(
-        `[voice] ${this.o.agent}: first words ${reply.firstTextMs ?? "-"} ms, ` +
+        `[voice] ${name}: first words ${reply.firstTextMs ?? "-"} ms, ` +
           `first audio ${firstAudioMs ?? "-"} ms after hearing you` +
           (reply.todo ? "; passed on a to-do" : ""),
       );
+      const invited = (reply.invite ?? []).filter((n) => !this.people.has(n));
+      const addressed = this.namedIn(reply.text, true);
+      if (invited.length)
+        next = async () => {
+          for (const n of invited) await this.invite(n, name);
+        };
+      else if (addressed && addressed !== name) {
+        if (hops < MAX_HOPS)
+          next = () => this.respond(addressed, hops + 1, generation);
+        else
+          console.log(
+            `[voice] ${name} asked ${addressed}, but that's ${MAX_HOPS} answers in a row: waiting for you`,
+          );
+      }
     } catch (err) {
-      // Talked over before it answered: keep their words for the next turn.
       if (signal.aborted) {
-        if (turn.spoke) this.unanswered = "";
+        // Cut off: remember what it heard and what it got out, so it can
+        // pick up the thread instead of losing it.
+        if (turn.said.length) {
+          const said = turn.said.join(" ");
+          p.chat.remember(heard, said);
+          p.seen = this.log.length;
+          this.add({ speaker: name, text: `${said} (cut off)` });
+        }
         return;
       }
       console.error(
-        `[voice] ${this.o.agent}: couldn't answer: ${err instanceof Error ? err.message : err}`,
+        `[voice] ${name}: couldn't answer: ${err instanceof Error ? err.message : err}`,
       );
-      this.unanswered = "";
       out?.end();
     } finally {
       clearTimeout(slow);
       if (this.turn === turn) this.turn = undefined;
     }
+    await next?.();
   }
 }

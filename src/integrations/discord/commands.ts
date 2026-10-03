@@ -24,6 +24,11 @@ export const COMMANDS: CommandDef[] = [
     agentOption: true,
   },
   {
+    name: "invite",
+    description: "Bring an agent into the voice call you're in",
+    agentOption: true,
+  },
+  {
     name: "pause",
     description:
       "Pause the whole office: stop all agents and their heartbeats until /resume",
@@ -48,6 +53,8 @@ export interface CommandHost {
   clearAgent?(name: string): string;
   pauseOffice?(): string;
   resumeOffice?(): string;
+  /** /invite: bring an agent into your voice call. */
+  inviteToCall?(name: string): Promise<string>;
   /** After a pause or resume (e.g. to redraw #status). */
   changed?(): void;
 }
@@ -82,7 +89,10 @@ export function tasksText(
 }
 
 /** What to answer a slash command with. */
-export function answer(c: IncomingCommand, host: CommandHost): string {
+export function answer(
+  c: IncomingCommand,
+  host: CommandHost,
+): string | Promise<string> {
   if (c.name === "status")
     return (
       host.statusText() ?? "Activity is turned off (DISCORD_ACTIVITY=off)."
@@ -101,6 +111,10 @@ export function answer(c: IncomingCommand, host: CommandHost): string {
   const agent = c.agent ?? "";
   if (!host.agentNames().includes(agent))
     return `There's no agent called "${agent}".`;
+  if (c.name === "invite")
+    return host.inviteToCall
+      ? host.inviteToCall(agent)
+      : "Voice calls aren't on (set VOICE_URL).";
   const run =
     c.name === "stop"
       ? host.stopAgent
@@ -113,11 +127,11 @@ export function answer(c: IncomingCommand, host: CommandHost): string {
 }
 
 /** Answer a slash command, privately. */
-export function runCommand(
+export async function runCommand(
   c: IncomingCommand,
   host: CommandHost,
 ): Promise<void> {
-  return c.reply(answer(c, host));
+  return c.reply(await answer(c, host));
 }
 
 /** What commands can see and do, from the bridge's parts. */
@@ -137,6 +151,9 @@ export function commandHost(
     ...(h.clearAgent ? { clearAgent: (a: string) => h.clearAgent!(a) } : {}),
     ...(h.pauseOffice ? { pauseOffice: () => h.pauseOffice!() } : {}),
     ...(h.resumeOffice ? { resumeOffice: () => h.resumeOffice!() } : {}),
+    ...(h.inviteToCall
+      ? { inviteToCall: (a: string) => h.inviteToCall!(a) }
+      : {}),
     changed: () => relay?.refreshStatus(),
   };
 }
