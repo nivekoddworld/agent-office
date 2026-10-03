@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Downsampler, Upsampler } from "../src/voice/audio.js";
 import { SentenceSplitter, forSpeech } from "../src/voice/sentences.js";
 import { VoiceChat, handoff, speakable } from "../src/voice/voice-chat.js";
-import { VoiceCall, type Participant } from "../src/voice/voice-call.js";
+import {
+  VoiceCall,
+  type CallLine,
+  type Participant,
+} from "../src/voice/voice-call.js";
 import { SpeechTurn } from "../src/voice/speech-turn.js";
 import { runVoiceTool, voiceTools } from "../src/voice/voice-tools.js";
 import { OpusDecoders, opusPacketOk } from "../src/voice/opus-decoder.js";
@@ -602,6 +606,27 @@ describe("group call fixes", () => {
     });
     await call.heard("we need the lead's opinion");
     await vi.waitFor(() => expect(call.names).toEqual(["hr", "lead"]));
+  });
+
+  it("tells the transcript every line of the call, as it's said", async () => {
+    const hr = who("hr", () => "Sure.");
+    const lead = who("lead", () => "Hi, Jim here.");
+    const lines: CallLine[] = [];
+    const call = new VoiceCall({
+      host: hr.p,
+      speech: fakeSpeech(),
+      output: output(),
+      join: () => lead.p,
+      roster,
+      transcript: (l) => lines.push(l),
+    });
+    await call.heard("Frank, add Jim", "Mazladore");
+    await vi.waitFor(() => expect(lines).toHaveLength(3));
+    expect(lines).toEqual([
+      { speaker: "Mazladore", text: "Frank, add Jim", human: true },
+      { speaker: "call", text: "lead joined the call" },
+      { speaker: "lead", text: "Hi, Jim here." },
+    ]);
   });
 
   it("never speaks for someone else", async () => {

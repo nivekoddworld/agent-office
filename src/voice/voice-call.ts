@@ -23,12 +23,10 @@ export interface Participant {
   aliases?: string[];
   voice: string;
   chat: VoiceChat;
-  /** Save a line of the call to this agent's DM history. */
+  /** Save a line of the call to this agent's memory of its calls. */
   record(role: "user" | "assistant", text: string): void;
   /** Work it promised during the call: sent to it as a message. */
   handoff(todo: string): void;
-  /** A finished exchange (e.g. to show in a text channel). */
-  turnDone?(heard: string, reply: string): void;
 }
 
 export interface VoiceCallOptions {
@@ -42,6 +40,8 @@ export interface VoiceCallOptions {
   onPeople?(names: string[]): void;
   /** Every agent that could join, with the other names they go by. */
   roster?(): Array<{ name: string; aliases?: string[] }>;
+  /** Each line of the call as it's said (e.g. for a text channel). */
+  transcript?(line: CallLine): void;
 }
 
 /** "add Jim", "bring artist in", "get lead on the call", "invite coder". */
@@ -55,7 +55,7 @@ const PROMISE =
 const ASK_AGENT =
   /\b(add|bring|bringing|invite|inviting|grab|grabbing|pull|pulling|loop|looping)\b/i;
 
-interface Line {
+export interface CallLine {
   /** A person's name, an agent's name, or "call" for things like joins. */
   speaker: string;
   text: string;
@@ -76,7 +76,7 @@ interface Member extends Participant {
  */
 export class VoiceCall {
   private people = new Map<string, Member>();
-  private log: Line[] = [];
+  private log: CallLine[] = [];
   /** Who answers when you don't say a name. */
   private current: string;
   private turn?: {
@@ -195,8 +195,9 @@ export class VoiceCall {
     if (!this.turn) void this.respond(agent, 1, this.generation);
   }
 
-  private add(line: Line): void {
+  private add(line: CallLine): void {
     this.log.push(line);
+    this.o.transcript?.(line);
     for (const p of this.people.values()) {
       if (line.speaker === p.name) p.record("assistant", line.text);
       else if (line.human && this.humans.size <= 1) p.record("user", line.text);
@@ -337,7 +338,6 @@ export class VoiceCall {
       out?.end();
       p.seen = this.log.length;
       if (reply.text) this.add({ speaker: name, text: reply.text });
-      p.turnDone?.(heard, reply.text);
       // The INVITE line, or "I'll grab Jim" when it forgot to write one.
       const invited = (
         reply.invite?.length ? reply.invite : this.wanted(reply.text, ASK_AGENT)

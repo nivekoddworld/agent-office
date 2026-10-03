@@ -354,6 +354,28 @@ describe("DiscordBridge", () => {
     expect(discord.sent[0]!.pingRoles ?? []).toEqual([]);
   });
 
+  it("puts voice calls in the voice channel's chat, not the DMs", async () => {
+    bridge.handleVoiceLine("voice-1", {
+      username: "Mazladore",
+      text: "add Jim",
+      avatarUrl: "https://avatars/me.png",
+    });
+    bridge.handleVoiceLine("voice-1", { username: "lead", text: "Hi there." });
+    await bridge.idle();
+    expect(
+      discord.sent.map((m) => [
+        m.channelId,
+        m.username,
+        m.content,
+        m.avatarUrl,
+      ]),
+    ).toEqual([
+      ["voice-1", "Mazladore", "add Jim", "https://avatars/me.png"],
+      ["voice-1", "lead", "Hi there.", "https://avatars/lead.png"],
+    ]);
+    expect(discord.posts("dm-lead")).toEqual([]);
+  });
+
   it("creates a read-only pair channel when two agents first message each other", async () => {
     const send = (from: string, id: string, to: string, message: string) => {
       bridge.handleAgentEvent(from, {

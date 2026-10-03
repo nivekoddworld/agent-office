@@ -71,3 +71,12 @@ export interface BridgeOptions {
   /** When to post the daily summary ("HH:MM", local time), or "off". */
   summaryAt?: string;
 }
+
+/** A line of a call, as posted in the voice channel's chat. */
+export interface TranscriptLine {
+  /** Who said it. */
+  username: string;
+  text: string;
+  /** A person's own avatar; agents get theirs. */
+  avatarUrl?: string;
+}

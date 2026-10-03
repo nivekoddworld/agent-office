@@ -34,7 +34,7 @@ instead of loading the agent's whole working context. It starts with:
 
 - who the agent is (its `IDENTITY`, `SOUL` and `CONTEXT` files);
 - its open tasks;
-- your recent DMs with it;
+- your recent DMs with it, and how its last calls ended;
 - what's been said in the call so far.
 
 **It can look things up while you talk**, with quick read-only tools: its task
@@ -48,11 +48,11 @@ while the office is paused. If it promises something but forgets to pass it on,
 what you asked is passed on anyway. **When it finishes** and messages you, the
 call hears about it, and the agent tells you if nobody's talking.
 
-Both sides of the call are kept in the agent's DM history (marked `(voice)`):
-
-- in the dashboard;
-- in its `#dm-` channel in Discord;
-- where the agent can read them with `read_dm`.
+**The transcript** goes in the voice channel's own text chat (the chat
+button on the channel), line by line as it's said: yours under your name and
+avatar, each agent's under theirs, and who joined. It stays out of the
+agents' DMs. Each agent also keeps the end of its last calls, so the next
+call picks up where you left off.
 
 ## Group calls
 
