@@ -3,7 +3,8 @@ on the CPU (no GPU memory), so the GPU stays free for the agents' model.
 
   WebSocket /stt   send 16 kHz mono s16le audio as binary messages while the
                    person talks, then the text "end"; the reply is
-                   {"text": "..."}.
+                   {"text": "..."}. Words recognized so far arrive on the way,
+                   as {"partial": "..."}.
   POST /tts        {"text": "...", "voice": "alba"} -> 24 kHz mono s16le audio,
                    streamed as it's made. Closing the request stops it.
   GET /health      {"ok": true, "voices": [...]}
@@ -88,6 +89,7 @@ async def stt(ws: WebSocket):
     stream = recognizer.create_stream()
     started = time.time()
     seconds = 0.0
+    partial = ""
     try:
         while True:
             msg = await ws.receive()
@@ -96,6 +98,10 @@ async def stt(ws: WebSocket):
                 seconds += len(pcm) / RATE
                 stream.accept_waveform(RATE, pcm.astype(np.float32) / 32768)
                 await asyncio.to_thread(decode, stream)
+                text = recognizer.get_result(stream).strip()
+                if text != partial:
+                    partial = text
+                    await ws.send_text(json.dumps({"partial": text}))
             elif msg.get("text") == "end":
                 ended = time.time()
                 stream.accept_waveform(RATE, np.zeros(int(RATE * TAIL_SECONDS), np.float32))
@@ -150,7 +156,7 @@ async def speak(req: Speak):
             if first is not None:
                 print(
                     f"[voice] Spoke {samples / tts.sample_rate:.1f} s in {time.time() - started:.1f} s, "
-                    f"first audio after {int(first * 1000)} ms ({req.voice})",
+                    f"first audio after {int(first * 1000)} ms ({req.voice}): {text[:80]!r}",
                     flush=True,
                 )
         except Exception as err:

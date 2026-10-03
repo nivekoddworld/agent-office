@@ -38,8 +38,11 @@ export class VoiceCall {
   constructor(private o: VoiceCallOptions) {}
 
   /** The person started talking: stop talking over them. */
-  interrupt(): void {
-    if (!this.turn) return;
+  interrupt(why = "you started talking"): void {
+    if (!this.turn || this.turn.abort.signal.aborted) return;
+    console.log(
+      `[voice] ${this.o.agent}: stopped ${this.turn.spoke ? "talking" : "answering"}: ${why}`,
+    );
     this.turn.abort.abort();
     this.o.output.stop();
   }
@@ -64,6 +67,7 @@ export class VoiceCall {
     const say = (sentence: string) => {
       speaking = speaking.then(async () => {
         if (signal.aborted) return;
+        console.log(`[voice] ${this.o.agent} says: "${sentence}"`);
         out ??= this.o.output.start();
         for await (const pcm of this.o.speech.speak(
           sentence,

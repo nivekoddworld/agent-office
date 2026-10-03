@@ -7,7 +7,6 @@ import {
   type VoiceState,
 } from "discord.js";
 import {
-  AudioPlayerStatus,
   EndBehaviorType,
   NoSubscriberBehavior,
   StreamType,
@@ -21,15 +20,22 @@ import {
 } from "@discordjs/voice";
 import prism from "prism-media";
 import { PassThrough } from "node:stream";
-import { Downsampler } from "../../voice/audio.js";
+import { SpeechTurn } from "../../voice/speech-turn.js";
 import type { SpeechService } from "../../voice/speech-service.js";
 import type { CallOutput, VoiceCall } from "../../voice/voice-call.js";
 
 const CATEGORY = "Agent Voice";
-/** Quiet this long and Discord's stream ends: that's the end of your turn. */
-const END_OF_TURN_MS = 600;
-/** Shorter than this is a cough or a click, not speech. */
-const MIN_SPEECH_MS = 300;
+/**
+ * Your turn is over after this much quiet (VOICE_END_OF_TURN_MS). Shorter
+ * answers sooner, but cuts you off when you pause mid-sentence.
+ */
+const END_OF_TURN_MS = Number(process.env["VOICE_END_OF_TURN_MS"]) || 900;
+/** Quiet this long and Discord ends a stretch of audio... */
+const SILENCE_MS = Math.min(300, END_OF_TURN_MS);
+/** ...and if nothing more comes in this long, the turn is over. */
+const GRACE_MS = END_OF_TURN_MS - SILENCE_MS;
+/** Shorter than this, with no words, is a cough or a click, not speech. */
+const MIN_SPEECH_MS = 400;
 
 export interface DiscordVoiceOptions {
   agentNames(): string[];
@@ -44,7 +50,10 @@ interface ActiveCall {
   connection: VoiceConnection;
   player: AudioPlayer;
   call: VoiceCall;
-  listening: Set<string>;
+  /** Who's talking, by user id. */
+  turns: Map<string, SpeechTurn>;
+  /** Whose audio stream is open. */
+  streams: Set<string>;
 }
 
 /**
@@ -197,7 +206,8 @@ export class DiscordVoice {
       connection,
       player,
       call,
-      listening: new Set(),
+      turns: new Map(),
+      streams: new Set(),
     };
     this.active = active;
     connection.receiver.speaking.on("start", (userId) =>
@@ -219,78 +229,90 @@ export class DiscordVoice {
   }
 
   private listen(active: ActiveCall, userId: string): void {
-    if (active.listening.has(userId)) return;
+    // Discord can say they started again while their last stream is open.
+    if (active.streams.has(userId)) return;
     const member = this.guild.members.cache.get(userId);
     if (member?.user.bot) return;
     const who = member?.displayName ?? userId;
-    active.listening.add(userId);
-    console.log(`[voice] Listening to ${who}…`);
-    if (active.player.state.status !== AudioPlayerStatus.Idle)
-      active.call.interrupt();
+    // Talking again after a short pause: the same turn goes on.
+    let turn = active.turns.get(userId);
+    if (turn && !turn.finished) turn.resume();
+    else {
+      console.log(`[voice] Listening to ${who}…`);
+      const next: SpeechTurn = new SpeechTurn({
+        speech: this.o.speech,
+        graceMs: GRACE_MS,
+        minSpeechMs: MIN_SPEECH_MS,
+        // Stop talking once they really say something (not at every noise).
+        onWords: () => active.call.interrupt(),
+        onDone: (text, ms) => {
+          if (active.turns.get(userId) === next) active.turns.delete(userId);
+          if (!text) {
+            if (process.env["VOICE_DEBUG"])
+              console.log(
+                `[voice] Heard ${who} (${(ms / 1000).toFixed(1)} s): no words`,
+              );
+            return;
+          }
+          console.log(
+            `[voice] Heard ${who} (${(ms / 1000).toFixed(1)} s): "${text}"`,
+          );
+          void active.call.heard(text);
+        },
+        onError: (err) =>
+          console.error(
+            `[voice] Couldn't hear ${who}: ${err instanceof Error ? err.message : err}`,
+          ),
+      });
+      turn = next;
+      active.turns.set(userId, turn);
+    }
+    const current = turn;
 
+    active.streams.add(userId);
     const opus = active.connection.receiver.subscribe(userId, {
-      end: { behavior: EndBehaviorType.AfterSilence, duration: END_OF_TURN_MS },
+      end: { behavior: EndBehaviorType.AfterSilence, duration: SILENCE_MS },
     });
     const decoder = new prism.opus.Decoder({
       rate: 48000,
       channels: 2,
       frameSize: 960,
     });
-    const down = new Downsampler();
-    const stt = this.o.speech.listen();
-    let ms = 0;
     let packets = 0;
+    let decoded = false;
     opus.on("data", () => packets++);
     decoder.on("data", (pcm: Buffer) => {
-      ms += pcm.length / 192; // 48 kHz × 2 channels × 2 bytes = 192 bytes/ms
-      stt.write(down.push(pcm));
+      decoded = true;
+      current.audio(pcm);
     });
-    let finished = false;
-    const done = () => {
-      if (finished) return;
-      finished = true;
-      active.listening.delete(userId);
-      if (ms < MIN_SPEECH_MS) {
-        stt.cancel();
+    let ended = false;
+    const end = () => {
+      if (ended) return;
+      ended = true;
+      active.streams.delete(userId);
+      if (packets > 5 && !decoded)
         console.log(
-          packets && !ms
-            ? `[voice] Got ${packets} audio packets from ${who} but couldn't decode any (encryption?)`
-            : `[voice] Ignored ${Math.round(ms)} ms from ${who}: too short to be speech`,
+          `[voice] Got ${packets} audio packets from ${who} but couldn't decode any (encryption?)`,
         );
-        return;
-      }
-      const t0 = Date.now();
-      stt
-        .finish()
-        .then((text) => {
-          console.log(
-            `[voice] Heard ${who} (${(ms / 1000).toFixed(1)} s, words ${Date.now() - t0} ms after): ${text ? `"${text}"` : "no words"}`,
-          );
-          return active.call.heard(text);
-        })
-        .catch((err) =>
-          console.error(
-            `[voice] Couldn't hear you: ${err instanceof Error ? err.message : err}`,
-          ),
-        );
+      current.pause();
     };
     opus.pipe(decoder);
-    decoder.once("end", done);
-    // A broken stream still ends your turn, so the bot keeps listening to you.
+    decoder.once("end", end);
+    // A broken stream still ends the stretch, so the bot keeps listening.
     const failed = (err: Error) => {
       console.error(`[voice] Bad audio from Discord: ${err.message}`);
-      done();
+      end();
     };
     decoder.on("error", failed);
     opus.once("error", failed);
-    opus.once("close", () => setTimeout(done, 1000));
+    opus.once("close", () => setTimeout(end, 1000));
   }
 
   private async leave(): Promise<void> {
     const active = this.active;
     if (!active) return;
     this.active = undefined;
-    active.call.interrupt();
+    active.call.interrupt("the call ended");
     active.player.stop(true);
     active.connection.destroy();
     await this.guild.members.me?.setNickname(null).catch(() => {});
