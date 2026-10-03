@@ -2,10 +2,11 @@ FROM node:22-slim
 
 # node:22-slim already provides user "node" with uid=1000 gid=1000
 
-# Build toolchain for npm native modules (node-gyp), and zip so agents can
-# package files (e.g. a game build) to send
+# Build toolchain for npm native modules (node-gyp), zip so agents can
+# package files (e.g. a game build) to send, and Pillow so they make images
+# with a real encoder (hand-written PNGs often won't display anywhere)
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 make g++ zip unzip \
+    && apt-get install -y --no-install-recommends python3 python3-pil make g++ zip unzip \
     && rm -rf /var/lib/apt/lists/*
 ENV PYTHON=/usr/bin/python3
 
