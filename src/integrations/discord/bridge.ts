@@ -30,10 +30,8 @@ import type { DiscordApi, IncomingMessage } from "./types.js";
  * names; what you type in Discord is delivered like a message from the web UI.
  */
 
-export { pairChannel } from "./names.js";
-
-/** Marks messages typed in Discord, so they aren't echoed back. */
-export { DISCORD_ORIGIN } from "./names.js";
+/** DISCORD_ORIGIN marks messages typed in Discord, so they aren't echoed back. */
+export { DISCORD_ORIGIN, pairChannel } from "./names.js";
 import { DISCORD_ORIGIN } from "./names.js";
 const SYNC_INTERVAL_MS = 60_000;
 const DM_CATEGORY = "DMs";
@@ -44,6 +42,7 @@ export const USER_ROLE = "office-user";
 
 export type { BridgeHost, BridgeOptions } from "./bridge-types.js";
 import type { BridgeHost, BridgeOptions } from "./bridge-types.js";
+import type { TranscriptLine as Line } from "./bridge-types.js";
 
 /** Wait this long after a task change for more before updating the forum. */
 const FORUM_DELAY_MS = 1500;
@@ -436,10 +435,11 @@ export class DiscordBridge {
     this.relay?.refreshStatus();
   }
 
-  /** An exchange from a voice call, kept in the agent's DM channel. */
-  handleVoiceTurn(agent: string, heard: string, reply: string): void {
-    const text = `${heard.replace(/^/gm, "> ")}\n${reply || "_(no answer)_"}`;
-    this.enqueue(() => this.post(`dm:${agent}`, agent, text));
+  /** A line of a voice call, in that voice channel's text chat. */
+  handleVoiceLine(channelId: string, line: Line): void {
+    const { text, ...base } = line;
+    base.avatarUrl ??= this.opts.avatarUrl?.(base.username);
+    this.enqueue(() => this.webhooks.post(channelId, base, text));
   }
 
   private async post(

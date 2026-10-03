@@ -177,7 +177,9 @@ export async function connectDiscord(
       if (
         !channel ||
         (channel.type !== ChannelType.GuildText &&
-          channel.type !== ChannelType.GuildForum)
+          channel.type !== ChannelType.GuildForum &&
+          // A voice channel's text chat (call transcripts).
+          channel.type !== ChannelType.GuildVoice)
       )
         throw new Error(`Discord channel ${channelId} not found`);
       const hook = await channel.createWebhook({ name: "agent-office" });

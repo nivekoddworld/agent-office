@@ -5,6 +5,7 @@ import { appendSession } from "../../sessions/session-writer.js";
 import {
   formatChannelLog,
   readSessionLog,
+  type ChannelLogEntry,
 } from "../../channels/channel-history.js";
 import { readInstructionFiles } from "../../agent/workspace-scaffold.js";
 import { resolveLocalApiKey } from "../../models/resolve-model.js";
@@ -15,20 +16,32 @@ import { voiceFor } from "../../voice/agent-voice.js";
 import { voiceTools } from "../../voice/voice-tools.js";
 import { onEgress } from "../../egress/egress-impl.js";
 import { DiscordVoice } from "./voice.js";
+import type { TranscriptLine } from "./bridge-types.js";
 
 const OPEN = new Set(["todo", "in_progress", "waiting"]);
+/** Each agent's memory of its calls (the transcript goes to Discord). */
+const CALLS_LOG = "voice-calls.jsonl";
 
-/** What the agent should know at each turn of a call. */
-function callContext(workspace: Workspace, agent: string): string {
+/** The last `n` lines of one of an agent's logs (DMs, calls). */
+function recent(workspace: Workspace, agent: string, file: string, n: number) {
+  return readSessionLog(workspace.office.dir, agent, file)
+    .slice(-n)
+    .map((e) => ({ ...e, text: e.text.slice(0, 600) }));
+}
+
+/** What the agent knows as the call starts (`calls`: how its last ones ended). */
+function callContext(
+  workspace: Workspace,
+  agent: string,
+  calls: ChannelLogEntry[],
+): string {
   const handle = workspace.getAgent(agent);
   const tasks = workspace.tasks
     .list()
     .filter((t) => t.assignee === agent && OPEN.has(t.status))
     .slice(0, 8)
     .map((t) => `- #${t.id} [${t.status}] ${t.title}`);
-  const dms = readSessionLog(workspace.office.dir, agent, "user-dm.jsonl")
-    .slice(-12)
-    .map((e) => ({ ...e, text: e.text.slice(0, 600) }));
+  const dms = recent(workspace, agent, "user-dm.jsonl", 12);
   return [
     `The call started ${new Date().toLocaleString([], { dateStyle: "full", timeStyle: "short" })}.`,
     handle?.status === "running"
@@ -43,35 +56,29 @@ function callContext(workspace: Workspace, agent: string): string {
     dms.length
       ? `\nYour recent DMs with the user, oldest first:\n${formatChannelLog(dms)}`
       : "",
+    calls.length
+      ? `\nThe end of your last call(s), oldest first:\n${formatChannelLog(calls)}`
+      : "",
   ].join("\n");
 }
 
-/** A line of the call, kept in the DM history (dashboard and read_dm). */
+/**
+ * A line of the call, kept for the agent's next call. Not in its DMs: those
+ * would fill up with every word of every call.
+ */
 function record(
   workspace: Workspace,
   agent: string,
   role: "user" | "assistant",
   text: string,
 ): void {
-  const line = `(voice) ${text}`;
-  appendSession(workspace.office.dir, agent, "user-dm.jsonl", {
+  appendSession(workspace.office.dir, agent, CALLS_LOG, {
     ts: new Date().toISOString(),
     role,
     from: role === "user" ? "__user__" : agent,
-    text: line,
+    text,
     kind: "voice",
   });
-  try {
-    workspace.store?.saveDm({
-      agent,
-      role,
-      text: line,
-      ts_ms: Date.now(),
-      request_id: null,
-    });
-  } catch (err) {
-    console.error("[voice] Couldn't save the call to the DM history:", err);
-  }
 }
 
 /** The name an agent goes by: the "Name:" line in its IDENTITY.md, if any. */
@@ -87,7 +94,8 @@ export async function startDiscordVoice(
   workspace: Workspace,
   raw: { client: Client; guild: Guild },
   voiceUrl: string,
-  turnDone: (agent: string, heard: string, reply: string) => void,
+  /** A line of the call, for the voice channel's text chat. */
+  transcript: (channelId: string, line: TranscriptLine) => void,
 ): Promise<{
   stop: () => Promise<void>;
   invite: (agent: string) => Promise<string>;
@@ -129,6 +137,8 @@ export async function startDiscordVoice(
       a.aliases ? `${a.name} (${a.aliases[0]})` : a.name,
     );
     const apiKey = resolveLocalApiKey(model);
+    // Before this call adds to it.
+    const lastCalls = recent(workspace, agent, CALLS_LOG, 12);
     return {
       name: agent,
       ...(alias ? { aliases: [alias] } : {}),
@@ -151,10 +161,9 @@ export async function startDiscordVoice(
           channels: workspace.office.channels,
         }),
         ...(alias ? { aliases: [alias] } : {}),
-        context: () => callContext(workspace, agent),
+        context: () => callContext(workspace, agent, lastCalls),
       }),
       record: (role, text) => record(workspace, agent, role, text),
-      turnDone: (heard, reply) => turnDone(agent, heard, reply),
       handoff: (todo) => {
         // Tagged so it gets done even while the office is paused.
         const r = workspace.sendUserDm(agent, `[From our voice call] ${todo}`, {
@@ -172,7 +181,7 @@ export async function startDiscordVoice(
   const voice = new DiscordVoice(raw.client, raw.guild, {
     agentNames: () => workspace.list().map((a) => a.name),
     speech,
-    newCall: (agent, output, onPeople) => {
+    newCall: (agent, channelId, output, onPeople) => {
       const host = participant(agent);
       if (typeof host === "string") throw new Error(host);
       return new VoiceCall({
@@ -182,6 +191,24 @@ export async function startDiscordVoice(
         join: participant,
         onPeople,
         roster,
+        transcript: (line) => {
+          const person = line.human
+            ? raw.guild.members.cache.find(
+                (m) => m.displayName === line.speaker,
+              )
+            : undefined;
+          const avatarUrl = person?.displayAvatarURL();
+          transcript(
+            channelId,
+            line.speaker === "call"
+              ? { username: "agent-office", text: `_${line.text}_` }
+              : {
+                  username: line.speaker,
+                  text: line.text,
+                  ...(avatarUrl ? { avatarUrl } : {}),
+                },
+          );
+        },
       });
     },
   });

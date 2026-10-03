@@ -223,7 +223,7 @@ export async function startDiscordBridge(
           workspace,
           api.raw,
           voiceUrl,
-          (agent, heard, reply) => bridge.handleVoiceTurn(agent, heard, reply),
+          (channelId, line) => bridge.handleVoiceLine(channelId, line),
         ).catch((err) => {
           console.error(
             `[voice] Voice calls not started: ${err instanceof Error ? err.message : err}`,

@@ -41,11 +41,12 @@ export interface DiscordVoiceOptions {
   agentNames(): string[];
   speech: SpeechService;
   /**
-   * A new call with an agent, speaking through `output`; `onPeople` is told
-   * when someone joins it.
+   * A new call with an agent in voice channel `channelId`, speaking through
+   * `output`; `onPeople` is told when someone joins it.
    */
   newCall(
     agent: string,
+    channelId: string,
     output: CallOutput,
     onPeople: (names: string[]) => void,
   ): VoiceCall;
@@ -184,7 +185,9 @@ export class DiscordVoice {
         player.stop(true);
       },
     };
-    const call = this.o.newCall(agent, output, (names) => this.rename(names));
+    const call = this.o.newCall(agent, channelId, output, (names) =>
+      this.rename(names),
+    );
     const connection = joinVoiceChannel({
       channelId,
       guildId: this.guild.id,
