@@ -149,6 +149,24 @@ export class DiscordVoice {
         `Voice service unreachable (${err instanceof Error ? err.message : err}); not joining ${agent}'s channel`,
       );
     });
+    // Keep playing through the pauses between sentences.
+    const player = createAudioPlayer({
+      behaviors: {
+        noSubscriber: NoSubscriberBehavior.Play,
+        maxMissedFrames: Infinity,
+      },
+    });
+    const output: CallOutput = {
+      start: () => {
+        const stream = new PassThrough();
+        player.play(createAudioResource(stream, { inputType: StreamType.Raw }));
+        return stream;
+      },
+      stop: () => {
+        player.stop(true);
+      },
+    };
+    const call = this.o.newCall(agent, output);
     const connection = joinVoiceChannel({
       channelId,
       guildId: this.guild.id,
@@ -164,25 +182,7 @@ export class DiscordVoice {
         `Couldn't connect to ${agent}'s voice channel (does the bot have Connect and Speak?): ${err instanceof Error ? err.message : err}`,
       );
     }
-    // Keep playing through the pauses between sentences.
-    const player = createAudioPlayer({
-      behaviors: {
-        noSubscriber: NoSubscriberBehavior.Play,
-        maxMissedFrames: Infinity,
-      },
-    });
     connection.subscribe(player);
-    const output: CallOutput = {
-      start: () => {
-        const stream = new PassThrough();
-        player.play(createAudioResource(stream, { inputType: StreamType.Raw }));
-        return stream;
-      },
-      stop: () => {
-        player.stop(true);
-      },
-    };
-    const call = this.o.newCall(agent, output);
     const active: ActiveCall = {
       agent,
       channelId,
@@ -232,7 +232,10 @@ export class DiscordVoice {
       ms += pcm.length / 192; // 48 kHz × 2 channels × 2 bytes = 192 bytes/ms
       stt.write(down.push(pcm));
     });
+    let finished = false;
     const done = () => {
+      if (finished) return;
+      finished = true;
       active.listening.delete(userId);
       if (ms < MIN_SPEECH_MS) {
         stt.cancel();
@@ -249,9 +252,14 @@ export class DiscordVoice {
     };
     opus.pipe(decoder);
     decoder.once("end", done);
-    decoder.on("error", (err) => {
+    // A broken stream still ends your turn, so the bot keeps listening to you.
+    const failed = (err: Error) => {
       console.error(`[voice] Bad audio from Discord: ${err.message}`);
-    });
+      done();
+    };
+    decoder.on("error", failed);
+    opus.once("error", failed);
+    opus.once("close", () => setTimeout(done, 1000));
   }
 
   private async leave(): Promise<void> {

@@ -71,6 +71,8 @@ Stock voices:
   two agents are both mid-request. The logs show where the time goes, for each
   reply:
   `[voice] artist: first words 850 ms, first audio 1400 ms after hearing you`.
+- **Use headphones**, or keep Discord's echo cancellation on. If your mic picks
+  up the agent's voice, it hears itself and stops talking.
 - English only for now.
 
 ## Tuning
