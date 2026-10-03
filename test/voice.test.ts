@@ -8,6 +8,8 @@ import { VoiceChat, handoff, speakable } from "../src/voice/voice-chat.js";
 import { VoiceCall, type Participant } from "../src/voice/voice-call.js";
 import { SpeechTurn } from "../src/voice/speech-turn.js";
 import { runVoiceTool, voiceTools } from "../src/voice/voice-tools.js";
+import { OpusDecoders, opusPacketOk } from "../src/voice/opus-decoder.js";
+import OpusScript from "opusscript";
 import { STOCK_VOICES, voiceFor } from "../src/voice/agent-voice.js";
 import type { SpeechService } from "../src/voice/speech-service.js";
 
@@ -883,5 +885,59 @@ describe("group conversation", () => {
     await call.heard("Jim, tell the coder to join us", "Mazladore");
     await vi.waitFor(() => expect(coder.heard).toHaveLength(1));
     expect(lead.heard).toHaveLength(0);
+  });
+});
+
+describe("decoding Discord's audio", () => {
+  const encoded = () => {
+    const enc = new OpusScript(48000, 2, OpusScript.Application.VOIP);
+    const pcm = Buffer.alloc(3840);
+    for (let i = 0; i < 1920; i++)
+      pcm.writeInt16LE(Math.round(5000 * Math.sin(i / 7)), i * 2);
+    const packet = Buffer.from(enc.encode(pcm, 960));
+    enc.delete();
+    return packet;
+  };
+
+  it("drops what can't be Opus: still-encrypted frames and garbage", () => {
+    const good = encoded();
+    expect(opusPacketOk(good)).toBe(true);
+    // DAVE end-to-end-encrypted frames end with 0xFAFA.
+    expect(opusPacketOk(Buffer.concat([good, Buffer.from([0xfa, 0xfa])]))).toBe(
+      false,
+    );
+    expect(opusPacketOk(Buffer.alloc(0))).toBe(false);
+    expect(opusPacketOk(Buffer.from([0x03, 0x00]))).toBe(false); // code 3, no frames
+    expect(opusPacketOk(Buffer.from([0x01, 1, 2, 3]))).toBe(false); // code 1, odd length
+  });
+
+  it("decodes off the main thread, and survives the decoder crashing", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const pool = new OpusDecoders();
+    try {
+      const got: Buffer[] = [];
+      const a = pool.open((pcm) => got.push(pcm));
+      expect(a.decode(encoded())).toBe(true);
+      expect(a.decode(Buffer.from([0xfa, 0xfa]))).toBe(false);
+      await vi.waitFor(() => expect(got).toHaveLength(1));
+      expect(got[0]!.length).toBe(3840); // 20 ms of 48 kHz stereo
+
+      // The worker dies (as when opusscript aborts): we're fine, and the
+      // next stream gets a new one.
+      await (pool as any).worker.terminate();
+      await vi.waitFor(() =>
+        expect(errors).toHaveBeenCalledWith(
+          expect.stringMatching(/audio decoder crashed/),
+        ),
+      );
+      a.decode(encoded()); // goes nowhere, no throw
+      a.close();
+      const again: Buffer[] = [];
+      pool.open((pcm) => again.push(pcm)).decode(encoded());
+      await vi.waitFor(() => expect(again).toHaveLength(1));
+    } finally {
+      await pool.stop();
+      errors.mockRestore();
+    }
   });
 });
