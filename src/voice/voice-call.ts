@@ -31,7 +31,7 @@ export interface VoiceCallOptions {
  * spoken a sentence at a time. Talking over it stops it.
  */
 export class VoiceCall {
-  private turn?: { abort: AbortController; spoke: boolean };
+  private turn?: { abort: AbortController; spoke: boolean; said: string[] };
   /** Words from a turn that was cut off before it answered. */
   private unanswered = "";
 
@@ -40,8 +40,12 @@ export class VoiceCall {
   /** The person started talking: stop talking over them. */
   interrupt(why = "you started talking"): void {
     if (!this.turn || this.turn.abort.signal.aborted) return;
+    const last = this.turn.said.at(-1);
     console.log(
-      `[voice] ${this.o.agent}: stopped ${this.turn.spoke ? "talking" : "answering"}: ${why}`,
+      `[voice] ${this.o.agent}: interrupted (${why}), ` +
+        (this.turn.spoke && last
+          ? `stopped talking after ${this.turn.said.length} sentence(s), last: "${last}"`
+          : "stopped before saying anything"),
     );
     this.turn.abort.abort();
     this.o.output.stop();
@@ -51,12 +55,16 @@ export class VoiceCall {
   async heard(text: string): Promise<void> {
     text = text.trim();
     if (!/\w/.test(text)) return;
-    this.interrupt();
+    this.interrupt(`you said more: "${text}"`);
     const said = this.unanswered ? `${this.unanswered} ${text}` : text;
     this.unanswered = said;
     this.o.record("user", text);
 
-    const turn = { abort: new AbortController(), spoke: false };
+    const turn = {
+      abort: new AbortController(),
+      spoke: false,
+      said: [] as string[],
+    };
     this.turn = turn;
     const signal = turn.abort.signal;
     const t0 = Date.now();
@@ -68,6 +76,7 @@ export class VoiceCall {
       speaking = speaking.then(async () => {
         if (signal.aborted) return;
         console.log(`[voice] ${this.o.agent} says: "${sentence}"`);
+        turn.said.push(sentence);
         out ??= this.o.output.start();
         for await (const pcm of this.o.speech.speak(
           sentence,

@@ -244,7 +244,7 @@ export class DiscordVoice {
         graceMs: GRACE_MS,
         minSpeechMs: MIN_SPEECH_MS,
         // Stop talking once they really say something (not at every noise).
-        onWords: () => active.call.interrupt(),
+        onWords: (words) => active.call.interrupt(`${who} said "${words}"`),
         onDone: (text, ms) => {
           if (active.turns.get(userId) === next) active.turns.delete(userId);
           if (!text) {

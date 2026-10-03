@@ -13,6 +13,7 @@ import {
   Priority,
   type AgentConfig,
   type AgentInfo,
+  type InboxMessage,
   type OfficeContext,
   type WorkspaceConfig,
 } from "./types.js";
@@ -51,6 +52,14 @@ import {
 } from "./messages/message-store.js";
 
 const DEFAULT_HOST_PORT = 13000;
+
+/** Requests from a voice call carry this, so they get done even while paused. */
+export const VOICE_REQUEST_PREFIX = "voice:";
+
+/** What still runs while the office is paused: what you asked for in a call. */
+function passesPause(msg: InboxMessage): boolean {
+  return msg.requestId?.startsWith(VOICE_REQUEST_PREFIX) ?? false;
+}
 
 /**
  * Workspace — the central facade that wires scheduler, bus, watchdog, and agents.
@@ -276,11 +285,13 @@ export class Workspace {
       await this.hostApi.start(this.hostApiPort);
     }
     const since = this.pausedSince;
-    if (since)
+    if (since) {
+      this.scheduler.pause(passesPause);
       console.log(
         `[office] Paused since ${new Date(since).toLocaleString()}: agents won't start anything until you resume (/resume in Discord, or ▶ in the dashboard)`,
       );
-    else this.scheduler.start();
+    }
+    this.scheduler.start();
     this.watchdog.start();
     this.cron.start();
     this.tasks.start();
@@ -799,8 +810,9 @@ export class Workspace {
 
   /**
    * Pause the office: stop what every agent is doing and start nothing new
-   * (messages wait, heartbeats stop) until resume(). Stays paused across a
-   * restart. Returns the agents that were stopped.
+   * (messages wait, heartbeats stop) until resume(), except work you ask for
+   * in a voice call. Stays paused across a restart. Returns the agents that
+   * were stopped.
    */
   pauseAll(): string[] {
     const stopped: string[] = [];
@@ -816,13 +828,14 @@ export class Workspace {
     } catch (err) {
       console.error("[office] Couldn't save the pause:", err);
     }
-    this.scheduler.stop();
+    this.scheduler.pause(passesPause);
     return stopped;
   }
 
   /** Undo pauseAll(): agents pick up their waiting messages and heartbeats. */
   resume(): void {
     rmSync(this.pauseFile, { force: true });
+    this.scheduler.resume();
     this.scheduler.start();
   }
 

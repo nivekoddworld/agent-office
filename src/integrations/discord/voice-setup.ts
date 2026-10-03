@@ -1,5 +1,6 @@
 import type { Client, Guild } from "discord.js";
-import type { Workspace } from "../../workspace.js";
+import { randomUUID } from "node:crypto";
+import { VOICE_REQUEST_PREFIX, type Workspace } from "../../workspace.js";
 import { appendSession } from "../../sessions/session-writer.js";
 import {
   formatChannelLog,
@@ -31,6 +32,9 @@ function callContext(workspace: Workspace, agent: string): string {
     handle?.status === "running"
       ? "You're in the middle of some work (your other self keeps at it during the call)."
       : "You're not working on anything else right now.",
+    workspace.pausedSince
+      ? "The office is paused: the other agents are on hold until the user resumes it, so anything you need from them waits. What you take on in this call still gets done right away."
+      : "",
     tasks.length
       ? `\nYour open tasks:\n${tasks.join("\n")}`
       : "\nNo open tasks.",
@@ -106,10 +110,14 @@ export async function startDiscordVoice(
         record: (role, text) => record(workspace, agent, role, text),
         turnDone: (heard, reply) => turnDone(agent, heard, reply),
         handoff: (todo) => {
+          // Tagged so it gets done even while the office is paused.
           const r = workspace.sendUserDm(
             agent,
             `[From our voice call] ${todo}`,
-            { origin: "voice" },
+            {
+              origin: "voice",
+              requestId: `${VOICE_REQUEST_PREFIX}${randomUUID()}`,
+            },
           );
           if (!r.ok)
             console.error(

@@ -69,7 +69,10 @@ Stock voices:
   Joining another agent's channel moves the bot there.
 - **Your model is shared.** With `--parallel 2`, a call waits for a free slot if
   two agents are both mid-request. `/pause` the office first to have the
-  model to yourself (calls still work while paused), then `/resume`. The logs show where the time goes, for each
+  model to yourself, then `/resume`. Calls work while paused, and so does what
+  you ask for in a call: that agent does it right away
+  (`[scheduler] Paused, but letting lead do what you asked for in a voice call`);
+  everything else waits. The logs show where the time goes, for each
   reply:
   `[voice] artist: first words 850 ms, first audio 1400 ms after hearing you`.
 - **Use headphones**, or keep Discord's echo cancellation on. If your mic picks
@@ -94,7 +97,8 @@ Stock voices:
 - `Heard … : "…"`: what it understood.
 - `lead says: "…"`: each sentence it speaks.
 - `… first words …`: how long the answer took.
-- `stopped talking: you started talking`: you talked over it.
+- `interrupted (Mazladore said "wait"), stopped talking after 2 sentence(s), last: "…"`:
+  someone talked over it, with the words that did it.
 
 The voice container's own log (`docker compose logs voice`) shows each stretch
 of speech it transcribed and each reply it spoke. Wherever the steps stop is
