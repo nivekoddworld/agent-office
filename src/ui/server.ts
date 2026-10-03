@@ -114,6 +114,10 @@ export async function startUiServer(
   const unsubTick = workspace.scheduler.onTick((state) =>
     broadcast("scheduler_tick", state),
   );
+  // Paused or resumed from anywhere (e.g. /pause in Discord): show it.
+  const unsubRunning = workspace.scheduler.onRunningChange(() =>
+    broadcast("state_changed", getBootstrapState(workspace, officeId)),
+  );
   const unsubAgent = workspace.onAgentEvent((name, event) =>
     broadcast("agent_event", { agent: name, ...event }),
   );
@@ -232,6 +236,7 @@ export async function startUiServer(
     if (flushTimer) clearTimeout(flushTimer);
     flushSSE();
     unsubTick();
+    unsubRunning();
     unsubAgent();
     unsubActivity();
     for (const u of unsubDiscordIn) u();

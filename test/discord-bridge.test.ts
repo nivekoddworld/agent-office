@@ -1321,7 +1321,42 @@ describe("Discord slash commands, replies and the daily summary", () => {
       "stop",
       "wake",
       "clear",
+      "pause",
+      "resume",
     ]);
+  });
+
+  it("pauses and resumes the office, and #status says so", async () => {
+    let paused: number | undefined;
+    host.pauseOffice = vi.fn(() => {
+      paused = T;
+      return "Paused the office.";
+    });
+    host.resumeOffice = vi.fn(() => {
+      paused = undefined;
+      return "Resumed.";
+    });
+    host.pausedSince = () => paused;
+    await bridge.stop();
+    bridge = new DiscordBridge(discord, host, {
+      guildId: "g1",
+      statePath: join(dir, "discord.json"),
+      activityIntervals: { editIntervalMs: 0, presenceIntervalMs: 0 },
+    });
+    await bridge.start();
+
+    expect(await discord.command("pause")).toBe(
+      "Only people with the office-user role can do that.",
+    );
+    const role = [discord.roleId("office-user")];
+    expect(await discord.command("pause", undefined, role)).toBe(
+      "Paused the office.",
+    );
+    expect(await discord.command("status")).toMatch(
+      /\n\*\*Paused\*\* since <t:\d+:R>: nothing new starts until \/resume/,
+    );
+    expect(await discord.command("resume", undefined, role)).toBe("Resumed.");
+    expect(await discord.command("status")).not.toMatch(/Paused/);
   });
 
   it("answers /status and /tasks", async () => {

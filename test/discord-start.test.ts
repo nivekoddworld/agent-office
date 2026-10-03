@@ -53,6 +53,7 @@ function fakeWorkspace(dir: string) {
     onActivity: vi.fn(() => () => {}),
     onSteered: vi.fn(() => () => {}),
     tasks: { list: () => [], onChange: vi.fn(() => () => {}) },
+    scheduler: { running: true, onRunningChange: vi.fn(() => () => {}) },
     discord: { enabled: true },
     discordBridgeStatus: { state: "off" },
   } as any;

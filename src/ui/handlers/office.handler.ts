@@ -138,7 +138,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       handler: (req, res, _url, params) => {
         if (requireMutation(req, res, getPort())) return;
         if (params.action === "start") {
-          workspace.scheduler.start();
+          workspace.resume();
         } else {
           workspace.scheduler.stop();
         }
@@ -151,7 +151,7 @@ export function register(ctx: HandlerContext): RouteDefinition[] {
       pattern: /^\/api\/workspace\/pause$/,
       handler: (req, res) => {
         if (requireMutation(req, res, getPort())) return;
-        const aborted = workspace.pauseAll();
+        const aborted = workspace.pauseAll().length;
         broadcast("state_changed", getBootstrapState(workspace, officeId));
         return json(res, 200, { ok: true, aborted });
       },

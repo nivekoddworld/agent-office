@@ -28,6 +28,8 @@ export interface ActivityRelayHooks {
   agentNames(): string[];
   /** A line about tasks for #status, e.g. "3 in progress · 1 failed". */
   taskSummary?(): string | undefined;
+  /** When the office was paused (/pause), if it is. */
+  pausedSince?(): number | undefined;
 }
 
 interface AgentNow {
@@ -246,6 +248,11 @@ export class ActivityRelay {
     const lines = [
       `**Office status** · online since ${at(this.startedAt, "R")} · updated ${at(this.time, "T")}`,
     ];
+    const paused = this.hooks.pausedSince?.();
+    if (paused)
+      lines.push(
+        `**Paused** since ${at(paused, "R")}: nothing new starts until /resume`,
+      );
     for (const agent of this.hooks.agentNames()) {
       const n = this.now.get(agent);
       if (!n || !n.busy) {
@@ -265,6 +272,8 @@ export class ActivityRelay {
   }
 
   presenceText(): { text: string; busy: boolean } {
+    if (this.hooks.pausedSince?.())
+      return { text: "Paused (/resume to continue)", busy: false };
     const busy = this.hooks.agentNames().flatMap((a) => {
       const n = this.now.get(a);
       return n?.busy ? [`${a}: ${n.tool ? n.tool.name : "thinking"}`] : [];
@@ -290,6 +299,7 @@ export class ActivityRelay {
   /** Redraw #status (e.g. when tasks change). */
   refreshStatus(): void {
     this.schedule("status");
+    this.schedule("presence");
   }
 
   private schedule(key: string): void {

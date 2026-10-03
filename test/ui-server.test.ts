@@ -104,6 +104,7 @@ function createMockWorkspace() {
   return {
     scheduler: {
       onTick: vi.fn(() => vi.fn()),
+      onRunningChange: vi.fn(() => vi.fn()),
       state: vi.fn(() => ({
         running: true,
         tickCount: 0,

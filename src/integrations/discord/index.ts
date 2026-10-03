@@ -81,6 +81,21 @@ function agentControls(workspace: Workspace) {
       h.clearConversation();
       return `Cleared ${name}'s memory of its conversations. The history is still in the logs: it can look back with read_dm and read_channel.`;
     },
+    pauseOffice: () => {
+      if (workspace.pausedSince) return "The office is already paused.";
+      const stopped = workspace.pauseAll();
+      return (
+        `Paused the office${stopped.length ? `: stopped ${stopped.join(", ")}` : ""}. ` +
+        "Nothing new starts (messages wait, heartbeats stop) until /resume, even across a restart. Voice calls still work."
+      );
+    },
+    resumeOffice: () => {
+      if (!workspace.pausedSince && workspace.scheduler.running)
+        return "The office isn't paused.";
+      workspace.resume();
+      return "Resumed: agents pick up their waiting messages and heartbeats.";
+    },
+    pausedSince: () => workspace.pausedSince,
   };
 }
 
@@ -183,6 +198,7 @@ export async function startDiscordBridge(
       workspace.onUserDm((e) => bridge.handleUserDm(e)),
       workspace.onActivity((name, entry) => bridge.handleActivity(name, entry)),
       workspace.tasks.onChange(() => bridge.handleTasksChanged()),
+      workspace.scheduler.onRunningChange(() => bridge.handleOfficeChanged()),
       workspace.onSteered((agent, text) => bridge.handleSteered(agent, text)),
       workspace.onAgentEvent((name, event) =>
         bridge.handleAgentEvent(
