@@ -9,7 +9,8 @@ export interface Transcriber {
 }
 
 export interface SpeechService {
-  listen(): Transcriber;
+  /** `onWords` gets the words recognized so far, as they come. */
+  listen(onWords?: (text: string) => void): Transcriber;
   /** 24 kHz mono 16-bit audio of `text`, streamed as it's made. */
   speak(
     text: string,
@@ -22,12 +23,23 @@ export interface SpeechService {
 export function speechService(baseUrl: string): SpeechService {
   const base = baseUrl.replace(/\/+$/, "");
   return {
-    listen() {
+    listen(onWords) {
       const ws = new WebSocket(`${base.replace(/^http/, "ws")}/stt`);
       ws.binaryType = "arraybuffer";
       const queued: Buffer[] = [];
       let open = false;
       let failed: Error | undefined;
+      let final: ((text: string) => void) | undefined;
+      ws.addEventListener("message", (e) => {
+        let m: { partial?: string; text?: string };
+        try {
+          m = JSON.parse(String(e.data));
+        } catch {
+          return;
+        }
+        if (typeof m.partial === "string") onWords?.(m.partial);
+        if (typeof m.text === "string") final?.(m.text);
+      });
       const opened = new Promise<void>((resolve, reject) => {
         ws.addEventListener("open", () => {
           open = true;
@@ -49,13 +61,7 @@ export function speechService(baseUrl: string): SpeechService {
         async finish() {
           await opened;
           const reply = new Promise<string>((resolve, reject) => {
-            ws.addEventListener("message", (e) => {
-              try {
-                resolve(String(JSON.parse(String(e.data)).text ?? ""));
-              } catch (err) {
-                reject(err);
-              }
-            });
+            final = resolve;
             ws.addEventListener("close", () =>
               reject(new Error("the voice service hung up")),
             );

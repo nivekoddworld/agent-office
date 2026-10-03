@@ -27,7 +27,7 @@ function callContext(workspace: Workspace, agent: string): string {
     .slice(-12)
     .map((e) => ({ ...e, text: e.text.slice(0, 600) }));
   return [
-    `It's ${new Date().toLocaleString()}.`,
+    `The call started ${new Date().toLocaleString([], { dateStyle: "full", timeStyle: "short" })}.`,
     handle?.status === "running"
       ? "You're in the middle of some work (your other self keeps at it during the call)."
       : "You're not working on anything else right now.",

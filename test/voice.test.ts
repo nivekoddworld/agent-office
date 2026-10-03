@@ -6,6 +6,7 @@ import { Downsampler, Upsampler } from "../src/voice/audio.js";
 import { SentenceSplitter, forSpeech } from "../src/voice/sentences.js";
 import { VoiceChat, handoff, speakable } from "../src/voice/voice-chat.js";
 import { VoiceCall } from "../src/voice/voice-call.js";
+import { SpeechTurn } from "../src/voice/speech-turn.js";
 import { STOCK_VOICES, voiceFor } from "../src/voice/agent-voice.js";
 import type { SpeechService } from "../src/voice/speech-service.js";
 
@@ -18,17 +19,33 @@ const samples = (b: Buffer) =>
   Array.from({ length: b.length / 2 }, (_, i) => b.readInt16LE(i * 2));
 
 describe("audio conversion", () => {
-  it("turns 48 kHz stereo into 16 kHz mono, across chunk boundaries", () => {
+  it("turns 48 kHz stereo into 16 kHz mono: speech passes, the hiss above 8 kHz doesn't", () => {
+    const stereo = (hz: number, seconds = 0.2) => {
+      const n = Math.round(48000 * seconds);
+      return pcm(
+        Array.from({ length: n * 2 }, (_, i) =>
+          Math.round(
+            8000 * Math.sin((2 * Math.PI * hz * Math.floor(i / 2)) / 48000),
+          ),
+        ),
+      );
+    };
+    const peak = (b: Buffer) => Math.max(...samples(b).slice(50).map(Math.abs));
+    expect(peak(new Downsampler().push(stereo(1000)))).toBeGreaterThan(7500);
+    expect(peak(new Downsampler().push(stereo(12000)))).toBeLessThan(400);
+
+    // Chunks can split a sample anywhere; the result is the same.
+    const input = stereo(440);
+    const whole = new Downsampler().push(input);
     const d = new Downsampler();
-    // 6 stereo samples = 2 output samples; split mid-sample.
-    const input = pcm([
-      100, 200, 100, 200, 100, 200, -60, -60, -60, -60, -60, -60,
-    ]);
-    const out = Buffer.concat([
+    const parts = Buffer.concat([
       d.push(input.subarray(0, 7)),
-      d.push(input.subarray(7)),
+      d.push(input.subarray(7, 4001)),
+      d.push(input.subarray(4001)),
     ]);
-    expect(samples(out)).toEqual([150, -60]);
+    expect(parts.equals(whole)).toBe(true);
+    // A third as many samples, less the few the filter holds for the next chunk.
+    expect(input.length / 4 / 3 - whole.length / 2).toBeLessThan(17);
   });
 
   it("turns 24 kHz mono into 48 kHz stereo", () => {
@@ -240,5 +257,109 @@ describe("voiceFor", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("SpeechTurn", () => {
+  /** A fake speech service: says `words` once it has had `after` bytes. */
+  function speech(words: string, after = 0) {
+    const got: Buffer[] = [];
+    let onWords: ((t: string) => void) | undefined;
+    let said = false;
+    const service: SpeechService = {
+      listen: (cb) => {
+        onWords = cb;
+        return {
+          write: (b) => {
+            got.push(b);
+            const total = got.reduce((n, x) => n + x.length, 0);
+            if (!said && words && total >= after) {
+              said = true;
+              onWords?.(words);
+            }
+          },
+          finish: async () => words,
+          cancel: () => {},
+        };
+      },
+      speak: async function* () {},
+      health: async () => ({ ok: true, voices: [] }),
+    };
+    return { service, got };
+  }
+  const audio = (ms: number) => Buffer.alloc(ms * 192); // 48 kHz stereo
+
+  it("keeps one turn across a short pause, and only stops the agent for words", async () => {
+    vi.useFakeTimers();
+    try {
+      const s = speech("so I was thinking maybe blue", 6400);
+      const onWords = vi.fn();
+      const onDone = vi.fn();
+      const turn = new SpeechTurn({
+        speech: s.service,
+        graceMs: 600,
+        minSpeechMs: 400,
+        onWords,
+        onDone,
+        onError: () => {},
+      });
+      turn.audio(audio(100));
+      expect(onWords).not.toHaveBeenCalled(); // a click isn't words
+      turn.audio(audio(300));
+      expect(onWords).toHaveBeenCalledOnce();
+      turn.pause();
+      await vi.advanceTimersByTimeAsync(300);
+      turn.resume(); // "...maybe blue"
+      turn.audio(audio(500));
+      turn.pause();
+      await vi.advanceTimersByTimeAsync(599);
+      expect(onDone).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(onDone).toHaveBeenCalledWith("so I was thinking maybe blue", 900);
+      expect(onWords).toHaveBeenCalledOnce();
+      // The pause went in as silence (300 ms at 16 kHz), so words don't run together.
+      expect(
+        s.got.some((b) => b.length === 300 * 16 * 2 && !b.some((x) => x)),
+      ).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores a short noise with no words", async () => {
+    vi.useFakeTimers();
+    try {
+      const onDone = vi.fn();
+      const turn = new SpeechTurn({
+        speech: speech("").service,
+        graceMs: 600,
+        minSpeechMs: 400,
+        onWords: () => {},
+        onDone,
+        onError: () => {},
+      });
+      turn.audio(audio(200));
+      turn.pause();
+      await vi.advanceTimersByTimeAsync(600);
+      expect(onDone).toHaveBeenCalledWith("", 200);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("VoiceChat prompt", () => {
+  it("reads the agent's context once per call, so the model can reuse its cache", async () => {
+    const calls: any[] = [];
+    const context = vi.fn(() => "No open tasks.");
+    const chat = new VoiceChat(
+      { ...agent, context },
+      fakeStream("Sure.", calls),
+    );
+    const signal = new AbortController().signal;
+    await chat.reply("one", () => {}, signal);
+    await chat.reply("two", () => {}, signal);
+    expect(context).toHaveBeenCalledOnce();
+    expect(calls[1].context.systemPrompt).toBe(calls[0].context.systemPrompt);
   });
 });

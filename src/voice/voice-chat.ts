@@ -14,7 +14,7 @@ export interface VoiceAgent {
   apiKey?: string;
   /** Its instruction files (IDENTITY, SOUL, CONTEXT), if any. */
   identity?: string;
-  /** Fresh context each turn: recent DMs, open tasks, what it's doing. */
+  /** Recent DMs, open tasks, what it's doing: read once, when the call starts. */
   context(): string;
 }
 
@@ -72,6 +72,11 @@ export function handoff(raw: string): string | undefined {
 /** One agent's side of a voice call. */
 export class VoiceChat {
   private history: Message[] = [];
+  /**
+   * The same for the whole call, so the model server can reuse what it has
+   * already read (its prompt cache) and each turn only reads the new words.
+   */
+  private system?: string;
 
   constructor(
     private agent: VoiceAgent,
@@ -90,7 +95,7 @@ export class VoiceChat {
     const started = Date.now();
     const user: Message = { role: "user", content: heard, timestamp: started };
     const context: Context = {
-      systemPrompt: systemPrompt(this.agent),
+      systemPrompt: (this.system ??= systemPrompt(this.agent)),
       messages: [...this.history, user],
     };
     const local = "localAuth" in this.agent.model;
@@ -137,8 +142,9 @@ export class VoiceChat {
     }
 
     if (final) this.history.push(user, final);
+    // Drop old turns in one go, not one per turn: every drop costs a re-read.
     if (this.history.length > MAX_TURNS)
-      this.history = this.history.slice(-MAX_TURNS);
+      this.history = this.history.slice(-MAX_TURNS / 2);
     const todo = handoff(raw);
     return {
       text: forSpeech(before),

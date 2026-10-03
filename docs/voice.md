@@ -9,7 +9,7 @@ can just talk:
   thinking off so it answers quickly.
 - The answer is read out in the agent's voice (Kyutai Pocket TTS), a sentence
   at a time as it's written.
-- Talk over it and it stops.
+- Talk over it and it stops (once it hears words, not at every noise).
 
 Speech-to-text and text-to-speech run on the **CPU** in the `voice` container
 (about 2–3 GB of RAM, no GPU memory), so the GPU stays free for your model.
@@ -78,11 +78,12 @@ Stock voices:
 
 ## Tuning
 
-| Setting             | Default | What it does                               |
-| ------------------- | ------- | ------------------------------------------ |
-| `VOICE_STT_THREADS` | 4       | CPU threads for speech-to-text             |
-| `VOICE_TTS_THREADS` | 4       | CPU threads for text-to-speech             |
-| `VOICE_DEBUG`       | off     | `on` logs Discord voice connection details |
+| Setting                | Default | What it does                                                                                        |
+| ---------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| `VOICE_STT_THREADS`    | 4       | CPU threads for speech-to-text                                                                      |
+| `VOICE_TTS_THREADS`    | 4       | CPU threads for text-to-speech                                                                      |
+| `VOICE_END_OF_TURN_MS` | 900     | Quiet this long and your turn is over. Lower answers sooner but cuts in when you pause mid-sentence |
+| `VOICE_DEBUG`          | off     | `on` logs Discord voice connection details, and noises it ignored                                   |
 
 ## When nothing happens
 
@@ -91,7 +92,9 @@ Stock voices:
 - `Joined …`: the bot is in the channel.
 - `Listening to …`: it's getting your audio.
 - `Heard … : "…"`: what it understood.
-- `… first words …`: the agent answered.
+- `lead says: "…"`: each sentence it speaks.
+- `… first words …`: how long the answer took.
+- `stopped talking: you started talking`: you talked over it.
 
 The voice container's own log (`docker compose logs voice`) shows each stretch
 of speech it transcribed and each reply it spoke. Wherever the steps stop is
