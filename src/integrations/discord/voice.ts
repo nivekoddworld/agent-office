@@ -40,8 +40,15 @@ const MIN_SPEECH_MS = 400;
 export interface DiscordVoiceOptions {
   agentNames(): string[];
   speech: SpeechService;
-  /** A new call with an agent, speaking through `output`. */
-  newCall(agent: string, output: CallOutput): VoiceCall;
+  /**
+   * A new call with an agent, speaking through `output`; `onPeople` is told
+   * when someone joins it.
+   */
+  newCall(
+    agent: string,
+    output: CallOutput,
+    onPeople: (names: string[]) => void,
+  ): VoiceCall;
 }
 
 interface ActiveCall {
@@ -175,7 +182,7 @@ export class DiscordVoice {
         player.stop(true);
       },
     };
-    const call = this.o.newCall(agent, output);
+    const call = this.o.newCall(agent, output, (names) => this.rename(names));
     const connection = joinVoiceChannel({
       channelId,
       guildId: this.guild.id,
@@ -218,13 +225,7 @@ export class DiscordVoice {
       if (this.active === active) this.queue(() => this.leave());
     });
     // Show up as the agent you're talking to.
-    await this.guild.members.me
-      ?.setNickname(agent)
-      .catch(() =>
-        console.warn(
-          "[voice] Couldn't rename the bot to the agent (give it Change Nickname)",
-        ),
-      );
+    await this.rename([agent]);
     console.log(`[voice] Joined ${agent}'s voice channel`);
   }
 
@@ -306,6 +307,25 @@ export class DiscordVoice {
     decoder.on("error", failed);
     opus.once("error", failed);
     opus.once("close", () => setTimeout(end, 1000));
+  }
+
+  /** /invite: bring an agent into the call you're in. */
+  async invite(agent: string): Promise<string> {
+    if (!this.active)
+      return "You're not in a voice call: join an agent's channel under Agent Voice first.";
+    return this.active.call.invite(agent);
+  }
+
+  /** The bot's name in the server: who's on the call. */
+  private async rename(names: string[]): Promise<void> {
+    const nick = names.join(" & ").slice(0, 32);
+    await this.guild.members.me
+      ?.setNickname(nick)
+      .catch(() =>
+        console.warn(
+          "[voice] Couldn't rename the bot to the agent (give it Change Nickname)",
+        ),
+      );
   }
 
   private async leave(): Promise<void> {

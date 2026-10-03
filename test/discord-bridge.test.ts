@@ -1321,9 +1321,29 @@ describe("Discord slash commands, replies and the daily summary", () => {
       "stop",
       "wake",
       "clear",
+      "invite",
       "pause",
       "resume",
     ]);
+  });
+
+  it("/invite brings an agent into your voice call", async () => {
+    host.inviteToCall = vi.fn(async (a: string) => `${a} joined the call.`);
+    await bridge.stop();
+    bridge = new DiscordBridge(discord, host, {
+      guildId: "g1",
+      statePath: join(dir, "discord.json"),
+      activityIntervals: { editIntervalMs: 0, presenceIntervalMs: 0 },
+    });
+    await bridge.start();
+    const role = [discord.roleId("office-user")];
+    expect(await discord.command("invite", "artist", role)).toBe(
+      "artist joined the call.",
+    );
+    expect(await discord.command("invite", "nobody", role)).toBe(
+      'There\'s no agent called "nobody".',
+    );
+    expect(host.inviteToCall).toHaveBeenCalledTimes(1);
   });
 
   it("pauses and resumes the office, and #status says so", async () => {

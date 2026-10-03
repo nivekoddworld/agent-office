@@ -1,11 +1,11 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Downsampler, Upsampler } from "../src/voice/audio.js";
 import { SentenceSplitter, forSpeech } from "../src/voice/sentences.js";
 import { VoiceChat, handoff, speakable } from "../src/voice/voice-chat.js";
-import { VoiceCall } from "../src/voice/voice-call.js";
+import { VoiceCall, type Participant } from "../src/voice/voice-call.js";
 import { SpeechTurn } from "../src/voice/speech-turn.js";
 import { STOCK_VOICES, voiceFor } from "../src/voice/agent-voice.js";
 import type { SpeechService } from "../src/voice/speech-service.js";
@@ -174,35 +174,58 @@ describe("VoiceCall", () => {
       stop: () => log.push("stop"),
     };
   };
+  /** An agent on the call whose replies come from `replies`, in order. */
+  const member = (
+    name: string,
+    replies: string[] | ((heard: string) => string),
+    extra: Partial<Participant> = {},
+  ) => {
+    const heard: string[] = [];
+    let i = 0;
+    const stream = ((_m: unknown, context: any) =>
+      (async function* () {
+        const h = context.messages.at(-1).content as string;
+        heard.push(h);
+        const text =
+          typeof replies === "function"
+            ? replies(h)
+            : (replies[i++] ?? "Okay.");
+        yield { type: "text_delta", delta: text };
+        yield {
+          type: "done",
+          message: { role: "assistant", content: [{ type: "text", text }] },
+        };
+      })()) as never;
+    const record = vi.fn();
+    const p: Participant = {
+      name,
+      voice: "alba",
+      chat: new VoiceChat({ ...agent, name }, stream),
+      record,
+      handoff: vi.fn(),
+      ...extra,
+    };
+    return { p, heard, record };
+  };
+  beforeEach(() => vi.spyOn(console, "log").mockImplementation(() => {}));
+  afterEach(() => vi.restoreAllMocks());
 
   it("answers, records both sides and hands off the to-do", async () => {
     const speech = fakeSpeech();
     const out = output();
-    const record = vi.fn();
-    const handoffFn = vi.fn();
-    const call = new VoiceCall({
-      agent: "artist",
-      voice: "alba",
-      chat: new VoiceChat(
-        agent,
-        fakeStream("On it, sending them now.\nTODO: send sheets"),
-      ),
-      speech,
-      output: out,
-      record,
-      handoff: handoffFn,
-    });
-    vi.spyOn(console, "log").mockImplementation(() => {});
+    const artist = member("artist", [
+      "On it, sending them now.\nTODO: send sheets",
+    ]);
+    const call = new VoiceCall({ host: artist.p, speech, output: out });
     await call.heard("send me the sheets");
     expect(speech.spoken).toEqual(["On it, sending them now."]);
     expect(out.log.filter((l) => l === "audio")).toHaveLength(3);
     expect(out.log.at(-1)).toBe("end");
-    expect(record.mock.calls).toEqual([
+    expect(artist.record.mock.calls).toEqual([
       ["user", "send me the sheets"],
       ["assistant", "On it, sending them now."],
     ]);
-    expect(handoffFn).toHaveBeenCalledWith("send sheets");
-    vi.restoreAllMocks();
+    expect(artist.p.handoff).toHaveBeenCalledWith("send sheets");
   });
 
   it("stops talking when interrupted, and answers what came before if it hadn't yet", async () => {
@@ -218,15 +241,16 @@ describe("VoiceCall", () => {
         yield { type: "done", message: { role: "assistant", content: [] } };
       })()) as never;
     const call = new VoiceCall({
-      agent: "artist",
-      voice: "alba",
-      chat: new VoiceChat(agent, slow),
+      host: {
+        name: "artist",
+        voice: "alba",
+        chat: new VoiceChat(agent, slow),
+        record: () => {},
+        handoff: () => {},
+      },
       speech,
       output: out,
-      record: () => {},
-      handoff: () => {},
     });
-    vi.spyOn(console, "log").mockImplementation(() => {});
     const first = call.heard("make the banana yellow");
     await new Promise((r) => setTimeout(r, 5));
     // They keep talking before it answers: one answer to both.
@@ -243,7 +267,138 @@ describe("VoiceCall", () => {
     ).toContain(
       '[voice] artist: interrupted (you said more: "and the frog green"), stopped before saying anything',
     );
-    vi.restoreAllMocks();
+  });
+
+  it("brings in a teammate who hears the call and answers when named", async () => {
+    const speech = fakeSpeech();
+    const lead = member("lead", [
+      "Good idea, let me grab her.\nINVITE: artist",
+      "Sounds right to me.",
+    ]);
+    const artist = member("artist", [
+      "Hi! Blue would pop. Lead, does that fit the theme?",
+      "Thanks!",
+    ]);
+    const people: string[][] = [];
+    const call = new VoiceCall({
+      host: lead.p,
+      speech,
+      output: output(),
+      join: (n) => (n === "artist" ? artist.p : `no ${n}`),
+      onPeople: (names) => people.push(names),
+    });
+    await call.heard("can we ask the artist about the logo colour?");
+    await vi.waitFor(() => expect(lead.heard).toHaveLength(2));
+
+    expect(people).toEqual([["lead", "artist"]]);
+    // The newcomer heard what it was brought in for.
+    expect(artist.heard[0]).toBe(
+      "user: can we ask the artist about the logo colour?\n" +
+        "lead: Good idea, let me grab her.\n" +
+        "(artist joined the call, brought in by lead)",
+    );
+    // Artist named lead, so lead answered next, hearing artist's line.
+    expect(lead.heard[1]).toBe(
+      "(artist joined the call, brought in by lead)\n" +
+        "artist: Hi! Blue would pop. Lead, does that fit the theme?",
+    );
+    expect(speech.spoken).toEqual([
+      "Good idea, let me grab her.",
+      "Hi! Blue would pop.",
+      "Lead, does that fit the theme?",
+      "Sounds right to me.",
+    ]);
+
+    // You name who you're talking to; otherwise whoever spoke last answers.
+    await call.heard("artist, thanks");
+    expect(artist.heard.at(-1)).toBe(
+      "lead: Sounds right to me.\nuser: artist, thanks",
+    );
+  });
+
+  it("stops agents answering each other after three in a row", async () => {
+    const a = member("lead", () => "Artist, over to you?");
+    const b = member("artist", () => "Lead, what do you think?");
+    const call = new VoiceCall({
+      host: a.p,
+      speech: fakeSpeech(),
+      output: output(),
+      join: () => b.p,
+    });
+    await call.invite("artist");
+    await vi.waitFor(() =>
+      expect(
+        (console.log as any).mock.calls.map((c: unknown[]) => c[0]),
+      ).toContainEqual(
+        expect.stringMatching(/answers in a row: waiting for you/),
+      ),
+    );
+    expect(a.heard.length + b.heard.length).toBe(3);
+  });
+
+  it("answers to the name in its IDENTITY.md, and not to a passing mention", async () => {
+    const lead = member("lead", () => "Sure.", { aliases: ["Jim"] });
+    const artist = member("artist", () => "We could lead with the logo.");
+    const call = new VoiceCall({
+      host: artist.p,
+      speech: fakeSpeech(),
+      output: output(),
+      join: () => lead.p,
+    });
+    await call.invite("lead");
+    await vi.waitFor(() => expect(lead.heard).toHaveLength(1));
+    await call.heard("Jim, what's next?");
+    expect(lead.heard).toHaveLength(2);
+    // "lead with the logo" isn't talking to lead.
+    await call.heard("artist, any ideas?");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(lead.heard).toHaveLength(2);
+  });
+
+  it("remembers what it got out before being cut off", async () => {
+    const speech = fakeSpeech();
+    const calls: any[] = [];
+    let n = 0;
+    const stream = ((_m: unknown, context: any, options: any) => {
+      calls.push(context.messages.map((m: any) => m.content));
+      const first = n++ === 0;
+      return (async function* () {
+        yield { type: "text_delta", delta: "The logo is blue. " };
+        if (first) {
+          await new Promise((r) => setTimeout(r, 50));
+          if (options.signal.aborted) throw new Error("aborted");
+        }
+        yield { type: "text_delta", delta: "And the font is bold." };
+        yield { type: "done", message: { role: "assistant", content: [] } };
+      })();
+    }) as never;
+    const call = new VoiceCall({
+      host: {
+        name: "artist",
+        voice: "alba",
+        chat: new VoiceChat(agent, stream),
+        record: () => {},
+        handoff: () => {},
+      },
+      speech,
+      output: output(),
+    });
+    const first = call.heard("tell me about the logo");
+    await vi.waitFor(() =>
+      expect(speech.spoken).toEqual(["The logo is blue."]),
+    );
+    call.interrupt();
+    await first;
+    await call.heard("what about the font?");
+    expect(calls[1].slice(0, 2)).toEqual([
+      "tell me about the logo",
+      [
+        {
+          type: "text",
+          text: "The logo is blue. (cut off: they started talking)",
+        },
+      ],
+    ]);
   });
 });
 

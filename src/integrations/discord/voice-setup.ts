@@ -10,7 +10,7 @@ import { readInstructionFiles } from "../../agent/workspace-scaffold.js";
 import { resolveLocalApiKey } from "../../models/resolve-model.js";
 import { speechService } from "../../voice/speech-service.js";
 import { VoiceChat } from "../../voice/voice-chat.js";
-import { VoiceCall } from "../../voice/voice-call.js";
+import { VoiceCall, type Participant } from "../../voice/voice-call.js";
 import { voiceFor } from "../../voice/agent-voice.js";
 import { DiscordVoice } from "./voice.js";
 
@@ -72,58 +72,94 @@ function record(
   }
 }
 
+/** The name an agent goes by: the "Name:" line in its IDENTITY.md, if any. */
+export function displayName(identity: string | undefined): string | undefined {
+  const m = /^\s*[-*]?\s*\**name\**\s*:\s*\**\s*([^\n*(]+)/im.exec(
+    identity ?? "",
+  );
+  return m?.[1]?.trim() || undefined;
+}
+
 /** Voice calls with agents in Discord, if VOICE_URL points at the voice service. */
 export async function startDiscordVoice(
   workspace: Workspace,
   raw: { client: Client; guild: Guild },
   voiceUrl: string,
   turnDone: (agent: string, heard: string, reply: string) => void,
-): Promise<{ stop: () => Promise<void> }> {
+): Promise<{
+  stop: () => Promise<void>;
+  invite: (agent: string) => Promise<string>;
+}> {
   const speech = speechService(voiceUrl);
-  const voice = new DiscordVoice(raw.client, raw.guild, {
-    agentNames: () => workspace.list().map((a) => a.name),
-    speech,
-    newCall: (agent, output) => {
-      const handle = workspace.getAgent(agent);
-      if (!handle) throw new Error(`${agent} isn't running`);
-      const model = handle.config.model;
-      let identity: string | undefined;
-      try {
-        identity = readInstructionFiles(handle.cwd);
-      } catch {
-        // too long or unreadable: talk without it
-      }
-      const apiKey = resolveLocalApiKey(model);
-      const chat = new VoiceChat({
+
+  /** An agent, ready to talk on a call; or why it can't. */
+  const participant = (agent: string): Participant | string => {
+    const handle = workspace.getAgent(agent);
+    if (!handle) return `there's no agent called "${agent}" running`;
+    const model = handle.config.model;
+    let identity: string | undefined;
+    try {
+      identity = readInstructionFiles(handle.cwd);
+    } catch {
+      // too long or unreadable: talk without it
+    }
+    const alias = displayName(identity);
+    const teammates = workspace
+      .list()
+      .map((a) => a.name)
+      .filter((n) => n !== agent)
+      .map((n) => {
+        const other = workspace.getAgent(n);
+        let id: string | undefined;
+        try {
+          id = other ? readInstructionFiles(other.cwd) : undefined;
+        } catch {
+          // no name to add
+        }
+        const known = displayName(id);
+        return known && known.toLowerCase() !== n ? `${n} (${known})` : n;
+      });
+    const apiKey = resolveLocalApiKey(model);
+    return {
+      name: agent,
+      ...(alias && alias.toLowerCase() !== agent ? { aliases: [alias] } : {}),
+      voice: voiceFor(agent, handle.cwd),
+      chat: new VoiceChat({
         name: agent,
         model,
         ...(apiKey ? { apiKey } : {}),
         ...(identity ? { identity } : {}),
+        teammates,
         context: () => callContext(workspace, agent),
-      });
+      }),
+      record: (role, text) => record(workspace, agent, role, text),
+      turnDone: (heard, reply) => turnDone(agent, heard, reply),
+      handoff: (todo) => {
+        // Tagged so it gets done even while the office is paused.
+        const r = workspace.sendUserDm(agent, `[From our voice call] ${todo}`, {
+          origin: "voice",
+          requestId: `${VOICE_REQUEST_PREFIX}${randomUUID()}`,
+        });
+        if (!r.ok)
+          console.error(
+            `[voice] Couldn't pass on ${agent}'s to-do: ${r.error}`,
+          );
+      },
+    };
+  };
+
+  const voice = new DiscordVoice(raw.client, raw.guild, {
+    agentNames: () => workspace.list().map((a) => a.name),
+    speech,
+    newCall: (agent, output, onPeople) => {
+      const host = participant(agent);
+      if (typeof host === "string") throw new Error(host);
       return new VoiceCall({
-        agent,
-        voice: voiceFor(agent, handle.cwd),
-        chat,
+        host,
         speech,
         output,
-        record: (role, text) => record(workspace, agent, role, text),
-        turnDone: (heard, reply) => turnDone(agent, heard, reply),
-        handoff: (todo) => {
-          // Tagged so it gets done even while the office is paused.
-          const r = workspace.sendUserDm(
-            agent,
-            `[From our voice call] ${todo}`,
-            {
-              origin: "voice",
-              requestId: `${VOICE_REQUEST_PREFIX}${randomUUID()}`,
-            },
-          );
-          if (!r.ok)
-            console.error(
-              `[voice] Couldn't pass on ${agent}'s to-do: ${r.error}`,
-            );
-        },
+        join: participant,
+        onPeople,
       });
     },
   });
@@ -131,5 +167,5 @@ export async function startDiscordVoice(
   console.log(
     `[voice] Voice channels ready: join one in "Agent Voice" to talk to that agent`,
   );
-  return { stop: () => voice.stop() };
+  return { stop: () => voice.stop(), invite: (a) => voice.invite(a) };
 }

@@ -35,6 +35,8 @@ export interface BridgeHost {
   resumeOffice?(): string;
   /** When the office was paused, if it is. */
   pausedSince?(): number | undefined;
+  /** For /invite: bring an agent into your voice call. */
+  inviteToCall?(name: string): Promise<string>;
   /** An agent's activity log since a time, for the daily summary. */
   activitySince?(agent: string, since: number): ActivityEntry[];
   /** Your comment on a task (typed in its post); `sent` is what the assignee got. */

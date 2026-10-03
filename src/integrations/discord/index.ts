@@ -121,6 +121,8 @@ export async function startDiscordBridge(
   }
 
   workspace.discordBridgeStatus = { state: "connecting" };
+  // Voice calls start after the bridge, which /invite needs to reach them.
+  let voice: Awaited<ReturnType<typeof startDiscordVoice>> | undefined;
   try {
     const api = await connectDiscord(token, guildId);
     const bridge = new DiscordBridge(
@@ -153,6 +155,14 @@ export async function startDiscordBridge(
               : {};
         },
         ...agentControls(workspace),
+        ...(env["VOICE_URL"]?.trim()
+          ? {
+              inviteToCall: async (agent: string) =>
+                voice
+                  ? voice.invite(agent)
+                  : "Voice calls didn't start: see the [voice] lines in the logs.",
+            }
+          : {}),
         activitySince: (agent) =>
           readActivity(workspace.office.dir, agent, MAX_ACTIVITY_LIMIT),
         createTask: (t) =>
@@ -208,7 +218,7 @@ export async function startDiscordBridge(
       ),
     ];
     const voiceUrl = env["VOICE_URL"]?.trim();
-    const voice = voiceUrl
+    voice = voiceUrl
       ? await startDiscordVoice(
           workspace,
           api.raw,

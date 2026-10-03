@@ -48,6 +48,28 @@ Both sides of the call are kept in the agent's DM history (marked `(voice)`):
 - in its `#dm-` channel in Discord;
 - where the agent can read them with `read_dm`.
 
+## Group calls
+
+Bring more agents into a call:
+
+- **Ask the agent:** "lead, can you bring artist in?" It says it will and
+  brings them in.
+- **Or type `/invite artist`** while you're in the call.
+
+Everyone hears everything, and each agent speaks in its own voice; the bot's
+name shows who's on the call ("lead & artist").
+
+- **Who answers you:** the agent you name ("artist, what colour…"), or
+  otherwise whoever spoke last. Agents answer to the `Name:` in their
+  IDENTITY.md too (e.g. "Jim").
+- **Agents talk to each other:** one that addresses another ("Lead, does
+  that fit?") hands it the floor. After 3 answers in a row they wait for you;
+  talking stops whoever's speaking, as usual.
+- **Work they take on** goes to whichever agent took it, as in a one-on-one
+  call (and gets done even while the office is paused).
+- **Each reply is one model call**, so a question passed from lead to artist
+  takes two answers' worth of time. `/pause` keeps the model free for the call.
+
 ## Voices
 
 Each agent gets a stock voice picked from its name, and keeps it. To choose one,
@@ -66,7 +88,8 @@ Stock voices:
 ## Limits
 
 - **One call at a time.** A bot can only be in one voice channel per server.
-  Joining another agent's channel moves the bot there.
+  Joining another agent's channel moves the bot there; use a group call to
+  talk to several agents at once.
 - **Your model is shared.** With `--parallel 2`, a call waits for a free slot if
   two agents are both mid-request. `/pause` the office first to have the
   model to yourself, then `/resume`. Calls work while paused, and so does what
