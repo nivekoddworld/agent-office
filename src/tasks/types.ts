@@ -13,7 +13,8 @@ export const TASK_STATUSES: readonly TaskStatus[] = [
 /** Allowed status transitions. */
 export const STATUS_TRANSITIONS: Record<TaskStatus, readonly TaskStatus[]> = {
   waiting: ["todo"],
-  todo: ["in_progress"],
+  // Quick tasks can be finished (or given up) without being started first.
+  todo: ["in_progress", "done", "failed"],
   in_progress: ["done", "failed"],
   done: ["todo"],
   failed: ["todo"],

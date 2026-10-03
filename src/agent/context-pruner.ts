@@ -371,3 +371,23 @@ export async function retryAfterOverflow(
   await agent.continue();
   return true;
 }
+
+/**
+ * If the last reply ran into the output-token limit and was cut off (nothing
+ * of it ran), tell the agent so it carries on in smaller steps instead of
+ * silently ending its turn. Returns whether it did.
+ */
+export async function continueAfterCutoff(agent: {
+  state: { messages: AgentMessage[]; model?: { maxTokens?: number } };
+  prompt(text: string): Promise<void>;
+}): Promise<boolean> {
+  const last = agent.state.messages.at(-1) as any;
+  if (last?.role !== "assistant" || last.stopReason !== "length") return false;
+  const limit = agent.state.model?.maxTokens;
+  await agent.prompt(
+    `[System: Your last reply hit the output limit${limit ? ` (${limit} tokens)` : ""} and was cut off, so none of it was used. ` +
+      "Carry on from where you were, in smaller steps: write a large file in several parts " +
+      "(create it with the first part, then add the rest with edits), and keep your thinking short.]",
+  );
+  return true;
+}

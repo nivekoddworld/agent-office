@@ -6,6 +6,7 @@ import {
   answerQueued,
   parseOverflow,
   retryAfterOverflow,
+  continueAfterCutoff,
   toolChars,
 } from "../src/agent/context-pruner.js";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
@@ -429,6 +430,31 @@ describe("overflow recovery", () => {
     expect(await retryAfterOverflow(agent, pruner)).toBe(false);
     expect(agent.continue).toHaveBeenCalledOnce();
     vi.restoreAllMocks();
+  });
+});
+
+describe("continueAfterCutoff", () => {
+  it("tells the agent its reply was cut off, and lets it carry on", async () => {
+    const agent = {
+      state: {
+        messages: [
+          userMsg("write the game"),
+          { role: "assistant", content: [], stopReason: "length" } as any,
+        ],
+        model: { maxTokens: 16384 },
+      },
+      prompt: vi.fn(async () => {}),
+    };
+    expect(await continueAfterCutoff(agent)).toBe(true);
+    expect(agent.prompt).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /hit the output limit \(16384 tokens\).*several parts/,
+      ),
+    );
+
+    agent.state.messages.push(assistantMsg("done"));
+    expect(await continueAfterCutoff(agent)).toBe(false);
+    expect(agent.prompt).toHaveBeenCalledOnce();
   });
 });
 

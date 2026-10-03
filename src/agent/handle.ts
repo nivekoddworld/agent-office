@@ -42,6 +42,7 @@ import {
 } from "./handle-init.js";
 import {
   answerQueued,
+  continueAfterCutoff,
   retryAfterOverflow,
   type ContextPruner,
 } from "./context-pruner.js";
@@ -364,7 +365,14 @@ export class AgentHandle {
         this.hostApi.cancelPendingPrompt(this.name, promptId);
         throw err;
       }
-      await done;
+      try {
+        await done;
+      } catch (err) {
+        // A stuck turn would hold up every prompt queued behind it.
+        if (err instanceof Error && / gave up: /.test(err.message))
+          this.abort();
+        throw err;
+      }
       return;
     }
     if (!this.agent) throw new Error(`Agent "${this.name}" not initialized`);
@@ -382,6 +390,10 @@ export class AgentHandle {
     }
     if (this.pruner && (await retryAfterOverflow(this.agent, this.pruner)))
       console.log(`[agent:${this.name}] Retried a prompt that was too long`);
+    if (await continueAfterCutoff(this.agent))
+      console.log(
+        `[agent:${this.name}] Reply was cut off at the output limit; continued`,
+      );
     await answerQueued(this.agent);
   }
 

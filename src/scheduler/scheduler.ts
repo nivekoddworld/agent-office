@@ -358,6 +358,12 @@ function formatMessagePayload(
     );
   }
   if (msg.from === "__cron__") return `[Scheduled trigger]\n${msg.payload}`;
+  // Task notices come from the task board, which can't be messaged.
+  if (msg.from === "__task__") {
+    return msg.payload.includes("[To reply")
+      ? msg.payload
+      : `${msg.payload}\n\n[Automatic task notice: don't reply to it. Act on it with the task tools, or message the agent it's about if you need to.]`;
+  }
   if (msg.from === "__heartbeat__") return `[Heartbeat]\n${msg.payload}`;
   return (
     before +

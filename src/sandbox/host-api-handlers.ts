@@ -212,7 +212,7 @@ export async function handlePromptDone(
     {
       resolve: () => void;
       reject: (e: Error) => void;
-      timer: ReturnType<typeof setTimeout>;
+      timer: ReturnType<typeof setInterval>;
     }
   >,
 ): Promise<void> {
@@ -233,7 +233,7 @@ export async function handlePromptDone(
   const key = `${agentName}:${promptId}`;
   const entry = pendingPrompts.get(key);
   if (entry) {
-    clearTimeout(entry.timer);
+    clearInterval(entry.timer);
     pendingPrompts.delete(key);
     if (error) entry.reject(new Error(error));
     else entry.resolve();
