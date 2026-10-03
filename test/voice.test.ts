@@ -7,6 +7,7 @@ import { SentenceSplitter, forSpeech } from "../src/voice/sentences.js";
 import { VoiceChat, handoff, speakable } from "../src/voice/voice-chat.js";
 import { VoiceCall, type Participant } from "../src/voice/voice-call.js";
 import { SpeechTurn } from "../src/voice/speech-turn.js";
+import { runVoiceTool, voiceTools } from "../src/voice/voice-tools.js";
 import { STOCK_VOICES, voiceFor } from "../src/voice/agent-voice.js";
 import type { SpeechService } from "../src/voice/speech-service.js";
 
@@ -521,5 +522,281 @@ describe("VoiceChat prompt", () => {
     await chat.reply("two", () => {}, signal);
     expect(context).toHaveBeenCalledOnce();
     expect(calls[1].context.systemPrompt).toBe(calls[0].context.systemPrompt);
+  });
+});
+
+describe("group call fixes", () => {
+  const output = () => ({
+    start: () => ({ write: () => {}, end: () => {} }),
+    stop: () => {},
+  });
+  beforeEach(() => vi.spyOn(console, "log").mockImplementation(() => {}));
+  afterEach(() => vi.restoreAllMocks());
+
+  /** A participant answering with `text`; records what it heard. */
+  const who = (
+    name: string,
+    text: (heard: string) => string,
+    extra: Partial<Participant> = {},
+  ) => {
+    const heard: string[] = [];
+    const stream = ((_m: unknown, context: any) =>
+      (async function* () {
+        const h = context.messages.at(-1).content as string;
+        heard.push(h);
+        const t = text(h);
+        yield { type: "text_delta", delta: t };
+        yield {
+          type: "done",
+          message: { role: "assistant", content: [{ type: "text", text: t }] },
+        };
+      })()) as never;
+    const p: Participant = {
+      name,
+      voice: "alba",
+      chat: new VoiceChat(
+        { ...agent, name, otherNames: ["lead", "jim", "hr", "frank"] },
+        stream,
+      ),
+      record: () => {},
+      handoff: vi.fn(),
+      ...extra,
+    };
+    return { p, heard };
+  };
+  const roster = () => [
+    { name: "hr", aliases: ["Frank"] },
+    { name: "lead", aliases: ["Jim"] },
+  ];
+
+  it("brings someone in when you ask, by name or alias, without the agent's help", async () => {
+    const hr = who("hr", () => "Sure.");
+    const lead = who("lead", () => "Hi, Jim here.");
+    const call = new VoiceCall({
+      host: hr.p,
+      speech: fakeSpeech(),
+      output: output(),
+      join: () => lead.p,
+      roster,
+    });
+    await call.heard("Frank, can you please add Jim the lead to the call");
+    await vi.waitFor(() => expect(lead.heard).toHaveLength(1));
+    expect(hr.heard).toHaveLength(0); // the newcomer answers instead
+    expect(call.names).toEqual(["hr", "lead"]);
+  });
+
+  it("brings them in when the agent only says it will", async () => {
+    const hr = who("hr", () => "I will invite Jim now.");
+    const lead = who("lead", () => "Hello!");
+    const call = new VoiceCall({
+      host: hr.p,
+      speech: fakeSpeech(),
+      output: output(),
+      join: () => lead.p,
+      roster,
+    });
+    await call.heard("we need the lead's opinion");
+    await vi.waitFor(() => expect(call.names).toEqual(["hr", "lead"]));
+  });
+
+  it("never speaks for someone else", async () => {
+    const speech = fakeSpeech();
+    const hr = who(
+      "hr",
+      () => "Jim: Hello Frank, and hello friend. I am here.",
+    );
+    const call = new VoiceCall({
+      host: hr.p,
+      speech,
+      output: output(),
+      roster,
+    });
+    await call.heard("hello Jim, are you there");
+    expect(speech.spoken).toEqual([]);
+  });
+
+  it("passes on work it promised without a TODO line", async () => {
+    const coder = who(
+      "coder",
+      () => "On it, I'll pull up the details for both tasks.",
+    );
+    const call = new VoiceCall({
+      host: coder.p,
+      speech: fakeSpeech(),
+      output: output(),
+    });
+    await call.heard("can you check the tasks");
+    expect(coder.p.handoff).toHaveBeenCalledWith(
+      'can you check the tasks\n(On the call you said: "On it, I\'ll pull up the details for both tasks.")',
+    );
+  });
+});
+
+describe("looking things up mid-call", () => {
+  beforeEach(() => vi.spyOn(console, "log").mockImplementation(() => {}));
+  afterEach(() => vi.restoreAllMocks());
+
+  it("uses a tool, then answers from what it found", async () => {
+    const contexts: any[] = [];
+    let round = 0;
+    const stream = ((_m: unknown, context: any) => {
+      contexts.push(JSON.parse(JSON.stringify(context)));
+      const first = round++ === 0;
+      return (async function* () {
+        if (first) {
+          yield { type: "text_delta", delta: "Let me check. " };
+          yield {
+            type: "done",
+            message: {
+              role: "assistant",
+              stopReason: "toolUse",
+              content: [
+                { type: "text", text: "Let me check. " },
+                {
+                  type: "toolCall",
+                  id: "c1",
+                  name: "task_list",
+                  arguments: { assignee: "coder" },
+                },
+              ],
+            },
+          };
+        } else {
+          yield { type: "text_delta", delta: "You have two tasks open." };
+          yield {
+            type: "done",
+            message: {
+              role: "assistant",
+              content: [{ type: "text", text: "You have two tasks open." }],
+            },
+          };
+        }
+      })();
+    }) as never;
+    const run = vi.fn(() => "#T-1 [todo] polish\n#T-2 [todo] scale-up");
+    const chat = new VoiceChat(
+      {
+        ...agent,
+        tools: [
+          {
+            tool: {
+              name: "task_list",
+              description: "List tasks",
+              parameters: {} as never,
+            },
+            run,
+          },
+        ],
+      },
+      stream,
+    );
+    const said: string[] = [];
+    const r = await chat.reply(
+      "how many tasks do I have?",
+      (s) => said.push(s),
+      new AbortController().signal,
+    );
+    expect(run).toHaveBeenCalledWith({ assignee: "coder" });
+    expect(said).toEqual(["Let me check.", "You have two tasks open."]);
+    expect(r.text).toBe("Let me check. You have two tasks open.");
+    // The second request carried the tool's answer.
+    expect(contexts[1].messages.at(-1)).toMatchObject({
+      role: "toolResult",
+      toolCallId: "c1",
+      content: [
+        { type: "text", text: "#T-1 [todo] polish\n#T-2 [todo] scale-up" },
+      ],
+    });
+    expect(contexts[0].tools.map((t: any) => t.name)).toEqual(["task_list"]);
+  });
+});
+
+describe("what the agent does outside the call", () => {
+  beforeEach(() => vi.spyOn(console, "log").mockImplementation(() => {}));
+  afterEach(() => vi.restoreAllMocks());
+
+  it("hears what its full self finished, and tells you", async () => {
+    const heard: string[] = [];
+    const stream = ((_m: unknown, context: any) =>
+      (async function* () {
+        heard.push(context.messages.at(-1).content);
+        yield { type: "text_delta", delta: "The picture's done!" };
+        yield { type: "done", message: { role: "assistant", content: [] } };
+      })()) as never;
+    const speech = fakeSpeech();
+    const call = new VoiceCall({
+      host: {
+        name: "coder",
+        voice: "alba",
+        chat: new VoiceChat(agent, stream),
+        record: () => {},
+        handoff: () => {},
+      },
+      speech,
+      output: {
+        start: () => ({ write: () => {}, end: () => {} }),
+        stop: () => {},
+      },
+    });
+    call.note(
+      "coder",
+      "Done: Captain Giggles is drawn (attached: captain_giggles.png)",
+    );
+    await vi.waitFor(() =>
+      expect(speech.spoken).toEqual(["The picture's done!"]),
+    );
+    expect(heard[0]).toBe(
+      "(coder, working outside the call, messaged the user: Done: Captain Giggles is drawn (attached: captain_giggles.png))",
+    );
+    call.note("lead", "not on this call"); // ignored
+    expect(heard).toHaveLength(1);
+  });
+});
+
+describe("voice tools", () => {
+  it("reads files in the workspace and /shared, and nothing outside", () => {
+    const root = mkdtempSync(join(tmpdir(), "voice-tools-"));
+    try {
+      const ws = join(root, "ws");
+      const shared = join(root, "shared");
+      mkdirSync(join(shared, "art"), { recursive: true });
+      mkdirSync(ws);
+      writeFileSync(join(shared, "art", "manifest.json"), '{"chars": 16}');
+      writeFileSync(join(ws, "notes.md"), "hello");
+      writeFileSync(join(root, "secret.txt"), "no");
+      const tools = voiceTools({
+        agent: "coder",
+        workspace: ws,
+        shared,
+        tasks: { list: () => [] } as never,
+        officeDir: root,
+        channels: new Map(),
+      });
+      const run = (name: string, args: Record<string, unknown>) =>
+        runVoiceTool(tools, name, args);
+      expect(run("list_files", { path: "/shared" }).text).toBe("art/");
+      expect(run("read_file", { path: "/shared/art/manifest.json" }).text).toBe(
+        '{"chars": 16}',
+      );
+      expect(run("read_file", { path: "/workspace/notes.md" }).text).toBe(
+        "hello",
+      );
+      expect(run("read_file", { path: "notes.md" }).text).toBe("hello");
+      expect(run("read_file", { path: "../secret.txt" })).toEqual({
+        text: "../secret.txt: only your workspace and /shared",
+        isError: true,
+      });
+      expect(run("bash", {}).isError).toBe(true);
+      expect(tools.map((t) => t.tool.name)).toEqual([
+        "task_list",
+        "task_get",
+        "read_channel",
+        "read_dm",
+        "list_files",
+        "read_file",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

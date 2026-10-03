@@ -6,6 +6,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
 import { SentenceSplitter, forSpeech } from "./sentences.js";
+import { runVoiceTool, type VoiceTool } from "./voice-tools.js";
 
 /** What the agent knows going into the call. */
 export interface VoiceAgent {
@@ -14,8 +15,14 @@ export interface VoiceAgent {
   apiKey?: string;
   /** Its instruction files (IDENTITY, SOUL, CONTEXT), if any. */
   identity?: string;
-  /** The other agents it can bring into the call. */
+  /** The other agents it can bring into the call, e.g. "lead (Jim)". */
   teammates?: string[];
+  /** Every name the others go by, so it never speaks as one of them. */
+  otherNames?: string[];
+  /** Other names it goes by itself (e.g. "Frank" for hr). */
+  aliases?: string[];
+  /** Quick look-ups it can do mid-call (tasks, files, channels). */
+  tools?: VoiceTool[];
   /** Recent DMs, open tasks, what it's doing: read once, when it joins. */
   context(): string;
 }
@@ -36,6 +43,8 @@ const CONTROLS = ["TODO:", "INVITE:"];
 const CONTROL_LINE = /(^|\n)[ \t]*(TODO|INVITE):/;
 /** Turns kept from this call: enough to follow along, small enough to be quick. */
 const MAX_TURNS = 24;
+/** Look-ups in one reply before it has to answer. */
+const MAX_TOOL_ROUNDS = 4;
 
 function systemPrompt(agent: VoiceAgent): string {
   const team = agent.teammates?.length
@@ -43,9 +52,12 @@ function systemPrompt(agent: VoiceAgent): string {
         "",
         "# Teammates",
         `Your teammates: ${agent.teammates.join(", ")}. To bring one into the call, say so and`,
-        "end your reply with a line: INVITE: <name>. Others on the call speak too:",
-        'their lines come to you as "name: what they said". To ask one of them',
-        "something, say their name; they answer after you. Answer only what's yours.",
+        "end your reply with a line: INVITE: <name>. Saying you'll bring them isn't",
+        "enough: the INVITE line is what brings them, and it works even while the office",
+        "is paused. Others on the call speak for themselves: their lines come to you as",
+        '"name: what they said". To ask one of them something, say their name; they',
+        "answer after you. Speak only as yourself: never say lines for anyone else, and",
+        "don't put a name in front of what you say.",
       ]
     : [];
   return [
@@ -56,11 +68,25 @@ function systemPrompt(agent: VoiceAgent): string {
     "No lists, markdown, emoji, code or links: everything you write is read aloud.",
     "If you don't know something, say so briefly rather than guessing.",
     "",
+    ...(agent.tools?.length
+      ? [
+          "# Looking things up",
+          `You can check things right now, during the call, with your tools: ${agent.tools.map((t) => t.tool.name).join(", ")}.`,
+          "When you're asked about tasks, files or what's been said, look it up and answer",
+          "from what you find instead of guessing. If it may take a moment, say a quick",
+          '"let me check" first.',
+          "",
+        ]
+      : []),
     "# Getting things done",
-    "You can't use your tools during the call. When the user asks for real work",
-    "(files, tasks, messages, checking something), say you'll do it, then end your",
-    "reply with one line: TODO: <what to do, with every detail you'll need>.",
-    "That line isn't spoken: it's sent to you as a message, and you do it right away.",
+    "You CAN get real work done from this call: anything you'd normally do (files,",
+    "tasks, messages, checking or changing something). Say you're on it, then end",
+    "your reply with one line: TODO: <what to do, with every detail you'll need>.",
+    "That line isn't spoken: it goes to you as a message and you do it right after",
+    "this reply, even while the office is paused. Never turn down work because",
+    "you're on a call or the office is paused.",
+    'When a line says you, "working outside the call", messaged the user, that\'s',
+    "work you finished: tell them about it in a sentence or two.",
     ...team,
     "",
     "# Right now",
@@ -132,56 +158,122 @@ export class VoiceChat {
       messages: [...this.history, user],
     };
     const local = "localAuth" in this.agent.model;
-    const events = this.stream(this.agent.model, context, {
-      ...(this.agent.apiKey ? { apiKey: this.agent.apiKey } : {}),
-      maxTokens: 400,
-      signal,
-      // Thinking would delay every answer by its whole length.
-      ...(local
-        ? {
-            samplingParams: {
-              chat_template_kwargs: { enable_thinking: false },
-            },
-          }
-        : {}),
-    });
-
+    const tools = this.agent.tools ?? [];
+    if (tools.length) context.tools = tools.map((t) => t.tool);
+    const ask = () =>
+      this.stream(this.agent.model, context, {
+        ...(this.agent.apiKey ? { apiKey: this.agent.apiKey } : {}),
+        maxTokens: 400,
+        signal,
+        // Thinking would delay every answer by its whole length.
+        ...(local
+          ? {
+              samplingParams: {
+                chat_template_kwargs: { enable_thinking: false },
+              },
+            }
+          : {}),
+      });
     const splitter = new SentenceSplitter();
     let raw = "";
     let spoken = 0;
     let firstTextMs: number | undefined;
     let final: AssistantMessage | undefined;
-    const speakUpTo = (text: string) => {
-      for (const s of splitter.push(text.slice(spoken))) {
-        const clean = forSpeech(s);
-        if (clean) say(clean);
+    const said: string[] = [];
+    // A sentence it starts with someone else's name ("Jim: hello") is it
+    // speaking for them: say nothing more this turn.
+    const others = new Set(
+      (this.agent.otherNames ?? []).map((n) => n.toLowerCase()),
+    );
+    const own = new Set(
+      [this.agent.name, ...(this.agent.aliases ?? [])].map((n) =>
+        n.toLowerCase(),
+      ),
+    );
+    let impersonating = false;
+    const sayOne = (s: string) => {
+      if (impersonating) return;
+      let clean = forSpeech(s);
+      const m = /^([A-Za-z][\w'-]*(?: [A-Za-z][\w'-]*)?)\s*:\s*/.exec(clean);
+      const who = m?.[1]?.toLowerCase();
+      if (who && others.has(who)) {
+        impersonating = true;
+        console.log(
+          `[voice] ${this.agent.name} started speaking as ${m![1]}: not said`,
+        );
+        return;
       }
+      if (who && own.has(who)) clean = clean.slice(m![0].length);
+      if (!clean) return;
+      said.push(clean);
+      say(clean);
+    };
+    const speakUpTo = (text: string) => {
+      for (const s of splitter.push(text.slice(spoken))) sayOne(s);
       spoken = text.length;
     };
-    for await (const e of events) {
-      if (e.type === "text_delta") {
-        firstTextMs ??= Date.now() - started;
-        raw += e.delta;
-        speakUpTo(speakable(raw));
-      } else if (e.type === "done") final = e.message;
-      else if (e.type === "error")
-        throw new Error(e.error.errorMessage ?? e.reason);
+    /** Everything it wrote this turn, across tool rounds (for TODO/INVITE). */
+    let allRaw = "";
+    const turnMessages: Message[] = [];
+    for (let round = 0; ; round++) {
+      raw = "";
+      spoken = 0;
+      final = undefined;
+      for await (const e of ask()) {
+        if (e.type === "text_delta") {
+          firstTextMs ??= Date.now() - started;
+          raw += e.delta;
+          speakUpTo(speakable(raw));
+        } else if (e.type === "done") final = e.message;
+        else if (e.type === "error")
+          throw new Error(e.error.errorMessage ?? e.reason);
+      }
+      allRaw += (allRaw ? "\n" : "") + raw;
+      const calls =
+        final?.content.filter(
+          (c): c is Extract<typeof c, { type: "toolCall" }> =>
+            c.type === "toolCall",
+        ) ?? [];
+      if (!final || !calls.length || round >= MAX_TOOL_ROUNDS) break;
+      // Say what it said before looking ("let me check") before waiting.
+      speakUpTo(speakable(raw.endsWith("\n") ? raw : raw + "\n"));
+      for (const s2 of splitter.flush()) sayOne(s2);
+      turnMessages.push(final);
+      context.messages.push(final);
+      for (const call of calls) {
+        const result = runVoiceTool(tools, call.name, call.arguments ?? {});
+        console.log(
+          `[voice] ${this.agent.name} looks up: ${call.name} ${JSON.stringify(call.arguments ?? {})}` +
+            (result.isError ? ` (failed: ${result.text.slice(0, 100)})` : ""),
+        );
+        const msg: Message = {
+          role: "toolResult",
+          toolCallId: call.id,
+          toolName: call.name,
+          content: [{ type: "text", text: result.text }],
+          isError: result.isError,
+          timestamp: Date.now(),
+        };
+        turnMessages.push(msg);
+        context.messages.push(msg);
+      }
     }
     const before = speakable(raw.endsWith("\n") ? raw : raw + "\n");
     speakUpTo(before);
-    for (const s of splitter.flush()) {
-      const clean = forSpeech(s);
-      if (clean) say(clean);
-    }
+    for (const s of splitter.flush()) sayOne(s);
 
-    if (final) this.history.push(user, final);
+    if (final) this.history.push(user, ...turnMessages, final);
     // Drop old turns in one go, not one per turn: every drop costs a re-read.
-    if (this.history.length > MAX_TURNS)
+    // Start at something you said, never halfway through a look-up.
+    if (this.history.length > MAX_TURNS) {
       this.history = this.history.slice(-MAX_TURNS / 2);
-    const todo = handoff(raw);
-    const invite = invites(raw);
+      while (this.history.length && this.history[0]!.role !== "user")
+        this.history.shift();
+    }
+    const todo = handoff(allRaw);
+    const invite = invites(allRaw);
     return {
-      text: forSpeech(before),
+      text: said.join(" "),
       ...(todo ? { todo } : {}),
       ...(invite.length ? { invite } : {}),
       ...(firstTextMs !== undefined ? { firstTextMs } : {}),

@@ -12,6 +12,8 @@ import { speechService } from "../../voice/speech-service.js";
 import { VoiceChat } from "../../voice/voice-chat.js";
 import { VoiceCall, type Participant } from "../../voice/voice-call.js";
 import { voiceFor } from "../../voice/agent-voice.js";
+import { voiceTools } from "../../voice/voice-tools.js";
+import { onEgress } from "../../egress/egress-impl.js";
 import { DiscordVoice } from "./voice.js";
 
 const OPEN = new Set(["todo", "in_progress", "waiting"]);
@@ -33,7 +35,7 @@ function callContext(workspace: Workspace, agent: string): string {
       ? "You're in the middle of some work (your other self keeps at it during the call)."
       : "You're not working on anything else right now.",
     workspace.pausedSince
-      ? "The office is paused: the other agents are on hold until the user resumes it, so anything you need from them waits. What you take on in this call still gets done right away."
+      ? "The office is paused: the other agents' work is on hold until the user resumes it, so anything you need them to do waits. You can still bring them into this call, and what you take on in it gets done right away."
       : "",
     tasks.length
       ? `\nYour open tasks:\n${tasks.join("\n")}`
@@ -92,6 +94,24 @@ export async function startDiscordVoice(
 }> {
   const speech = speechService(voiceUrl);
 
+  /** An agent's other name (its IDENTITY.md "Name:"), if it has one. */
+  const aliasOf = (agent: string): string | undefined => {
+    const handle = workspace.getAgent(agent);
+    let identity: string | undefined;
+    try {
+      identity = handle ? readInstructionFiles(handle.cwd) : undefined;
+    } catch {
+      // unreadable: no other name
+    }
+    const alias = displayName(identity);
+    return alias && alias.toLowerCase() !== agent ? alias : undefined;
+  };
+  const roster = () =>
+    workspace.list().map((a) => {
+      const alias = aliasOf(a.name);
+      return { name: a.name, ...(alias ? { aliases: [alias] } : {}) };
+    });
+
   /** An agent, ready to talk on a call; or why it can't. */
   const participant = (agent: string): Participant | string => {
     const handle = workspace.getAgent(agent);
@@ -103,26 +123,15 @@ export async function startDiscordVoice(
     } catch {
       // too long or unreadable: talk without it
     }
-    const alias = displayName(identity);
-    const teammates = workspace
-      .list()
-      .map((a) => a.name)
-      .filter((n) => n !== agent)
-      .map((n) => {
-        const other = workspace.getAgent(n);
-        let id: string | undefined;
-        try {
-          id = other ? readInstructionFiles(other.cwd) : undefined;
-        } catch {
-          // no name to add
-        }
-        const known = displayName(id);
-        return known && known.toLowerCase() !== n ? `${n} (${known})` : n;
-      });
+    const alias = aliasOf(agent);
+    const others = roster().filter((a) => a.name !== agent);
+    const teammates = others.map((a) =>
+      a.aliases ? `${a.name} (${a.aliases[0]})` : a.name,
+    );
     const apiKey = resolveLocalApiKey(model);
     return {
       name: agent,
-      ...(alias && alias.toLowerCase() !== agent ? { aliases: [alias] } : {}),
+      ...(alias ? { aliases: [alias] } : {}),
       voice: voiceFor(agent, handle.cwd),
       chat: new VoiceChat({
         name: agent,
@@ -130,6 +139,18 @@ export async function startDiscordVoice(
         ...(apiKey ? { apiKey } : {}),
         ...(identity ? { identity } : {}),
         teammates,
+        otherNames: others.flatMap((a) => [a.name, ...(a.aliases ?? [])]),
+        tools: voiceTools({
+          agent,
+          workspace: handle.cwd,
+          ...(workspace.office.sharedDir
+            ? { shared: workspace.office.sharedDir }
+            : {}),
+          tasks: workspace.tasks,
+          officeDir: workspace.office.dir,
+          channels: workspace.office.channels,
+        }),
+        ...(alias ? { aliases: [alias] } : {}),
         context: () => callContext(workspace, agent),
       }),
       record: (role, text) => record(workspace, agent, role, text),
@@ -160,12 +181,27 @@ export async function startDiscordVoice(
         output,
         join: participant,
         onPeople,
+        roster,
       });
     },
   });
   await voice.start();
+  // What agents on the call finish meanwhile (they message you): the call hears it.
+  const unsub = onEgress((e) => {
+    if (e.kind !== "dm") return;
+    const files = e.attachments?.length
+      ? ` (attached: ${e.attachments.map((a) => a.filename).join(", ")})`
+      : "";
+    voice.note(e.agent, e.text + files);
+  });
   console.log(
     `[voice] Voice channels ready: join one in "Agent Voice" to talk to that agent`,
   );
-  return { stop: () => voice.stop(), invite: (a) => voice.invite(a) };
+  return {
+    stop: async () => {
+      unsub();
+      await voice.stop();
+    },
+    invite: (a) => voice.invite(a),
+  };
 }

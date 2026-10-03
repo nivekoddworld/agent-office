@@ -30,17 +30,23 @@ Speech-to-text and text-to-speech run on the **CPU** in the `voice` container
 ## What the agent knows and does during a call
 
 The call has its own short conversation, so it can answer in a second or two
-instead of loading the agent's whole working context. It knows:
+instead of loading the agent's whole working context. It starts with:
 
 - who the agent is (its `IDENTITY`, `SOUL` and `CONTEXT` files);
 - its open tasks;
 - your recent DMs with it;
 - what's been said in the call so far.
 
-It can't use tools while talking. When you ask for real work ("send me the
-sheets", "make a task for the logo"), it says it'll do it, and the request goes
-to the agent as a message (`[From our voice call] …`). The agent then does it
-as usual, and you'll see it in its DM channel.
+**It can look things up while you talk**, with quick read-only tools: its task
+list and task details, files in its workspace and `/shared`, a channel's recent
+messages, and its DMs. Ask "how many characters are on the roster?" and it
+checks the manifest and tells you (`[voice] coder looks up: read_file …`).
+
+**Real work** (making files, tasks, messages, changing things) goes to the
+agent as a message (`[From our voice call] …`), and it does it as usual, even
+while the office is paused. If it promises something but forgets to pass it on,
+what you asked is passed on anyway. **When it finishes** and messages you, the
+call hears about it, and the agent tells you if nobody's talking.
 
 Both sides of the call are kept in the agent's DM history (marked `(voice)`):
 
@@ -52,8 +58,8 @@ Both sides of the call are kept in the agent's DM history (marked `(voice)`):
 
 Bring more agents into a call:
 
-- **Ask the agent:** "lead, can you bring artist in?" It says it will and
-  brings them in.
+- **Ask:** "add Jim to the call", "bring artist in", or ask the agent to. Names
+  from IDENTITY.md work too ("Jim" for lead).
 - **Or type `/invite artist`** while you're in the call.
 
 Everyone hears everything, and each agent speaks in its own voice; the bot's
