@@ -35,6 +35,7 @@ export class Scheduler {
   /** Messages already given a second try after a failed delivery. */
   private retried = new Set<string>();
   private listeners: Array<(state: SchedulerState) => void> = [];
+  private runningListeners: Array<(running: boolean) => void> = [];
   private lastHeartbeatTs = new Map<string, number>();
 
   constructor(
@@ -66,13 +67,23 @@ export class Scheduler {
   start(): void {
     if (this.tickTimer) return;
     this.tickTimer = setInterval(() => this.tick(), this._intervalMs);
+    for (const fn of this.runningListeners) fn(true);
   }
 
   stop(): void {
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
       this.tickTimer = null;
+      for (const fn of this.runningListeners) fn(false);
     }
+  }
+
+  /** Called when the scheduler starts or stops (e.g. paused from Discord). */
+  onRunningChange(fn: (running: boolean) => void): () => void {
+    this.runningListeners.push(fn);
+    return () => {
+      this.runningListeners = this.runningListeners.filter((l) => l !== fn);
+    };
   }
 
   onTick(fn: (state: SchedulerState) => void): () => void {

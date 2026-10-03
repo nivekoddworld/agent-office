@@ -30,6 +30,11 @@ export interface BridgeHost {
   stopAgent?(name: string): string;
   wakeAgent?(name: string): string;
   clearAgent?(name: string): string;
+  /** For /pause and /resume (the whole office): what to tell you. */
+  pauseOffice?(): string;
+  resumeOffice?(): string;
+  /** When the office was paused, if it is. */
+  pausedSince?(): number | undefined;
   /** An agent's activity log since a time, for the daily summary. */
   activitySince?(agent: string, since: number): ActivityEntry[];
   /** Your comment on a task (typed in its post); `sent` is what the assignee got. */

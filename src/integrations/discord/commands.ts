@@ -23,6 +23,15 @@ export const COMMANDS: CommandDef[] = [
     description: "Clear an agent's memory of its conversations (the logs stay)",
     agentOption: true,
   },
+  {
+    name: "pause",
+    description:
+      "Pause the whole office: stop all agents and their heartbeats until /resume",
+  },
+  {
+    name: "resume",
+    description: "Resume the office after /pause",
+  },
 ];
 
 export interface CommandHost {
@@ -30,13 +39,17 @@ export interface CommandHost {
   statusText(): string | undefined;
   tasks(): Task[];
   taskPosts(): Record<string, TaskPost>;
-  /** The office-user role: who may stop, wake and clear agents. */
+  /** The office-user role: who may stop, wake, clear, pause and resume. */
   userRole(): string | undefined;
   agentNames(): string[];
   /** Each returns what to tell you. */
   stopAgent?(name: string): string;
   wakeAgent?(name: string): string;
   clearAgent?(name: string): string;
+  pauseOffice?(): string;
+  resumeOffice?(): string;
+  /** After a pause or resume (e.g. to redraw #status). */
+  changed?(): void;
 }
 
 const MAX = 1900;
@@ -78,6 +91,13 @@ export function answer(c: IncomingCommand, host: CommandHost): string {
   const role = host.userRole();
   if (!c.isManager && !(role && c.roleIds.includes(role)))
     return "Only people with the office-user role can do that.";
+  if (c.name === "pause" || c.name === "resume") {
+    const run = c.name === "pause" ? host.pauseOffice : host.resumeOffice;
+    if (!run) return `/${c.name} isn't available here.`;
+    const said = run.call(host);
+    host.changed?.();
+    return said;
+  }
   const agent = c.agent ?? "";
   if (!host.agentNames().includes(agent))
     return `There's no agent called "${agent}".`;
@@ -115,5 +135,8 @@ export function commandHost(
     ...(h.stopAgent ? { stopAgent: (a: string) => h.stopAgent!(a) } : {}),
     ...(h.wakeAgent ? { wakeAgent: (a: string) => h.wakeAgent!(a) } : {}),
     ...(h.clearAgent ? { clearAgent: (a: string) => h.clearAgent!(a) } : {}),
+    ...(h.pauseOffice ? { pauseOffice: () => h.pauseOffice!() } : {}),
+    ...(h.resumeOffice ? { resumeOffice: () => h.resumeOffice!() } : {}),
+    changed: () => relay?.refreshStatus(),
   };
 }

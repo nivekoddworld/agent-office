@@ -68,7 +68,8 @@ Stock voices:
 - **One call at a time.** A bot can only be in one voice channel per server.
   Joining another agent's channel moves the bot there.
 - **Your model is shared.** With `--parallel 2`, a call waits for a free slot if
-  two agents are both mid-request. The logs show where the time goes, for each
+  two agents are both mid-request. `/pause` the office first to have the
+  model to yourself (calls still work while paused), then `/resume`. The logs show where the time goes, for each
   reply:
   `[voice] artist: first words 850 ms, first audio 1400 ms after hearing you`.
 - **Use headphones**, or keep Discord's echo cancellation on. If your mic picks

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { AgentEvent } from "@earendil-works/pi-agent-core";
 import { AgentHandle } from "./agent/handle.js";
 import { MessageBus } from "./transport/message-bus.js";
@@ -275,7 +275,12 @@ export class Workspace {
       });
       await this.hostApi.start(this.hostApiPort);
     }
-    this.scheduler.start();
+    const since = this.pausedSince;
+    if (since)
+      console.log(
+        `[office] Paused since ${new Date(since).toLocaleString()}: agents won't start anything until you resume (/resume in Discord, or ▶ in the dashboard)`,
+      );
+    else this.scheduler.start();
     this.watchdog.start();
     this.cron.start();
     this.tasks.start();
@@ -792,18 +797,47 @@ export class Workspace {
     };
   }
 
-  /** Abort all running agents and stop the scheduler. */
-  pauseAll(): number {
-    let aborted = 0;
+  /**
+   * Pause the office: stop what every agent is doing and start nothing new
+   * (messages wait, heartbeats stop) until resume(). Stays paused across a
+   * restart. Returns the agents that were stopped.
+   */
+  pauseAll(): string[] {
+    const stopped: string[] = [];
     for (const handle of this.agents.values()) {
       if (handle.status === "running") {
         handle.abort();
         handle.setStatus("idle");
-        aborted++;
+        stopped.push(handle.name);
       }
     }
+    try {
+      writeFileSync(this.pauseFile, new Date().toISOString(), "utf-8");
+    } catch (err) {
+      console.error("[office] Couldn't save the pause:", err);
+    }
     this.scheduler.stop();
-    return aborted;
+    return stopped;
+  }
+
+  /** Undo pauseAll(): agents pick up their waiting messages and heartbeats. */
+  resume(): void {
+    rmSync(this.pauseFile, { force: true });
+    this.scheduler.start();
+  }
+
+  /** When the office was paused, if it is. */
+  get pausedSince(): number | undefined {
+    try {
+      const t = Date.parse(readFileSync(this.pauseFile, "utf-8"));
+      return Number.isNaN(t) ? Date.now() : t;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private get pauseFile(): string {
+    return join(this.office.dir, "paused");
   }
 
   // --- Watchdog stuck handler ---

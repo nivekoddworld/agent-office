@@ -104,6 +104,7 @@ export class DiscordBridge {
           },
           agentNames: () => host.agentNames(),
           taskSummary: () => host.tasks && TaskForum.summary(host.tasks()),
+          pausedSince: () => host.pausedSince?.(),
         },
         opts.activityIntervals,
       );
@@ -430,13 +431,14 @@ export class DiscordBridge {
     return id;
   }
 
+  /** The office was paused or resumed (e.g. from the dashboard). */
+  handleOfficeChanged(): void {
+    this.relay?.refreshStatus();
+  }
+
   /** An exchange from a voice call, kept in the agent's DM channel. */
   handleVoiceTurn(agent: string, heard: string, reply: string): void {
-    const quoted = heard
-      .split("\n")
-      .map((l) => `> ${l}`)
-      .join("\n");
-    const text = `${quoted}\n${reply || "_(no answer)_"}`;
+    const text = `${heard.replace(/^/gm, "> ")}\n${reply || "_(no answer)_"}`;
     this.enqueue(() => this.post(`dm:${agent}`, agent, text));
   }
 
