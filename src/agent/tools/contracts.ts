@@ -385,7 +385,7 @@ export const TASK_DELETE = {
 const FILES_PARAM = Type.Optional(
   Type.Array(Type.String(), {
     description:
-      "Files to attach, as paths in your workspace or the shared folder: images (png, jpg, gif, webp) show inline, anything else (e.g. a .zip of a game build) is a download. Up to 10 files, 25 MB each. To send a folder, zip it first with bash (zip -r build.zip build/).",
+      "Files to attach, as paths in your workspace or the shared folder: images (png, jpg, gif, webp) show inline, anything else (e.g. a .zip of a game build) is a download. Up to 10 files, 25 MB each. To send a folder, zip it first with bash (zip -r build.zip build/). Make images with an image library (Python's PIL is installed: from PIL import Image), not by writing PNG bytes yourself, or they may not display.",
   }),
 );
 
